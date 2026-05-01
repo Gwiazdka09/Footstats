@@ -46,6 +46,9 @@ jobs:
             SECRET_KEY=${{ secrets.SECRET_KEY }}
             ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            FOOTSTATS_USER=${{ secrets.FOOTSTATS_USER }}
+            FOOTSTATS_PASSWORD_HASH=${{ secrets.FOOTSTATS_PASSWORD_HASH }}
             ENV=production
 
       - name: Verify deployment health

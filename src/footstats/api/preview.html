@@ -108,9 +108,40 @@
     ::-webkit-scrollbar { width:5px; }
     ::-webkit-scrollbar-track { background:transparent; }
     ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:3px; }
+
+    #login-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999;
+      display:flex; align-items:center; justify-content:center;
+    }
+    #login-overlay.hidden { display:none; }
+    .login-box {
+      background:#1e293b; border:1px solid rgba(255,255,255,0.1);
+      border-radius:1.5rem; padding:2.5rem; width:100%; max-width:380px;
+    }
+    .login-input {
+      width:100%; background:rgba(255,255,255,0.05);
+      border:1px solid rgba(255,255,255,0.10); border-radius:10px;
+      padding:10px 14px; color:#fff; font-size:14px;
+      transition:border-color 0.15s;
+    }
+    .login-input:focus { outline:none; border-color:rgba(99,102,241,0.5); }
   </style>
 </head>
 <body class="flex min-h-screen">
+
+  <!-- ===== LOGIN OVERLAY ===== -->
+  <div id="login-overlay" class="hidden">
+    <div class="login-box">
+      <div class="text-2xl font-extrabold bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent mb-1">FootStats</div>
+      <p class="text-sm text-slate-500 mb-6">Zaloguj się, aby kontynuować</p>
+      <div class="space-y-3">
+        <input id="login-user" class="login-input" type="text" placeholder="Użytkownik" autocomplete="username" />
+        <input id="login-pass" class="login-input" type="password" placeholder="Hasło" autocomplete="current-password" />
+        <div id="login-err" class="text-xs text-rose-400 hidden"></div>
+        <button onclick="doLogin()" class="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all text-sm">Zaloguj</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== SIDEBAR ===== -->
   <aside class="sidebar hidden lg:flex flex-col p-6 fixed h-screen w-64 top-0 left-0 z-20">
@@ -138,7 +169,11 @@
     </nav>
     <div class="p-4 bg-white/5 rounded-xl border border-white/5 mt-auto">
       <p class="text-xs text-slate-500 uppercase tracking-tight">Właściciel</p>
-      <p class="font-bold text-slate-300 text-sm">Jakub</p>
+      <p class="font-bold text-slate-300 text-sm mb-3">Jakub</p>
+      <button onclick="localStorage.removeItem('fs_token'); showLogin();"
+        class="w-full text-xs text-slate-500 hover:text-rose-400 transition-colors text-left">
+        Wyloguj
+      </button>
     </div>
   </aside>
 
@@ -455,6 +490,47 @@
   <script>
     const API = '';  // relative — serwowany przez FastAPI
 
+    // ---- auth ----
+    function showLogin() {
+      document.getElementById('login-overlay').classList.remove('hidden');
+      document.getElementById('loading').classList.add('hidden');
+    }
+    function hideLogin() {
+      document.getElementById('login-overlay').classList.add('hidden');
+    }
+    async function doLogin() {
+      const user = document.getElementById('login-user').value.trim();
+      const pass = document.getElementById('login-pass').value;
+      const err  = document.getElementById('login-err');
+      err.classList.add('hidden');
+      try {
+        const res = await apiFetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user, password: pass })
+        });
+        if (!res.ok) { err.textContent = 'Nieprawidłowe dane logowania.'; err.classList.remove('hidden'); return; }
+        const data = await res.json();
+        localStorage.setItem('fs_token', data.access_token);
+        hideLogin();
+        init();
+      } catch(e) {
+        err.textContent = 'Błąd połączenia.'; err.classList.remove('hidden');
+      }
+    }
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !document.getElementById('login-overlay').classList.contains('hidden')) doLogin();
+    });
+
+    async function apiFetch(url, opts = {}) {
+      const token = localStorage.getItem('fs_token');
+      const headers = { ...(opts.headers || {}) };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(url, { ...opts, headers });
+      if (res.status === 401) { localStorage.removeItem('fs_token'); showLogin(); throw new Error('Unauthorized'); }
+      return res;
+    }
+
     // ---- helpers ----
     function statusClass(s) {
       s = (s || '').toUpperCase();
@@ -597,7 +673,7 @@
     async function reloadDashboard() {
       try {
         const [statusRes, activeRes] = await Promise.all([
-          fetch('/api/status'), fetch('/api/coupons/active')
+          apiFetch('/api/status'), apiFetch('/api/coupons/active')
         ]);
         const status = await statusRes.json();
         const active = await activeRes.json();
@@ -674,7 +750,7 @@
       btn.textContent = 'Zapisuję...';
 
       try {
-        const res = await fetch('/api/bankroll', {
+        const res = await apiFetch('/api/bankroll', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ balance: val })
@@ -701,13 +777,14 @@
 
     // ---- Init ----
     async function init() {
+      if (!localStorage.getItem('fs_token')) { showLogin(); return; }
       try {
         const [statusRes, activeRes, historyRes, chartRes, configRes] = await Promise.all([
-          fetch('/api/status'),
-          fetch('/api/coupons/active'),
-          fetch('/api/coupons?limit=50'),
-          fetch('/api/bankroll/history?limit=60'),
-          fetch('/api/config').catch(() => null)
+          apiFetch('/api/status'),
+          apiFetch('/api/coupons/active'),
+          apiFetch('/api/coupons?limit=50'),
+          apiFetch('/api/bankroll/history?limit=60'),
+          apiFetch('/api/config').catch(() => null)
         ]);
 
         const status  = await statusRes.json();
@@ -754,7 +831,7 @@
         }
 
         // --- Settings (nowy endpoint) ---
-        const settingsRes = await fetch('/api/settings').catch(() => null);
+        const settingsRes = await apiFetch('/api/settings').catch(() => null);
         if (settingsRes && settingsRes.ok) {
           const s = await settingsRes.json();
           _fillSettings(s);
@@ -816,7 +893,7 @@
       document.getElementById('wiz-btn-analyze').classList.add('hidden');
       wiz.selectedIds.clear();
       try {
-        const res = await fetch('/api/matches/today');
+        const res = await apiFetch('/api/matches/today');
         wiz.matches = await res.json();
         _renderMatchList();
       } catch(e) {
@@ -879,7 +956,7 @@
       // }, 200); // DISABLED: polling removed (v3.2)
 
       try {
-        const res  = await fetch('/api/matches/analyze', {
+        const res  = await apiFetch('/api/matches/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ match_ids: [...wiz.selectedIds] })
@@ -994,7 +1071,7 @@
       }
       wizStep(4);
       try {
-        const res = await fetch('/api/coupon/kelly', {
+        const res = await apiFetch('/api/coupon/kelly', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ selections: wiz.selections })
@@ -1065,7 +1142,7 @@
 
       const totalOdds = round2(wiz.selections.reduce((acc, s) => acc * s.odds, 1.0));
       try {
-        const res = await fetch('/api/coupon/place', {
+        const res = await apiFetch('/api/coupon/place', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1135,7 +1212,7 @@
       };
 
       try {
-        const res = await fetch('/api/settings', {
+        const res = await apiFetch('/api/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
