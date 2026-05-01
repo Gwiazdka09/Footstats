@@ -788,9 +788,12 @@
         ]);
 
         const status  = await statusRes.json();
-        const active  = await activeRes.json();
-        const history = await historyRes.json();
-        const chart   = await chartRes.json();
+        const activeRaw  = await activeRes.json();
+        const historyRaw = await historyRes.json();
+        const chartRaw   = await chartRes.json();
+        const active  = Array.isArray(activeRaw)  ? activeRaw  : [];
+        const history = Array.isArray(historyRaw) ? historyRaw : [];
+        const chart   = Array.isArray(chartRaw)   ? chartRaw   : [];
 
         // --- Dashboard ---
         const bankroll = parseFloat(status.bankroll || 0).toFixed(2);
@@ -850,8 +853,7 @@
       } catch(e) {
         document.getElementById('loading').innerHTML =
           `<div class="text-center"><p class="text-rose-400 font-semibold mb-2">Błąd połączenia z API</p>
-           <p class="text-slate-500 text-sm">${e.message}</p>
-           <p class="text-slate-600 text-xs mt-3">Uruchom: <code class="text-indigo-400">uvicorn footstats.api.main:app --reload</code></p></div>`;
+           <p class="text-slate-500 text-sm">${e.message}</p></div>`;
         return;
       }
 

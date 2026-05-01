@@ -48,6 +48,25 @@ from footstats.api.routes.status import router as status_router
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 
+def _init_db() -> None:
+    from footstats.config import DB_PATH
+    import sqlite3
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS coupons (
+            id TEXT PRIMARY KEY, status TEXT, created_at TEXT,
+            legs_json TEXT, total_odds REAL, stake_pln REAL,
+            potential_win REAL, result_pln REAL, settled_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS bankroll_state (
+            id INTEGER PRIMARY KEY, balance REAL, updated_at TEXT
+        );
+    """)
+    conn.close()
+
+_init_db()
+
 app = FastAPI(title="FootStats API", version="2.0")
 
 app.state.limiter = limiter

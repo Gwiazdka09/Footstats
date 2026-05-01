@@ -12,7 +12,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 COPY pyproject.toml ./
 COPY src ./src
 
-RUN uv pip install --system ".[api]"
+RUN uv pip install --system ".[api]" && mkdir -p /app/data
 
 EXPOSE 8000
 
