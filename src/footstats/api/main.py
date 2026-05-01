@@ -1,7 +1,10 @@
 """FootStats API — app factory with auth, CORS, and rate limiting."""
+import json
+import logging
 import os
 from pathlib import Path
 
+import sentry_sdk
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +16,29 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
 load_dotenv()
+
+_sentry_dsn = os.environ.get("SENTRY_DSN", "")
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        traces_sample_rate=0.1,
+        environment=os.environ.get("ENV", "production"),
+    )
+
+
+class _JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        return json.dumps({
+            "level": record.levelname,
+            "msg": record.getMessage(),
+            "logger": record.name,
+            "time": self.formatTime(record),
+        })
+
+
+_handler = logging.StreamHandler()
+_handler.setFormatter(_JsonFormatter())
+logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
 
 from footstats.api.auth import router as auth_router
 from footstats.api.routes.bankroll import router as bankroll_router
@@ -44,6 +70,13 @@ app.include_router(status_router)
 app.include_router(bankroll_router)
 app.include_router(settings_router)
 app.include_router(coupons_router)
+
+
+@app.get("/health", tags=["ops"])
+def health() -> dict:
+    from footstats import __version__
+    return {"status": "ok", "version": __version__}
+
 
 from fastapi_mcp import FastApiMCP as _FastApiMCP
 
