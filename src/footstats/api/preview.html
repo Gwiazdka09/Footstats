@@ -851,9 +851,18 @@
         }
 
       } catch(e) {
-        document.getElementById('loading').innerHTML =
-          `<div class="text-center"><p class="text-rose-400 font-semibold mb-2">Błąd połączenia z API</p>
-           <p class="text-slate-500 text-sm">${e.message}</p></div>`;
+        if (e.message === 'Unauthorized') return; // showLogin() already called inside apiFetch
+        const errEl = document.getElementById('loading');
+        const msg = document.createElement('div');
+        msg.className = 'text-center';
+        const title = document.createElement('p');
+        title.className = 'text-rose-400 font-semibold mb-2';
+        title.textContent = 'Błąd połączenia z API';
+        const detail = document.createElement('p');
+        detail.className = 'text-slate-500 text-sm';
+        detail.textContent = e.message;
+        msg.appendChild(title); msg.appendChild(detail);
+        errEl.replaceChildren(msg);
         return;
       }
 
