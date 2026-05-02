@@ -38,19 +38,19 @@ def _fetch_predictions() -> list:
 
 
 def _mock_predictions() -> list:
-    today = datetime.now().strftime("%Y-%m-%d")
     tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    day2 = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
     return [
         {"id": "m001", "gosp": "Legia Warszawa", "gosc": "Lech Poznań", "liga": "PKO BP Ekstraklasa",
-         "data": today, "godzina": "18:00",
+         "data": tomorrow, "godzina": "18:00",
          "pred_ml": {"prob_home_win": 0.52, "prob_draw": 0.28, "prob_away_win": 0.20, "prob_over_25": 0.61, "prob_btts_yes": 0.48},
          "odds": {"home": 1.85, "draw": 3.40, "away": 4.10, "over_2_5": 1.72, "under_2_5": 2.05, "btts": 1.90}},
         {"id": "m002", "gosp": "Ajax Amsterdam", "gosc": "PSV Eindhoven", "liga": "Eredivisie",
-         "data": today, "godzina": "20:45",
+         "data": tomorrow, "godzina": "20:45",
          "pred_ml": {"prob_home_win": 0.45, "prob_draw": 0.25, "prob_away_win": 0.30, "prob_over_25": 0.72, "prob_btts_yes": 0.58},
          "odds": {"home": 2.10, "draw": 3.30, "away": 3.50, "over_2_5": 1.58, "under_2_5": 2.40, "btts": 1.75}},
         {"id": "m003", "gosp": "Roma", "gosc": "Lazio", "liga": "Serie A",
-         "data": today, "godzina": "20:45",
+         "data": day2, "godzina": "20:45",
          "pred_ml": {"prob_home_win": 0.40, "prob_draw": 0.30, "prob_away_win": 0.30, "prob_over_25": 0.58, "prob_btts_yes": 0.52},
          "odds": {"home": 2.30, "draw": 3.20, "away": 3.10, "over_2_5": 1.80, "under_2_5": 1.98, "btts": 1.85}},
     ]

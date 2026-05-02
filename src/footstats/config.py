@@ -8,7 +8,7 @@ from rich.prompt import Prompt, Confirm
 # ================================================================
 #  STALE
 # ================================================================
-VERSION         = "v3.1 Interaktywny Kreator"
+VERSION         = "v3.2 Interaktywny Kreator"
 DB_PATH         = Path(__file__).parents[2] / "data" / "footstats_backtest.db"
 MAX_GOLE        = 8
 OSTATNIE_N      = 15
