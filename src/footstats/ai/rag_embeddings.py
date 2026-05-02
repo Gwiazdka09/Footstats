@@ -1,10 +1,11 @@
-"""RAG Embeddings: sentence-transformers + SQLite BLOB storage for semantic lesson retrieval."""
+"""RAG Embeddings: sentence-transformers + PostgreSQL BYTEA storage for semantic lesson retrieval."""
 
-import sqlite3
 import logging
 import numpy as np
 from typing import Optional
 from pathlib import Path
+
+from footstats.utils.db import connect as _connect
 
 logger = logging.getLogger(__name__)
 
@@ -25,29 +26,18 @@ def _get_embedding_model():
     return _EMBEDDING_MODEL
 
 
-def _get_db_path() -> Path:
-    """Get footstats_backtest.db path."""
-    return Path(__file__).parent.parent.parent.parent / "data" / "footstats_backtest.db"
-
-
 def ensure_schema():
     """Create ai_feedback_embeddings table if not exists."""
-    db_path = _get_db_path()
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS ai_feedback_embeddings (
-            feedback_id INTEGER PRIMARY KEY,
-            embedding BLOB NOT NULL,
-            model_name TEXT NOT NULL,
-            dim INTEGER NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(feedback_id) REFERENCES ai_feedback(id) ON DELETE CASCADE
-        )
-    """)
-    conn.commit()
-    conn.close()
+    with _connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ai_feedback_embeddings (
+                feedback_id INTEGER PRIMARY KEY REFERENCES ai_feedback(id) ON DELETE CASCADE,
+                embedding   BYTEA NOT NULL,
+                model_name  TEXT NOT NULL,
+                dim         INTEGER NOT NULL,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
     logger.info("[RAG] Embeddings table schema ensured")
 
 
@@ -55,7 +45,7 @@ class EmbeddingStore:
     """Encapsulates embedding generation, storage, and retrieval."""
 
     def __init__(self, db_path: Optional[Path] = None, model_name: str = "paraphrase-multilingual-MiniLM-L12-v2"):
-        self.db_path = db_path or _get_db_path()
+        self.db_path = db_path  # kept for API compat, unused (shared PG connection used)
         self.model_name = model_name
         self.model = _get_embedding_model()
         # Use get_embedding_dimension() for newer versions; fallback to old name for compat
@@ -73,15 +63,14 @@ class EmbeddingStore:
         try:
             embedding = self.embed_text(text)
             blob = embedding.tobytes()
-
-            conn = sqlite3.connect(self.db_path)
-            cur = conn.cursor()
-            cur.execute("""
-                INSERT OR REPLACE INTO ai_feedback_embeddings (feedback_id, embedding, model_name, dim)
-                VALUES (?, ?, ?, ?)
-            """, (feedback_id, blob, self.model_name, self.dim))
-            conn.commit()
-            conn.close()
+            with _connect() as conn:
+                conn.execute(
+                    "INSERT INTO ai_feedback_embeddings (feedback_id, embedding, model_name, dim)"
+                    " VALUES (?, ?, ?, ?)"
+                    " ON CONFLICT (feedback_id) DO UPDATE SET"
+                    " embedding=EXCLUDED.embedding, model_name=EXCLUDED.model_name, dim=EXCLUDED.dim",
+                    (feedback_id, blob, self.model_name, self.dim),
+                )
             return True
         except Exception as e:
             logger.error(f"[RAG] Failed to upsert embedding for feedback_id={feedback_id}: {e}")
@@ -93,18 +82,15 @@ class EmbeddingStore:
         Matrix shape: (num_embeddings, dim). Returns ([], None) if table empty.
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cur = conn.cursor()
-            cur.execute("SELECT feedback_id, embedding FROM ai_feedback_embeddings ORDER BY feedback_id")
-            rows = cur.fetchall()
-            conn.close()
-
+            with _connect() as conn:
+                rows = conn.execute(
+                    "SELECT feedback_id, embedding FROM ai_feedback_embeddings ORDER BY feedback_id"
+                ).fetchall()
             if not rows:
                 return [], None
-
-            ids = [row[0] for row in rows]
+            ids = [row["feedback_id"] for row in rows]
             embeddings = np.array([
-                np.frombuffer(row[1], dtype=np.float32) for row in rows
+                np.frombuffer(bytes(row["embedding"]), dtype=np.float32) for row in rows
             ])
             return ids, embeddings
         except Exception as e:
@@ -142,11 +128,10 @@ def backfill_embeddings(db_path: Optional[Path] = None, verbose: bool = False):
     store = EmbeddingStore(db_path)
 
     try:
-        conn = sqlite3.connect(store.db_path)
-        cur = conn.cursor()
-        cur.execute("SELECT id, reason_for_failure FROM ai_feedback WHERE reason_for_failure IS NOT NULL ORDER BY id")
-        rows = cur.fetchall()
-        conn.close()
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT id, reason_for_failure FROM ai_feedback WHERE reason_for_failure IS NOT NULL ORDER BY id"
+            ).fetchall()
 
         if not rows:
             logger.info("[RAG] No ai_feedback rows to backfill")

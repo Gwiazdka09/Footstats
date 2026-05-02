@@ -58,16 +58,14 @@ def _pobierz_porazki(days_back: int) -> list[dict]:
 
 def _zapisz_feedback(match_id: int, prediction_details: dict, reason: str) -> None:
     """Zapisuje analizę do tabeli ai_feedback. Auto-embeds for RAG semantic search."""
-    from footstats.core.backtest import _connect
+    from footstats.utils.db import connect as _connect
     with _connect() as conn:
-        cur = conn.execute(
-            """
-            INSERT INTO ai_feedback (match_id, prediction_details, reason_for_failure)
-            VALUES (?, ?, ?)
-            """,
+        row = conn.execute(
+            "INSERT INTO ai_feedback (match_id, prediction_details, reason_for_failure)"
+            " VALUES (?, ?, ?) RETURNING id",
             (match_id, json.dumps(prediction_details, ensure_ascii=False), reason),
-        )
-        feedback_id = cur.lastrowid
+        ).fetchone()
+        feedback_id = row["id"]
 
     # Auto-embed for semantic RAG (non-blocking — failure doesn't break feedback write)
     try:

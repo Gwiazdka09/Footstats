@@ -18,8 +18,7 @@ Multiplier jest stosowany jako czynnik do efektywnego bankrollu przed Kelly.
 """
 from __future__ import annotations
 
-import sqlite3
-from footstats.config import DB_PATH
+from footstats.utils.db import connect as _connect
 
 # Kalibracja długoterminowa (10 kuponów)
 MULTIPLIER_HIGH    = 1.2
@@ -38,16 +37,12 @@ FORMA_LOOKBACK        = 3
 def _last_coupon_statuses(n: int) -> list[str]:
     """Zwraca statusy ostatnich n rozliczonych kuponów (WON/LOST), od najnowszego."""
     try:
-        conn = sqlite3.connect(str(DB_PATH))
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """SELECT status FROM coupons
-               WHERE status IN ('WON','LOST')
-               ORDER BY created_at DESC, id DESC
-               LIMIT ?""",
-            (n,),
-        ).fetchall()
-        conn.close()
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT status FROM coupons WHERE status IN ('WON','LOST')"
+                " ORDER BY created_at DESC, id DESC LIMIT ?",
+                (n,),
+            ).fetchall()
         return [r["status"] for r in rows]
     except Exception:
         return []
@@ -88,13 +83,12 @@ def get_stake_multiplier(n: int = LOOKBACK_N) -> float:
 
     # Fallback: hit-rate na ostatnich n kuponach
     try:
-        conn = sqlite3.connect(str(DB_PATH))
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT status FROM coupons WHERE status IN ('WON','LOST') ORDER BY created_at DESC, id DESC LIMIT ?",
-            (n,),
-        ).fetchall()
-        conn.close()
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT status FROM coupons WHERE status IN ('WON','LOST')"
+                " ORDER BY created_at DESC, id DESC LIMIT ?",
+                (n,),
+            ).fetchall()
     except Exception:
         return MULTIPLIER_NEUTRAL
 
@@ -114,18 +108,12 @@ def get_stake_multiplier(n: int = LOOKBACK_N) -> float:
 def calibration_summary(n: int = LOOKBACK_N) -> dict:
     """Zwraca słownik ze statystykami kalibracji — do logowania w agencie."""
     try:
-        conn = sqlite3.connect(str(DB_PATH))
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
-            SELECT status, stake_pln, payout_pln, roi_pct FROM coupons
-            WHERE status IN ('WON', 'LOST')
-            ORDER BY created_at DESC
-            LIMIT ?
-            """,
-            (n,),
-        ).fetchall()
-        conn.close()
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT status, stake_pln, payout_pln, roi_pct FROM coupons"
+                " WHERE status IN ('WON', 'LOST') ORDER BY created_at DESC LIMIT ?",
+                (n,),
+            ).fetchall()
     except Exception:
         return {"error": "Brak dostępu do DB", "multiplier": MULTIPLIER_NEUTRAL}
 

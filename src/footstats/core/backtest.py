@@ -13,12 +13,10 @@ Użycie jako moduł:
 """
 
 import json
-import sqlite3
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from footstats.config import DB_PATH
 from footstats.utils.db import connect as _connect
 from footstats.utils.betting import oblicz_tip_correct  # noqa: E402 (shared utility)
 
@@ -50,47 +48,39 @@ def init_db() -> None:
     with _connect() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS predictions (
-                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-                created_at           TEXT    NOT NULL DEFAULT (datetime('now')),
-                match_date           TEXT    NOT NULL,
-                team_home            TEXT    NOT NULL,
-                team_away            TEXT    NOT NULL,
-                league               TEXT    NOT NULL DEFAULT '',
-                ai_tip               TEXT    NOT NULL,
-                ai_confidence        INTEGER NOT NULL CHECK(ai_confidence BETWEEN 0 AND 100),
-                ai_reasoning         TEXT    NOT NULL DEFAULT '',
+                id                   SERIAL PRIMARY KEY,
+                created_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                match_date           TEXT NOT NULL,
+                team_home            TEXT NOT NULL,
+                team_away            TEXT NOT NULL,
+                league               TEXT NOT NULL DEFAULT '',
+                ai_tip               TEXT NOT NULL DEFAULT '',
+                ai_confidence        INTEGER NOT NULL DEFAULT 0 CHECK(ai_confidence BETWEEN 0 AND 100),
+                ai_reasoning         TEXT NOT NULL DEFAULT '',
                 odds                 REAL,
                 actual_result        TEXT,
-                tip_correct          INTEGER CHECK(tip_correct IN (0, 1, NULL)),
-                kupon_type           TEXT    DEFAULT '',
-                kodeks_rules_checked TEXT    NOT NULL DEFAULT '[]',
-                prompt_version       TEXT    NOT NULL DEFAULT '',
-                factors              TEXT    NOT NULL DEFAULT '[]',
-                match_stats          TEXT
+                tip_correct          INTEGER CHECK(tip_correct IN (0, 1)),
+                kupon_type           TEXT DEFAULT '',
+                kodeks_rules_checked TEXT NOT NULL DEFAULT '[]',
+                prompt_version       TEXT NOT NULL DEFAULT '',
+                factors              TEXT NOT NULL DEFAULT '[]',
+                match_stats          TEXT,
+                coupon_id            INTEGER REFERENCES coupons(id)
             );
+            CREATE INDEX IF NOT EXISTS idx_match_date  ON predictions(match_date);
+            CREATE INDEX IF NOT EXISTS idx_tip_correct ON predictions(tip_correct);
+            CREATE INDEX IF NOT EXISTS idx_kupon_type  ON predictions(kupon_type);
+            CREATE INDEX IF NOT EXISTS idx_league      ON predictions(league);
 
-            CREATE INDEX IF NOT EXISTS idx_match_date   ON predictions(match_date);
-            CREATE INDEX IF NOT EXISTS idx_tip_correct  ON predictions(tip_correct);
-            CREATE INDEX IF NOT EXISTS idx_kupon_type   ON predictions(kupon_type);
-            CREATE INDEX IF NOT EXISTS idx_league       ON predictions(league);
-        """)
-        # Migration: factors column dla istniejących DB
-        try:
-            conn.execute("ALTER TABLE predictions ADD COLUMN match_stats TEXT")
-        except sqlite3.OperationalError:
-            pass
-
-        # Tabela feedbacku AI (analiza porażek)
-        conn.executescript("""
             CREATE TABLE IF NOT EXISTS ai_feedback (
-                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                id                  SERIAL PRIMARY KEY,
                 match_id            INTEGER NOT NULL REFERENCES predictions(id),
-                prediction_details  TEXT    NOT NULL DEFAULT '{}',
-                reason_for_failure  TEXT    NOT NULL DEFAULT '',
-                created_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+                prediction_details  TEXT NOT NULL DEFAULT '{}',
+                reason_for_failure  TEXT NOT NULL DEFAULT '',
+                created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_ai_feedback_match ON ai_feedback(match_id);
-            CREATE INDEX IF NOT EXISTS idx_ai_feedback_date  ON ai_feedback(created_at);
+            CREATE INDEX IF NOT EXISTS idx_ai_feedback_date  ON ai_feedback(created_at)
         """)
 
 
@@ -118,19 +108,19 @@ def save_prediction(
     factors_json = json.dumps(factors or [], ensure_ascii=False)
 
     with _connect() as conn:
-        cur = conn.execute(
+        row = conn.execute(
             """
             INSERT INTO predictions
                 (match_date, team_home, team_away, league,
                  ai_tip, ai_confidence, ai_reasoning, odds,
                  kupon_type, kodeks_rules_checked, prompt_version, factors)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
             """,
             (match_date, team_home, team_away, league,
              ai_tip, ai_confidence, ai_reasoning, odds,
              kupon_type, rules_json, prompt_version, factors_json),
-        )
-        return cur.lastrowid
+        ).fetchone()
+        return row["id"]
 
 
 # ── 2. update_result ─────────────────────────────────────────────────────

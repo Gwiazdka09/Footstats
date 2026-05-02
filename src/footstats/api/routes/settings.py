@@ -1,5 +1,4 @@
 """Bot settings endpoints."""
-import sqlite3
 from typing import Optional
 
 import footstats.config as cfg
@@ -7,15 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from footstats.api.auth import require_auth
-from footstats.config import DB_PATH
+from footstats.utils.db import connect as _connect
 
 router = APIRouter(prefix="/api", tags=["settings"])
-
-
-def _get_conn():
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
 class SettingsUpdate(BaseModel):
@@ -28,30 +21,22 @@ class SettingsUpdate(BaseModel):
 
 @router.get("/settings")
 def get_settings(user: str = Depends(require_auth)):
-    conn = _get_conn()
-    try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS bot_settings (
-                key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT
-            )
-        """)
-        defaults = {
-            "version": cfg.VERSION,
-            "pewniaczek_prog": str(cfg.PEWNIACZEK_PROG),
-            "kandydat_prog": str(round(cfg.AGENT_KANDYDAT_PROG * 100, 1)),
-            "kelly_fraction": str(cfg.AGENT_KELLY_FRACTION),
-            "kelly_w1_multipliers": "0.7 / 1.0 / 1.1",
-        }
+    defaults = {
+        "version": cfg.VERSION,
+        "pewniaczek_prog": str(cfg.PEWNIACZEK_PROG),
+        "kandydat_prog": str(round(cfg.AGENT_KANDYDAT_PROG * 100, 1)),
+        "kelly_fraction": str(cfg.AGENT_KELLY_FRACTION),
+        "kelly_w1_multipliers": "0.7 / 1.0 / 1.1",
+    }
+    with _connect() as conn:
         for key, val in defaults.items():
             conn.execute(
-                "INSERT OR IGNORE INTO bot_settings (key, value, updated_at) VALUES (?,?,datetime('now'))",
+                "INSERT INTO bot_settings (key, value, updated_at) VALUES (?,?,CURRENT_TIMESTAMP)"
+                " ON CONFLICT (key) DO NOTHING",
                 (key, val),
             )
-        conn.commit()
         rows = conn.execute("SELECT key, value FROM bot_settings").fetchall()
-        data = {r["key"]: r["value"] for r in rows}
-    finally:
-        conn.close()
+    data = {r["key"]: r["value"] for r in rows}
     return {
         "version": data.get("version", cfg.VERSION),
         "pewniaczek_prog": float(data.get("pewniaczek_prog", cfg.PEWNIACZEK_PROG)),
@@ -72,14 +57,11 @@ def update_settings(data: SettingsUpdate, user: str = Depends(require_auth)):
     if data.kelly_w1_multipliers is not None: updates["kelly_w1_multipliers"] = data.kelly_w1_multipliers
     if not updates:
         raise HTTPException(status_code=400, detail="Brak pól do aktualizacji")
-    conn = _get_conn()
-    try:
+    with _connect() as conn:
         for key, val in updates.items():
             conn.execute(
-                "INSERT OR REPLACE INTO bot_settings (key, value, updated_at) VALUES (?,?,datetime('now'))",
+                "INSERT INTO bot_settings (key, value, updated_at) VALUES (?,?,CURRENT_TIMESTAMP)"
+                " ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=EXCLUDED.updated_at",
                 (key, val),
             )
-        conn.commit()
-    finally:
-        conn.close()
     return {"ok": True, "updated": list(updates.keys())}

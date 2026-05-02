@@ -9,24 +9,11 @@ Umożliwia eksport:
 """
 
 import json
-import sqlite3
 from datetime import datetime
 from typing import Any
 from pathlib import Path
 
-
-def _get_db_path() -> Path:
-    """Zwraca ścieżkę do bazy danych."""
-    return Path(__file__).parents[3] / "data" / "footstats_backtest.db"
-
-
-def _connect_db() -> sqlite3.Connection:
-    """Nawiązuje połączenie z bazą danych."""
-    db_path = _get_db_path()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    return conn
+from footstats.utils.db import connect as _connect_db
 
 
 def export_coupons_to_json(

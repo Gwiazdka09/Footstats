@@ -9,50 +9,29 @@ Użycie CLI:
 """
 from __future__ import annotations
 
-import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from footstats.utils.console import console
-
-_DEFAULT_DB = Path(__file__).parents[2] / "data" / "footstats_backtest.db"
+from footstats.utils.db import connect as _connect
 
 
 def get_stats_7_dni(db_path: Path = None) -> dict:
-    """Statystyki kuponów z ostatnich 7 dni.
-
-    Zwraca słownik z kluczami:
-        total, won, lost, partial, void,
-        accuracy_pct, total_stake, total_payout, roi_pct
-    """
-    path = db_path or _DEFAULT_DB
+    """Statystyki kuponów z ostatnich 7 dni."""
     _empty = {
-        "total": 0,
-        "won": 0,
-        "lost": 0,
-        "partial": 0,
-        "void": 0,
-        "accuracy_pct": 0.0,
-        "total_stake": 0.0,
-        "total_payout": 0.0,
-        "roi_pct": 0.0,
+        "total": 0, "won": 0, "lost": 0, "partial": 0, "void": 0,
+        "accuracy_pct": 0.0, "total_stake": 0.0, "total_payout": 0.0, "roi_pct": 0.0,
     }
 
-    if not path.exists():
-        return _empty
-
     cutoff = (datetime.now() - timedelta(days=7)).isoformat()
-    conn = sqlite3.connect(str(path))
-    conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute(
-            "SELECT status, stake_pln, payout_pln FROM coupons WHERE created_at >= ?",
-            (cutoff,),
-        ).fetchall()
-    except sqlite3.OperationalError:
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT status, stake_pln, payout_pln FROM coupons WHERE created_at >= ?",
+                (cutoff,),
+            ).fetchall()
+    except Exception:
         return _empty
-    finally:
-        conn.close()
 
     counts: dict[str, int] = {}
     total_stake = 0.0

@@ -3,15 +3,13 @@ bankroll.py – Zarządzanie kapitałem (Bankroll Management) dla FootStats.
 Obsługuje trwałość salda w SQLite oraz logikę reinvestmentu.
 """
 
-import sqlite3
-from pathlib import Path
 from datetime import datetime, timezone
-from footstats.config import AGENT_BANKROLL, AGENT_KELLY_FRACTION, DB_PATH
+from footstats.config import AGENT_BANKROLL, AGENT_KELLY_FRACTION
 from footstats.utils.db import connect as _db_connect
 
 
-def _connect() -> sqlite3.Connection:
-    return _db_connect(wal=False, foreign_keys=False)
+def _connect():
+    return _db_connect()
 
 def init_bankroll_tables() -> None:
     """Tworzy tabele do śledzenia stanu i historii bankrolla."""
@@ -19,19 +17,18 @@ def init_bankroll_tables() -> None:
     try:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS bankroll_state (
-                id           INTEGER PRIMARY KEY CHECK (id = 1),
-                balance      REAL NOT NULL,
-                updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+                id         INTEGER PRIMARY KEY CHECK (id = 1),
+                balance    REAL NOT NULL,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
-            
             CREATE TABLE IF NOT EXISTS bankroll_history (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp    TEXT NOT NULL DEFAULT (datetime('now')),
-                change_pln   REAL NOT NULL,
-                new_balance  REAL NOT NULL,
-                type         TEXT NOT NULL,
-                description  TEXT
-            );
+                id          SERIAL PRIMARY KEY,
+                timestamp   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                change_pln  REAL NOT NULL,
+                new_balance REAL NOT NULL,
+                type        TEXT NOT NULL,
+                description TEXT
+            )
         """)
         # Inicjalizacja balansu startowego jeśli nie istnieje
         check = conn.execute("SELECT balance FROM bankroll_state WHERE id = 1").fetchone()
@@ -66,7 +63,7 @@ def update_bankroll(change: float, tx_type: str, description: str = "") -> float
         if new_balance < 0 and tx_type == 'BET':
             new_balance = 0
             
-        conn.execute("UPDATE bankroll_state SET balance = ?, updated_at = datetime('now') WHERE id = 1", (new_balance,))
+        conn.execute("UPDATE bankroll_state SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1", (new_balance,))
         conn.execute("""
             INSERT INTO bankroll_history (change_pln, new_balance, type, description)
             VALUES (?, ?, ?, ?)

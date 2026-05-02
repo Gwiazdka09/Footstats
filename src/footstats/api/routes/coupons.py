@@ -1,7 +1,6 @@
 """Coupon, match, kelly, and stats endpoints."""
 import json
 import os
-import sqlite3
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -10,17 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from footstats.api.auth import require_auth
-from footstats.config import DB_PATH
+from footstats.utils.db import connect as _connect
 
 router = APIRouter(prefix="/api", tags=["coupons"])
 
 _MATCHES_CACHE: list = []
-
-
-def _get_conn():
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
 def _to_pct(v, default: float = 33.0) -> float:
@@ -94,36 +87,30 @@ class SettleRequest(BaseModel):
 
 @router.get("/coupons/active")
 def get_active_coupons(user: str = Depends(require_auth)):
-    conn = _get_conn()
-    try:
+    with _connect() as conn:
         rows = conn.execute(
             "SELECT * FROM coupons WHERE status IN ('ACTIVE','PENDING') ORDER BY created_at DESC"
         ).fetchall()
-        result = []
-        for r in rows:
-            d = dict(r)
-            d["legs"] = json.loads(d["legs_json"])
-            result.append(d)
-        return result
-    finally:
-        conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["legs"] = json.loads(d["legs_json"])
+        result.append(d)
+    return result
 
 
 @router.get("/coupons")
 def get_coupons(limit: int = 50, user: str = Depends(require_auth)):
-    conn = _get_conn()
-    try:
+    with _connect() as conn:
         rows = conn.execute(
             "SELECT * FROM coupons ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
-        result = []
-        for r in rows:
-            d = dict(r)
-            d["legs"] = json.loads(d["legs_json"])
-            result.append(d)
-        return result
-    finally:
-        conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["legs"] = json.loads(d["legs_json"])
+        result.append(d)
+    return result
 
 
 @router.get("/stats/coupon-summary")
@@ -250,14 +237,11 @@ def analyze_matches(req: AnalyzeRequest, user: str = Depends(require_auth)):
 def calculate_kelly(req: KellyRequest, user: str = Depends(require_auth)):
     if not req.selections:
         raise HTTPException(status_code=400, detail="Brak typów")
-    conn = _get_conn()
-    try:
+    with _connect() as conn:
         row = conn.execute("SELECT balance FROM bankroll_state WHERE id=1").fetchone()
         bankroll = float(row["balance"]) if row else float(cfg.AGENT_BANKROLL)
         frac_row = conn.execute("SELECT value FROM bot_settings WHERE key='kelly_fraction'").fetchone()
         fraction = int(frac_row["value"]) if frac_row else cfg.AGENT_KELLY_FRACTION
-    finally:
-        conn.close()
     total_odds = 1.0
     win_prob = 1.0
     for s in req.selections:
@@ -278,8 +262,7 @@ def calculate_kelly(req: KellyRequest, user: str = Depends(require_auth)):
 def place_coupon(req: PlaceCouponRequest, user: str = Depends(require_auth)):
     if not req.stake_pln or req.stake_pln < 2.0:
         raise HTTPException(status_code=400, detail="Minimalna stawka to 2.00 PLN")
-    conn = _get_conn()
-    try:
+    with _connect() as conn:
         row = conn.execute("SELECT balance FROM bankroll_state WHERE id=1").fetchone()
         balance = float(row["balance"]) if row else 0.0
         if req.stake_pln > balance:
@@ -289,13 +272,14 @@ def place_coupon(req: PlaceCouponRequest, user: str = Depends(require_auth)):
             [{"home": s.home, "away": s.away, "tip": s.tip, "odds": s.odds, "decision_score": int(s.win_prob)}
              for s in req.selections], ensure_ascii=False
         )
-        conn.execute("""
+        coupon_row = conn.execute("""
             INSERT INTO coupons (created_at, phase, status, kupon_type, legs_json,
                                  total_odds, stake_pln, payout_pln, match_date_first)
-            VALUES (?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?) RETURNING id
         """, (now, "final", "ACTIVE", "accumulator", legs_json,
               req.total_odds, req.stake_pln, None,
-              req.match_date or datetime.now().strftime("%Y-%m-%d")))
+              req.match_date or datetime.now().strftime("%Y-%m-%d"))).fetchone()
+        coupon_id = coupon_row["id"]
         new_balance = round(balance - req.stake_pln, 2)
         conn.execute("UPDATE bankroll_state SET balance=?, updated_at=? WHERE id=1", (new_balance, now))
         conn.execute("""
@@ -303,10 +287,6 @@ def place_coupon(req: PlaceCouponRequest, user: str = Depends(require_auth)):
             VALUES (?,?,?,?,?)
         """, (now, -req.stake_pln, new_balance, "BET",
               f"Kupon AI ({', '.join(s.tip for s in req.selections)})"))
-        conn.commit()
-        coupon_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    finally:
-        conn.close()
     return {"ok": True, "coupon_id": coupon_id, "new_balance": new_balance, "stake_pln": req.stake_pln}
 
 

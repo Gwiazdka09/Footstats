@@ -11,8 +11,6 @@ Użycie:
 """
 
 import json
-import sqlite3
-from footstats.config import DB_PATH
 from footstats.utils.db import connect as _connect
 
 # Statusy kuponu
@@ -52,11 +50,11 @@ def init_coupon_tables() -> None:
     def _fn(conn):
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS coupons (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                created_at       TEXT NOT NULL DEFAULT (datetime('now')),
-                phase            TEXT NOT NULL,
+                id               SERIAL PRIMARY KEY,
+                created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                phase            TEXT NOT NULL DEFAULT '',
                 status           TEXT NOT NULL DEFAULT 'DRAFT',
-                kupon_type       TEXT NOT NULL,
+                kupon_type       TEXT NOT NULL DEFAULT '',
                 legs_json        TEXT NOT NULL DEFAULT '[]',
                 total_odds       REAL,
                 stake_pln        REAL,
@@ -67,15 +65,11 @@ def init_coupon_tables() -> None:
                 match_date_first TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_coupon_status  ON coupons(status);
-            CREATE INDEX IF NOT EXISTS idx_coupon_created ON coupons(created_at);
+            CREATE INDEX IF NOT EXISTS idx_coupon_created ON coupons(created_at)
         """)
-        # Migration: coupon_id do predictions (bezpieczne jeśli już istnieje)
-        try:
-            conn.execute(
-                "ALTER TABLE predictions ADD COLUMN coupon_id INTEGER REFERENCES coupons(id)"
-            )
-        except sqlite3.OperationalError:
-            pass  # kolumna już istnieje
+        conn.execute(
+            "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS coupon_id INTEGER REFERENCES coupons(id)"
+        )
     _exec(_fn)
 
 
@@ -101,17 +95,17 @@ def save_coupon(
     legs_json = json.dumps(legs, ensure_ascii=False)
 
     def _fn(conn):
-        cur = conn.execute(
+        row = conn.execute(
             """
             INSERT INTO coupons
                 (phase, status, kupon_type, legs_json, total_odds, stake_pln,
                  groq_reasoning, decision_score, match_date_first)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
             """,
             (phase, STATUS_DRAFT, kupon_type, legs_json,
              total_odds, stake_pln, groq_reasoning, decision_score, match_date_first),
-        )
-        return cur.lastrowid
+        ).fetchone()
+        return row["id"]
     return _exec(_fn)
 
 
@@ -146,7 +140,7 @@ def update_coupon_status(
     _exec(_fn)
 
 
-def get_active_coupons() -> list[sqlite3.Row]:
+def get_active_coupons() -> list:
     """Zwraca kupony ze statusem DRAFT lub ACTIVE, od najnowszych."""
     init_coupon_tables()
 
@@ -158,7 +152,7 @@ def get_active_coupons() -> list[sqlite3.Row]:
     return _exec(_fn)
 
 
-def get_draft_today() -> "sqlite3.Row | None":
+def get_draft_today() -> "dict | None":
     """Zwraca dzisiejszy kupon DRAFT (pierwszy znaleziony) lub None."""
     init_coupon_tables()
     from datetime import datetime, timezone

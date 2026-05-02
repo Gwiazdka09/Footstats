@@ -10,13 +10,12 @@ Wyświetla:
   - Tabela 5 najnowszych wniosków z ai_feedback ("Mózg Bota")
 """
 
-import sqlite3
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from footstats.config import DB_PATH
+from footstats.utils.db import connect as _pg_connect
 
 # ── Konfiguracja ───────────────────────────────────────────────────────────────
 
@@ -29,10 +28,8 @@ st.set_page_config(
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    return conn
+def _connect():
+    return _pg_connect()
 
 
 @st.cache_data(ttl=60)

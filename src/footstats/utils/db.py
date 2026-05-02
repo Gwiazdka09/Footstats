@@ -1,15 +1,73 @@
-"""Shared SQLite connection factory for FootStats."""
+"""PostgreSQL connection factory — drop-in replacement for sqlite3 usage."""
 
-import sqlite3
-from footstats.config import DB_PATH
+import os
+
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
+
+_pool: psycopg2.pool.ThreadedConnectionPool | None = None
 
 
-def connect(wal: bool = True, foreign_keys: bool = True) -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    if wal:
-        conn.execute("PRAGMA journal_mode=WAL")
-    if foreign_keys:
-        conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
+    global _pool
+    if _pool is None:
+        url = os.environ.get("DATABASE_URL")
+        if not url:
+            raise RuntimeError("DATABASE_URL env var not set — add Neon.tech connection string to Cloud Run")
+        _pool = psycopg2.pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=url)
+    return _pool
+
+
+class _Conn:
+    """sqlite3-compatible psycopg2 connection wrapper."""
+
+    def __init__(self) -> None:
+        self._raw = _get_pool().getconn()
+
+    @staticmethod
+    def _fix(sql: str) -> str:
+        return sql.replace("?", "%s")
+
+    def execute(self, sql: str, params: tuple = ()) -> psycopg2.extensions.cursor:
+        cur = self._raw.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(self._fix(sql), params or None)
+        return cur
+
+    def executemany(self, sql: str, seq) -> psycopg2.extensions.cursor:
+        cur = self._raw.cursor()
+        cur.executemany(self._fix(sql), seq)
+        return cur
+
+    def executescript(self, script: str) -> None:
+        """Execute multiple ;-separated DDL statements (PostgreSQL-compatible)."""
+        cur = self._raw.cursor()
+        for stmt in script.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                cur.execute(stmt)
+
+    def commit(self) -> None:
+        self._raw.commit()
+
+    def rollback(self) -> None:
+        self._raw.rollback()
+
+    def close(self) -> None:
+        _get_pool().putconn(self._raw)
+
+    def __enter__(self) -> "_Conn":
+        return self
+
+    def __exit__(self, exc_type, *_) -> bool:
+        if exc_type:
+            self.rollback()
+        else:
+            self.commit()
+        self.close()
+        return False
+
+
+def connect(wal: bool = True, foreign_keys: bool = True) -> _Conn:
+    """Return a PostgreSQL connection. wal/foreign_keys ignored (PG handles natively)."""
+    return _Conn()

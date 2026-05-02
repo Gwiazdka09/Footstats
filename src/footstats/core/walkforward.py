@@ -13,7 +13,6 @@ Użycie:
 """
 
 import json
-import sqlite3
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -21,7 +20,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from footstats.config import DB_PATH
 from footstats.utils.db import connect as _connect
 MIN_HIST = 5   # min meczów drużyny w historii żeby liczyć lambdę
 
@@ -35,25 +33,25 @@ def _init_wf_table() -> None:
     with _connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS wf_results (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_at       TEXT NOT NULL DEFAULT (datetime('now')),
-                league       TEXT NOT NULL,
-                match_date   TEXT NOT NULL,
-                home         TEXT NOT NULL,
-                away         TEXT NOT NULL,
-                actual_hg    INTEGER,
-                actual_ag    INTEGER,
-                actual_res   TEXT,
-                pred_res     TEXT,
-                pred_conf    REAL,
-                pred_tip     TEXT,
-                lambda_h     REAL,
-                lambda_a     REAL,
-                form_h       REAL,
-                form_a       REAL,
-                elo_diff     REAL,
-                correct      INTEGER,
-                market       TEXT
+                id         SERIAL PRIMARY KEY,
+                run_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                league     TEXT NOT NULL,
+                match_date TEXT NOT NULL,
+                home       TEXT NOT NULL,
+                away       TEXT NOT NULL,
+                actual_hg  INTEGER,
+                actual_ag  INTEGER,
+                actual_res TEXT,
+                pred_res   TEXT,
+                pred_conf  REAL,
+                pred_tip   TEXT,
+                lambda_h   REAL,
+                lambda_a   REAL,
+                form_h     REAL,
+                form_a     REAL,
+                elo_diff   REAL,
+                correct    INTEGER,
+                market     TEXT
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_wf_league ON wf_results(league)")
