@@ -12,7 +12,7 @@ _ALGORITHM = "HS256"
 _EXPIRE_HOURS = 24
 _bearer = HTTPBearer(auto_error=False)
 
-router = APIRouter(tags=["auth"])
+router = APIRouter(prefix="/api", tags=["auth"])
 
 
 class LoginRequest(BaseModel):
