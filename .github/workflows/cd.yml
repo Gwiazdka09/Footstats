@@ -42,12 +42,6 @@ jobs:
           service: ${{ secrets.CLOUD_RUN_SERVICE }}
           region: ${{ secrets.GCP_REGION }}
           image: ${{ env.IMAGE }}:${{ github.sha }}
-          env_vars: |
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            FOOTSTATS_USER=${{ secrets.FOOTSTATS_USER }}
-            FOOTSTATS_PASSWORD_HASH=${{ secrets.FOOTSTATS_PASSWORD_HASH }}
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
-            ENV=production
 
       - name: Verify deployment health
         run: |
