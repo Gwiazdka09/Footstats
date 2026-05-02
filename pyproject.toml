@@ -33,6 +33,7 @@ api = [
 ]
 ai = [
     "groq>=0.4",
+    "langfuse>=2.0",
 ]
 scraper = [
     "playwright>=1.40",
