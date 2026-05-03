@@ -224,6 +224,56 @@ else:
                             headers={"Cache-Control": "no-store"})
 
 
+@app.get("/manifest.json", tags=["pwa"])
+def pwa_manifest():
+    from fastapi.responses import JSONResponse
+    return JSONResponse({
+        "name": "FootStats",
+        "short_name": "FootStats",
+        "description": "Kreator kuponów piłkarskich",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0f172a",
+        "theme_color": "#6366f1",
+        "lang": "pl",
+        "icons": [
+            {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+    })
+
+
+@app.get("/sw.js", tags=["pwa"])
+def service_worker():
+    from fastapi.responses import Response
+    js = """
+const CACHE = 'footstats-v1';
+const PRECACHE = ['/preview'];
+
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)));
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ));
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  if (e.request.url.includes('/api/')) return;
+  e.respondWith(
+    fetch(e.request).catch(() => caches.match(e.request))
+  );
+});
+""".strip()
+    return Response(js, media_type="application/javascript",
+                    headers={"Cache-Control": "no-cache"})
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

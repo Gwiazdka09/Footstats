@@ -1,21 +1,24 @@
 """PostgreSQL connection factory — drop-in replacement for sqlite3 usage."""
 
+from __future__ import annotations
+
 import os
+from typing import TYPE_CHECKING
 
-import psycopg2
-import psycopg2.extras
-import psycopg2.pool
+if TYPE_CHECKING:
+    import psycopg2.pool
 
-_pool: psycopg2.pool.ThreadedConnectionPool | None = None
+_pool: "psycopg2.pool.ThreadedConnectionPool | None" = None
 
 
-def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
+def _get_pool() -> "psycopg2.pool.ThreadedConnectionPool":
     global _pool
     if _pool is None:
+        import psycopg2.pool as _pg_pool
         url = os.environ.get("DATABASE_URL")
         if not url:
             raise RuntimeError("DATABASE_URL env var not set — add Neon.tech connection string to Cloud Run")
-        _pool = psycopg2.pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=url)
+        _pool = _pg_pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=url)
     return _pool
 
 
@@ -29,12 +32,13 @@ class _Conn:
     def _fix(sql: str) -> str:
         return sql.replace("?", "%s")
 
-    def execute(self, sql: str, params: tuple = ()) -> psycopg2.extensions.cursor:
-        cur = self._raw.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    def execute(self, sql: str, params: tuple = ()):
+        import psycopg2.extras as _extras
+        cur = self._raw.cursor(cursor_factory=_extras.RealDictCursor)
         cur.execute(self._fix(sql), params or None)
         return cur
 
-    def executemany(self, sql: str, seq) -> psycopg2.extensions.cursor:
+    def executemany(self, sql: str, seq):
         cur = self._raw.cursor()
         cur.executemany(self._fix(sql), seq)
         return cur
@@ -54,7 +58,7 @@ class _Conn:
         self._raw.rollback()
 
     def close(self) -> None:
-        _get_pool().putconn(self._raw)
+        _get_pool().putconn(self._raw)  # type: ignore[arg-type]
 
     def __enter__(self) -> "_Conn":
         return self
