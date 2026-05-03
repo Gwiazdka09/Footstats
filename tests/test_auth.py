@@ -31,7 +31,7 @@ def client():
 
 
 def test_login_success(client):
-    resp = client.post("/auth/login", json={"username": "admin", "password": "testpass"})
+    resp = client.post("/api/auth/login", json={"username": "admin", "password": "testpass"})
     assert resp.status_code == 200
     data = resp.json()
     assert "access_token" in data
@@ -39,12 +39,12 @@ def test_login_success(client):
 
 
 def test_login_wrong_password(client):
-    resp = client.post("/auth/login", json={"username": "admin", "password": "wrong"})
+    resp = client.post("/api/auth/login", json={"username": "admin", "password": "wrong"})
     assert resp.status_code == 401
 
 
 def test_login_wrong_user(client):
-    resp = client.post("/auth/login", json={"username": "hacker", "password": "testpass"})
+    resp = client.post("/api/auth/login", json={"username": "hacker", "password": "testpass"})
     assert resp.status_code == 401
 
 
@@ -54,7 +54,7 @@ def test_protected_no_token(client):
 
 
 def test_protected_valid_token(client):
-    login = client.post("/auth/login", json={"username": "admin", "password": "testpass"})
+    login = client.post("/api/auth/login", json={"username": "admin", "password": "testpass"})
     token = login.json()["access_token"]
     resp = client.get("/protected", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
