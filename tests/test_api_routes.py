@@ -19,7 +19,7 @@ client = TestClient(app, raise_server_exceptions=False)
 
 
 def _token() -> str:
-    r = client.post("/auth/login", json={"username": "admin", "password": "testpass"})
+    r = client.post("/api/auth/login", json={"username": "admin", "password": "testpass"})
     return r.json()["access_token"]
 
 
@@ -72,6 +72,6 @@ def test_cors_allowed_origin():
 
 def test_login_rate_limit():
     for _ in range(5):
-        client.post("/auth/login", json={"username": "x", "password": "x"})
-    resp = client.post("/auth/login", json={"username": "x", "password": "x"})
+        client.post("/api/auth/login", json={"username": "x", "password": "x"})
+    resp = client.post("/api/auth/login", json={"username": "x", "password": "x"})
     assert resp.status_code in (401, 429)
