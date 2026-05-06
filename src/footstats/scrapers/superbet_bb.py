@@ -357,3 +357,26 @@ def pobierz_bb_dla_meczow(
             browser.close()
 
     return wyniki
+
+
+if __name__ == "__main__":
+    import sys
+    import json
+    import logging
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    debug = "--debug" in sys.argv
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    dom  = args[0] if len(args) > 0 else "Legia"
+    gost = args[1] if len(args) > 1 else "Cracovia"
+
+    print(f"\n=== BetBuilder odds: {dom} vs {gost} ===\n")
+    wyniki = pobierz_bb_dla_meczow([{"dom": dom, "gost": gost}], headless=not debug)
+
+    for klucz, typy in wyniki.items():
+        print(f"\n{klucz} — {len(typy)} kursów:")
+        for t in sorted(typy, key=lambda x: x.kurs):
+            print(f"  {t.nazwa:<50} {t.kurs}")
+
+    print(f"\nRAW JSON:\n{json.dumps({k: [(t.nazwa, t.kurs) for t in v] for k, v in wyniki.items()}, ensure_ascii=False, indent=2)}")
