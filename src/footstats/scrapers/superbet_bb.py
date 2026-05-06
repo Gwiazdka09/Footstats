@@ -26,7 +26,10 @@ from footstats.scrapers.base_playwright import SUPERBET_CONFIG as _CFG, zamknij_
 
 logger = logging.getLogger(__name__)
 
-SUPERBET_URL = "https://www.superbet.pl"
+SUPERBET_URL    = "https://superbet.pl"
+FOOTBALL_URL    = f"{SUPERBET_URL}/zaklady-bukmacherskie/pilka-nozna"
+FOOTBALL_TODAY  = f"{FOOTBALL_URL}?day=dzisiaj"
+FOOTBALL_TMRW   = f"{FOOTBALL_URL}?day=jutro"
 
 # URL substrings that suggest a BetBuilder API response
 _BB_URL_HINTS = [
@@ -154,81 +157,51 @@ def _parsuj_kursy_z_dom(page: Page) -> list[Typ]:
 
 # ── Match search ──────────────────────────────────────────────────────────────
 
-def _wyciagnij_url_z_search(data, dom: str, gost: str) -> str | None:
-    """Pick a match URL from Superbet search API JSON."""
-    items: list = []
-    if isinstance(data, list):
-        items = data
-    elif isinstance(data, dict):
-        for k in ("events", "results", "data", "items", "matches"):
-            if k in data and isinstance(data[k], list):
-                items = data[k]
-                break
-
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        name = (item.get("name") or item.get("eventName") or "").lower()
-        if dom.lower()[:5] in name or gost.lower()[:5] in name:
-            for k in ("url", "link", "href", "slug", "eventSlug"):
-                v = item.get(k, "")
-                if v:
-                    return v if v.startswith("http") else SUPERBET_URL + v
-            eid = item.get("id") or item.get("eventId")
-            if eid:
-                return f"{SUPERBET_URL}/zaklady-sportowe/pilka-nozna/mecz/{eid}"
-    return None
-
-
 def znajdz_url_meczu(page: Page, dom: str, gost: str) -> str | None:
     """
-    Tries Superbet search API, then DOM search, to find the match page URL.
-    Returns full URL or None.
+    Szuka meczu na stronie piłki nożnej Superbet (dzisiaj + jutro).
+    Szuka linku zawierającego nazwę drużyny w href lub tekście.
+    Zwraca pełny URL meczu lub None.
     """
-    query = f"{dom} {gost}"
+    dom_s  = dom.lower()[:6]
+    gost_s = gost.lower()[:6]
 
-    for api_url in [
-        f"{SUPERBET_URL}/api/offer/v2/events/search?query={query.replace(' ', '+')}",
-        f"{SUPERBET_URL}/api/search?q={query.replace(' ', '+')}",
-    ]:
+    for listing_url in (FOOTBALL_TODAY, FOOTBALL_TMRW):
         try:
-            resp = page.request.get(api_url, timeout=8000)
-            if resp.ok:
-                url = _wyciagnij_url_z_search(resp.json(), dom, gost)
-                if url:
-                    logger.info("[BB] Mecz znaleziony via API: %s", url)
-                    return url
-        except Exception:
-            continue
+            page.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
+            time.sleep(3)
+            zamknij_popup(page, _CFG)
 
-    # DOM search fallback
-    try:
-        page.goto(SUPERBET_URL, wait_until="domcontentloaded", timeout=15000)
-        time.sleep(1)
-        for sel in (
-            "input[placeholder*='Szukaj']",
-            "input[placeholder*='szukaj']",
-            "input[type='search']",
-            "[data-cy='search-input']",
-        ):
-            try:
-                page.fill(sel, query, timeout=3000)
-                time.sleep(2.5)
-                break
-            except Exception:
-                continue
+            # Scroll żeby SPA załadował wszystkie mecze
+            for _ in range(4):
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                time.sleep(0.8)
 
-        for link in page.query_selector_all(
-            "a[href*='/mecz/'], a[href*='/event/'], a[href*='/match/']"
-        ):
-            href = link.get_attribute("href") or ""
-            tekst = (link.inner_text() or "").lower()
-            if dom.lower()[:5] in tekst or gost.lower()[:5] in tekst:
-                full = href if href.startswith("http") else SUPERBET_URL + href
-                logger.info("[BB] Mecz znaleziony via DOM: %s", full)
-                return full
-    except Exception as e:
-        logger.warning("[BB] Błąd szukania: %s", e)
+            # Zbierz wszystkie href z domeną superbet
+            hrefs: list[str] = page.evaluate(
+                "Array.from(document.querySelectorAll('a[href]'))"
+                ".map(a => a.href)"
+                ".filter(h => h.includes('superbet.pl') && h.includes('zaklady'))"
+            )
+
+            for href in hrefs:
+                href_l = href.lower()
+                if dom_s in href_l or gost_s in href_l:
+                    logger.info("[BB] Mecz znaleziony: %s", href)
+                    return href
+
+            # Fallback: sprawdź tekst linków
+            for link in page.query_selector_all("a[href]"):
+                tekst = (link.inner_text() or "").lower()
+                if dom_s in tekst or gost_s in tekst:
+                    href = link.get_attribute("href") or ""
+                    if "zaklady" in href or "pilka" in href or "live" in href:
+                        full = href if href.startswith("http") else SUPERBET_URL + href
+                        logger.info("[BB] Mecz znaleziony via tekst: %s", full)
+                        return full
+
+        except Exception as e:
+            logger.warning("[BB] Błąd listingu %s: %s", listing_url, e)
 
     logger.warning("[BB] Nie znaleziono: %s vs %s", dom, gost)
     return None
@@ -327,7 +300,7 @@ def pobierz_bb_dla_meczow(
         page = ctx.new_page()
 
         try:
-            page.goto(SUPERBET_URL, wait_until="domcontentloaded", timeout=20000)
+            page.goto(FOOTBALL_TODAY, wait_until="domcontentloaded", timeout=20000)
             time.sleep(2)
             zamknij_popup(page, _CFG)
             _zaloguj(page)
