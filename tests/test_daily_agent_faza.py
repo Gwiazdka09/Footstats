@@ -1,5 +1,98 @@
+import sqlite3
 import pytest
 from unittest.mock import patch, MagicMock
+
+
+_COUPON_SCHEMA = """
+CREATE TABLE IF NOT EXISTS coupons (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    phase            TEXT NOT NULL DEFAULT '',
+    status           TEXT NOT NULL DEFAULT 'DRAFT',
+    kupon_type       TEXT NOT NULL DEFAULT '',
+    legs_json        TEXT NOT NULL DEFAULT '[]',
+    total_odds       REAL,
+    stake_pln        REAL,
+    payout_pln       REAL,
+    roi_pct          REAL,
+    groq_reasoning   TEXT,
+    decision_score   INTEGER,
+    match_date_first TEXT
+);
+CREATE TABLE IF NOT EXISTS predictions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, coupon_id INTEGER REFERENCES coupons(id)
+)
+"""
+
+
+class _SQLiteConn:
+    def __init__(self, path: str) -> None:
+        self._raw = sqlite3.connect(path)
+        self._raw.row_factory = sqlite3.Row
+
+    def execute(self, sql: str, params=()):
+        return self._raw.execute(sql, params)
+
+    def executemany(self, sql: str, seq):
+        return self._raw.executemany(sql, seq)
+
+    def executescript(self, script: str) -> None:
+        self._raw.executescript(script)
+
+    def commit(self) -> None:
+        self._raw.commit()
+
+    def rollback(self) -> None:
+        self._raw.rollback()
+
+    def close(self) -> None:
+        self._raw.close()
+
+    def __enter__(self) -> "_SQLiteConn":
+        return self
+
+    def __exit__(self, exc_type, *_) -> bool:
+        if exc_type:
+            self.rollback()
+        else:
+            self.commit()
+        self.close()
+        return False
+
+
+_BANKROLL_SCHEMA = """
+CREATE TABLE IF NOT EXISTS bankroll_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    balance REAL NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS bankroll_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    change_pln REAL NOT NULL, new_balance REAL NOT NULL,
+    type TEXT NOT NULL, description TEXT
+)
+"""
+
+
+def _setup_sqlite_ct(tmp_path, monkeypatch):
+    """Init SQLite DB + patch coupon_tracker, bankroll _connect, init fns."""
+    db_path = str(tmp_path / "test.db")
+    setup = sqlite3.connect(db_path)
+    setup.executescript(_COUPON_SCHEMA)
+    setup.executescript(_BANKROLL_SCHEMA)
+    setup.execute("INSERT OR IGNORE INTO bankroll_state (id, balance) VALUES (1, 1000.0)")
+    setup.commit()
+    setup.close()
+
+    conn_factory = lambda: _SQLiteConn(db_path)
+
+    import footstats.core.coupon_tracker as ct
+    import footstats.core.bankroll as bk
+    monkeypatch.setattr(ct, "_connect", conn_factory)
+    monkeypatch.setattr(ct, "init_coupon_tables", lambda: None)
+    monkeypatch.setattr(bk, "_db_connect", conn_factory)
+    return db_path
 
 
 def test_decision_score_kandydat_wrapper_returns_tuple():
@@ -32,10 +125,8 @@ def test_filtruj_przez_decision_score_adds_score_field():
     assert "decision_reasons" in result[0]
 
 
-def test_zapisz_kupon_do_db_returns_id_or_none(tmp_path):
-    import footstats.core.coupon_tracker as ct
-    ct.DB_PATH = tmp_path / "test.db"
-    ct.init_coupon_tables()
+def test_zapisz_kupon_do_db_returns_id_or_none(tmp_path, monkeypatch):
+    db_path = _setup_sqlite_ct(tmp_path, monkeypatch)
 
     from footstats.daily_agent import _zapisz_kupon_do_db
     kandydaci = [{"gospodarz": "PSG", "goscie": "Lyon", "tip": "Over 2.5",
@@ -44,13 +135,11 @@ def test_zapisz_kupon_do_db_returns_id_or_none(tmp_path):
     assert result is None or isinstance(result, int)
 
 
-def test_zapisz_kupon_final_promotes_draft_to_active(tmp_path):
+def test_zapisz_kupon_final_promotes_draft_to_active(tmp_path, monkeypatch):
     """Faza final powinna promować istniejący DRAFT → ACTIVE, nie tworzyć nowego."""
-    import footstats.core.coupon_tracker as ct
-    ct.DB_PATH = tmp_path / "test.db"
-    ct.init_coupon_tables()
+    db_path = _setup_sqlite_ct(tmp_path, monkeypatch)
 
-    # Tworzymy DRAFT ręcznie
+    import footstats.core.coupon_tracker as ct
     draft_id = ct.save_coupon("draft", "A", [], stake_pln=10.0)
 
     from footstats.daily_agent import _zapisz_kupon_do_db
@@ -58,12 +147,9 @@ def test_zapisz_kupon_final_promotes_draft_to_active(tmp_path):
                   "kurs": 1.75, "decision_score": 70}]
     result = _zapisz_kupon_do_db(kandydaci, phase="final", groq_resp="Final reason", stake=10.0, total_odds=1.75)
 
-    # Zwraca ten sam ID co DRAFT
     assert result == draft_id
 
-    # Sprawdź status w bazie
-    import sqlite3
-    conn = sqlite3.connect(str(tmp_path / "test.db"))
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     row = conn.execute("SELECT status, phase FROM coupons WHERE id=?", (draft_id,)).fetchone()
     conn.close()

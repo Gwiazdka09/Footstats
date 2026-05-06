@@ -1,24 +1,142 @@
 """tests/test_evening_agent.py"""
+import sqlite3
 import pytest
 from unittest.mock import patch
 
 
-# ── Fixtures ───────────────────────────────────────────────────────────────
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS coupons (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    phase            TEXT NOT NULL DEFAULT '',
+    status           TEXT NOT NULL DEFAULT 'DRAFT',
+    kupon_type       TEXT NOT NULL DEFAULT '',
+    legs_json        TEXT NOT NULL DEFAULT '[]',
+    total_odds       REAL,
+    stake_pln        REAL,
+    payout_pln       REAL,
+    roi_pct          REAL,
+    groq_reasoning   TEXT,
+    decision_score   INTEGER,
+    match_date_first TEXT
+);
+CREATE TABLE IF NOT EXISTS predictions (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    match_date           TEXT NOT NULL DEFAULT '',
+    team_home            TEXT NOT NULL DEFAULT '',
+    team_away            TEXT NOT NULL DEFAULT '',
+    league               TEXT NOT NULL DEFAULT '',
+    ai_tip               TEXT NOT NULL DEFAULT '',
+    ai_confidence        INTEGER NOT NULL DEFAULT 0,
+    ai_reasoning         TEXT NOT NULL DEFAULT '',
+    odds                 REAL,
+    actual_result        TEXT,
+    tip_correct          INTEGER,
+    kupon_type           TEXT DEFAULT '',
+    kodeks_rules_checked TEXT NOT NULL DEFAULT '[]',
+    prompt_version       TEXT NOT NULL DEFAULT '',
+    factors              TEXT NOT NULL DEFAULT '[]',
+    match_stats          TEXT,
+    coupon_id            INTEGER REFERENCES coupons(id)
+);
+CREATE TABLE IF NOT EXISTS ai_feedback (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    content    TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS bankroll_state (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    balance    REAL NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS bankroll_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    change_pln  REAL NOT NULL,
+    new_balance REAL NOT NULL,
+    type        TEXT NOT NULL,
+    description TEXT
+)
+"""
+
+
+class _SQLiteConn:
+    def __init__(self, path: str) -> None:
+        self._raw = sqlite3.connect(path)
+        self._raw.row_factory = sqlite3.Row
+
+    def execute(self, sql: str, params=()):
+        return self._raw.execute(sql, params)
+
+    def executemany(self, sql: str, seq):
+        return self._raw.executemany(sql, seq)
+
+    def executescript(self, script: str) -> None:
+        self._raw.executescript(script)
+
+    def commit(self) -> None:
+        self._raw.commit()
+
+    def rollback(self) -> None:
+        self._raw.rollback()
+
+    def close(self) -> None:
+        self._raw.close()
+
+    def __enter__(self) -> "_SQLiteConn":
+        return self
+
+    def __exit__(self, exc_type, *_) -> bool:
+        if exc_type:
+            self.rollback()
+        else:
+            self.commit()
+        self.close()
+        return False
+
 
 @pytest.fixture(autouse=True)
 def patch_db(tmp_path, monkeypatch):
-    """Przekieruj obie bazy na tmp."""
+    """All DB modules get a shared SQLite file; DDL init calls no-op'd."""
+    db_path = str(tmp_path / "test.db")
+
+    setup = sqlite3.connect(db_path)
+    setup.executescript(_SCHEMA)
+    setup.execute("INSERT OR IGNORE INTO bankroll_state (id, balance) VALUES (1, 1000.0)")
+    setup.commit()
+    setup.close()
+
+    conn_factory = lambda: _SQLiteConn(db_path)
+
     import footstats.core.coupon_tracker as ct
     import footstats.core.backtest as bt
-    db = tmp_path / "test.db"
-    monkeypatch.setattr(ct, "DB_PATH", db)
-    monkeypatch.setattr(bt, "DB_PATH", db)
-    yield db
+    import footstats.core.bankroll as bk
+
+    monkeypatch.setattr(ct, "_connect", conn_factory)
+    monkeypatch.setattr(bt, "_connect", conn_factory)
+    monkeypatch.setattr(bk, "_db_connect", conn_factory)
+    monkeypatch.setattr(ct, "init_coupon_tables", lambda: None)
+    monkeypatch.setattr(bt, "init_db", lambda: None)
+
+    import footstats.evening_agent as ea
+    monkeypatch.setattr(ea, "init_coupon_tables", lambda: None)
+    monkeypatch.setattr(ea, "init_db", lambda: None)
+
+    yield db_path
+
+
+# ── Pure helpers ────────────────────────────────────────────────────────────
+
+from footstats.evening_agent import (
+    _wynik_z_fixture,
+    _find_result,
+    _status_kuponu,
+)
 
 
 @pytest.fixture
 def sample_fixture_psg_lyon():
-    """Fixture API-Football: PSG 2-1 Lyon (zakończony)."""
     return {
         "fixture": {"status": {"short": "FT"}},
         "teams": {
@@ -31,7 +149,6 @@ def sample_fixture_psg_lyon():
 
 @pytest.fixture
 def sample_fixture_inprogress():
-    """Fixture API-Football: mecz w trakcie."""
     return {
         "fixture": {"status": {"short": "1H"}},
         "teams": {
@@ -40,15 +157,6 @@ def sample_fixture_inprogress():
         },
         "goals": {"home": 1, "away": 0},
     }
-
-
-# ── Testy pomocników ────────────────────────────────────────────────────────
-
-from footstats.evening_agent import (
-    _wynik_z_fixture,
-    _find_result,
-    _status_kuponu,
-)
 
 
 def test_wynik_z_fixture_finished(sample_fixture_psg_lyon):
@@ -71,8 +179,7 @@ def test_find_result_no_match():
         "teams": {"home": {"name": "Juventus"}, "away": {"name": "Inter"}},
         "goals": {"home": 1, "away": 1},
     }
-    wynik = _find_result("Arsenal", "Chelsea", [fixture])
-    assert wynik is None
+    assert _find_result("Arsenal", "Chelsea", [fixture]) is None
 
 
 def test_status_kuponu_all_win():
@@ -95,14 +202,12 @@ def test_status_kuponu_empty():
     assert _status_kuponu([]) == "VOID"
 
 
-# ── Test integracyjny run_evening_agent ─────────────────────────────────────
+# ── Integration: run_evening_agent ──────────────────────────────────────────
 
 def test_run_evening_agent_marks_coupon_won(sample_fixture_psg_lyon):
-    """Kupon z nogą PSG-1 wygrywa gdy PSG wygrywa 2-1."""
-    from footstats.core.coupon_tracker import save_coupon, get_active_coupons, init_coupon_tables
+    from footstats.core.coupon_tracker import save_coupon, get_active_coupons
     from footstats.evening_agent import run_evening_agent
 
-    init_coupon_tables()
     legs = [{"gospodarz": "PSG", "goscie": "Lyon", "typ": "1", "kurs": 1.45}]
     save_coupon("final", "A", legs, total_odds=1.45, stake_pln=10.0)
 
@@ -113,16 +218,13 @@ def test_run_evening_agent_marks_coupon_won(sample_fixture_psg_lyon):
         summary = run_evening_agent("2026-04-09")
 
     assert summary["won"] == 1
-    active = get_active_coupons()
-    assert len(active) == 0  # kupon przeniesiony do WON
+    assert len(get_active_coupons()) == 0
 
 
 def test_run_evening_agent_marks_coupon_lost(sample_fixture_psg_lyon):
-    """Kupon z nogą Lyon-1 przegrywa gdy Lyon przegrywa 1-2."""
-    from footstats.core.coupon_tracker import save_coupon, get_active_coupons, init_coupon_tables
+    from footstats.core.coupon_tracker import save_coupon
     from footstats.evening_agent import run_evening_agent
 
-    init_coupon_tables()
     legs = [{"gospodarz": "PSG", "goscie": "Lyon", "typ": "2", "kurs": 3.20}]
     save_coupon("final", "A", legs, total_odds=3.20, stake_pln=10.0)
 
@@ -136,11 +238,9 @@ def test_run_evening_agent_marks_coupon_lost(sample_fixture_psg_lyon):
 
 
 def test_run_evening_agent_pending_when_no_result():
-    """Kupon zostaje ACTIVE gdy mecz jeszcze nie zakończony."""
-    from footstats.core.coupon_tracker import save_coupon, get_active_coupons, init_coupon_tables
+    from footstats.core.coupon_tracker import save_coupon, get_active_coupons
     from footstats.evening_agent import run_evening_agent
 
-    init_coupon_tables()
     legs = [{"gospodarz": "Bayern", "goscie": "Dortmund", "typ": "1", "kurs": 1.60}]
     save_coupon("final", "A", legs, total_odds=1.60, stake_pln=10.0)
 
@@ -150,18 +250,13 @@ def test_run_evening_agent_pending_when_no_result():
         summary = run_evening_agent("2026-04-09")
 
     assert summary["active"] == 1
-    active = get_active_coupons()
-    assert len(active) == 1  # nadal aktywny
+    assert len(get_active_coupons()) == 1
 
 
 def test_run_evening_agent_triggers_auto_trainer():
-    """Gdy >= 20 nóg dostaje wyniki → auto-trainer jest uruchamiany."""
-    from footstats.core.coupon_tracker import save_coupon, init_coupon_tables, promote_to_active
+    from footstats.core.coupon_tracker import save_coupon, promote_to_active
     from footstats.evening_agent import run_evening_agent
 
-    init_coupon_tables()
-
-    # Tworzymy 20 kuponów jednonożnych — każdy z inną drużyną
     fixtures = []
     for i in range(20):
         home = f"HomeTeam{i}"

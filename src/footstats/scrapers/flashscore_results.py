@@ -6,6 +6,7 @@ Ulepszona wersja: korzysta z Flashscore.mobi (lekka wersja HTML) i lepszej norma
 import re
 import logging
 import requests
+from difflib import SequenceMatcher
 from datetime import datetime, timedelta
 from pathlib import Path
 from bs4 import BeautifulSoup

@@ -169,6 +169,7 @@ def _wzbogac_forme_top(wyniki: list, top_n: int = 6) -> None:
 def _wzbogac_o_betbuilder(wyniki: list) -> None:
     try:
         from footstats.core.bet_builder import estimate_lambdas_from_probs, get_all_market_suggestions
+        from footstats.betbuilder import fmt_bb_sugestie
     except ImportError:
         return
 
@@ -190,6 +191,11 @@ def _wzbogac_o_betbuilder(wyniki: list) -> None:
             if all_sugestie:
                 w["bet_builder"] = all_sugestie
                 w["bet_builder_markets"] = markets
+                # BetBuilder sugestie z kurs_fair (1/p_poisson) dla kontekstu AI
+                # Wyciągamy surowe sugestie z kategorii BetBuilder (mają szansę %)
+                bb_raw = markets.get("BetBuilder", [])
+                if bb_raw:
+                    w["bet_builder_kombinacje"] = fmt_bb_sugestie(bb_raw)
 
 # ── Krok 3: Groq AI ───────────────────────────────────────────────────────────
 
@@ -560,6 +566,9 @@ def _waliduj_kupon_groq(dane: dict, stawka: float, kupon_key: str = "kupon_a") -
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    from dotenv import load_dotenv
+    load_dotenv()
+
     parser = argparse.ArgumentParser(description="FootStats Daily Agent")
     parser.add_argument("--stawka",   type=float, default=10.0, help="Stawka kupon A (PLN, domyslnie 10)")
     parser.add_argument("--stawka-b", type=float, default=5.0,  help="Stawka kupon B (PLN, domyslnie 5)")
@@ -1052,6 +1061,10 @@ def _ocen_zdarzenia_decision_score(dane: dict, phase: str = "draft") -> None:
                 "referee_neutral": z.get("referee_neutral", True),
             }
             sc, reasons = score_kandydat(w, context=ctx, phase=phase)
+            # BetBuilder leg z pozytywnym EV dostaje bonus — Poisson math potwierdza edge
+            if z.get("betbuilder") and (z.get("ev_netto") or 0) > 0:
+                sc += 5
+                reasons.append("BetBuilder leg EV>0 (+5)")
             z["decision_score"] = sc
             z["decision_reasons"] = reasons
             ikona = "[green]✅[/green]" if sc >= threshold else "[yellow]⚠️ [/yellow]"

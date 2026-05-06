@@ -9,14 +9,44 @@ import numpy as np
 from src.footstats.ai.rag_embeddings import EmbeddingStore, ensure_schema, backfill_embeddings
 
 
-@pytest.fixture
-def temp_db():
-    """Create temporary SQLite DB for testing."""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = Path(f.name)
+class _SQLiteConn:
+    def __init__(self, path: str) -> None:
+        self._raw = sqlite3.connect(path)
+        self._raw.row_factory = sqlite3.Row
 
-    # Initialize schema
-    conn = sqlite3.connect(db_path)
+    def execute(self, sql: str, params=()):
+        return self._raw.execute(sql, params)
+
+    def executescript(self, script: str) -> None:
+        self._raw.executescript(script)
+
+    def commit(self) -> None:
+        self._raw.commit()
+
+    def rollback(self) -> None:
+        self._raw.rollback()
+
+    def close(self) -> None:
+        self._raw.close()
+
+    def __enter__(self) -> "_SQLiteConn":
+        return self
+
+    def __exit__(self, exc_type, *_) -> bool:
+        if exc_type:
+            self.rollback()
+        else:
+            self.commit()
+        self.close()
+        return False
+
+
+@pytest.fixture
+def temp_db(tmp_path, monkeypatch):
+    """SQLite DB for testing; patches rag_embeddings._connect to use it."""
+    db_path = tmp_path / "rag_test.db"
+
+    conn = sqlite3.connect(str(db_path))
     conn.execute("""
         CREATE TABLE ai_feedback (
             id INTEGER PRIMARY KEY,
@@ -29,12 +59,10 @@ def temp_db():
     conn.commit()
     conn.close()
 
-    yield db_path
+    import src.footstats.ai.rag_embeddings as re_mod
+    monkeypatch.setattr(re_mod, "_connect", lambda: _SQLiteConn(str(db_path)))
 
-    # Cleanup
-    db_path.unlink(missing_ok=True)
-    (db_path.parent / (db_path.name + "-wal")).unlink(missing_ok=True)
-    (db_path.parent / (db_path.name + "-shm")).unlink(missing_ok=True)
+    yield str(db_path)
 
 
 class TestEmbeddingStore:
@@ -145,11 +173,13 @@ class TestSemanticRetrieval:
     """Integration tests for semantic lesson retrieval."""
 
     def test_retrieve_empty_embeddings_table(self, temp_db):
-        """Retrieval on empty embeddings should return []."""
-        from src.footstats.ai.rag import retrieve_relevant_lessons
-
-        # This will fail to connect to real DB; we'd need a mock for full integration test
-        # For now, just verify the function handles no embeddings gracefully
+        """EmbeddingStore.cosine_top_k on empty table returns []."""
+        ensure_schema_in_db(temp_db)
+        from src.footstats.ai.rag_embeddings import EmbeddingStore
+        store = EmbeddingStore(temp_db)
+        query = store.embed_text("test")
+        results = store.cosine_top_k(query, k=5, min_score=0.0)
+        assert results == []
 
 
 def ensure_schema_in_db(db_path: Path):

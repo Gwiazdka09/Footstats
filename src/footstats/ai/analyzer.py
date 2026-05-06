@@ -109,29 +109,11 @@ BTTS: oba ataki w formie, zadna druzyna nie ma COMFORT/VACATION (bo te druzyny n
 1/X/2: EV_netto > 3%, brak ROTACJA/ZMECZENIE, Poisson i ML zgodne.
 1X / X2: bezpieczniejsze ale niskie kursy – tylko gdy EV_netto > 0 po podatku.
 
-== PRZYKLADY (kalibracja) ==
-KOTWICA OK:
-  PSG vs Toulouse | ML 1=91% | kurs=1.28
-  EV_netto = 0.91x1.28x0.88-1 = +2.5% – PSG w domu, klasa A vs D, pewnosc >= 90%. Moze byc kotwica.
-
-DOBRY TYP:
-  Bayern vs Augsburg | TWIERDZA(Bayern 9m) | ML 1=82% | kurs=1.48
-  EV_netto = 0.82x1.48x0.88-1 = +6.8% WARTOSC
-
-ZLY TYP (pulapka kursu):
-  PSG vs Metz | ML 1=91% | kurs=1.18 – ponizej progu 1.20. NIGDY.
-
-PULAPKA ROZBIÉZNOSCI:
-  Liverpool vs Chelsea | Poisson=72% vs ML=51% | ROZBIÉZNOSC +21%
-  Modele sie kloca. Nie wkladaj do AKO.
-
-ROTACJA W AKO:
-  Man City (ROTACJA – CL za 3 dni) | ML 1=78% | kurs=1.55
-  Nie bierz do AKO. Rotacja kadry kasuje statystyke.
-
-HISTORIA RAG:
-  Bayern vs Dortmund | PATENT+TWIERDZA | HISTORIA: PATENT+TWIERDZA->1: 7/8(87%)
-  Historycznie ten wzorzec trafia 87% – mocny dowod na "1".
+== PRZYKLADY ==
+KOTWICA: 1=91% kurs=1.28 EV=+2.5% klasa A vs D → OK
+VALUE: TWIERDZA 1=82% kurs=1.48 EV=+6.8% → BIERZ
+NIE: kurs<1.20 NIGDY | ROZBIEŻNOŚĆ>15% POMIŃ | ROTACJA POMIŃ
+RAG: PATENT+TWIERDZA→1: 7/8=87% → mocny dowód
 
 == ZAKAZY BEZWZGLEDNE (nauczone na stratach 04.04.2026) ==
 1. Max 6 nog w AKO – bez wyjatkow. Wiecej nog = iluzja pewnosci, nie wieksza szansa.
@@ -142,8 +124,10 @@ HISTORIA RAG:
 4. "Kupon 19 pewniaczkow": NIE BUDUJ. Kazda noga ponizej 1.20 to NIGDY. 19 nog to 19 szans na blad.
 
 == BET BUILDer (ZAKŁADY ŁĄCZONE) ==
-- Pamiętaj, że zyski z zakładów łączonych dają ogromne "Value". Jeśli widzisz przy danym meczu dostarczoną listę pod kluczem 'bet_builder_sugestie', wolno Ci postawić DOKŁADNIE TEN sugerowany typ (np. "1 & Over 1.5").
-- Uwolnij kreatywność — jeśli łączony bet ma duży sens (i został dostarczony w sugestiach, co świadczy o sprawdzonej matematyce macierzy Poissona) dodaj go zamiast zwyczajnego 1X2, zwłaszcza by zaatakować większe mnożniki.
+- Jeśli widzisz 'bb_z_kursem' PREFERUJ ten format — zawiera kurs_fair (1/p_Poisson) i % szansy. Wybierz typ z najwyższym kursem który masz powód popierać danymi.
+- Jeśli brak 'bb_z_kursem', korzystaj z 'bet_builder_sugestie'. Wolno Ci postawić DOKŁADNIE TEN sugerowany typ jako jedną nogę (np. "1 & Over 1.5").
+- BetBuilder noga zastępuje standardowy 1X2 — nie dodawaj jej NA DODATEK do 1/X/2 z tego samego meczu.
+- Kurs_fair to kurs bez marży bukmachera. Realny kurs BetBuilder w Superbet będzie o ~10% niższy.
 
 == POLITYKA "OVER 2.5" I KONTUZJI (PEŁNA ANALIZA) ==
 - SCEPTYCYZM WOBEC OVER 2.5: Wymagaj dowodow na SIŁĘ ATAKU OBU drużyn. Jeśli brakuje informacji lub jedna z drużyn ma słaby atak, ODRZUC Over 2.5. Słaba obrona to nie jest wystarczający powód na Over.
@@ -243,6 +227,24 @@ def _analizuj_forme(mecze: list) -> dict:
     }
 
 
+def _kontynuuj_uciety_json(client, messages: list, partial: str, max_tokens: int = 700) -> str:
+    """Wysyła ucięty JSON jako assistant turn i prosi o dokończenie."""
+    cont_messages = messages + [
+        {"role": "assistant", "content": partial},
+        {"role": "user", "content": "Kontynuuj JSON od miejsca ucięcia. Zwróć TYLKO brakującą część (bez wstępu)."},
+    ]
+    try:
+        resp2 = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=cont_messages,
+            max_tokens=max_tokens,
+            temperature=0.1,
+        )
+        return partial + resp2.choices[0].message.content
+    except Exception:
+        return partial
+
+
 def _zapytaj_typera(prompt: str, max_tokens: int = 900) -> str:
     """Groq z systemowym promptem wyspecjalizowanego typera + kalibracja + liga statystyki."""
     klucz = os.getenv("GROQ_API_KEY", "").strip()
@@ -257,27 +259,25 @@ def _zapytaj_typera(prompt: str, max_tokens: int = 900) -> str:
     if liga_blok:
         system += f"\n\n{liga_blok}\n"
 
-    if langfuse:
-        pass
-
     try:
         import groq as groq_lib
         client = groq_lib.Groq(api_key=klucz)
 
-        # Langfuse span for Groq API call
-        trace_input = {"prompt": prompt[:200], "max_tokens": max_tokens}
-
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": prompt},
+        ]
         resp = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user",   "content": prompt},
-            ],
+            messages=messages,
             max_tokens=max_tokens,
             temperature=0.25,
         )
 
         result = resp.choices[0].message.content
+        if resp.choices[0].finish_reason == "length":
+            result = _kontynuuj_uciety_json(client, messages, result)
+
         return result
     except Exception as e:
         return zapytaj_ai(prompt, max_tokens)
@@ -837,6 +837,11 @@ def _buduj_opis_meczu(w: dict) -> str:
         b_str = ", ".join(bb)
         linie.append(f"  [bet_builder_sugestie]: {b_str}")
 
+    # BetBuilder z kurs_fair (1/p_Poisson) — preferowany format dla AI
+    bb_k = w.get("bet_builder_kombinacje")
+    if bb_k and isinstance(bb_k, list):
+        linie.append(f"  [bb_z_kursem]: {', '.join(bb_k[:6])}")
+
     # Scout Bot EV — format quick_picks
     scout = w.get("scout") or {}
     if scout:
@@ -1151,16 +1156,16 @@ def ai_analiza_pewniaczki(
     except Exception:
         pass
 
-    mecze_opisy = [_buduj_opis_meczu(w) for w in wyniki[:8]]
+    mecze_opisy = [_buduj_opis_meczu(w) for w in wyniki[:5]]
 
     prompt = f"""ROLA: Jesteś zawodowym, ultra-sceptycznym analitykiem bukmacherskim. Twój cel NIE jest znaleźć zwycięzcę — jest znaleźć powody, dla których typ PRZEGRA.
 
-MASZ DO DYSPOZYCJI: {len(wyniki)} meczów piłkarskich z predykcjami na najbliższe 72h.
+MASZ DO DYSPOZYCJI: {len(wyniki[:5])} meczów piłkarskich z predykcjami na najbliższe 72h.
 Mecze [metoda:POISSON] mają pełną analizę czynnikową. Mecze [metoda:ML] to samo Bzzoiro bez historii.
 
 KONTEKST ZBIORU:
 {sygnaly}
-{kalibracja_str}{feedback_str}
+{kalibracja_str[:600]}{feedback_str[:400]}
 PODATEK: 12% zryczałtowany. Wzór netto: stawka × kurs_łączny × 0.88
 EV(brutto) w danych jest PRZED podatkiem — po podatku realny zysk jest o ~12% niższy.
 
@@ -1182,47 +1187,22 @@ MECZE:
 
 ZADANIE: Odpowiedz TYLKO w JSON (bez tekstu przed/po):
 {{
-  "top3": [
-    {{
-      "mecz": "Gospodarz vs Goscie",
-      "typ": "1",
-      "kurs": 1.48,
-      "pewnosc_pct": 72,
-      "ev_netto": 6.8,
-      "uzasadnienie": "1 zdanie po polsku",
-      "ryzyko": [
-        "Argument 1 PRZECIWKO typowi",
-        "Argument 2 PRZECIWKO typowi",
-        "Argument 3 PRZECIWKO typowi"
-      ]
-    }}
-  ],
+  "top3": [{{"mecz": "X vs Y", "typ": "1", "kurs": 1.48, "pewnosc_pct": 72, "ev_netto": 6.8, "uzasadnienie": "1 zdanie", "ryzyko": ["r1","r2","r3"]}}],
   "kupon_a": {{
     "zdarzenia": [
-      {{"nr": 1, "mecz": "Druzyna1 vs Druzyna2", "typ": "1", "kurs": 1.55, "pewnosc_pct": 70, "ryzyko": ["Kontuzja kluczowego gracza", "Forma spadkowa ostatnie 3 mecze", "Dominacja przeciwnika w meczach bezpośrednich"]}},
-      {{"nr": 2, "mecz": "Druzyna3 vs Druzyna4", "typ": "Over", "kurs": 1.80, "pewnosc_pct": 65, "ryzyko": ["Obrona mocna ostatnio", "Zagęszczenie kalendarza", "Historia niskich wyników"]}},
-      {{"nr": 3, "mecz": "Druzyna5 vs Druzyna6", "typ": "1", "kurs": 1.65, "pewnosc_pct": 68, "ryzyko": ["Zmiana trenera niedawno", "Brak formy u napastnika", "Granie na wyjeździe"]}},
-      {{"nr": 4, "mecz": "Druzyna7 vs Druzyna8", "typ": "BTTS", "kurs": 1.90, "pewnosc_pct": 62, "ryzyko": ["Drużyna gośćmi zaciśnięta obrona", "Nieobecność napastnika", "Taktyka defensywna"]}}
+      {{"nr": 1, "mecz": "A vs B", "typ": "1", "kurs": 1.55, "pewnosc_pct": 70, "ryzyko": ["r1","r2","r3"]}},
+      {{"nr": 2, "mecz": "C vs D", "typ": "Over", "kurs": 1.80, "pewnosc_pct": 65, "ryzyko": ["r1","r2","r3"]}}
     ],
-    "kurs_laczny": 8.7,
-    "szansa_wygranej_pct": 19.4,
-    "wygrana_netto": 38.3,
-    "ryzyko_ogolne": "Kurs bardzo wysoki — spora szansa na przegrana"
+    "kurs_laczny": 8.7, "szansa_wygranej_pct": 19.4, "wygrana_netto": 38.3, "ryzyko_ogolne": "..."
   }},
   "kupon_b": {{
     "zdarzenia": [
-      {{"nr": 1, "mecz": "Druzyna1 vs Druzyna2", "typ": "1", "kurs": 1.75, "pewnosc_pct": 64, "ryzyko": ["Slaba obrona na wyjeździe", "Forma oscylacyjna", "Brak bezpośrednich wygran"]}},
-      {{"nr": 2, "mecz": "Druzyna3 vs Druzyna4", "typ": "2", "kurs": 2.10, "pewnosc_pct": 60, "ryzyko": ["Kurs wysoki — mało pewna prognoza", "Drużyna 1 może się zmobilizować", "Atmosfera dla gospodarza"]}},
-      {{"nr": 3, "mecz": "Druzyna5 vs Druzyna6", "typ": "Over", "kurs": 1.85, "pewnosc_pct": 62, "ryzyko": ["Obrona mocna zmiana taktyki", "Kontuzje napastników", "Wynik 0-0 w ostatnich spotkaniach"]}},
-      {{"nr": 4, "mecz": "Druzyna7 vs Druzyna8", "typ": "1", "kurs": 1.60, "pewnosc_pct": 66, "ryzyko": ["Rotacja kadry spodziewana", "Gra na neutralnym boisku", "Niepewna dyspozycja"]}},
-      {{"nr": 5, "mecz": "Druzyna9 vs Druzyna10", "typ": "BTTS", "kurs": 1.75, "pewnosc_pct": 63, "ryzyko": ["Bramkarz gośćmi w formie", "Taktyka jeden-nil", "Brak ofensywy ostatnio"]}}
+      {{"nr": 1, "mecz": "A vs B", "typ": "2", "kurs": 2.10, "pewnosc_pct": 60, "ryzyko": ["r1","r2","r3"]}},
+      {{"nr": 2, "mecz": "E vs F", "typ": "BTTS", "kurs": 1.75, "pewnosc_pct": 63, "ryzyko": ["r1","r2","r3"]}}
     ],
-    "kurs_laczny": 19.2,
-    "szansa_wygranej_pct": 9.7,
-    "wygrana_netto": 84.5,
-    "ryzyko_ogolne": "Bardzo wysoki kurs 19.2 — realnie szansa <10% na zwycięstwo"
+    "kurs_laczny": 19.2, "szansa_wygranej_pct": 9.7, "wygrana_netto": 84.5, "ryzyko_ogolne": "..."
   }},
-  "ostrzezenia": "2-3 zdania o ryzykach"
+  "ostrzezenia": "2-3 zdania"
 }}
 
 ZAKAZY BEZWZGLEDNE:
@@ -1247,7 +1227,7 @@ REGUŁY SCEPTYCYZMU:
         prompt = f"{prompt}{rag_similar}"
 
     # Langfuse observability is handled globally
-    tekst = _zapytaj_typera(prompt, max_tokens=2500)
+    tekst = _zapytaj_typera(prompt, max_tokens=1500)
     dane = _wyciagnij_json(tekst)
     if "top3" not in dane:
         dane["_raw"] = tekst
