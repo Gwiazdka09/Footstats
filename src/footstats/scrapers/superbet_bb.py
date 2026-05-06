@@ -170,74 +170,48 @@ def _slugify(name: str) -> str:
 
 def znajdz_url_meczu(page: Page, dom: str, gost: str) -> str | None:
     """
-    Szuka meczu przez wyszukiwarkę Superbet (/wyszukaj).
-    Wpisuje nazwę drużyny domowej, klika pierwszy wynik meczu,
-    zwraca URL strony meczu (/kursy/pilka-nozna/...).
+    Szuka meczu przez wyszukiwarkę Superbet.
+    URL: /wyszukaj?query={dom} — szuka drużyny domowej,
+    wybiera pierwszy wynik /kursy/pilka-nozna/ pasujący do gościa.
+    Zwraca URL meczu lub None.
     """
-    search_url = f"{SUPERBET_URL}/wyszukaj"
-    dom_s  = _slugify(dom)[:6]
-    gost_s = _slugify(gost)[:6]
+    query    = dom.replace(" ", "+")
+    dom_s    = _slugify(dom)[:6]
+    gost_s   = _slugify(gost)[:6]
+    src_url  = f"{SUPERBET_URL}/wyszukaj?query={query}"
 
     try:
-        page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
-        time.sleep(2)
+        page.goto(src_url, wait_until="domcontentloaded", timeout=20000)
+        time.sleep(3)
         zamknij_popup(page, _CFG)
 
-        # Wpisz drużynę domową w wyszukiwarkę
-        input_sel = (
-            "input[type='search'], input[placeholder*='Szukaj'], "
-            "input[placeholder*='szukaj'], [data-cy='search-input'], "
-            "input[name='search'], input[class*='search']"
-        )
-        page.wait_for_selector(input_sel, timeout=8000)
-        page.fill(input_sel, dom, timeout=5000)
-        time.sleep(2.5)
-
-        # Zbierz linki wyników — mecze są pod /kursy/pilka-nozna/
         hrefs: list[str] = page.evaluate(
             "Array.from(document.querySelectorAll('a[href]'))"
             ".map(a => a.href)"
             ".filter(h => h.includes('/kursy/pilka-nozna/'))"
         )
+        logger.info("[BB] Search '%s' → %d wyników /kursy/", dom, len(hrefs))
 
+        # Prefer link containing both teams
         for href in hrefs:
-            href_l = href.lower()
-            if dom_s in href_l or gost_s in href_l:
-                logger.info("[BB] Mecz znaleziony via search: %s", href)
+            h = href.lower()
+            if dom_s in h and gost_s in h:
+                logger.info("[BB] Mecz (obie drużyny): %s", href)
                 return href
 
-        # Fallback: kliknij pierwszy link wyników i sprawdź URL
-        first = page.query_selector("a[href*='/kursy/pilka-nozna/']")
-        if first:
-            href = first.get_attribute("href") or ""
-            full = href if href.startswith("http") else SUPERBET_URL + href
-            logger.info("[BB] Pierwszy wynik search: %s", full)
-            return full
+        # Fallback: first result containing home team
+        for href in hrefs:
+            if dom_s in href.lower():
+                logger.info("[BB] Mecz (dom): %s", href)
+                return href
+
+        # Fallback: just first result
+        if hrefs:
+            logger.info("[BB] Pierwszy wynik: %s", hrefs[0])
+            return hrefs[0]
 
     except Exception as e:
         logger.warning("[BB] Błąd search: %s", e)
-
-    # Fallback: listing strony piłki nożnej
-    dom_s2  = _slugify(dom)[:6]
-    gost_s2 = _slugify(gost)[:6]
-    for listing_url in (FOOTBALL_TODAY, FOOTBALL_TMRW):
-        try:
-            page.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
-            time.sleep(3)
-            for _ in range(3):
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(0.8)
-            hrefs = page.evaluate(
-                "Array.from(document.querySelectorAll('a[href]'))"
-                ".map(a => a.href)"
-                ".filter(h => h.includes('/kursy/pilka-nozna/'))"
-            )
-            for href in hrefs:
-                if dom_s2 in href.lower() or gost_s2 in href.lower():
-                    logger.info("[BB] Mecz znaleziony via listing: %s", href)
-                    return href
-        except Exception:
-            continue
 
     logger.warning("[BB] Nie znaleziono: %s vs %s", dom, gost)
     return None
