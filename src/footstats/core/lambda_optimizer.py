@@ -82,6 +82,7 @@ def save_calibration(
     factor_h = round(max(CAL_MIN, min(CAL_MAX, bias_h)), 4)
     factor_a = round(max(CAL_MIN, min(CAL_MAX, bias_a)), 4)
 
+    from datetime import timezone
     payload = {
         "factor_home":   factor_h,
         "factor_away":   factor_a,
@@ -89,7 +90,7 @@ def save_calibration(
         "bias_raw_away": round(bias_a, 6),
         "n_matches":     n_matches,
         "acc_1x2_pct":   round(acc_1x2, 2) if acc_1x2 is not None else None,
-        "updated_at":    datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "updated_at":    datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "safety_rail":   [CAL_MIN, CAL_MAX],
         "clamped_home":  factor_h != round(bias_h, 4),
         "clamped_away":  factor_a != round(bias_a, 4),
