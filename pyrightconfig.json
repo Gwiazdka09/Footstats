@@ -1,0 +1,20 @@
+{
+  "include": ["src", "tests", "scripts"],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "data",
+    "logs",
+    "assets",
+    "cache",
+    "pdf",
+    ".venv",
+    ".claude"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "typeCheckingMode": "basic"
+}
