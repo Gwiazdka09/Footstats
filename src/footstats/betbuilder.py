@@ -1,11 +1,15 @@
 """
 BetBuilder kombinacje z EV filtrowaniem.
 
+Obsługuje dwa formaty nazw:
+  - Superbet API: "Mecz: 1", "Liczba goli: powyżej 2.5"
+  - Poisson (legacy): "1", "Over 2.5", "BTTS_TAK"
+
 Użycie (Superbet API data):
-    typy = [Typ("1", 1.60), Typ("Over 1.5", 1.25), Typ("BTTS", 1.80)]
+    typy = [Typ("Mecz: 1", 1.76), Typ("Liczba goli: powyżej 2.5", 1.88)]
     combos = generuj_kombinacje(typy, kurs_rynkowy=3.20)
 
-Użycie (Poisson suggestions → AI context):
+Użycie (Poisson → AI context):
     formatted = fmt_bb_sugestie(w["bet_builder"])
 """
 
@@ -14,7 +18,51 @@ from dataclasses import dataclass
 from itertools import combinations
 from math import prod
 
-_SPRZECZNE: list[frozenset[str]] = [
+# ── Data types ────────────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class Typ:
+    nazwa: str
+    kurs: float
+
+
+@dataclass(frozen=True)
+class Kombinacja:
+    typy: tuple["Typ", ...]
+    kurs_laczny: float
+    ev: float | None  # None gdy brak kurs_rynkowy
+
+
+# ── Conflict detection ────────────────────────────────────────────────────────
+
+def _sel(nazwa: str) -> str:
+    """'Mecz: 1' → '1',  'Liczba goli: powyżej 2.5' → 'powyżej 2.5'"""
+    return nazwa.split(": ", 1)[-1].strip() if ": " in nazwa else nazwa
+
+
+def _market(nazwa: str) -> str:
+    """'Mecz: 1' → 'Mecz',  'Over 2.5' → ''"""
+    return nazwa.split(": ", 1)[0].strip() if ": " in nazwa else ""
+
+
+_WYNIKI_1X2 = {"1", "x", "2"}
+_TAK_NIE    = {"tak", "nie"}
+_OU_RE      = re.compile(r'(powyżej|poniżej|over|under)\s+(\d+\.?\d*)', re.IGNORECASE)
+_OVER_WDS   = {"powyżej", "over"}
+_UNDER_WDS  = {"poniżej", "under"}
+
+
+def _parse_ou(s: str) -> tuple[str, float] | None:
+    """'powyżej 2.5' → ('over', 2.5),  'poniżej 1.5' → ('under', 1.5)"""
+    m = _OU_RE.match(s.strip())
+    if not m:
+        return None
+    direction = "over" if m.group(1).lower() in _OVER_WDS else "under"
+    return direction, float(m.group(2))
+
+
+# Legacy pairs (Poisson short-name format)
+_LEGACY_PARY: list[frozenset] = [
     frozenset({"1", "2"}),
     frozenset({"1", "X"}),
     frozenset({"X", "2"}),
@@ -25,36 +73,99 @@ _SPRZECZNE: list[frozenset[str]] = [
 ]
 
 
-@dataclass(frozen=True)
-class Typ:
-    nazwa: str
-    kurs: float
+def _para_sprzeczna(a: str, b: str) -> bool:
+    """
+    True jeśli dwa typy są wzajemnie wykluczające się.
+
+    Reguły:
+    1. Legacy exact-name pairs (backward compat z Poisson)
+    2. Ten sam market → 1/X/2 wynik (dowolne dwa konfliktują)
+    3. Ten sam market → Tak/Nie (binarne)
+    4. Ten sam market → Over X + Under Y gdzie Y <= X
+    5. Ten sam compound market (zawiera '/') → dowolne dwa wyniki konfliktują
+    """
+    ma, mb = _market(a), _market(b)
+    sa = _sel(a).lower()
+    sb = _sel(b).lower()
+
+    # 1. Legacy pairs
+    for para in _LEGACY_PARY:
+        if frozenset({a, b}) <= para or frozenset({sa, sb}) <= para:
+            return True
+
+    # Wszystkie dalsze reguły wymagają tego samego marketu
+    if not ma or ma != mb:
+        return False
+
+    # 2. Wynik meczu: 1/X/2
+    if {sa, sb} <= _WYNIKI_1X2:
+        return True
+
+    # 3. Tak / Nie
+    if {sa, sb} == _TAK_NIE:
+        return True
+
+    # 4. Over/Under w tym samym markecie
+    ou_a = _parse_ou(sa)
+    ou_b = _parse_ou(sb)
+    if ou_a and ou_b:
+        dir_a, val_a = ou_a
+        dir_b, val_b = ou_b
+        # over X + under Y → niemożliwe jeśli Y <= X
+        if dir_a == "over" and dir_b == "under" and val_b <= val_a:
+            return True
+        if dir_b == "over" and dir_a == "under" and val_a <= val_b:
+            return True
+
+    # 5. Compound half/full-time markets ("1.Połowa/Mecz: 1/1" vs "1.Połowa/Mecz: X/X")
+    if "/" in ma and sa != sb:
+        return True
+
+    # 6. Same market, same direction Over/Under — redundant, nie wartościowa kombinacja
+    #    (powyżej 3.5 + powyżej 4.5 = wystarczy postawić samo powyżej 4.5)
+    ou_a2 = _parse_ou(sa)
+    ou_b2 = _parse_ou(sb)
+    if ou_a2 and ou_b2 and ou_a2[0] == ou_b2[0]:
+        return True
+
+    return False
 
 
-@dataclass(frozen=True)
-class Kombinacja:
-    typy: tuple[Typ, ...]
-    kurs_laczny: float
-    ev: float | None  # None gdy brak kurs_rynkowy
+def _sprzeczne(typy: tuple["Typ", ...]) -> bool:
+    """True jeśli jakakolwiek para typów w kombinacji jest sprzeczna."""
+    for i in range(len(typy)):
+        for j in range(i + 1, len(typy)):
+            if _para_sprzeczna(typy[i].nazwa, typy[j].nazwa):
+                return True
+    return False
 
 
-def _sprzeczne(typy: tuple[Typ, ...]) -> bool:
-    nazwy = {t.nazwa for t in typy}
-    return any(para <= nazwy for para in _SPRZECZNE)
-
+# ── Combination generator ─────────────────────────────────────────────────────
 
 def generuj_kombinacje(
-    typy: list[Typ],
+    typy: list["Typ"],
     kurs_rynkowy: float | None = None,
     min_typy: int = 2,
+    max_typy: int = 4,
     min_kurs: float = 1.60,
     min_ev: float = 0.10,
-) -> list[Kombinacja]:
-    """Generuje niesprzeczne kombinacje z filtrami kurs i EV."""
+) -> list["Kombinacja"]:
+    """
+    Generuje niesprzeczne kombinacje z filtrami kurs i EV.
+
+    Args:
+        typy:          Lista Typ do kombinowania.
+        kurs_rynkowy:  Benchmark (np. exchange); jeśli None, EV nie jest liczony.
+        min_typy:      Minimalna liczba nóg w kombinacji.
+        max_typy:      Maksymalna liczba nóg (cap zapobiega wykładniczemu hangowi).
+        min_kurs:      Minimalny kurs łączny.
+        min_ev:        Minimalny EV (ignorowany jeśli kurs_rynkowy=None).
+    """
     if not typy:
         return []
     wyniki: list[Kombinacja] = []
-    for r in range(min_typy, len(typy) + 1):
+    limit = min(max_typy, len(typy))
+    for r in range(min_typy, limit + 1):
         for combo in combinations(typy, r):
             if _sprzeczne(combo):
                 continue
@@ -65,11 +176,13 @@ def generuj_kombinacje(
             if kurs_rynkowy and (ev is None or ev < min_ev):
                 continue
             wyniki.append(Kombinacja(typy=combo, kurs_laczny=kurs_l, ev=ev))
-    return sorted(wyniki, key=lambda k: k.ev or 0.0, reverse=True)
+    return sorted(wyniki, key=lambda k: k.ev if k.ev is not None else k.kurs_laczny, reverse=True)
 
+
+# ── Poisson formatter (legacy AI context) ─────────────────────────────────────
 
 def _parsuj_prob(s: str) -> float | None:
-    """Parsuje 'Szansa: 45%' → 0.45 z napisu Poisson sugestii."""
+    """'Szansa: 45%' → 0.45"""
     m = re.search(r'Szansa:\s*(\d+)%', s)
     return int(m.group(1)) / 100.0 if m else None
 
@@ -86,13 +199,13 @@ def fmt_bb_sugestie(
     """
     wyniki: list[str] = []
     for s in sugestie[:max_items]:
-        prob = _parsuj_prob(s)
+        prob  = _parsuj_prob(s)
         nazwa = re.sub(r'\s*\(Szansa:.*?\)', '', s).strip()
         if prob and prob > 0:
             kurs_f = round(1.0 / prob, 2)
             ev_str = ""
             if kurs_rynkowy and kurs_rynkowy > 1.0:
-                ev = kurs_f / kurs_rynkowy - 1.0
+                ev     = kurs_f / kurs_rynkowy - 1.0
                 ev_str = f" EV={ev * 100:+.0f}%"
             wyniki.append(f"{nazwa} @{kurs_f}{ev_str} (p={int(prob * 100)}%)")
         else:

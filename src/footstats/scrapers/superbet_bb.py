@@ -30,10 +30,18 @@ SUPERBET_URL  = "https://superbet.pl"
 KURSY_BASE    = f"{SUPERBET_URL}/kursy/pilka-nozna"
 BB_API        = "https://production-superbet-bmb.freetls.fastly.net/betbuilder/v2/getBetbuilderMarketsForMatch"
 
-# Markets excluded from BetBuilder combinations (too player-specific or redundant)
+# Markets excluded from BetBuilder combinations
 _SKIP_MARKETS = {
     "awans", "handicap azjatycki", "podwójna szansa",
 }
+
+# Prefixes that indicate player-specific markets (bloat: thousands of types)
+_PLAYER_PREFIXES = (
+    "zawodnik -",
+    "strzelec",
+    "asystent",
+    "player -",
+)
 
 
 # ── Match ID extraction ───────────────────────────────────────────────────────
@@ -46,11 +54,19 @@ def _match_id_z_url(url: str) -> str | None:
 
 # ── API parser ────────────────────────────────────────────────────────────────
 
-def _parsuj_markets_api(data: dict) -> list[Typ]:
+def _parsuj_markets_api(
+    data: dict,
+    filtruj_gracze: bool = True,
+    min_kurs: float = 1.001,
+) -> list[Typ]:
     """
     Parses getBetbuilderMarketsForMatch response into list of Typ.
     Format: {"matchId": "...", "markets": [{"name": "...", "odds": [...]}]}
     Typ.nazwa = "{market_name}: {selection_name}"
+
+    Args:
+        filtruj_gracze: Skip player-specific markets (reduces ~1400 → ~80 types).
+        min_kurs:       Skip odds ≤ this value (near-certainties add no value).
     """
     typy: list[Typ] = []
     markets = data.get("markets", [])
@@ -59,21 +75,24 @@ def _parsuj_markets_api(data: dict) -> list[Typ]:
         market_name = market.get("name", "").strip()
         if not market_name:
             continue
-        if any(s in market_name.lower() for s in _SKIP_MARKETS):
+        name_lower = market_name.lower()
+        if any(s in name_lower for s in _SKIP_MARKETS):
+            continue
+        if filtruj_gracze and any(name_lower.startswith(p) for p in _PLAYER_PREFIXES):
             continue
 
         for odd in market.get("odds", []):
             if odd.get("status") != "ACTIVE":
                 continue
             sel_name = odd.get("name", "").strip()
-            price = odd.get("price")
+            price    = odd.get("price")
             if not sel_name or price is None:
                 continue
             try:
                 kurs = round(float(price), 3)
             except (ValueError, TypeError):
                 continue
-            if kurs <= 1.0:
+            if kurs <= min_kurs:
                 continue
 
             nazwa = f"{market_name}: {sel_name}"

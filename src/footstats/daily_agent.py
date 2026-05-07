@@ -166,36 +166,100 @@ def _wzbogac_forme_top(wyniki: list, top_n: int = 6) -> None:
             pass
 
 
-def _wzbogac_o_betbuilder(wyniki: list) -> None:
+def _wzbogac_o_betbuilder(wyniki: list, pobierz_superbet: bool = False) -> None:
+    """
+    Wzbogaca mecze o sugestie BetBuilder.
+
+    Krok 1 (zawsze): Poisson — szybka estymacja prawdopodobieństw.
+    Krok 2 (--bb):   Real kursy z Superbet API via browser (~2-4min dla 5 meczów).
+                     Generuje kombinacje z generuj_kombinacje() i zapisuje do
+                     w["bet_builder_kombinacje_superbet"] dla kontekstu AI Groq.
+    """
+    # -- Krok 1: Poisson (zawsze) --
     try:
         from footstats.core.bet_builder import estimate_lambdas_from_probs, get_all_market_suggestions
         from footstats.betbuilder import fmt_bb_sugestie
     except ImportError:
+        pass
+    else:
+        console.print("[dim]BetBuilder: Estymacja macierzy Poissona...[/dim]")
+        for w in wyniki:
+            pw  = w.get("pw", 0) / 100.0
+            pp  = w.get("pp", 0) / 100.0
+            o25 = w.get("o25", 0) / 100.0
+            if pw > 0 or pp > 0:
+                lh, la  = estimate_lambdas_from_probs(pw, pp, o25)
+                ref_avg = w.get("referee_avg_y")
+                markets = get_all_market_suggestions(lh, la, ref_avg_yellow=ref_avg)
+                all_sugestie = [
+                    f"[{cat}] {item}"
+                    for cat, items in markets.items()
+                    for item in items
+                ]
+                if all_sugestie:
+                    w["bet_builder"]         = all_sugestie
+                    w["bet_builder_markets"] = markets
+                    bb_raw = markets.get("BetBuilder", [])
+                    if bb_raw:
+                        w["bet_builder_kombinacje"] = fmt_bb_sugestie(bb_raw)
+
+    # -- Krok 2: Real Superbet BB odds (opcjonalnie, --bb) --
+    if not pobierz_superbet:
         return
 
-    console.print("[dim]BetBuilder: Estymacja macierzy Poissona i generowanie sugestii łączonych...[/dim]")
-    for w in wyniki:
-        pw = w.get("pw", 0) / 100.0
-        pp = w.get("pp", 0) / 100.0
-        o25 = w.get("o25", 0) / 100.0
+    try:
+        from footstats.scrapers.superbet_bb import pobierz_bb_dla_meczow
+        from footstats.betbuilder import generuj_kombinacje
+    except ImportError:
+        console.print("[yellow]BetBuilder Superbet: brak modulu superbet_bb[/yellow]")
+        return
 
-        if pw > 0 or pp > 0:
-            lh, la = estimate_lambdas_from_probs(pw, pp, o25)
-            ref_avg = w.get("referee_avg_y")
-            markets = get_all_market_suggestions(lh, la, ref_avg_yellow=ref_avg)
-            # Flatten all suggestions for AI context
-            all_sugestie = []
-            for category, items in markets.items():
-                for item in items:
-                    all_sugestie.append(f"[{category}] {item}")
-            if all_sugestie:
-                w["bet_builder"] = all_sugestie
-                w["bet_builder_markets"] = markets
-                # BetBuilder sugestie z kurs_fair (1/p_poisson) dla kontekstu AI
-                # Wyciągamy surowe sugestie z kategorii BetBuilder (mają szansę %)
-                bb_raw = markets.get("BetBuilder", [])
-                if bb_raw:
-                    w["bet_builder_kombinacje"] = fmt_bb_sugestie(bb_raw)
+    top_n = wyniki[:5]
+    mecze_input = [
+        {"dom": w.get("gospodarz", ""), "gost": w.get("goscie", "")}
+        for w in top_n
+        if w.get("gospodarz") and w.get("goscie")
+    ]
+    if not mecze_input:
+        return
+
+    console.print(f"[dim]BetBuilder Superbet: pobieranie kursow dla {len(mecze_input)} meczow (moze ~3min)...[/dim]")
+    try:
+        bb_data = pobierz_bb_dla_meczow(mecze_input, headless=True)
+    except Exception as e:
+        console.print(f"[yellow]BetBuilder Superbet error: {e}[/yellow]")
+        return
+
+    for w in top_n:
+        dom   = w.get("gospodarz", "")
+        gost  = w.get("goscie", "")
+        klucz = f"{dom} vs {gost}"
+        typy  = bb_data.get(klucz, [])
+        if not typy:
+            continue
+
+        typy_filtr = [t for t in typy if 1.15 <= t.kurs <= 10.0][:60]
+        if not typy_filtr:
+            continue
+
+        combos = generuj_kombinacje(
+            typy_filtr,
+            min_typy=2,
+            max_typy=4,
+            min_kurs=3.0,
+            min_ev=0.0,
+        )
+        if not combos:
+            continue
+
+        # Fokus na realnym zakresie 5x-25x (atrakcyjne, nie absurdalne)
+        zakres = [c for c in combos if 5.0 <= c.kurs_laczny <= 25.0]
+        top_combos = sorted(zakres or combos, key=lambda c: c.kurs_laczny)[:12]
+        w["bet_builder_kombinacje_superbet"] = [
+            {"kurs": c.kurs_laczny, "typy": [{"nazwa": t.nazwa, "kurs": t.kurs} for t in c.typy]}
+            for c in top_combos
+        ]
+        console.print(f"[dim]  BB Superbet {klucz}: {len(combos)} kombinacji ({len(zakres)} w 5-25x)[/dim]")
 
 # ── Krok 3: Groq AI ───────────────────────────────────────────────────────────
 
@@ -589,6 +653,10 @@ def main():
         "--dry-run", action="store_true",
         help="Tryb podgladu: nie zapisuje do DB, TXT, nie wysyla Telegram/Windows"
     )
+    parser.add_argument(
+        "--bb", action="store_true",
+        help="Pobierz realne kursy BetBuilder z Superbet API (wolno, ~3min)"
+    )
     args = parser.parse_args()
 
     from footstats.config import AGENT_BANKROLL
@@ -700,7 +768,7 @@ def main():
     if not args.tylko_kupon:
         _sep("KROK 2 — Forma SofaScore")
         _wzbogac_forme_top(wyniki, top_n=12)
-        _wzbogac_o_betbuilder(wyniki)
+        _wzbogac_o_betbuilder(wyniki, pobierz_superbet=args.bb)
 
     _sep("KROK 3 — Groq AI")
     dane = _analizuj_groq(wyniki, cel_wygrana_a=args.cel_a, cel_wygrana_b=args.cel_b, stawka=args.stawka)
