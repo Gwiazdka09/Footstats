@@ -1,0 +1,33 @@
+[run]
+source = src/footstats
+omit =
+    src/footstats/scrapers/base_playwright.py
+    src/footstats/scrapers/superbet.py
+    src/footstats/scrapers/superoferta.py
+    src/footstats/scrapers/sts.py
+    src/footstats/scrapers/flashscore_match.py
+    src/footstats/scrapers/flashscore_results.py
+    src/footstats/scrapers/form_scraper.py
+    src/footstats/scrapers/lineup_scraper.py
+    src/footstats/scrapers/zawodtyper_referees.py
+    src/footstats/scrapers/results_updater.py
+    src/footstats/scrapers/kursy.py
+    src/footstats/daily_agent.py
+    src/footstats/daily_agent_scheduler.py
+    src/footstats/dashboard.py
+    src/footstats/export/pdf.py
+    src/footstats/export/pdf_font.py
+    src/footstats/export/tables.py
+    src/footstats/cli.py
+    src/footstats/__main__.py
+    src/footstats/utils/logging.py
+    src/footstats/utils/telegram_notify.py
+    src/footstats/core/weekly_picks.py
+    src/footstats/core/quick_picks.py
+    src/footstats/core/pattern_analyzer.py
+    src/footstats/data/context_scraper.py
+    src/footstats/data/historical_loader.py
+
+[report]
+show_missing = True
+skip_covered = False
