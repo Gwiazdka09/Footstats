@@ -61,16 +61,33 @@ def _parse_ou(s: str) -> tuple[str, float] | None:
     return direction, float(m.group(2))
 
 
-# Legacy pairs (Poisson short-name format)
+# Legacy pairs (Poisson short-name format) - normalized to lowercase
 _LEGACY_PARY: list[frozenset] = [
     frozenset({"1", "2"}),
-    frozenset({"1", "X"}),
-    frozenset({"X", "2"}),
-    frozenset({"Over", "Under"}),
-    frozenset({"BTTS_TAK", "BTTS_NIE"}),
-    frozenset({"Over 2.5", "Under 2.5"}),
-    frozenset({"Over 1.5", "Under 1.5"}),
+    frozenset({"1", "x"}),
+    frozenset({"x", "2"}),
+    frozenset({"over", "under"}),
+    frozenset({"btts_tak", "btts_nie"}),
+    frozenset({"over 2.5", "under 2.5"}),
+    frozenset({"over 1.5", "under 1.5"}),
 ]
+
+# Outcome mapping for result-based markets (1=Home, X=Draw, 2=Away)
+_RESULT_MARKETS = {"mecz", "draw no bet", "podwójna szansa", "wynik końcowy"}
+_SELECTION_OUTCOMES = {
+    "1": {"1"},
+    "x": {"x"},
+    "2": {"2"},
+    "1x": {"1", "x"},
+    "x2": {"x", "2"},
+    "12": {"1", "2"},
+    "1 lub x": {"1", "x"},
+    "x lub 2": {"x", "2"},
+    "1 lub 2": {"1", "2"},
+    "home": {"1"},
+    "away": {"2"},
+    "draw": {"x"},
+}
 
 
 def _para_sprzeczna(a: str, b: str) -> bool:
@@ -88,21 +105,31 @@ def _para_sprzeczna(a: str, b: str) -> bool:
     sa = _sel(a).lower()
     sb = _sel(b).lower()
 
-    # 1. Legacy pairs
+    # 1. Legacy pairs (must be two DIFFERENT selections forming a conflict)
     for para in _LEGACY_PARY:
-        if frozenset({a, b}) <= para or frozenset({sa, sb}) <= para:
+        if sa != sb and (frozenset({a, b}) == para or frozenset({sa, sb}) == para):
             return True
+
+    # 1b. Cross-market result conflicts (e.g., Mecz: 1 vs Draw No Bet: 2)
+    if (ma.lower() in _RESULT_MARKETS or not ma) and (mb.lower() in _RESULT_MARKETS or not mb):
+        outcomes_a = _SELECTION_OUTCOMES.get(sa)
+        outcomes_b = _SELECTION_OUTCOMES.get(sb)
+        if outcomes_a and outcomes_b:
+            # Conflict if they share no possible outcomes (mutually exclusive)
+            # Exception: if identical selection in different market, it's NOT a conflict
+            if not (outcomes_a & outcomes_b):
+                return True
 
     # Wszystkie dalsze reguły wymagają tego samego marketu
     if not ma or ma != mb:
         return False
 
-    # 2. Wynik meczu: 1/X/2
-    if {sa, sb} <= _WYNIKI_1X2:
+    # 2. Wynik meczu: 1/X/2 (redundant with 1b if market is 'mecz', but kept for clarity)
+    if sa != sb and {sa, sb} <= _WYNIKI_1X2:
         return True
 
     # 3. Tak / Nie
-    if {sa, sb} == _TAK_NIE:
+    if sa != sb and {sa, sb} == _TAK_NIE:
         return True
 
     # 4. Over/Under w tym samym markecie
