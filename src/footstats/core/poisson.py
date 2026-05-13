@@ -163,10 +163,9 @@ def predict_match(
 
     # ── Macierz Poissona ─────────────────────────────────────────────
     N = MAX_GOLE + 1
-    M = np.zeros((N, N))
-    for i in range(N):
-        for j in range(N):
-            M[i][j] = poisson.pmf(i, lambda_g) * poisson.pmf(j, lambda_a)
+    pmf_g = poisson.pmf(np.arange(N), lambda_g)
+    pmf_a = poisson.pmf(np.arange(N), lambda_a)
+    M = np.outer(pmf_g, pmf_a)
 
     pw  = float(np.sum(np.tril(M, -1)))
     pr  = float(np.sum(np.diag(M)))
@@ -180,13 +179,15 @@ def predict_match(
     suma = pw + pr + pp or 1.0
     pw /= suma; pr /= suma; pp /= suma
 
-    btts   = (1 - poisson.pmf(0, lambda_g)) * (1 - poisson.pmf(0, lambda_a))
-    over25 = 1.0 - sum(M[i][j] for i in range(N) for j in range(N) if i+j <= 2)
+    btts   = (1 - pmf_g[0]) * (1 - pmf_a[0])
+    i_idx, j_idx = np.meshgrid(np.arange(N), np.arange(N), indexing='ij')
+    over25 = 1.0 - float(M[i_idx + j_idx <= 2].sum())
     over25 = min(over25 / suma, 1.0)
 
-    idx  = np.unravel_index(np.argmax(M), M.shape)
-    flat = sorted([(M[i][j], i, j) for i in range(N) for j in range(N)], reverse=True)
-    top5 = [(f"{i}:{j}", round(p*100, 1)) for p, i, j in flat[:5]]
+    idx      = np.unravel_index(np.argmax(M), M.shape)
+    top5_idx = np.argsort(M, axis=None)[::-1][:5]
+    top5     = [(f"{r}:{c}", round(M[r, c] * 100, 1))
+                for r, c in zip(*np.unravel_index(top5_idx, M.shape))]
 
     n_h2h_srednia = (h2h_g.get("n_h2h", 0) + h2h_a.get("n_h2h", 0)) // 2
     pewnosc = AnalizaH2H.oblicz_pewnosc_laczna(n_h2h_srednia, len(df_f))

@@ -187,8 +187,10 @@ def run_calibration(n_matches: int = 200, verbose: bool = True) -> dict:
     correct_1x2 = 0
     total_1x2   = 0
 
+    dates_arr = df["date"].values
     for _, row in df_wf.iterrows():
-        hist = df[df["date"] < row["date"]]
+        cutoff = int(np.searchsorted(dates_arr, row["date"], side="left"))
+        hist = df.iloc[:cutoff]
         result = _predict_lambdas(hist, row["home"], row["away"])
         if result is None:
             continue

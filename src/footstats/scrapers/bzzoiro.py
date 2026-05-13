@@ -1,9 +1,12 @@
+import logging
 import time
 import requests
 from datetime import datetime, timedelta
 from footstats.utils.cache import _cache_get, _cache_set
 from footstats.utils.console import console
 from footstats.config import ENV_BZZOIRO, PEWNIACZEK_DNI, BZZOIRO_MAX_ROZN
+
+logger = logging.getLogger(__name__)
 
 # ================================================================
 #  MODUL 4c – BZZOIRO (sports.bzzoiro.com) v2.7
@@ -54,15 +57,26 @@ class BzzoiroClient:
         cached = _cache_get(cache_key)
         if cached is not None:
             return cached
-        try:
-            r = requests.get(f"{self.BASE}{path}",
-                             headers=self.headers, params=params, timeout=15)
-            if r.status_code == 200:
-                data = r.json()
-                _cache_set(cache_key, data)
-                return data
-        except Exception:
-            pass
+        for attempt in range(3):
+            try:
+                r = requests.get(f"{self.BASE}{path}",
+                                 headers=self.headers, params=params, timeout=30)
+                if r.status_code == 200:
+                    data = r.json()
+                    _cache_set(cache_key, data)
+                    return data
+                if r.status_code in (429, 500, 502, 503, 504):
+                    delay = 2 ** attempt
+                    logger.warning(f"Bzzoiro HTTP {r.status_code} na {path}, retry {attempt+1}/3 za {delay}s")
+                    time.sleep(delay)
+                    continue
+                logger.error(f"Bzzoiro HTTP {r.status_code} na {path}")
+                return None
+            except Exception as e:
+                delay = 2 ** attempt
+                logger.error(f"Bzzoiro request error na {path} (próba {attempt+1}/3): {e}")
+                if attempt < 2:
+                    time.sleep(delay)
         return None
 
     def nadchodzace_tygodnia(self, liga_kod: str = None) -> list:

@@ -37,7 +37,7 @@ def scrape_flashscore_match_details(match_id: str) -> Dict:
             
             # Pobierz Składy (tam są absencje) - klikamy dla pewności
             try: page.get_by_text("SKŁADY", exact=True).click(); time.sleep(2)
-            except: pass
+            except Exception as e: logger.warning(f"Klik SKŁADY: {e}")
             
             content = page.content()
             
@@ -98,7 +98,7 @@ def search_flashscore_match_id(page, home: str, away: str):
             if away.lower()[:5] in row_text:
                 desc = l.get_attribute("aria-describedby")
                 if desc and desc.startswith("g_1_"): return desc.replace("g_1_", "")
-    except: pass
+    except Exception as e: logger.warning(f"search_flashscore_match_id({home}, {away}): {e}")
     return None
 
 def scrape_match_with_search(h, a):
@@ -109,7 +109,7 @@ def scrape_match_with_search(h, a):
             mid = search_flashscore_match_id(page, h, a)
             browser.close()
             if mid: return scrape_flashscore_match_details(mid)
-    except: pass
+    except Exception as e: logger.error(f"scrape_match_with_search({h}, {a}): {e}")
     return {"success": False}
 
 if __name__ == "__main__":
