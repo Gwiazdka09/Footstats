@@ -1,38 +1,38 @@
-# Wykorzystujemy obraz z preinstalowanym Playwrightem i Pythonem
+# ── Stage 1: build React frontend ────────────────────────────────
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /build
+COPY src/footstats/gui/package*.json ./
+RUN npm ci
+
+COPY src/footstats/gui/ ./
+RUN npm run build
+
+# ── Stage 2: Python + Playwright runtime ─────────────────────────
 FROM mcr.microsoft.com/playwright/python:v1.43.0-jammy
 
-# Ustawienia środowiska
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-ENV PYTHONPATH /app/src
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/src
 
 WORKDIR /app
 
-# Instalacja podstawowych narzędzi systemowych
-RUN apt-get update && apt-get install -y \
-    curl \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl git && rm -rf /var/lib/apt/lists/*
 
-# Instalacja uv (szybszy manager pakietów)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Kopiowanie plików definicji zależności
 COPY pyproject.toml ./
-
-# Instalacja zależności (bez samego projektu jeszcze)
 RUN uv pip install --system ".[ai,scraper]"
 
-# Kopiowanie reszty kodu projektu
 COPY src ./src
 COPY data ./data
 
-# Instalacja Playwright browsers (tylko Chromium dla oszczędności miejsca)
+# Umieść zbudowany React w miejscu, które FastAPI serwuje
+COPY --from=frontend-builder /build/dist ./src/footstats/gui/dist
+
 RUN playwright install chromium
 
-# Skrypt startowy
 COPY start_cloud.sh ./
 RUN chmod +x start_cloud.sh
 
-# Domyślna komenda (może być nadpisana w Cloud Scheduler)
 CMD ["./start_cloud.sh"]

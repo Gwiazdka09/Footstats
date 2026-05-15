@@ -11,8 +11,21 @@ Requires-Dist: scipy>=1.11
 Requires-Dist: rich>=13.0
 Requires-Dist: python-dotenv>=1.0
 Requires-Dist: reportlab>=4.0
+Requires-Dist: fastapi>=0.110
+Requires-Dist: uvicorn>=0.29
+Requires-Dist: python-jose[cryptography]>=3.3
+Requires-Dist: bcrypt>=4.0
+Requires-Dist: slowapi>=0.1.9
+Requires-Dist: httpx>=0.27
+Requires-Dist: fastapi-mcp>=0.3
+Requires-Dist: psycopg2-binary>=2.9
+Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: alembic>=1.13
+Provides-Extra: api
+Requires-Dist: sentry-sdk[fastapi]>=2.0; extra == "api"
 Provides-Extra: ai
 Requires-Dist: groq>=0.4; extra == "ai"
+Requires-Dist: langfuse>=2.0; extra == "ai"
 Provides-Extra: scraper
 Requires-Dist: playwright>=1.40; extra == "scraper"
 Provides-Extra: dev
