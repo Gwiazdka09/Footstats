@@ -86,10 +86,13 @@ class SettleRequest(BaseModel):
 
 
 @router.get("/coupons/active")
-def get_active_coupons(user: str = Depends(require_auth)):
+def get_active_coupons(user_id: int = Depends(require_auth)):
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM coupons WHERE status IN ('ACTIVE','PENDING') ORDER BY created_at DESC"
+            "SELECT * FROM coupons"
+            " WHERE status IN ('ACTIVE','PENDING') AND user_id = ?"
+            " ORDER BY created_at DESC",
+            (user_id,),
         ).fetchall()
     result = []
     for r in rows:
@@ -100,10 +103,11 @@ def get_active_coupons(user: str = Depends(require_auth)):
 
 
 @router.get("/coupons")
-def get_coupons(limit: int = 50, user: str = Depends(require_auth)):
+def get_coupons(limit: int = 50, user_id: int = Depends(require_auth)):
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM coupons ORDER BY created_at DESC LIMIT ?", (limit,)
+            "SELECT * FROM coupons WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
         ).fetchall()
     result = []
     for r in rows:
@@ -114,18 +118,31 @@ def get_coupons(limit: int = 50, user: str = Depends(require_auth)):
 
 
 @router.get("/stats/coupon-summary")
-def get_coupon_summary(days: int = 30, user: str = Depends(require_auth)):
+def get_coupon_summary(days: int = 30, user_id: int = Depends(require_auth)):
     try:
-        conn = _get_conn()
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-        rows = conn.execute("""
-            SELECT COUNT(*) as cnt, SUM(stake_pln) as total_stake,
-                   SUM(payout_pln) as total_return, kupon_type, status
-            FROM coupons WHERE created_at >= ? GROUP BY kupon_type, status
-        """, (cutoff,)).fetchall()
-        stats: dict = {"total_coupons": 0, "total_stake": 0.0, "total_return": 0.0,
-                       "roi_percent": 0.0, "win_count": 0, "loss_count": 0,
-                       "void_count": 0, "by_type": {}}
+        with _connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT COUNT(*) as cnt, SUM(stake_pln) as total_stake,
+                       SUM(payout_pln) as total_return, kupon_type, status
+                FROM coupons
+                WHERE created_at >= ? AND user_id = ?
+                GROUP BY kupon_type, status
+                """,
+                (cutoff, user_id),
+            ).fetchall()
+            streak_rows = conn.execute(
+                "SELECT status FROM coupons"
+                " WHERE created_at >= ? AND user_id = ?"
+                " ORDER BY created_at DESC LIMIT 20",
+                (cutoff, user_id),
+            ).fetchall()
+        stats: dict = {
+            "total_coupons": 0, "total_stake": 0.0, "total_return": 0.0,
+            "roi_percent": 0.0, "win_count": 0, "loss_count": 0,
+            "void_count": 0, "by_type": {},
+        }
         for row in rows:
             cnt = row["cnt"]
             stake = row["total_stake"] or 0.0
@@ -151,10 +168,6 @@ def get_coupon_summary(days: int = 30, user: str = Depends(require_auth)):
             stats["roi_percent"] = round(
                 (stats["total_return"] - stats["total_stake"]) / stats["total_stake"] * 100, 1
             )
-        streak_rows = conn.execute(
-            "SELECT status FROM coupons WHERE created_at >= ? ORDER BY created_at DESC LIMIT 20",
-            (cutoff,)
-        ).fetchall()
         current = max_s = 0
         for sr in streak_rows:
             if sr["status"] == "WIN":
@@ -164,14 +177,13 @@ def get_coupon_summary(days: int = 30, user: str = Depends(require_auth)):
                 current = 0
         stats["streak"] = {"current": current, "max": max_s}
         stats["confidence_avg"] = 0.0
-        conn.close()
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/matches/today")
-def get_matches_today(user: str = Depends(require_auth)):
+def get_matches_today(user_id: int = Depends(require_auth)):
     global _MATCHES_CACHE
     preds = _fetch_predictions()
     now = datetime.now()
@@ -190,7 +202,7 @@ def get_matches_today(user: str = Depends(require_auth)):
 
 
 @router.post("/matches/analyze")
-def analyze_matches(req: AnalyzeRequest, user: str = Depends(require_auth)):
+def analyze_matches(req: AnalyzeRequest, user_id: int = Depends(require_auth)):
     global _MATCHES_CACHE
     if not _MATCHES_CACHE:
         _MATCHES_CACHE = _fetch_predictions()
@@ -226,21 +238,28 @@ def analyze_matches(req: AnalyzeRequest, user: str = Depends(require_auth)):
         if dcx2: tips.append({"tip": "X2", "label": "X2", "odds": dcx2, "prob": round(pr + pp, 1), "color": "purple"})
         if odds.get("over_2_5"): tips.append({"tip": "Over 2.5", "label": "Over 2.5", "odds": odds["over_2_5"], "prob": po, "color": "emerald"})
         if odds.get("btts"): tips.append({"tip": "BTTS", "label": "Obie strzelą", "odds": odds["btts"], "prob": pbt, "color": "amber"})
-        results.append({"id": m["id"], "home": m["gosp"], "away": m["gosc"],
-                        "liga": m.get("liga", ""), "data": m.get("data", ""), "godzina": m.get("godzina", ""),
-                        "prob_home": ph, "prob_draw": pr, "prob_away": pp,
-                        "prob_over": po, "prob_btts": pbt, "tips": tips})
+        results.append({
+            "id": m["id"], "home": m["gosp"], "away": m["gosc"],
+            "liga": m.get("liga", ""), "data": m.get("data", ""), "godzina": m.get("godzina", ""),
+            "prob_home": ph, "prob_draw": pr, "prob_away": pp,
+            "prob_over": po, "prob_btts": pbt, "tips": tips,
+        })
     return results
 
 
 @router.post("/coupon/kelly")
-def calculate_kelly(req: KellyRequest, user: str = Depends(require_auth)):
+def calculate_kelly(req: KellyRequest, user_id: int = Depends(require_auth)):
     if not req.selections:
         raise HTTPException(status_code=400, detail="Brak typów")
     with _connect() as conn:
-        row = conn.execute("SELECT balance FROM bankroll_state WHERE id=1").fetchone()
+        row = conn.execute(
+            "SELECT balance FROM bankroll_state WHERE user_id = ?", (user_id,)
+        ).fetchone()
         bankroll = float(row["balance"]) if row else float(cfg.AGENT_BANKROLL)
-        frac_row = conn.execute("SELECT value FROM bot_settings WHERE key='kelly_fraction'").fetchone()
+        frac_row = conn.execute(
+            "SELECT value FROM bot_settings WHERE user_id = ? AND key = 'kelly_fraction'",
+            (user_id,),
+        ).fetchone()
         fraction = int(frac_row["value"]) if frac_row else cfg.AGENT_KELLY_FRACTION
     total_odds = 1.0
     win_prob = 1.0
@@ -253,50 +272,67 @@ def calculate_kelly(req: KellyRequest, user: str = Depends(require_auth)):
     stake = round(f_star / fraction * bankroll, 2)
     stake = max(stake, 2.0)
     stake = min(stake, round(bankroll * 0.20, 2))
-    return {"total_odds": round(total_odds, 2), "win_prob_pct": round(win_prob * 100, 1),
-            "f_star_pct": round(f_star * 100, 2), "stake_pln": stake,
-            "bankroll": bankroll, "kelly_fraction": fraction}
+    return {
+        "total_odds": round(total_odds, 2), "win_prob_pct": round(win_prob * 100, 1),
+        "f_star_pct": round(f_star * 100, 2), "stake_pln": stake,
+        "bankroll": bankroll, "kelly_fraction": fraction,
+    }
 
 
 @router.post("/coupon/place")
-def place_coupon(req: PlaceCouponRequest, user: str = Depends(require_auth)):
+def place_coupon(req: PlaceCouponRequest, user_id: int = Depends(require_auth)):
     if not req.stake_pln or req.stake_pln < 2.0:
         raise HTTPException(status_code=400, detail="Minimalna stawka to 2.00 PLN")
     with _connect() as conn:
-        row = conn.execute("SELECT balance FROM bankroll_state WHERE id=1").fetchone()
+        row = conn.execute(
+            "SELECT balance FROM bankroll_state WHERE user_id = ?", (user_id,)
+        ).fetchone()
         balance = float(row["balance"]) if row else 0.0
         if req.stake_pln > balance:
             raise HTTPException(status_code=400, detail=f"Niewystarczający bankroll ({balance:.2f} PLN)")
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         legs_json = json.dumps(
             [{"home": s.home, "away": s.away, "tip": s.tip, "odds": s.odds, "decision_score": int(s.win_prob)}
-             for s in req.selections], ensure_ascii=False
+             for s in req.selections],
+            ensure_ascii=False,
         )
-        coupon_row = conn.execute("""
-            INSERT INTO coupons (created_at, phase, status, kupon_type, legs_json,
-                                 total_odds, stake_pln, payout_pln, match_date_first)
-            VALUES (?,?,?,?,?,?,?,?,?) RETURNING id
-        """, (now, "final", "ACTIVE", "accumulator", legs_json,
-              req.total_odds, req.stake_pln, None,
-              req.match_date or datetime.now().strftime("%Y-%m-%d"))).fetchone()
+        coupon_row = conn.execute(
+            """
+            INSERT INTO coupons
+                (created_at, phase, status, kupon_type, legs_json,
+                 total_odds, stake_pln, payout_pln, match_date_first, user_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id
+            """,
+            (now, "final", "ACTIVE", "accumulator", legs_json,
+             req.total_odds, req.stake_pln, None,
+             req.match_date or datetime.now().strftime("%Y-%m-%d"), user_id),
+        ).fetchone()
         coupon_id = coupon_row["id"]
         new_balance = round(balance - req.stake_pln, 2)
-        conn.execute("UPDATE bankroll_state SET balance=?, updated_at=? WHERE id=1", (new_balance, now))
-        conn.execute("""
-            INSERT INTO bankroll_history (timestamp, change_pln, new_balance, type, description)
-            VALUES (?,?,?,?,?)
-        """, (now, -req.stake_pln, new_balance, "BET",
-              f"Kupon AI ({', '.join(s.tip for s in req.selections)})"))
+        conn.execute(
+            "UPDATE bankroll_state SET balance=?, updated_at=? WHERE user_id=?",
+            (new_balance, now, user_id),
+        )
+        conn.execute(
+            "INSERT INTO bankroll_history (timestamp, change_pln, new_balance, type, description, user_id)"
+            " VALUES (?,?,?,?,?,?)",
+            (now, -req.stake_pln, new_balance, "BET",
+             f"Kupon AI ({', '.join(s.tip for s in req.selections)})", user_id),
+        )
     return {"ok": True, "coupon_id": coupon_id, "new_balance": new_balance, "stake_pln": req.stake_pln}
 
 
 @router.post("/coupons/settle")
-def settle_coupons(req: SettleRequest, user: str = Depends(require_auth)):
+def settle_coupons(req: SettleRequest, user_id: int = Depends(require_auth)):
     try:
         from footstats.core.coupon_settlement import settle_active_coupons
         stats = settle_active_coupons(days_back=req.days_back or 3, dry_run=req.dry_run or False, verbose=True)
-        return {"ok": True, "settled": stats.get("settled", 0), "partial": stats.get("partial", 0),
-                "errors": stats.get("errors", 0),
-                "message": f"Rozliczono {stats.get('settled',0)}, częściowych {stats.get('partial',0)}, błędów {stats.get('errors',0)}"}
+        return {
+            "ok": True,
+            "settled": stats.get("settled", 0),
+            "partial": stats.get("partial", 0),
+            "errors": stats.get("errors", 0),
+            "message": f"Rozliczono {stats.get('settled',0)}, częściowych {stats.get('partial',0)}, błędów {stats.get('errors',0)}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

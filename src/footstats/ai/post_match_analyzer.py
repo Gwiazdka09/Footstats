@@ -74,7 +74,7 @@ def _zapisz_feedback(match_id: int, prediction_details: dict, reason: str) -> No
         store.upsert(feedback_id, reason)
     except Exception as e:
         # Log but don't fail — embedding is nice-to-have, not critical
-        logger.debug(f"[RAG] Auto-embed failed for feedback_id={feedback_id}: {e}")
+        log.debug(f"[RAG] Auto-embed failed for feedback_id={feedback_id}: {e}")
 
 
 def pobierz_ostatnie_wnioski(n: int = 3) -> list[str]:

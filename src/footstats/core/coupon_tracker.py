@@ -1,13 +1,5 @@
-"""
-coupon_tracker.py – SQLite CRUD dla kuponów FootStats.
-
-Tabela coupons: śledzi kupony od DRAFT do WON/LOST/VOID.
-Migracja: dodaje coupon_id FK do istniejącej tabeli predictions.
-
-Użycie:
-    from footstats.core.coupon_tracker import save_coupon, update_coupon_status
-    cid = save_coupon("draft", "A", legs, total_odds=12.5, stake_pln=10.0)
-    update_coupon_status(cid, "WON", payout_pln=110.0)
+"""coupon_tracker.py – CRUD dla kuponów FootStats.
+user_id=1 domyślnie (daily_agent / system). API routes przekazują real user_id.
 """
 
 import json
@@ -62,10 +54,12 @@ def init_coupon_tables() -> None:
                 roi_pct          REAL,
                 groq_reasoning   TEXT,
                 decision_score   INTEGER,
-                match_date_first TEXT
+                match_date_first TEXT,
+                user_id          INTEGER
             );
             CREATE INDEX IF NOT EXISTS idx_coupon_status  ON coupons(status);
-            CREATE INDEX IF NOT EXISTS idx_coupon_created ON coupons(created_at)
+            CREATE INDEX IF NOT EXISTS idx_coupon_created ON coupons(created_at);
+            CREATE INDEX IF NOT EXISTS idx_coupon_user    ON coupons(user_id)
         """)
         conn.execute(
             "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS coupon_id INTEGER REFERENCES coupons(id)"
@@ -82,15 +76,9 @@ def save_coupon(
     groq_reasoning: str = "",
     decision_score: int | None = None,
     match_date_first: str | None = None,
+    user_id: int = 1,
 ) -> int:
-    """
-    Zapisuje nowy kupon (status=DRAFT). Zwraca id.
-
-    phase:      'draft' | 'final'
-    kupon_type: 'A' | 'B' | 'single'
-    legs:       lista dict z kluczami: gospodarz, goscie, typ, kurs,
-                opcjonalnie: pewnosc, liga, prediction_id
-    """
+    """Zapisuje nowy kupon (status=DRAFT). Zwraca id."""
     init_coupon_tables()
     legs_json = json.dumps(legs, ensure_ascii=False)
 
@@ -99,11 +87,11 @@ def save_coupon(
             """
             INSERT INTO coupons
                 (phase, status, kupon_type, legs_json, total_odds, stake_pln,
-                 groq_reasoning, decision_score, match_date_first)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+                 groq_reasoning, decision_score, match_date_first, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
             """,
             (phase, STATUS_DRAFT, kupon_type, legs_json,
-             total_odds, stake_pln, groq_reasoning, decision_score, match_date_first),
+             total_odds, stake_pln, groq_reasoning, decision_score, match_date_first, user_id),
         ).fetchone()
         return row["id"]
     return _exec(_fn)
@@ -140,23 +128,22 @@ def update_coupon_status(
     _exec(_fn)
 
 
-def get_active_coupons() -> list:
-    """Zwraca kupony ze statusem DRAFT lub ACTIVE, od najnowszych."""
+def get_active_coupons(user_id: int = 1) -> list:
+    """Zwraca kupony DRAFT/ACTIVE dla danego użytkownika, od najnowszych."""
     init_coupon_tables()
 
     def _fn(conn):
         return conn.execute(
-            "SELECT * FROM coupons WHERE status IN (?, ?) ORDER BY created_at DESC",
-            ACTIVE_STATUSES,
+            "SELECT * FROM coupons WHERE status IN (?, ?) AND user_id = ? ORDER BY created_at DESC",
+            (*ACTIVE_STATUSES, user_id),
         ).fetchall()
     return _exec(_fn)
 
 
-def get_draft_today() -> "dict | None":
-    """Zwraca dzisiejszy kupon DRAFT (pierwszy znaleziony) lub None."""
+def get_draft_today(user_id: int = 1) -> "dict | None":
+    """Zwraca dzisiejszy kupon DRAFT lub None."""
     init_coupon_tables()
     from datetime import datetime, timezone
-    # SQLite datetime('now') zwraca UTC — porównujemy z datą UTC, nie lokalną
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     def _fn(conn):
@@ -165,10 +152,11 @@ def get_draft_today() -> "dict | None":
             SELECT * FROM coupons
             WHERE status = 'DRAFT'
               AND date(created_at) = ?
+              AND user_id = ?
             ORDER BY created_at DESC
             LIMIT 1
             """,
-            (dzis,),
+            (dzis, user_id),
         ).fetchone()
     return _exec(_fn)
 

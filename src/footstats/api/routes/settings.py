@@ -20,7 +20,7 @@ class SettingsUpdate(BaseModel):
 
 
 @router.get("/settings")
-def get_settings(user: str = Depends(require_auth)):
+def get_settings(user_id: int = Depends(require_auth)):
     defaults = {
         "version": cfg.VERSION,
         "pewniaczek_prog": str(cfg.PEWNIACZEK_PROG),
@@ -31,11 +31,14 @@ def get_settings(user: str = Depends(require_auth)):
     with _connect() as conn:
         for key, val in defaults.items():
             conn.execute(
-                "INSERT INTO bot_settings (key, value, updated_at) VALUES (?,?,CURRENT_TIMESTAMP)"
-                " ON CONFLICT (key) DO NOTHING",
-                (key, val),
+                "INSERT INTO bot_settings (user_id, key, value, updated_at)"
+                " VALUES (?,?,?,CURRENT_TIMESTAMP)"
+                " ON CONFLICT (user_id, key) DO NOTHING",
+                (user_id, key, val),
             )
-        rows = conn.execute("SELECT key, value FROM bot_settings").fetchall()
+        rows = conn.execute(
+            "SELECT key, value FROM bot_settings WHERE user_id = ?", (user_id,)
+        ).fetchall()
     data = {r["key"]: r["value"] for r in rows}
     return {
         "version": data.get("version", cfg.VERSION),
@@ -48,7 +51,7 @@ def get_settings(user: str = Depends(require_auth)):
 
 
 @router.post("/settings")
-def update_settings(data: SettingsUpdate, user: str = Depends(require_auth)):
+def update_settings(data: SettingsUpdate, user_id: int = Depends(require_auth)):
     updates: dict[str, str] = {}
     if data.version is not None: updates["version"] = data.version
     if data.pewniaczek_prog is not None: updates["pewniaczek_prog"] = str(data.pewniaczek_prog)
@@ -60,8 +63,10 @@ def update_settings(data: SettingsUpdate, user: str = Depends(require_auth)):
     with _connect() as conn:
         for key, val in updates.items():
             conn.execute(
-                "INSERT INTO bot_settings (key, value, updated_at) VALUES (?,?,CURRENT_TIMESTAMP)"
-                " ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=EXCLUDED.updated_at",
-                (key, val),
+                "INSERT INTO bot_settings (user_id, key, value, updated_at)"
+                " VALUES (?,?,?,CURRENT_TIMESTAMP)"
+                " ON CONFLICT (user_id, key)"
+                " DO UPDATE SET value=EXCLUDED.value, updated_at=EXCLUDED.updated_at",
+                (user_id, key, val),
             )
     return {"ok": True, "updated": list(updates.keys())}
