@@ -1,5 +1,7 @@
 """Status and config endpoints."""
+import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import footstats.config as cfg
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,24 +13,30 @@ router = APIRouter(prefix="/api", tags=["status"])
 
 
 @router.get("/status")
-def get_status(user: str = Depends(require_auth)):
+def get_status(user_id: int = Depends(require_auth)):
     try:
         with _connect() as conn:
             bankroll = conn.execute(
-                "SELECT balance, updated_at FROM bankroll_state WHERE id = 1"
+                "SELECT balance, updated_at FROM bankroll_state WHERE user_id = ?",
+                (user_id,),
             ).fetchone()
-            stats = conn.execute("""
+            stats = conn.execute(
+                """
                 SELECT
                     COUNT(*) as total,
                     SUM(CASE WHEN status IN ('WON','WIN') THEN 1 ELSE 0 END) as wins,
                     SUM(payout_pln) as total_payout,
                     SUM(stake_pln) as total_stake
-                FROM coupons WHERE status IN ('WON','WIN','LOSE','LOST')
-            """).fetchone()
+                FROM coupons
+                WHERE status IN ('WON','WIN','LOSE','LOST') AND user_id = ?
+                """,
+                (user_id,),
+            ).fetchone()
             cutoff_30d = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
             wins_30d = conn.execute(
-                "SELECT COUNT(*) as n FROM coupons WHERE status IN ('WON','WIN') AND created_at >= ?",
-                (cutoff_30d,)
+                "SELECT COUNT(*) as n FROM coupons"
+                " WHERE status IN ('WON','WIN') AND created_at >= ? AND user_id = ?",
+                (cutoff_30d, user_id),
             ).fetchone()
         roi = 0
         if stats and stats["total_stake"]:
@@ -49,8 +57,22 @@ def get_status(user: str = Depends(require_auth)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+_CALIBRATION_PATH = Path(__file__).parent.parent.parent.parent.parent / "data" / "model_calibration.json"
+
+
+@router.get("/calibration")
+def get_calibration(user_id: int = Depends(require_auth)):
+    try:
+        data = json.loads(_CALIBRATION_PATH.read_text(encoding="utf-8"))
+        return data
+    except FileNotFoundError:
+        return {"updated_at": None, "factor_home": None, "factor_away": None, "n_matches": 0}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/config")
-def get_bot_config(user: str = Depends(require_auth)):
+def get_bot_config(user_id: int = Depends(require_auth)):
     return {
         "version": cfg.VERSION,
         "kelly_fraction": cfg.AGENT_KELLY_FRACTION,

@@ -162,6 +162,9 @@ def _init_db() -> None:
 import logging as _logging
 try:
     _init_db()
+    from footstats.db.migrations import run_migrations, seed_admin_user
+    run_migrations()
+    seed_admin_user()
 except Exception as _db_err:
     _logging.getLogger(__name__).error("DB init failed: %s", _db_err, exc_info=True)
 
