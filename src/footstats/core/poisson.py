@@ -1,3 +1,4 @@
+import functools
 import math
 import pandas as pd
 import numpy as np
@@ -17,6 +18,25 @@ from footstats.utils.console import console
 # ================================================================
 #  MODUL 10 - PREDYKCJA POISSONA
 # ================================================================
+
+@functools.lru_cache(maxsize=512)
+def _macierz(lambda_g: float, lambda_a: float, N: int) -> tuple:
+    """Cached Poisson matrix. Args should be pre-rounded to 4dp."""
+    pmf_g = poisson.pmf(np.arange(N), lambda_g)
+    pmf_a = poisson.pmf(np.arange(N), lambda_a)
+    M = np.outer(pmf_g, pmf_a)
+    pw  = float(np.sum(np.tril(M, -1)))
+    pr  = float(np.sum(np.diag(M)))
+    pp  = float(np.sum(np.triu(M,  1)))
+    btts = float((1 - pmf_g[0]) * (1 - pmf_a[0]))
+    i_idx, j_idx = np.meshgrid(np.arange(N), np.arange(N), indexing="ij")
+    over25_raw = 1.0 - float(M[i_idx + j_idx <= 2].sum())
+    idx = np.unravel_index(np.argmax(M), M.shape)
+    top5_raw = np.argsort(M, axis=None)[::-1][:5]
+    rows_, cols_ = np.unravel_index(top5_raw, M.shape)
+    top5_data = tuple((int(r), int(c), float(M[r, c])) for r, c in zip(rows_, cols_))
+    return (pw, pr, pp, btts, over25_raw, int(idx[0]), int(idx[1]), top5_data)
+
 
 def predict_match(
     g: str, a: str,
@@ -161,33 +181,21 @@ def predict_match(
     lambda_g = max(0.05, lambda_g)
     lambda_a = max(0.05, lambda_a)
 
-    # ── Macierz Poissona ─────────────────────────────────────────────
+    # ── Macierz Poissona (cached) ────────────────────────────────────
+    from footstats.config import FINAL_REMIS_BOOST
     N = MAX_GOLE + 1
-    pmf_g = poisson.pmf(np.arange(N), lambda_g)
-    pmf_a = poisson.pmf(np.arange(N), lambda_a)
-    M = np.outer(pmf_g, pmf_a)
-
-    pw  = float(np.sum(np.tril(M, -1)))
-    pr  = float(np.sum(np.diag(M)))
-    pp  = float(np.sum(np.triu(M,  1)))
+    pw, pr, pp, btts, over25_raw, wynik_g, wynik_a, top5_data = _macierz(
+        round(lambda_g, 4), round(lambda_a, 4), N
+    )
 
     # ── v2.6 Final boost: wiekszy remis w meczach bez rewanzu ────────
-    from footstats.config import FINAL_REMIS_BOOST
     if jest_single:
-        pr *= FINAL_REMIS_BOOST   # szansa remisu rosnie (dogrywka/karne realna)
+        pr *= FINAL_REMIS_BOOST
 
     suma = pw + pr + pp or 1.0
     pw /= suma; pr /= suma; pp /= suma
-
-    btts   = (1 - pmf_g[0]) * (1 - pmf_a[0])
-    i_idx, j_idx = np.meshgrid(np.arange(N), np.arange(N), indexing='ij')
-    over25 = 1.0 - float(M[i_idx + j_idx <= 2].sum())
-    over25 = min(over25 / suma, 1.0)
-
-    idx      = np.unravel_index(np.argmax(M), M.shape)
-    top5_idx = np.argsort(M, axis=None)[::-1][:5]
-    top5     = [(f"{r}:{c}", round(M[r, c] * 100, 1))
-                for r, c in zip(*np.unravel_index(top5_idx, M.shape))]
+    over25 = min(over25_raw / suma, 1.0)
+    top5 = [(f"{r}:{c}", round(v * 100, 1)) for r, c, v in top5_data]
 
     n_h2h_srednia = (h2h_g.get("n_h2h", 0) + h2h_a.get("n_h2h", 0)) // 2
     pewnosc = AnalizaH2H.oblicz_pewnosc_laczna(n_h2h_srednia, len(df_f))
@@ -203,8 +211,8 @@ def predict_match(
         "btts":         round(btts  * 100, 1),
         "over25":       round(over25 * 100, 1),
         "under25":      round((1 - over25) * 100, 1),
-        "wynik_g":      int(idx[0]),
-        "wynik_a":      int(idx[1]),
+        "wynik_g":      wynik_g,
+        "wynik_a":      wynik_a,
         "top5":         top5,
         "sila_at_g":    round(sg["atak"],   2),
         "sila_ob_g":    round(sg["obrona"], 2),

@@ -10,8 +10,13 @@ Eksportuje:
         Zwraca "" gdy brak danych lub za mało próbek.
 """
 
+import logging
+import time as _time
 from datetime import datetime, timedelta
 
+from footstats.core.backtest import _connect, init_db
+
+logger = logging.getLogger(__name__)
 
 # ── Ekstrakcja czynników z pred dict ─────────────────────────────────────
 
@@ -73,63 +78,60 @@ def pobierz_rag_wzorce(
     Zwraca "" gdy brak danych lub za mało próbek.
 
     Przykład zwrotu: "PATENT+TWIERDZA->1: 7/8(87%) | PATENT->1: 12/16(75%)"
+    Maks 5 zapytań na wywołanie, wykonywanych jako jeden UNION ALL batch.
     """
     if not factors:
         return ""
 
     try:
-        from footstats.core.backtest import _connect, init_db
-    except ImportError:
-        return ""
-
-    try:
         init_db()
         date_from = (datetime.now() - timedelta(days=dni)).strftime("%Y-%m-%d")
-        wyniki: list[str] = []
 
+        # Zbierz specyfikacje zapytań (max 5)
+        specs: list[tuple[str, list[str], str | None]] = []
+        combo = factors[:3]
+        if len(combo) >= 2 and ai_tip:
+            specs.append(("+".join(combo), combo, ai_tip))
+        seen: set[str] = set()
+        for f in factors[:4]:
+            if ai_tip:
+                key = f"{f}->{ai_tip}"
+                if key not in seen:
+                    seen.add(key)
+                    specs.append((f, [f], ai_tip))
+
+        if not specs:
+            return ""
+
+        # Batch wszystkich zapytań jako UNION ALL
+        parts: list[str] = []
+        params: list = []
+        for _label, factor_list, tip in specs:
+            exists_parts = [
+                "EXISTS (SELECT 1 FROM json_each(factors) WHERE value = ?)"
+                for _ in factor_list
+            ]
+            tip_clause = "AND ai_tip = ?" if tip else ""
+            parts.append(
+                f"SELECT COUNT(*) AS n, COALESCE(SUM(tip_correct), 0) AS hits "
+                f"FROM predictions "
+                f"WHERE match_date >= ? AND tip_correct IS NOT NULL "
+                f"AND {' AND '.join(exists_parts)} {tip_clause}"
+            )
+            params.extend([date_from] + factor_list + ([tip] if tip else []))
+
+        t0 = _time.monotonic()
         with _connect() as conn:
+            rows = conn.execute(" UNION ALL ".join(parts), params).fetchall()
+        elapsed = _time.monotonic() - t0
+        logger.debug("[RAG] Batch %d queries in %.3fs", len(specs), elapsed)
 
-            def _query(factor_list: list[str], tip: str | None) -> tuple[int, int]:
-                """Zwraca (n_zbadanych, trafienia) dla podanych czynników + tipu."""
-                exists_parts = [
-                    "EXISTS (SELECT 1 FROM json_each(factors) WHERE value = ?)"
-                    for _ in factor_list
-                ]
-                params: list = [date_from] + factor_list
-                tip_clause = ""
-                if tip:
-                    tip_clause = "AND ai_tip = ?"
-                    params.append(tip)
-                sql = f"""
-                    SELECT COUNT(*) AS n, COALESCE(SUM(tip_correct), 0) AS hits
-                    FROM predictions
-                    WHERE match_date >= ?
-                      AND tip_correct IS NOT NULL
-                      AND {" AND ".join(exists_parts)}
-                      {tip_clause}
-                """
-                row = conn.execute(sql, params).fetchone()
-                return (row[0] or 0, int(row[1] or 0))
-
-            # 1. Kombinacja wszystkich czynników (max 3) + tip
-            combo = factors[:3]
-            if len(combo) >= 2 and ai_tip:
-                n, hits = _query(combo, ai_tip)
-                if n >= min_n:
-                    acc = round(hits / n * 100)
-                    label = "+".join(combo)
-                    wyniki.append(f"{label}->{ai_tip}: {hits}/{n}({acc}%)")
-
-            # 2. Pojedyncze czynniki + tip
-            seen: set[str] = set()
-            for f in factors[:4]:
-                if ai_tip:
-                    n, hits = _query([f], ai_tip)
-                    key = f"{f}->{ai_tip}"
-                    if n >= min_n and key not in seen:
-                        seen.add(key)
-                        acc = round(hits / n * 100)
-                        wyniki.append(f"{key}: {hits}/{n}({acc}%)")
+        wyniki: list[str] = []
+        for (label, _, tip), row in zip(specs, rows):
+            n, hits = row[0] or 0, int(row[1] or 0)
+            if n >= min_n:
+                acc = round(hits / n * 100)
+                wyniki.append(f"{label}->{tip}: {hits}/{n}({acc}%)")
 
         return " | ".join(wyniki[:3])
 
@@ -207,20 +209,21 @@ def retrieve_relevant_lessons(query_context: str, k: int = 5, min_score: float =
         feedback_ids = [fid for fid, score in results]
         lessons: list[dict] = []
 
+        score_map = dict(results)
+        placeholders = ",".join("?" * len(feedback_ids))
         with _connect() as conn:
-            for fid, score in results:
-                row = conn.execute(
-                    "SELECT id, match_id, reason_for_failure, created_at FROM ai_feedback WHERE id = ?",
-                    (fid,)
-                ).fetchone()
-                if row:
-                    lessons.append({
-                        'id': row[0],
-                        'match_id': row[1],
-                        'reason_for_failure': row[2],
-                        'score': score,
-                        'created_at': row[3]
-                    })
+            rows = conn.execute(
+                f"SELECT id, match_id, reason_for_failure, created_at FROM ai_feedback WHERE id IN ({placeholders})",
+                feedback_ids,
+            ).fetchall()
+        for row in rows:
+            lessons.append({
+                "id": row[0],
+                "match_id": row[1],
+                "reason_for_failure": row[2],
+                "score": score_map.get(row[0], 0.0),
+                "created_at": row[3],
+            })
 
         logger.debug(f"[RAG] Retrieved {len(lessons)} lessons (top-{k}, min_score={min_score})")
         return lessons

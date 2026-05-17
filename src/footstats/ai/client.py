@@ -7,6 +7,7 @@ import logging
 import os
 import requests
 from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_exponential
 from footstats.utils.console import console
 from footstats.core.circuit_breaker import groq_circuit, ollama_circuit
 from footstats.core.exceptions import FootStatsCircuitOpenError
@@ -20,9 +21,34 @@ OLLAMA_MODEL = "gemma2:2b"
 OLLAMA_URL   = "http://localhost:11434/api/generate"
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
+def _groq_call_impl(klucz: str, prompt: str, max_tokens: int) -> str:
+    """Inner Groq call with exponential backoff retry. Raises on failure."""
+    import groq as groq_lib
+
+    client = groq_lib.Groq(api_key=klucz)
+    resp = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Jesteś ekspertem analitykiem piłkarskim. "
+                    "Odpowiadasz zawsze po polsku. "
+                    "Jeśli prosisz o JSON – zwracasz TYLKO JSON, bez żadnego tekstu przed ani po."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=max_tokens,
+        temperature=0.3,
+    )
+    return resp.choices[0].message.content
+
+
 def _groq(prompt: str, max_tokens: int = 600) -> str | None:
     """
-    Odpytuje Groq API. Zwraca tekst lub None jeśli błąd.
+    Odpytuje Groq API z exponential backoff. Zwraca tekst lub None.
     Obsługuje RateLimitError gracefully i circuit breaker.
     """
     klucz = os.getenv("GROQ_API_KEY", "").strip()
@@ -34,29 +60,8 @@ def _groq(prompt: str, max_tokens: int = 600) -> str | None:
         return None
 
     try:
-        import time
-        time.sleep(2)  # Throttling to prevent 429
-        import groq as groq_lib
-
         with groq_circuit:
-            client = groq_lib.Groq(api_key=klucz)
-            resp = client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Jesteś ekspertem analitykiem piłkarskim. "
-                            "Odpowiadasz zawsze po polsku. "
-                            "Jeśli prosisz o JSON – zwracasz TYLKO JSON, bez żadnego tekstu przed ani po."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=max_tokens,
-                temperature=0.3,
-            )
-            return resp.choices[0].message.content
+            return _groq_call_impl(klucz, prompt, max_tokens)
     except FootStatsCircuitOpenError as e:
         logger.warning("[AI] %s", e)
         return None
@@ -65,30 +70,36 @@ def _groq(prompt: str, max_tokens: int = 600) -> str | None:
         if "429" in err_str or "rate_limit" in err_str or "too many requests" in err_str:
             logger.warning("[AI] Groq RateLimitError (429) — zwracam None")
         else:
-            logger.error("[AI] Groq błąd: %s", e)
+            logger.error("[AI] Groq błąd po 3 retry: %s", e)
         return None
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
+def _ollama_call_impl(prompt: str) -> str:
+    """Inner Ollama call with exponential backoff retry. Raises on failure."""
+    r = requests.post(
+        OLLAMA_URL,
+        json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+        timeout=120,
+    )
+    r.raise_for_status()
+    return r.json().get("response", "")
+
+
 def _ollama(prompt: str) -> str | None:
-    """Odpytuje lokalną Ollamę. Zwraca tekst lub None jeśli błąd."""
+    """Odpytuje lokalną Ollamę z exponential backoff. Zwraca tekst lub None."""
     if ollama_circuit.is_open:
         logger.warning("[AI] Ollama circuit OPEN — pomijam")
         return None
 
     try:
         with ollama_circuit:
-            r = requests.post(
-                OLLAMA_URL,
-                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-                timeout=120,
-            )
-            r.raise_for_status()
-            return r.json().get("response", "")
+            return _ollama_call_impl(prompt)
     except FootStatsCircuitOpenError as e:
         logger.warning("[AI] %s", e)
         return None
     except Exception as e:
-        logger.error("[AI] Ollama błąd: %s", e)
+        logger.error("[AI] Ollama błąd po 3 retry: %s", e)
         return None
 
 

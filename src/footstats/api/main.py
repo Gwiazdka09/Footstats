@@ -1,19 +1,25 @@
-"""FootStats API — app factory with auth, CORS, and rate limiting."""
+"""FootStats API — app factory with auth, CORS, rate limiting, and timeout."""
+import asyncio
 import json
 import logging
 import os
+import uuid
+from contextvars import ContextVar
 from pathlib import Path
 
 import sentry_sdk
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
+
+_request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 
 load_dotenv()
 
@@ -33,7 +39,32 @@ class _JsonFormatter(logging.Formatter):
             "msg": record.getMessage(),
             "logger": record.name,
             "time": self.formatTime(record),
+            "request_id": _request_id_var.get(""),
         })
+
+
+class _RequestIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        rid = request.headers.get("X-Request-ID") or str(uuid.uuid4())[:8]
+        _request_id_var.set(rid)
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = rid
+        return response
+
+
+class _TimeoutMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, timeout: float = 10.0) -> None:
+        super().__init__(app)
+        self.timeout = timeout
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await asyncio.wait_for(call_next(request), timeout=self.timeout)
+        except asyncio.TimeoutError:
+            return JSONResponse(
+                {"detail": "Request timeout", "timeout_s": self.timeout},
+                status_code=504,
+            )
 
 
 _handler = logging.StreamHandler()
@@ -173,6 +204,8 @@ app = FastAPI(title="FootStats API", version="2.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(_TimeoutMiddleware, timeout=10.0)
+app.add_middleware(_RequestIDMiddleware)
 
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
 _origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
