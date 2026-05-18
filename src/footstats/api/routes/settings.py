@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from footstats.api.auth import require_auth
+from footstats.core.response_cache import cached_response
 from footstats.utils.db import connect as _connect
 
 router = APIRouter(prefix="/api", tags=["settings"])
@@ -20,6 +21,7 @@ class SettingsUpdate(BaseModel):
 
 
 @router.get("/settings")
+@cached_response(ttl_seconds=1800, vary_by=["user_id"])
 def get_settings(user_id: int = Depends(require_auth)):
     defaults = {
         "version": cfg.VERSION,

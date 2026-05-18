@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from footstats.api.auth import require_auth
+from footstats.core.response_cache import cached_response
 from footstats.utils.db import connect as _connect
 
 router = APIRouter(prefix="/api", tags=["coupons"])
@@ -86,6 +87,7 @@ class SettleRequest(BaseModel):
 
 
 @router.get("/coupons/active")
+@cached_response(ttl_seconds=900, vary_by=["user_id"])
 def get_active_coupons(user_id: int = Depends(require_auth)):
     with _connect() as conn:
         rows = conn.execute(
@@ -103,6 +105,7 @@ def get_active_coupons(user_id: int = Depends(require_auth)):
 
 
 @router.get("/coupons")
+@cached_response(ttl_seconds=900, vary_by=["limit", "user_id"])
 def get_coupons(limit: int = 50, user_id: int = Depends(require_auth)):
     with _connect() as conn:
         rows = conn.execute(
@@ -118,6 +121,7 @@ def get_coupons(limit: int = 50, user_id: int = Depends(require_auth)):
 
 
 @router.get("/stats/coupon-summary")
+@cached_response(ttl_seconds=1800, vary_by=["days", "user_id"])
 def get_coupon_summary(days: int = 30, user_id: int = Depends(require_auth)):
     try:
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
@@ -183,6 +187,7 @@ def get_coupon_summary(days: int = 30, user_id: int = Depends(require_auth)):
 
 
 @router.get("/matches/today")
+@cached_response(ttl_seconds=600, vary_by=["user_id"])
 def get_matches_today(user_id: int = Depends(require_auth)):
     global _MATCHES_CACHE
     preds = _fetch_predictions()

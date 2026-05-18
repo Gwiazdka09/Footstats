@@ -7,7 +7,9 @@ Exports:
     clear_response_cache(prefix) → invalidate cache by pattern
 """
 
+import asyncio
 import hashlib
+import inspect
 import time
 from datetime import datetime, timedelta
 from functools import wraps
@@ -20,31 +22,48 @@ _RESPONSE_CACHE: dict[str, dict[str, Any]] = {}
 _CACHE_LOCK_TIME = 0
 
 
-def cache_key_builder(request: Request, vary_by: list[str] | None = None) -> str:
+def cache_key_builder(request_or_name: Request | str = None, vary_by: list[str] | None = None, vary_values: dict | None = None) -> str:
     """
-    Build cache key from request path + query params.
+    Build cache key from request path + vary_by parameters, or from function name + vary_by values.
 
     Args:
-        request: FastAPI Request object
-        vary_by: List of query param names to include in cache key (None = all params)
+        request_or_name: FastAPI Request object OR function name string
+        vary_by: List of parameter names to include in cache key
+        vary_values: Dict of {param_name: value} for vary_by extraction (used with string name)
 
     Returns:
-        Cache key string (hash of path + params)
+        Cache key string (hash of path/name + params)
     """
     vary_by = vary_by or []
-    key_parts = [str(request.url.path)]
+    vary_values = vary_values or {}
 
-    if vary_by:
+    if isinstance(request_or_name, str):
+        key_parts = [request_or_name]
         for param in vary_by:
-            val = request.query_params.get(param, "")
-            if val:
+            val = vary_values.get(param, "")
+            if val is not None:
                 key_parts.append(f"{param}={val}")
     else:
-        for k, v in request.query_params.items():
-            key_parts.append(f"{k}={v}")
+        request = request_or_name
+        key_parts = [str(request.url.path)]
+        qp = request.query_params
+        if isinstance(qp, dict):
+            qp_dict = qp
+        else:
+            qp_dict = dict(qp) if qp else {}
 
-    key_str = "|".join(key_parts)
-    return hashlib.md5(key_str.encode()).hexdigest()
+        if vary_by:
+            for param in vary_by:
+                val = qp_dict.get(param, "")
+                if val:
+                    key_parts.append(f"{param}={val}")
+        else:
+            for k, v in qp_dict.items():
+                key_parts.append(f"{k}={v}")
+
+    key_str = "|".join(str(k) for k in key_parts)
+    _hash = hashlib.md5(key_str.encode()).hexdigest()
+    return _hash
 
 
 def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None):
@@ -64,48 +83,116 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
     vary_by = vary_by or []
 
     def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        async def wrapper(request: Request, *args, **kwargs):
-            cache_key = cache_key_builder(request, vary_by)
+        is_async = asyncio.iscoroutinefunction(func)
 
-            entry = _RESPONSE_CACHE.get(cache_key)
-            if entry:
-                age = time.time() - entry["ts"]
-                if age < ttl_seconds:
-                    response = JSONResponse(
-                        content=entry["data"],
-                        status_code=entry["status"],
-                    )
-                    response.headers["Cache-Control"] = f"max-age={int(ttl_seconds - age)}, must-revalidate"
-                    response.headers["X-Cache"] = "HIT"
-                    return response
+        if is_async:
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                request = None
+                if args and hasattr(args[0], 'url') and hasattr(args[0], 'query_params'):
+                    request = args[0]
 
-            result = await func(request, *args, **kwargs)
+                if request is not None:
+                    vary_vals = {}
+                    for param in vary_by:
+                        if param in kwargs:
+                            vary_vals[param] = kwargs[param]
+                    cache_key = cache_key_builder(request, vary_by, vary_vals)
+                else:
+                    cache_key = cache_key_builder(func.__name__, vary_by, kwargs)
 
-            if isinstance(result, Response):
-                body = result.body.decode() if isinstance(result.body, bytes) else result.body
-                try:
-                    import json
-                    data = json.loads(body) if isinstance(body, str) else body
-                except Exception:
-                    data = body
-                status = result.status_code
-            else:
-                data = result
-                status = 200
+                entry = _RESPONSE_CACHE.get(cache_key)
+                if entry is not None:
+                    age = time.time() - entry["ts"]
+                    if age < ttl_seconds:
+                        response = JSONResponse(
+                            content=entry["data"],
+                            status_code=entry["status"],
+                        )
+                        response.headers["Cache-Control"] = f"max-age={int(ttl_seconds - age)}, must-revalidate"
+                        response.headers["X-Cache"] = "HIT"
+                        return response
 
-            _RESPONSE_CACHE[cache_key] = {
-                "data": data,
-                "status": status,
-                "ts": time.time(),
-            }
+                result = await func(*args, **kwargs)
 
-            response = JSONResponse(content=data, status_code=status)
-            response.headers["Cache-Control"] = f"max-age={ttl_seconds}, must-revalidate"
-            response.headers["X-Cache"] = "MISS"
-            return response
+                if isinstance(result, Response):
+                    body = result.body.decode() if isinstance(result.body, bytes) else result.body
+                    try:
+                        import json
+                        data = json.loads(body) if isinstance(body, str) else body
+                    except Exception:
+                        data = body
+                    status = result.status_code
+                else:
+                    data = result
+                    status = 200
 
-        return wrapper
+                _RESPONSE_CACHE[cache_key] = {
+                    "data": data,
+                    "status": status,
+                    "ts": time.time(),
+                }
+
+                response = JSONResponse(content=data, status_code=status)
+                response.headers["Cache-Control"] = f"max-age={ttl_seconds}, must-revalidate"
+                response.headers["X-Cache"] = "MISS"
+                return response
+
+            return async_wrapper
+        else:
+            @wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                request = None
+                if args and hasattr(args[0], 'url') and hasattr(args[0], 'query_params'):
+                    request = args[0]
+
+                if request is not None:
+                    vary_vals = {}
+                    for param in vary_by:
+                        if param in kwargs:
+                            vary_vals[param] = kwargs[param]
+                    cache_key = cache_key_builder(request, vary_by, vary_vals)
+                else:
+                    cache_key = cache_key_builder(func.__name__, vary_by, kwargs)
+
+                entry = _RESPONSE_CACHE.get(cache_key)
+                if entry is not None:
+                    age = time.time() - entry["ts"]
+                    if age < ttl_seconds:
+                        response = JSONResponse(
+                            content=entry["data"],
+                            status_code=entry["status"],
+                        )
+                        response.headers["Cache-Control"] = f"max-age={int(ttl_seconds - age)}, must-revalidate"
+                        response.headers["X-Cache"] = "HIT"
+                        return response
+
+                result = func(*args, **kwargs)
+
+                if isinstance(result, Response):
+                    body = result.body.decode() if isinstance(result.body, bytes) else result.body
+                    try:
+                        import json
+                        data = json.loads(body) if isinstance(body, str) else body
+                    except Exception:
+                        data = body
+                    status = result.status_code
+                else:
+                    data = result
+                    status = 200
+
+                _RESPONSE_CACHE[cache_key] = {
+                    "data": data,
+                    "status": status,
+                    "ts": time.time(),
+                }
+
+                response = JSONResponse(content=data, status_code=status)
+                response.headers["Cache-Control"] = f"max-age={ttl_seconds}, must-revalidate"
+                response.headers["X-Cache"] = "MISS"
+                return response
+
+            return sync_wrapper
 
     return decorator
 

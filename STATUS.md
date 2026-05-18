@@ -1,8 +1,8 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-05-07  
+**Last Updated:** 2026-05-18  
 **Current Version:** v3.4-stable  
-**Build Status:** ✅ Passing (105 tests)  
+**Build Status:** ✅ Passing (105+ tests, 49 test files)  
 **System State:** Fully Autonomous Production Ready
 
 ---
@@ -45,11 +45,26 @@
 
 ---
 
+## ⚠️ KNOWN ISSUES (2026-05-18 audit)
+
+| Issue | Severity | Location |
+|-------|----------|----------|
+| VERSION mismatch: config.py="v3.2", CLAUDE.md="v3.3", STATUS.md="v3.4" | 🟡 Low | config.py:11, CLAUDE.md:1 |
+| 216x `except Exception` — wiele bez logowania | 🟠 Medium | core/, scrapers/ |
+| SQLite conn bez context manager (potential leak) | 🟠 Medium | referee_db.py, dashboard.py |
+| 614 starych plików cache (>30 dni, 263MB) | 🟡 Low | cache/form/ (258MB) |
+| 4 skrypty check_settlement*.py w root (nie w scripts/) | 🟡 Low | root/ |
+| PHASE3_SPEC.md, PHASE4_SPEC.md — zakończone, do archiwizacji | 🟡 Low | root/ |
+
+---
+
 ## 🚀 CURRENT FOCUS
 
-- **Periodic Calibration**: Uruchom `python -m footstats.core.lambda_optimizer` po każdym sezonie lub co 500 meczów aby odświeżyć bias.
+- **Version Sync**: Ujednolicić VERSION we wszystkich plikach do v3.4-stable.
+- **Periodic Calibration**: Uruchom `python -m footstats.core.lambda_optimizer` po każdym sezonie lub co 500 meczów.
 - **SofaScore Injuries**: Scraper kontuzji/zawieszeń jako dodatkowy sygnał dla lambda.
-- **UI Expansion**: Adding more interactive charts to the Streamlit dashboard.
+- **Cache Cleanup**: Usunąć 614 plików cache starszych niż 30 dni (263MB do odzyskania).
+- **SQLite Context Managers**: Zamienić ręczne conn/close na `with` w referee_db.py i dashboard.py.
 
 ---
 
@@ -57,3 +72,4 @@
 - **Daily Agent**: Running successfully on schedule.
 - **Dashboard**: Live and tracking real-time ROI.
 - **API**: 12 endpoints serving predictions and stats.
+- **DB**: 1966 predictions, 174 coupons, 219 AI feedback entries, 180 referees.
