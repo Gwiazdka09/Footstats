@@ -142,3 +142,67 @@ def test_predict_match_top5_format():
         label, prob = entry
         assert ":" in label
         assert 0 <= prob <= 100
+
+
+# ── Phase 3: Poisson Smoothing Edge Cases ────────────────────────────────────
+
+def test_macierz_extreme_low_lambdas_no_nan():
+    """Extreme low lambdas should not produce NaN/Inf with smoothing."""
+    pw, pr, pp, btts, over25, _wynik_g, _wynik_a, _top5 = _macierz(0.01, 0.01, 10)
+    assert not np.isnan([pw, pr, pp, btts, over25]).any()
+    assert not np.isinf([pw, pr, pp, btts, over25]).any()
+    assert 0.0 <= pw <= 1.0
+    assert 0.0 <= pr <= 1.0
+    assert 0.0 <= pp <= 1.0
+
+
+def test_macierz_extreme_high_lambdas_no_nan():
+    """Extreme high lambdas should not produce NaN/Inf with smoothing."""
+    pw, pr, pp, btts, over25, _wynik_g, _wynik_a, _top5 = _macierz(8.0, 8.0, 15)
+    assert not np.isnan([pw, pr, pp, btts, over25]).any()
+    assert not np.isinf([pw, pr, pp, btts, over25]).any()
+    assert 0.0 <= pw <= 1.0
+    assert 0.0 <= pr <= 1.0
+    assert 0.0 <= pp <= 1.0
+
+
+def test_macierz_smoothing_prevents_zero_probability():
+    """Laplace smoothing should prevent exact zero probabilities."""
+    pw, pr, pp, btts, over25, _wynik_g, _wynik_a, _top5 = _macierz(0.1, 0.1, 8)
+    assert pw > 0.0, "Win probability should be smoothed away from zero"
+    assert pr > 0.0, "Draw probability should be smoothed away from zero"
+    assert pp > 0.0, "Loss probability should be smoothed away from zero"
+    assert btts > 0.0, "BTTS should be smoothed away from zero"
+
+
+def test_macierz_probabilities_normalized_after_smoothing():
+    """After smoothing, probabilities should sum close to 1.0."""
+    pw, pr, pp, _btts, _over25, _wynik_g, _wynik_a, _top5 = _macierz(1.5, 1.3, 10)
+    total = pw + pr + pp
+    assert abs(total - 1.0) < 0.01, f"Probabilities sum to {total}, not close to 1.0"
+
+
+def test_macierz_btts_valid_range_extreme():
+    """BTTS should always be in [0, 1] even with extreme lambdas."""
+    for lambda_g, lambda_a in [(0.01, 0.01), (0.5, 5.0), (8.0, 8.0)]:
+        _pw, _pr, _pp, btts, _over25, _wynik_g, _wynik_a, _top5 = _macierz(lambda_g, lambda_a, 12)
+        assert 0.0 <= btts <= 1.0, f"BTTS out of range for lambdas ({lambda_g}, {lambda_a}): {btts}"
+        assert not np.isnan(btts)
+
+
+def test_macierz_over25_valid_range():
+    """Over 2.5 probability should always be in [0, 1]."""
+    for lambda_g, lambda_a in [(0.05, 0.05), (1.0, 1.0), (5.0, 5.0)]:
+        _pw, _pr, _pp, _btts, over25, _wynik_g, _wynik_a, _top5 = _macierz(lambda_g, lambda_a, 12)
+        assert 0.0 <= over25 <= 1.0, f"Over25 out of range for lambdas ({lambda_g}, {lambda_a}): {over25}"
+        assert not np.isnan(over25)
+
+
+def test_macierz_top5_probabilities_valid():
+    """Top 5 scores should have valid probabilities even with edge case lambdas."""
+    _pw, _pr, _pp, _btts, _over25, _wynik_g, _wynik_a, top5 = _macierz(0.2, 4.5, 12)
+    for g, a, prob in top5:
+        assert 0.0 <= prob <= 1.0, f"Top5 probability invalid: {prob}"
+        assert not np.isnan(prob)
+        assert 0 <= g < 12
+        assert 0 <= a < 12

@@ -21,10 +21,25 @@ from footstats.utils.console import console
 
 @functools.lru_cache(maxsize=512)
 def _macierz(lambda_g: float, lambda_a: float, N: int) -> tuple:
-    """Cached Poisson matrix. Args should be pre-rounded to 4dp."""
+    """
+    Cached Poisson matrix with Laplace smoothing.
+
+    Args should be pre-rounded to 4dp.
+    Smoothing prevents zero probabilities and numerical instability.
+    """
+    SMOOTHING_EPS = 1e-8
+
     pmf_g = poisson.pmf(np.arange(N), lambda_g)
     pmf_a = poisson.pmf(np.arange(N), lambda_a)
+
+    pmf_g = (pmf_g + SMOOTHING_EPS) / (1.0 + N * SMOOTHING_EPS)
+    pmf_a = (pmf_a + SMOOTHING_EPS) / (1.0 + N * SMOOTHING_EPS)
+
     M = np.outer(pmf_g, pmf_a)
+    M_sum = np.sum(M)
+    if M_sum > 0:
+        M = M / M_sum
+
     pw  = float(np.sum(np.tril(M, -1)))
     pr  = float(np.sum(np.diag(M)))
     pp  = float(np.sum(np.triu(M,  1)))
