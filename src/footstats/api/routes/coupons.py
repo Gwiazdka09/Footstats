@@ -1,5 +1,6 @@
 """Coupon, match, kelly, and stats endpoints."""
 import json
+import logging
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -11,6 +12,8 @@ from pydantic import BaseModel
 from footstats.api.auth import require_auth
 from footstats.core.response_cache import cached_response
 from footstats.utils.db import connect as _connect
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["coupons"])
 
@@ -29,12 +32,16 @@ def _fetch_predictions() -> list:
         from footstats.scrapers.bzzoiro import BzzoiroClient
         from footstats.config import ENV_BZZOIRO
         key = os.getenv(ENV_BZZOIRO, "").strip()
+        _log.info("BZZOIRO_KEY present: %s, length: %d", bool(key), len(key))
         if not key:
+            _log.warning("Brak BZZOIRO_KEY — using mock predictions")
             return _mock_predictions()
         client = BzzoiroClient(key)
         preds = client.predykcje_tygodnia()
+        _log.info("Bzzoiro returned %d predictions", len(preds) if preds else 0)
         return preds if preds else _mock_predictions()
-    except Exception:
+    except Exception as e:
+        _log.error("_fetch_predictions error: %s", e, exc_info=True)
         return _mock_predictions()
 
 

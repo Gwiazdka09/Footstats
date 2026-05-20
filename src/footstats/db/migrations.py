@@ -52,6 +52,15 @@ MIGRATIONS: list[tuple[int, str, list[str]]] = [
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_bot_settings_user_key ON bot_settings(user_id, key)",
         ],
     ),
+    (
+        3,
+        "fix_bankroll_state_id_generation",
+        [
+            "CREATE SEQUENCE IF NOT EXISTS bankroll_state_id_seq",
+            "SELECT setval('bankroll_state_id_seq', COALESCE((SELECT MAX(id) FROM bankroll_state), 0) + 1)",
+            "ALTER TABLE bankroll_state ALTER COLUMN id SET DEFAULT nextval('bankroll_state_id_seq')",
+        ],
+    ),
 ]
 
 
