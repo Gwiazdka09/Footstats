@@ -1,5 +1,5 @@
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import timedelta
 from footstats.utils.helpers import _parse_date
 from footstats.config import (
     REWANZ_OKNO_DNI, REWANZ_VABANK, REWANZ_PARKING_BUS,

@@ -1,5 +1,5 @@
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import timedelta
 from footstats.config import ROTACJA_DNI, ROTACJA_KARA, ZMECZ_GODZ, ZMECZ_KARA_OBR
 from footstats.utils.helpers import _parse_date
 
