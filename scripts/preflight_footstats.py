@@ -1,6 +1,7 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
-preflight_footstats.py ù sprawdzenie ?rodowiska przed operatorem / daily_agent.
+preflight_footstats.py ÔøΩ sprawdzenie ?rodowiska przed operatorem / daily_agent.
 
 U?ycie:
     python scripts/preflight_footstats.py
@@ -45,7 +46,7 @@ def _check_var(key: str, required: bool, desc: str, min_len: int) -> tuple[str, 
     if not val:
         return (RED if required else YELLOW, "BRAK")
     if len(val) < min_len:
-        return (YELLOW, f"ZA KRùTKI ({len(val)} < {min_len})")
+        return (YELLOW, f"ZA KRÔøΩTKI ({len(val)} < {min_len})")
     if any(p in val.lower() for p in PLACEHOLDER_FRAGMENTS):
         return (YELLOW, "PLACEHOLDER")
     return (GREEN, "OK")
@@ -158,10 +159,10 @@ def main() -> int:
 
     print(f"\n{'='*60}")
     if errors:
-        print(f"  {RED}FAIL{RESET} ù {errors} b??dùw, {warnings} ostrze?e?")
+        print(f"  {RED}FAIL{RESET} ÔøΩ {errors} b??dÔøΩw, {warnings} ostrze?e?")
         return 1
     if warnings and args.strict:
-        print(f"  {YELLOW}WARN{RESET} ù --strict")
+        print(f"  {YELLOW}WARN{RESET} ÔøΩ --strict")
         return 1
     print(f"  {GREEN}PASS{RESET}")
     print(f"{'='*60}\n")

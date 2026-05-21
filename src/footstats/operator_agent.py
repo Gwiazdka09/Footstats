@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 """
-Operator Agent — FootStats orchestrator.
+Operator Agent ï¿½ FootStats orchestrator.
 
 Usage:
     python -m footstats.operator_agent --faza full
