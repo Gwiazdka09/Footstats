@@ -31,19 +31,15 @@ def _db(db_path: Path | None) -> Path:
 def init_referee_table(db_path: Path = None) -> None:
     path = _db(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
-    try:
+    with sqlite3.connect(path) as conn:
         conn.execute(_DDL)
         conn.commit()
-    finally:
-        conn.close()
 
 
 def upsert_referee(name: str, stats: dict, db_path: Path = None) -> None:
     init_referee_table(db_path)
     path = _db(db_path)
-    conn = sqlite3.connect(path)
-    try:
+    with sqlite3.connect(path) as conn:
         conn.execute(
             """
             INSERT INTO referees (name, country, avg_yellow, avg_red, avg_goals,
@@ -70,21 +66,16 @@ def upsert_referee(name: str, stats: dict, db_path: Path = None) -> None:
             ),
         )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def get_referee(name: str, db_path: Path = None) -> dict | None:
     init_referee_table(db_path)
     path = _db(db_path)
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    try:
+    with sqlite3.connect(path) as conn:
+        conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT * FROM referees WHERE name = ?", (name,)
         ).fetchone()
-    finally:
-        conn.close()
     if row is None:
         return None
     return dict(row)
