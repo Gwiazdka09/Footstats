@@ -1,74 +1,77 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-05-20  
-**Current Version:** v3.4-stable  
-**Build Status:** ✅ Passing (105+ tests, 47 test files, 99 source modules)  
+**Last Updated:** 2026-05-21  
+**Current Version:** v3.4-stable (config.py + CLAUDE.md zsynchronizowane)  
+**Build Status:** ✅ Passing (99 source modules compile OK, 45 test files)  
 **System State:** Fully Autonomous Production Ready
 
 ---
 
 ## ✅ RECENT MILESTONES (Completed)
 
-### 🎯 v3.4 — Poisson Model Auto-Calibration
-- **`lambda_optimizer.py`**: Walk-forward kalibracja na 200 meczach, Bias_Home/Bias_Away z porownania lambd z golami.
-- **Safety Rail [0.85–1.15]**: Mnoznik clampowany — brak ryzyka overfittingu.
-- **`data/model_calibration.json`**: Trwaly zapis mnoznikow z metadanymi.
-- **`poisson.py` integracja**: Kalibracja po korektach (rewanz, H2H, forma). Graceful fallback.
-- **CLI**: `python -m footstats.core.lambda_optimizer [--n 200] [--quiet]`
+### v3.4 — Poisson Model Auto-Calibration
+- `lambda_optimizer.py`: Walk-forward kalibracja na 200 meczach.
+- Safety Rail [0.85–1.15], `data/model_calibration.json`.
+- `poisson.py` integracja z graceful fallback.
 
-### 📂 Architectural Refactor & Cleanup
-- Standardized Project Structure, Source Management, Asset Organization.
+### Phase 4 hygiene (2026-05-21, Claude Code)
+- P4.1 Version sync → v3.4-stable w config.py i CLAUDE.md.
+- P4.2 SQLite context managers w referee_db.py i dashboard.py.
+- P4.6 częściowy cleanup importów (cli, data_fetcher, form).
+- P4.7 martwe zależności Postgres usunięte z requirements.txt.
 
-### 🤖 AI & Automation
+### Architectural Refactor & Cleanup
+- Standardized Project Structure, Source Management.
+
+### AI & Automation
 - Ultra-Skeptical AI Engine, RAG Lessons Learned, Autonomous Scheduler.
 
-### 📈 Data & Intelligence
+### Data & Intelligence
 - Superbet API (1400+ markets), BetBuilder, Referee DB.
 
 ---
 
-## 📊 PROJECT HEALTH METRICS
+## PROJECT HEALTH METRICS
 
 | Metric | Status | Value |
 |--------|--------|-------|
-| **Code Quality** | ✅ High | PEP8, Type hints, 99 modules parse OK |
-| **Test Coverage** | ✅ Solid | 105+ tests, 47 test files |
+| **Syntax** | ✅ Clean | 99/99 .py files parse OK |
+| **Tests** | ✅ Solid | 45 test files |
 | **AI Accuracy** | ✅ Stable | ~75% on 75%+ confidence |
-| **Automation** | ✅ Full | Zero-touch daily loop (Draft -> Final -> Settlement) |
-| **API Load** | ✅ Optimized | Response cache + TTL 24h + budget tracking |
-| **Syntax** | ✅ Clean | All 99 .py files parse without errors |
+| **Automation** | ✅ Full | Zero-touch daily loop |
+| **API Cache** | ✅ Wired | response_cache na 5 endpointach (settings, coupons, matches) |
+| **DB** | ✅ OK | 1966 predictions, 174 coupons, 219 AI feedback, 180 referees |
+| **Cache dir** | ✅ OK | 2 pliki, 6.3MB (czyste) |
 
 ---
 
-## ⚠️ KNOWN ISSUES (2026-05-20 audit)
+## KNOWN ISSUES (2026-05-21 audit)
 
-| Issue | Severity | Location |
-|-------|----------|----------|
-| VERSION mismatch: config.py="v3.2", CLAUDE.md="v3.3", STATUS.md="v3.4" | 🟠 Medium | config.py:11, CLAUDE.md:1 |
-| 216x `except Exception` — wiele bez logowania | 🟠 Medium | Najgorzej: sts.py(16), superbet.py(15), base_playwright.py(14), daily_agent.py(13), analyzer.py(13) |
-| SQLite conn bez context manager (potential leak) | 🟠 Medium | referee_db.py (3x), dashboard.py (1x) |
-| 682 starych plikow cache (>30 dni, 263MB) | 🟡 Low | cache/ |
-| 4x check_settlement*.py w root (powinny byc w scripts/) | 🟡 Low | root/ |
-| PHASE3_SPEC.md, PHASE4_SPEC.md, PROJECT_STATE.md — zakonczony, do archiwizacji | 🟡 Low | root/ |
-| DAILY_ANALYSIS_*.md, maintenance_prompt.md, validation_errors.csv w root | 🟡 Low | root/ → docs/ |
-| Playwright sync_playwright().start() — poprawne (p.stop() w finally) | ✅ OK | base_playwright.py |
-| Lambda optimizer cache — globalny dict, brak TTL (OK dla batch) | 🟡 Info | lambda_optimizer.py |
+| Issue | Severity | Details |
+|-------|----------|---------|
+| 216x `except Exception` | 🟠 Med | Top: sts(16), superbet(15), base_playwright(14), daily_agent(13), analyzer(13) |
+| ~70x potentially unused imports | 🟠 Med | fatigue.py, classifier.py + reszta; część już wyczyszczona |
+| 3x check_settlement*.py w root | 🟡 Low | Powinny byc w scripts/ |
+| Stale .md w root | 🟡 Low | PHASE3/4_SPEC, PROJECT_STATE, DAILY_ANALYSIS_*, maintenance_prompt → docs/ |
+| validation_errors.csv w root | 🟡 Low | → data/ |
+| checkpoint.py nie wpiety w daily_agent | 🟡 Low | Modul gotowy, nieuzywany |
+| egg-info wymaga odswiezenia | 🟡 Info | Po usunieciu psycopg2/sqlalchemy z requirements — `pip install -e .` |
 
----
-
-## 🚀 CURRENT FOCUS (Phase 4: Maintenance & Hygiene)
-
-- **P4.1** Version Sync: config.py, CLAUDE.md → "v3.4-stable"
-- **P4.2** SQLite Context Managers: referee_db.py (3x), dashboard.py (1x)
-- **P4.3** Exception Handling: top 5 plikow (sts, superbet, base_playwright, daily_agent, analyzer)
-- **P4.4** Cache Cleanup: 682 plikow >30 dni (263MB) + skrypt cleanup_cache.py
-- **P4.5** Root Cleanup: przeniesc 10 plikow do scripts/ i docs/
+**Rozwiązane dziś:** VERSION mismatch, SQLite try/finally, martwe deps Postgres, przestarzały wpis o cache 263MB.
 
 ---
 
-## 📜 DEPLOYMENT LOGS
-- **Daily Agent**: Running on schedule via Task Scheduler.
-- **Dashboard**: Live Streamlit, tracking ROI.
-- **API**: 12 endpoints, response_cache.py ready (nie wpiety w routes).
-- **DB**: 1966+ predictions, 174 coupons, 219 AI feedback, 180 referees.
-- **Pipeline**: run_daily.bat → backup → draft-wait-final → evening settlement.
+## CURRENT FOCUS (Phase 4: Maintenance & Hygiene)
+
+- **P4.3** Exception Handling: top 5 plikow, dodac specificzne exceptiony + logging
+- **P4.5** Root Cleanup: przeniesc skrypty i docs (TASK 5 — czeka na Claude)
+- **P4.6** Unused imports: fatigue.py, classifier.py
+- **P4.2** test_referee_db_conn_cleanup.py
+
+---
+
+## DEPLOYMENT LOGS
+- **Daily Agent**: Task Scheduler, stable.
+- **Dashboard**: Streamlit live.
+- **API**: 17 endpoints, response_cache wired on 5.
+- **Pipeline**: run_daily.bat → backup → draft-wait-final → settlement.
