@@ -174,8 +174,8 @@
     </nav>
     <div class="p-4 bg-white/5 rounded-xl border border-white/5 mt-auto">
       <p class="text-xs text-slate-500 uppercase tracking-tight">Właściciel</p>
-      <p class="font-bold text-slate-300 text-sm mb-3">Jakub</p>
-      <button onclick="localStorage.removeItem('fs_token'); showLogin();"
+      <p id="sidebar-username" class="font-bold text-slate-300 text-sm mb-3">—</p>
+      <button onclick="localStorage.removeItem('fs_token'); localStorage.removeItem('fs_user'); showLogin();"
         class="w-full text-xs text-slate-500 hover:text-rose-400 transition-colors text-left">
         Wyloguj
       </button>
@@ -197,7 +197,7 @@
     <div id="view-dashboard" class="hidden">
       <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
         <div>
-          <h1 class="text-3xl font-bold mb-1">Witaj, Jakub</h1>
+          <h1 class="text-3xl font-bold mb-1">Witaj, <span id="welcome-username">—</span></h1>
           <p class="text-slate-500 text-sm">Twoje imperium bukmacherskie jest online.</p>
         </div>
         <div class="glass-card px-8 py-5 flex items-center gap-4 border-indigo-500/20 bg-indigo-500/5">
