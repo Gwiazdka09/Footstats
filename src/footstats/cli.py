@@ -20,7 +20,7 @@ from footstats.config import (
     ENV_FOOTBALL, ENV_APISPORTS, ENV_BZZOIRO,
     _wczytaj_lub_stworz_env, _czytaj_wszystkie_klucze,
 )
-from footstats.export.pdf_font import _zarejestruj_font, FONT_OK
+from footstats.export.pdf_font import _zarejestruj_font
 from footstats.scrapers.football_data import APIClient
 from footstats.scrapers.api_football import APIFootball
 from footstats.scrapers.bzzoiro import BzzoiroClient
@@ -32,7 +32,6 @@ from footstats.core.fortress import HomeFortress
 from footstats.core.classifier import KlasyfikatorMeczu
 from footstats.core.form import AnalizaDomWyjazd, porownaj_forme
 from footstats.core.poisson import predict_match
-from footstats.core.value_bet import typy_zaklady
 from footstats.core.confidence import komentarz_analityka
 from footstats.core.weekly_picks import (
     pewniaczki_tygodnia, wyswietl_pewniaczki, eksportuj_pdf_pewniaczki,
@@ -514,7 +513,6 @@ def main():
     # OPCJA_AI_FOOTSTATS_PATCH
     _ai_dostepne = False
     try:
-        from ai_client   import zapytaj_ai        as _zapytaj_ai    # noqa: F401
         from ai_analyzer import analizuj_mecz_ai  as _analizuj_ai   # noqa: F401
         from ai_analyzer import wyswietl_analiza_ai as _pokaz_ai    # noqa: F401
         from scraper_kursy import szukaj_kursy_meczu as _kursy_ai   # noqa: F401

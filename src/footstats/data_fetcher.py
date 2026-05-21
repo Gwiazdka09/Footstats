@@ -1,13 +1,12 @@
 import time
 import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
-from rich.panel import Panel
 from rich.prompt import Prompt
 from rich import box
 from rich.table import Table
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
-from footstats.config import SLEEP_LOOP, VERSION
+from footstats.config import SLEEP_LOOP
 from footstats.scrapers.football_data import APIClient
 from footstats.scrapers.api_football import APIFootball
 

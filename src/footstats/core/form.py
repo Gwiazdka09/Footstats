@@ -1,5 +1,4 @@
 import pandas as pd
-from datetime import datetime, timedelta
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
 from footstats.config import DOMWYJAZD_MIN_M, DOMWYJAZD_PODROZNIK, OSTATNIE_N
