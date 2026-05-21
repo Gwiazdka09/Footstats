@@ -53,6 +53,12 @@ AGENT_KANDYDAT_PROG = 0.55 # prog pewnosci dla daily_agent (nizszy niz PEWNIACZE
 AGENT_BANKROLL      = 100.0 # bankroll do Kelly Criterion (PLN)
 AGENT_KELLY_FRACTION = 4    # bezpieczny fractional Kelly: f*/4 (bardziej konserwatywny dla 100 PLN)
 
+# Konto docelowe: daily_agent, operator_agent, zapis kuponów systemowych
+OPERATOR_ADMIN_USERNAME = os.getenv("OPERATOR_ADMIN_USERNAME", "Admin_JG").strip() or "Admin_JG"
+OPERATOR_STAWKA_A = float(os.getenv("OPERATOR_STAWKA_A", "10"))
+OPERATOR_STAWKA_B = float(os.getenv("OPERATOR_STAWKA_B", "5"))
+OPERATOR_SMOKE_TIMEOUT = int(os.getenv("OPERATOR_SMOKE_TIMEOUT", "120"))
+
 # Ligi do śledzenia (API-Football IDs) są teraz zdefiniowane w results_updater.py
 
 # Klucze .env – nazwy zmiennych srodowiskowych

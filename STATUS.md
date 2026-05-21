@@ -14,6 +14,11 @@
 - Safety Rail [0.85–1.15], `data/model_calibration.json`.
 - `poisson.py` integracja z graceful fallback.
 
+### Operator Agent (2026-05-21)
+- `python -m footstats.operator_agent` — preflight, smoke API (coupon wizard), pipeline, review.
+- Konto docelowe: `OPERATOR_ADMIN_USERNAME=Admin_JG` (`resolve_admin_user_id`).
+- Preview Kreator: dynamiczny user, widoczny CTA kroku 1.
+
 ### Phase 4 hygiene (2026-05-21, Claude Code)
 - P4.1 Version sync → v3.4-stable w config.py i CLAUDE.md.
 - P4.2 SQLite context managers w referee_db.py i dashboard.py.

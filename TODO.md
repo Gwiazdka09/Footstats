@@ -51,7 +51,8 @@
 ## Phase 5: PRODUCTION INTEGRATION (Next)
 
 - [x] 5.1: response_cache.py — JUZ WPIETY (settings, coupons/active, coupons, coupon-summary, matches/today)
-- [ ] 5.2: Integrate checkpoint.py into daily_agent batch flow
+- [x] 5.5: Operator Agent + Kreator fix (`operator_agent`, `preview.html`, `Admin_JG` user_id)
+- [ ] 5.2: Integrate checkpoint.py into daily_agent batch flow (częściowo: `data/operator_state/latest.json`)
 - [ ] 5.3: Prometheus metrics export (logging_config stubs → real endpoints)
 - [ ] 5.4: SofaScore injury scraper dla lambda correction
 

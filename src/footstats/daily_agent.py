@@ -665,8 +665,10 @@ def main():
 
     from footstats.config import AGENT_BANKROLL
     from footstats.core.bankroll import get_current_bankroll
+    from footstats.utils.admin_user import resolve_admin_user_id
 
-    current_bankroll = get_current_bankroll()
+    admin_uid = resolve_admin_user_id()
+    current_bankroll = get_current_bankroll(user_id=admin_uid)
     date_label = args.date or datetime.now().strftime("%Y-%m-%d")
     dry_tag    = "  [yellow]⚠ DRY-RUN[/yellow]" if args.dry_run else ""
 
@@ -1203,8 +1205,11 @@ def _zapisz_kupon_do_db(
             get_draft_today, promote_to_active
         )
         from footstats.core.bankroll import process_bet, get_current_bankroll
+        from footstats.utils.admin_user import resolve_admin_user_id
+
+        admin_uid = resolve_admin_user_id()
         init_coupon_tables()
-        current_bankroll = get_current_bankroll()
+        current_bankroll = get_current_bankroll(user_id=admin_uid)
         
         def _parse_home_away(k: dict) -> tuple[str, str]:
             """Wyciąga home/away: wprost z pól lub przez split 'mecz'."""
@@ -1236,7 +1241,7 @@ def _zapisz_kupon_do_db(
         avg_score = int(sum(k.get("decision_score", 0) for k in kandydaci) / max(len(kandydaci), 1))
 
         if phase == "final":
-            draft_row = get_draft_today()
+            draft_row = get_draft_today(user_id=admin_uid)
             if draft_row:
                 try:
                     promote_to_active(
@@ -1265,6 +1270,7 @@ def _zapisz_kupon_do_db(
             groq_reasoning=groq_resp or "",
             decision_score=avg_score,
             match_date_first=match_date,
+            user_id=admin_uid,
         )
 
         # Faza final: save_coupon tworzy DRAFT — od razu promuj do ACTIVE
@@ -1274,7 +1280,7 @@ def _zapisz_kupon_do_db(
             console.print(f"[green]Kupon #{cid} → ACTIVE[/green]")
 
         if cid and stake > 0:
-            process_bet(stake, f"Kupon A ID={cid} ({phase})")
+            process_bet(stake, f"Kupon A ID={cid} ({phase})", user_id=admin_uid)
 
         return cid
     except Exception as e:

@@ -25,7 +25,7 @@ RESET = "\033[0m"
 
 CHECKS = [
     # (klucz, wymagany, opis, min_len)
-    ("DATABASE_URL",      True,  "PostgreSQL connection string",    20),
+    ("DATABASE_URL",      False, "PostgreSQL (opcjonalnie; bez tego SQLite DB_PATH)", 20),
     ("GROQ_API_KEY",      True,  "Groq LLM (AI kupony)",            10),
     ("JWT_SECRET",        True,  "JWT podpisywanie tokenów",        32),
     ("SECRET_KEY",        True,  "FastAPI secret key",              32),
@@ -55,12 +55,21 @@ def _check_var(key: str, required: bool, desc: str, min_len: int) -> tuple[str, 
 
 
 def _check_db() -> tuple[bool, str]:
+    url = os.getenv("DATABASE_URL", "").strip()
     try:
-        import psycopg2
-        url = os.getenv("DATABASE_URL", "")
-        conn = psycopg2.connect(url, connect_timeout=5)
-        conn.close()
-        return True, "Połączono z bazą"
+        if url:
+            import psycopg2
+            conn = psycopg2.connect(url, connect_timeout=5)
+            conn.close()
+            return True, "PostgreSQL OK"
+        root = Path(__file__).resolve().parent.parent
+        db = root / "data" / "footstats_backtest.db"
+        if not db.exists():
+            return False, f"Brak SQLite: {db}"
+        import sqlite3
+        with sqlite3.connect(db) as conn:
+            conn.execute("SELECT 1").fetchone()
+        return True, f"SQLite OK ({db.name})"
     except Exception as e:
         return False, str(e)[:80]
 
@@ -123,7 +132,7 @@ def main() -> int:
     print("\n── Połączenia sieciowe ───────────────────────────────────")
 
     ok, msg = _check_db()
-    print(f"  {'✓' if ok else '✖'} {'Baza PostgreSQL':<25} {msg}")
+    print(f"  {'✓' if ok else '✖'} {'Baza danych':<25} {msg}")
     if not ok:
         errors += 1
 

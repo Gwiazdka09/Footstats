@@ -385,11 +385,13 @@
           <div class="spinner" style="width:24px;height:24px;border-width:2px"></div> Pobieram mecze…
         </div>
         <div id="wiz-matches-list" class="space-y-3 hidden"></div>
+        <p id="wiz-select-hint" class="text-xs text-slate-500 mt-3 hidden">Kliknij kartę meczu, aby ją zaznaczyć (checkbox po lewej).</p>
+        <div id="wiz-analyze-error" class="text-rose-400 text-sm mt-3 hidden"></div>
         <div class="mt-6 flex justify-end">
-          <button id="wiz-btn-analyze" onclick="wizAnalyze()"
-            class="hidden px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2">
+          <button id="wiz-btn-analyze" onclick="wizAnalyze()" disabled
+            class="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Głęboka Analiza wybranych
+            <span class="wiz-btn-label">Zaznacz mecze, aby analizować (0)</span>
           </button>
         </div>
       </div>
@@ -517,6 +519,8 @@
         if (!res.ok) { err.textContent = 'Nieprawidłowe dane logowania.'; err.classList.remove('hidden'); return; }
         const data = await res.json();
         localStorage.setItem('fs_token', data.access_token);
+        localStorage.setItem('fs_user', user);
+        applyUserDisplay();
         hideLogin();
         init();
       } catch(e) {
@@ -780,9 +784,31 @@
       }
     }
 
+    function applyUserDisplay() {
+      const u = localStorage.getItem('fs_user') || 'Użytkownik';
+      const side = document.getElementById('sidebar-username');
+      const welcome = document.getElementById('welcome-username');
+      if (side) side.textContent = u;
+      if (welcome) welcome.textContent = u;
+    }
+
+    function wizUpdateAnalyzeBtn() {
+      const btn = document.getElementById('wiz-btn-analyze');
+      if (!btn) return;
+      const n = wiz.selectedIds.size;
+      btn.disabled = n === 0;
+      const label = btn.querySelector('.wiz-btn-label');
+      if (label) {
+        label.textContent = n === 0
+          ? 'Zaznacz mecze, aby analizować (0)'
+          : `Analizuj wybrane (${n})`;
+      }
+    }
+
     // ---- Init ----
     async function init() {
       if (!localStorage.getItem('fs_token')) { showLogin(); return; }
+      applyUserDisplay();
       try {
         const [statusRes, activeRes, historyRes, chartRes, configRes] = await Promise.all([
           apiFetch('/api/status'),
@@ -906,8 +932,11 @@
     async function wizLoadMatches() {
       document.getElementById('wiz-matches-loading').classList.remove('hidden');
       document.getElementById('wiz-matches-list').classList.add('hidden');
-      document.getElementById('wiz-btn-analyze').classList.add('hidden');
+      document.getElementById('wiz-select-hint').classList.add('hidden');
+      const errEl = document.getElementById('wiz-analyze-error');
+      if (errEl) { errEl.classList.add('hidden'); errEl.textContent = ''; }
       wiz.selectedIds.clear();
+      wizUpdateAnalyzeBtn();
       try {
         const res = await apiFetch('/api/matches/today');
         wiz.matches = await res.json();
@@ -923,11 +952,13 @@
       const list    = document.getElementById('wiz-matches-list');
       loading.classList.add('hidden');
       list.classList.remove('hidden');
-      list.innerHTML = wiz.matches.map(m => `
+      list.innerHTML = wiz.matches.map(m => {
+        const mid = String(m.id);
+        return `
         <div class="match-card glass-card px-5 py-4 flex items-center gap-4"
-             id="mcard-${m.id}" onclick="wizToggleMatch('${m.id}')">
-          <div class="w-5 h-5 rounded border-2 border-white/20 flex items-center justify-center shrink-0 transition-all" id="mcheck-${m.id}">
-            <svg class="hidden w-3 h-3 text-indigo-400" id="mcheck-icon-${m.id}" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+             id="mcard-${mid}" onclick="wizToggleMatch(${JSON.stringify(mid)})">
+          <div class="w-5 h-5 rounded border-2 border-white/20 flex items-center justify-center shrink-0 transition-all" id="mcheck-${mid}">
+            <svg class="hidden w-3 h-3 text-indigo-400" id="mcheck-icon-${mid}" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-xs text-indigo-400 font-semibold uppercase tracking-wide mb-1">${m.liga}</p>
@@ -935,11 +966,14 @@
             <p class="text-xs text-slate-500 mt-0.5">${m.data} ${m.godzina}</p>
           </div>
           <div class="text-xs text-slate-600 font-medium shrink-0">${m.data === new Date().toISOString().slice(0,10) ? '🟢 dziś' : '📅 jutro'}</div>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
+      document.getElementById('wiz-select-hint').classList.remove('hidden');
+      wizUpdateAnalyzeBtn();
     }
 
     function wizToggleMatch(id) {
+      id = String(id);
       const card  = document.getElementById('mcard-' + id);
       const check = document.getElementById('mcheck-' + id);
       const icon  = document.getElementById('mcheck-icon-' + id);
@@ -954,12 +988,13 @@
         check.classList.add('border-indigo-500', 'bg-indigo-500/20');
         icon.classList.remove('hidden');
       }
-      const btn = document.getElementById('wiz-btn-analyze');
-      wiz.selectedIds.size > 0 ? btn.classList.remove('hidden') : btn.classList.add('hidden');
+      wizUpdateAnalyzeBtn();
     }
 
     async function wizAnalyze() {
       if (wiz.selectedIds.size === 0) return;
+      const errEl = document.getElementById('wiz-analyze-error');
+      if (errEl) { errEl.classList.add('hidden'); errEl.textContent = ''; }
       wizStep(2);
 
       // Animuj pasek postępu
@@ -985,18 +1020,13 @@
         _renderAnalysis();
         wizStep(3);
       } catch(e) {
-        // clearInterval(ticker); // DISABLED: polling removed (v3.2)
         wizStep(1);
         console.error('Błąd analizy:', e.message);
-        // Display error in UI instead of alert
-        const errDiv = document.getElementById('analysis-error') || (() => {
-          const d = document.createElement('div');
-          d.id = 'analysis-error';
-          d.style.cssText = 'color: #e74c3c; font-size: 12px; margin-top: 8px;';
-          document.querySelector('form').appendChild(d);
-          return d;
-        })();
-        errDiv.textContent = '❌ Błąd analizy: ' + e.message;
+        const errDiv = document.getElementById('wiz-analyze-error');
+        if (errDiv) {
+          errDiv.textContent = 'Błąd analizy: ' + e.message;
+          errDiv.classList.remove('hidden');
+        }
       }
     }
 

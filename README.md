@@ -122,10 +122,24 @@ FootStats/
    # Otwórz brain_graph.html w przeglądarce
    ```
 
+## Operator Agent (smoke + pipeline + review)
+
+Orchestrator uruchamia preflight, testy API (flow Kreatora Kuponu), `daily_agent` draft i review Groq. Kupony trafiają na konto z `.env`: `OPERATOR_ADMIN_USERNAME=Admin_JG`.
+
+```bash
+python scripts/preflight_footstats.py
+python -m footstats.operator_agent --only smoke
+python -m footstats.operator_agent --faza full
+python -m footstats.operator_agent --only review
+```
+
+Logi: `data/logs/operator_agent.log`. Raporty: `data/operator_reports/`. Harmonogram Windows: `scripts/run_operator.bat`.
+
 ## Testy
 
 ```bash
 pytest tests/ -v
+pytest tests/test_coupon_wizard_api.py tests/test_operator_agent.py tests/test_admin_user.py -v
 ```
 
 ## Licencja
