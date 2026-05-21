@@ -1,4 +1,4 @@
-# FootStats v3.3-stable
+# FootStats v3.4-stable
 Lang: PL. Context: Soccer predictions (Poisson + RAG + LLM).
 
 ## Commands
