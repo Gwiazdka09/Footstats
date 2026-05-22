@@ -30,13 +30,10 @@
 ### P4.4: Cache Cleanup ✅ (RESOLVED)
 - [x] Cache dir: tylko 2 pliki, 6.3MB
 
-### P4.5: Root Directory Cleanup 🟡
-- [ ] Usunac brain_graph.html z root (duplikat assets/)
-- [ ] Usunac validation_errors.csv z root (duplikat data/)
-- [ ] Usunac tests/scratch (stary debug skrypt)
-- [ ] Usunac data/lf_sig.txt, data/lf_ver.txt (Langfuse garbage)
-- [ ] Usunac data/env_wzor.txt (przestarzaly, jest .env.example)
-- [ ] Usunac gui scaffolding: counter.ts, typescript.svg, vite.svg
+### P4.5: Root Directory Cleanup ✅
+- [x] Usunieto brain_graph.html, validation_errors.csv, tests/scratch
+- [x] Usunieto data/lf_sig.txt, lf_ver.txt, data/env_wzor.txt
+- [x] Usunieto gui scaffolding: counter.ts, typescript.svg, vite.svg
 
 ### P4.6: Unused Imports Cleanup 🟠
 - [x] cli.py, data_fetcher.py, form.py
@@ -45,15 +42,16 @@
 ### P4.7: Dead Dependencies ✅
 - [x] Usunieto z requirements.txt: psycopg2-binary, sqlalchemy, alembic
 
-### P4.8: Response Cache Memory Leak 🔴 (NEW)
-- [ ] _RESPONSE_CACHE: dodac MAX_ENTRIES (np. 500) + eviction najstarszych wpisow
-- [ ] Alternatywa: uzyc functools.lru_cache lub cachetools.TTLCache
+### P4.8: Response Cache Memory Leak ✅
+- [x] _RESPONSE_CACHE: MAX_ENTRIES=500 + LRU eviction
+- [x] _evict_oldest() i _cleanup_expired() zaimplementowane
+- [x] test_response_cache_eviction.py dodane
 
-### P4.9: Duplikat import Langfuse 🟠 (NEW)
-- [ ] analyzer.py linia 17 i 25: duplikat `from langfuse import Langfuse` → usunac linia 25
+### P4.9: Duplikat import Langfuse ✅
+- [x] analyzer.py: usunięty duplikat `from langfuse import Langfuse` linia 25
 
-### P4.10: Deprecated asyncio API 🟠 (NEW)
-- [ ] async_utils.py: `asyncio.get_event_loop()` → `asyncio.get_running_loop()` (Python 3.12+)
+### P4.10: Deprecated asyncio API ✅
+- [x] async_utils.py: `asyncio.get_event_loop()` → safe pattern
 
 ---
 
@@ -67,9 +65,17 @@
 
 ---
 
+## Phase 6: GROQ LEARNING & FEEDBACK LOOP
+
+- [ ] Przeanalizowac lekcje z ostatnich kuponów
+- [ ] Uaktualnić feedback w RAG knowledge base
+- [ ] Sprawdzić accuracy Groq na ostatnich meczach (75%+ confidence)
+
+---
+
 ## Proposed Tests (from audit 2026-05-22)
 
-- [ ] test_response_cache_eviction.py — max entries, TTL expiry, memory cap
+- [x] test_response_cache_eviction.py — max entries, TTL expiry, memory cap ✅
 - [ ] test_referee_db_conn_cleanup.py — sqlite context manager
 - [ ] test_daily_agent_prefilter.py — pre_filtruj_kursy, pre_filtruj_tokenow edge cases
 - [ ] test_coupon_settlement_edge.py — partial settlement, void handling
@@ -78,4 +84,4 @@
 ---
 
 ## Blockers
-- Brak krytycznych blockerów. P4.3 i P4.8 to priorytet stabilności.
+- Brak krytycznych blockerów. P4.3 to priorytet stabilności.

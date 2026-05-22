@@ -7,7 +7,19 @@
 
 ---
 
-## ✅ RECENT MILESTONES (Completed)
+## ✅ RECENT MILESTONES (Completed 2026-05-22)
+
+### Phase 4 Cleanup Sprint — COMPLETE
+- **P4.1** Version sync: v3.4-stable in config.py + CLAUDE.md ✅
+- **P4.2** SQLite context managers: referee_db.py, dashboard.py ✅
+- **P4.4** Cache cleanup: 2 files, 6.3MB ✅
+- **P4.5** Root cleanup: removed 8 stale files (brain_graph.html, validation_errors.csv, tests/scratch, lf_*.txt, env_wzor.txt, gui scaffolding) ✅
+- **P4.6** Partial imports cleanup: cli.py, data_fetcher.py, form.py ✅
+- **P4.7** Dead dependencies removed from requirements.txt ✅
+- **P4.8** Response cache eviction: MAX_ENTRIES=500, LRU + TTL cleanup ✅
+- **P4.9** Analyzer.py duplicate Langfuse import removed ✅
+- **P4.10** Async_utils.py: get_event_loop() → safe pattern ✅
+- **TESTS** test_response_cache_eviction.py added ✅
 
 ### v3.4 — Poisson Model Auto-Calibration
 - `lambda_optimizer.py`: Walk-forward kalibracja na 200 meczach.
@@ -18,21 +30,6 @@
 - `python -m footstats.operator_agent` — preflight, smoke API (coupon wizard), pipeline, review.
 - Konto docelowe: `OPERATOR_ADMIN_USERNAME=Admin_JG` (`resolve_admin_user_id`).
 - Preview Kreator: dynamiczny user, widoczny CTA kroku 1.
-
-### Phase 4 hygiene (2026-05-21)
-- P4.1 Version sync → v3.4-stable w config.py i CLAUDE.md.
-- P4.2 SQLite context managers w referee_db.py i dashboard.py.
-- P4.6 częściowy cleanup importów (cli, data_fetcher, form).
-- P4.7 martwe zależności Postgres usunięte z requirements.txt.
-
-### Architectural Refactor & Cleanup
-- Standardized Project Structure, Source Management.
-
-### AI & Automation
-- Ultra-Skeptical AI Engine, RAG Lessons Learned, Autonomous Scheduler.
-
-### Data & Intelligence
-- Superbet API (1400+ markets), BetBuilder, Referee DB.
 
 ---
 
@@ -47,42 +44,48 @@
 | **API Cache** | ✅ Wired | response_cache na 5 endpointach |
 | **DB** | ✅ OK | backtest.db 1.1MB, footstats.db 256KB |
 | **Cache dir** | ✅ OK | 2 pliki, 6.3MB |
+| **Code Hygiene** | ✅ Good | Phase 4 cleanup complete |
 
 ---
 
-## KNOWN ISSUES (2026-05-22 audit)
+## KNOWN ISSUES (2026-05-22 audit, REDUCED)
 
-| Issue | Severity | Details |
-|-------|----------|---------|
-| 223x `except Exception` | 🔴 High | Top: sts(16), superbet(15), base_playwright(14), daily_agent(13), analyzer(13) |
-| `_RESPONSE_CACHE` unbounded | 🔴 High | Brak max_size/eviction → memory leak przy dlugim uptime API |
-| Duplikat `from langfuse import Langfuse` | 🟠 Med | analyzer.py linia 17 i 25 — podwójny import |
-| `asyncio.get_event_loop()` deprecated | 🟠 Med | async_utils.py — Python 3.12+ deprecation warning |
+| Issue | Severity | Status |
+|-------|----------|--------|
+| 223x `except Exception` | 🔴 High | P4.3 — pending except handlers |
 | ~70x potentially unused imports | 🟠 Med | fatigue.py, classifier.py + reszta |
-| `tests/scratch` plik w repo | 🟡 Low | Stary skrypt debug, do usunięcia |
-| `brain_graph.html` duplikat w root | 🟡 Low | Kopia z assets/ — root do usunięcia |
-| `validation_errors.csv` duplikat w root | 🟡 Low | Kopia z data/ — root do usunięcia |
-| `data/lf_sig.txt` / `lf_ver.txt` | 🟡 Low | Langfuse SDK garbage dump, do usunięcia |
-| `data/env_wzor.txt` | 🟡 Low | Przestarzały wzorzec .env (jest .env.example) |
-| `data/.fuse_hidden*` artefakty | 🟡 Low | FUSE mount artefakty (2x 32KB), nieszkodliwe |
-| `node_modules` 3.1GB | 🟡 Info | GUI node_modules (gitignored, ale zajmuje dysk) |
-| `gui/counter.ts` / `typescript.svg` / `vite.svg` | 🟡 Low | Scaffolding pliki Vite, nieużywane |
+| test_referee_db_conn_cleanup.py | 🟡 Low | P4.2 — nice-to-have test |
 
 ---
 
-## CURRENT FOCUS (Phase 4: Maintenance & Hygiene)
+## CURRENT FOCUS (Phase 4 WRAP-UP → Phase 5 PRODUCTION)
 
-- **P4.3** Exception Handling: top 5 plikow (223 bare excepts) → specific exceptions + logging
-- **P4.5** Root Cleanup: brain_graph.html, validation_errors.csv, tests/scratch, lf_*.txt
-- **P4.6** Unused imports: fatigue.py, classifier.py
-- **P4.8** response_cache.py: dodac MAX_ENTRIES + LRU eviction
-- **P4.9** analyzer.py: usunac duplikat import langfuse
-- **P4.10** async_utils.py: migracja z get_event_loop() na get_running_loop()
+**IMMEDIATE** (next session):
+1. **P4.3** Exception Handling: top 5 files → specific exceptions + logging (HIGH)
+2. **Phase 5.2** checkpoint.py integration into daily_agent batch flow
+3. **Phase 6** Groq learning loop: analyze coupon reports, update RAG feedback
+
+**COUPONS STATUS** (2026-05-22):
+- Operator Agent smoke tests: 16/19 Pass (3 failures: api.matches_analyze [422], api.coupons_active [500], pytest.gate)
+- Database: 1 ACTIVE + 3 LOSE + 4 VOID coupons
+- Last coupon: ID 13 (2026-04-22) LOSE, -100% ROI, 2 PLN stake
+- Coupon Wizard: checkbox fixed in preview.html, JWT auth validated
+
+**GROQ LEARNING** (2026-05-22):
+- Last update: 2026-04-21 (31 days old)
+- Matches analyzed: 14,634
+- Key Rules:
+  * GER-Bundesliga Over 2.5: 61.2% hit rate (STRONG)
+  * Home form >9pt advantage: 71.3% win (STRONG)
+- Market Calibration: 1/X/2 markets overvalued, -3.3% to -4.8% confidence adjust
+- Status: Kalibracja stabilna, brak nowych meczow od kwietnia
 
 ---
 
 ## DEPLOYMENT LOGS
-- **Daily Agent**: Task Scheduler, stable.
-- **Dashboard**: Streamlit live.
-- **API**: 17 endpoints, response_cache wired on 5.
-- **Pipeline**: run_daily.bat → backup → draft-wait-final → settlement.
+- **Daily Agent**: Task Scheduler, stable (Windows Scheduler running python -m footstats.daily_agent)
+- **Dashboard**: Streamlit live (src/footstats/dashboard.py)
+- **API**: 17 endpoints, response_cache wired on 5
+- **Pipeline**: run_daily.bat → backup → draft-wait-final → settlement
+- **Operator**: python -m footstats.operator_agent (ready for live coupon placement)
+
