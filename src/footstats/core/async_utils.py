@@ -49,10 +49,9 @@ async def gather_with_timeout(
 def cleanup_event_loop() -> None:
     """Clean up event loop (close pending tasks, drain queue)."""
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
     except RuntimeError:
-        logger.debug("[Async] No event loop to cleanup")
-        return
+        loop = asyncio.new_event_loop()
 
     if loop.is_closed():
         logger.debug("[Async] Event loop already closed")
@@ -81,10 +80,9 @@ def run_background_task(coro: Coroutine, task_name: str = "bg_task") -> Optional
         asyncio.Task or None if no event loop
     """
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
     except RuntimeError:
-        logger.warning(f"[Async] No event loop for background task: {task_name}")
-        return None
+        loop = asyncio.new_event_loop()
 
     if loop.is_closed():
         logger.warning(f"[Async] Event loop closed, cannot schedule: {task_name}")
