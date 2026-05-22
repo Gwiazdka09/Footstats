@@ -22,7 +22,6 @@ from footstats.scrapers.kursy import szukaj_kursy_meczu, scrape_betexplorer, pok
 from footstats.data.context_scraper import get_match_context
 
 # ── Langfuse Initialization ────────────────────────────────────────────────
-from langfuse import Langfuse
 try:
     langfuse = Langfuse(
         public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
