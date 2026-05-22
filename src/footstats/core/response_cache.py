@@ -20,6 +20,8 @@ from starlette.responses import JSONResponse
 
 _RESPONSE_CACHE: dict[str, dict[str, Any]] = {}
 _CACHE_LOCK_TIME = 0
+MAX_ENTRIES = 500
+_PUT_COUNT = 0
 
 
 def cache_key_builder(request_or_name: Request | str = None, vary_by: list[str] | None = None, vary_values: dict | None = None) -> str:
@@ -88,6 +90,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
         if is_async:
             @wraps(func)
             async def async_wrapper(*args, **kwargs):
+                global _PUT_COUNT
                 request = None
                 if args and hasattr(args[0], 'url') and hasattr(args[0], 'query_params'):
                     request = args[0]
@@ -103,7 +106,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
 
                 entry = _RESPONSE_CACHE.get(cache_key)
                 if entry is not None:
-                    age = time.time() - entry["ts"]
+                    age = time.time() - entry["stored_at"]
                     if age < ttl_seconds:
                         response = JSONResponse(
                             content=entry["data"],
@@ -130,8 +133,14 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                 _RESPONSE_CACHE[cache_key] = {
                     "data": data,
                     "status": status,
-                    "ts": time.time(),
+                    "stored_at": time.time(),
                 }
+
+                _PUT_COUNT += 1
+                if _PUT_COUNT % 100 == 0:
+                    _cleanup_expired(ttl_seconds)
+                if len(_RESPONSE_CACHE) > MAX_ENTRIES:
+                    _evict_oldest()
 
                 response = JSONResponse(content=data, status_code=status)
                 response.headers["Cache-Control"] = f"max-age={ttl_seconds}, must-revalidate"
@@ -142,6 +151,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
         else:
             @wraps(func)
             def sync_wrapper(*args, **kwargs):
+                global _PUT_COUNT
                 request = None
                 if args and hasattr(args[0], 'url') and hasattr(args[0], 'query_params'):
                     request = args[0]
@@ -157,7 +167,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
 
                 entry = _RESPONSE_CACHE.get(cache_key)
                 if entry is not None:
-                    age = time.time() - entry["ts"]
+                    age = time.time() - entry["stored_at"]
                     if age < ttl_seconds:
                         response = JSONResponse(
                             content=entry["data"],
@@ -184,8 +194,14 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                 _RESPONSE_CACHE[cache_key] = {
                     "data": data,
                     "status": status,
-                    "ts": time.time(),
+                    "stored_at": time.time(),
                 }
+
+                _PUT_COUNT += 1
+                if _PUT_COUNT % 100 == 0:
+                    _cleanup_expired(ttl_seconds)
+                if len(_RESPONSE_CACHE) > MAX_ENTRIES:
+                    _evict_oldest()
 
                 response = JSONResponse(content=data, status_code=status)
                 response.headers["Cache-Control"] = f"max-age={ttl_seconds}, must-revalidate"
@@ -229,7 +245,7 @@ def response_cache_info() -> dict[str, Any]:
     if not _RESPONSE_CACHE:
         return {"entries": 0, "size_kb": 0, "oldest": None, "newest": None}
 
-    timestamps = [v["ts"] for v in _RESPONSE_CACHE.values()]
+    timestamps = [v["stored_at"] for v in _RESPONSE_CACHE.values()]
     size_kb = sum(
         len(str(v["data"]).encode()) for v in _RESPONSE_CACHE.values()
     ) // 1024
@@ -242,19 +258,25 @@ def response_cache_info() -> dict[str, Any]:
     }
 
 
-def cleanup_stale_cache(ttl_seconds: int = 300) -> int:
-    """
-    Remove expired entries from cache.
+def _evict_oldest() -> int:
+    """Usuń najstarszy wpis jeśli cache > MAX_ENTRIES."""
+    if len(_RESPONSE_CACHE) > MAX_ENTRIES:
+        oldest_key = min(_RESPONSE_CACHE, key=lambda k: _RESPONSE_CACHE[k]["stored_at"])
+        del _RESPONSE_CACHE[oldest_key]
+        return 1
+    return 0
 
-    Args:
-        ttl_seconds: Entries older than this are removed
 
-    Returns:
-        Number of entries removed
-    """
+def _cleanup_expired(ttl_seconds: int = 300) -> int:
+    """Usuń wygaśnięte wpisy z cache."""
     global _RESPONSE_CACHE
     now = time.time()
-    stale = [k for k, v in _RESPONSE_CACHE.items() if (now - v["ts"]) > ttl_seconds]
+    stale = [k for k, v in _RESPONSE_CACHE.items() if (now - v["stored_at"]) > ttl_seconds]
     for k in stale:
         del _RESPONSE_CACHE[k]
     return len(stale)
+
+
+def cleanup_stale_cache(ttl_seconds: int = 300) -> int:
+    """Remove expired entries from cache (deprecated, use _cleanup_expired)."""
+    return _cleanup_expired(ttl_seconds)
