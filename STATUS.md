@@ -17,7 +17,7 @@
 | `_RAM_CACHE` eviction | ✅ FIXED | MAX_ENTRIES=200, LRU logic added |
 | 209x bare except | 🔴 PENDING | Top 5 files: sts.py(16), superbet.py(15), base_playwright.py(14) |
 | gui/node_modules/ bloat | ✅ FIXED | Added to .gitignore, cleaned |
-| groq_lessons.json stale | 🟡 PENDING | 35 days old, needs Phase 6 refresh |
+| groq_lessons.json stale | ✅ FIXED | Updated 2026-05-25, trainer.py UTF-8 fix |
 | root `__pycache__/` | ✅ FIXED | Cleaned (ai_client, scraper_kursy removed) |
 | tests/scratch | ✅ FIXED | Removed |
 | Dirty files | ✅ FIXED | All committed to main |

@@ -20,7 +20,7 @@
 - [x] **DAILY AGENT** — restarted, operational (0 candidates in 72h window) ✅
 - [x] **MIGRACJE DUAL-DIALECT** — SQLite + PostgreSQL support added to migrations.py ✅
 - [x] **BANKROLL** — Coupon #12 ACTIVE since 2026-04-19, daily_agent handles settlement ✅
-- [ ] **GROQ/RAG STALE 35 DNI** — `groq_lessons.json` last update 2026-04-21. Uruchomić `Phase 6` learning loop.
+- [x] **GROQ/RAG REFRESHED** — `groq_lessons.json` updated 2026-05-25, trainer.py UTF-8 fix applied ✅
 
 ---
 
@@ -86,7 +86,7 @@
 
 ## Stale Docs (do cleanup)
 
-- [ ] `docs/archive/` vs `docs/archives/` — zduplikowane foldery archiwalne
+- [x] `docs/archive/` vs `docs/archives/` — consolidated to archive/ ✅
 - [ ] `docs/BETA_FIX_PROMPT.md` — prawdopodobnie nieaktualny
 - [ ] `docs/session_2026-05-07.md` — notatki sesyjne, do archiwum
 - [ ] `docs/SecondBrain_Log_2026-04-17.md` — stary log
