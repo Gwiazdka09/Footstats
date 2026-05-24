@@ -1,82 +1,115 @@
-# RAPORT ANALIZY PROJEKTU FOOTSTATS — 2026-05-24
+# RAPORT ANALIZY PROJEKTU FOOTSTATS — 2026-05-24 (auto-scan #3)
 
 ## CO WYKRYTO
 
 ### KRYTYCZNE (P0)
-1. **response_cache.py UCIETY** — plik obciety w linii 255, brakuje 3 funkcji: `_evict_oldest()`, `_cleanup_expired()`, `cleanup_stale_cache()`. Cache rosnie bez limitu = **memory leak w produkcji**. Git HEAD ma kompletna wersje.
-2. **NULL BYTES w 2 plikach** — `ai/analyzer.py` (31 null bytes na koncu), `core/async_utils.py` (90 null bytes). Pliki sa binarne zamiast tekstowych, grep/parsery je pomijaja.
-3. **39 uncommitted dirty files** — working copy rozjechana z git HEAD.
+1. **response_cache.py UCIETY** — plik obciety w linii 255, brakuje 916 bytes (3 funkcje: `_evict_oldest()`, `_cleanup_expired()`, `cleanup_stale_cache()`). Cache rosnie bez limitu = **memory leak w produkcji**. ✅ NAPRAWIONE commit 2c62f8dfc.
+2. **NULL BYTES w 2 plikach** — `ai/analyzer.py` (31 null bytes), `core/async_utils.py` (90 null bytes). ✅ NAPRAWIONE commit 2c62f8dfc.
+3. **41 uncommitted dirty files** — working copy rozjechana z git HEAD. ✅ NAPRAWIONE commit 2c62f8dfc.
+4. **DAILY AGENT MARTWY** — ostatni run: 2026-04-18 (36 dni!). Brak nowych predictions od 2026-04-23. Task Scheduler prawdopodobnie wylaczony/broken. Strona nie pokazuje aktualnych meczow.
+5. **MIGRACJE PG-ONLY** — `db/migrations.py` uzywa skladni PostgreSQL (`SERIAL`, `setval`, `DROP CONSTRAINT IF EXISTS`, `ALTER COLUMN`). Tabele SQLite nie maja kolumny `user_id` (coupons, bankroll_state, bankroll_history). API filtruje po `user_id` → endpointy `/coupons/active`, `/coupon/place`, `/coupons` rzuca **500 error** przy SQLite.
+6. **BANKROLL PRAWIE PUSTY** — 8.00 PLN po serii 3x LOSE + 4x VOID (na 8 kuponow). Kupon #12 ACTIVE od 2026-04-19 — prawdopodobnie stale/nierozliczony.
+7. **GROQ/RAG STALE 33 DNI** — `groq_lessons.json` last update 2026-04-21. RAG daje nieaktualne rady.
 
 ### WAZNE (P1)
-4. **gui/node_modules/ = 3.1 GB** — w git tracking, gigantyczny bloat. Brak w .gitignore.
-5. **209x bare `except Exception`** — top: sts.py(16), superbet.py(15), base_playwright.py(14), daily_agent.py(13). Polykaja bledy bez logowania.
-6. **pyproject.toml niespojny z requirements.txt** — psycopg2-binary, sqlalchemy, alembic w main deps zamiast optional (usuniety z requirements.txt, ale nie z pyproject).
-7. **`_RAM_CACHE` w cache.py bez eviction** — rosnie bez limitu, brak MAX_ENTRIES.
+8. **gui/node_modules/ = 3.1 GB w repo** — brak w .gitignore, trackowany w git.
+9. **209x bare `except Exception`** — top: sts.py(16), superbet.py(15), base_playwright.py(14), daily_agent.py(13), analyzer.py(13).
+10. **pyproject.toml niespojny** — psycopg2-binary, sqlalchemy, alembic w main deps (usuniete z requirements.txt, ale nie z pyproject).
+11. **`_RAM_CACHE` bez eviction** — `utils/cache.py`: `_RAM_CACHE: dict = {}` rosnie bez limitu, brak MAX_ENTRIES.
 
 ### NISKOPRIORYTETOWE (P2)
-8. **Unused imports** — poisson.py (6 symbolow), classifier.py (4), ensemble.py (1).
-9. **Stale docs** — 5x DAILY_ANALYSIS w docs/, archive/archives duplication.
-10. **12 starych PDF** w pdf/ (od lutego do marca).
+12. **Unused imports** — poisson.py(6), classifier.py(4), ensemble.py(1).
+13. **Root `__pycache__/`** — stale .pyc z dawnych modulow (ai_client, scraper_kursy).
+14. **`tests/scratch`**, **`.aider.tags.cache.v4/`** (768KB), **`data/.fuse_hidden*`** — smieci.
+15. **`docs/archive/` vs `docs/archives/`** — zduplikowane foldery archiwalne.
 
-## CO ZAPROPONOWANO
+---
 
-| Zmiana | Priorytet | Estymacja |
-|--------|-----------|-----------|
-| git checkout 3 uszkodzonych plikow | P0 | 1 min |
-| git commit dirty files | P0 | 5 min |
-| gui/node_modules → .gitignore + git rm --cached | P1 | 2 min |
-| _RAM_CACHE: dodac MAX_ENTRIES=200 + LRU | P1 | 15 min |
-| pyproject.toml: deps → optional[cloud] | P1 | 5 min |
-| P4.3 bare except: top 5 plikow | P1 | 45 min |
-| Unused imports cleanup (poisson, classifier, ensemble) | P2 | 10 min |
+## CO POPRAWIONO/ZAPROPONOWANO
+
+1. ✅ Naprawiono 3 uszkodzone pliki (response_cache.py, analyzer.py, async_utils.py) — commit 2c62f8dfc.
+2. ✅ Committed 39 dirty files.
+3. Zaktualizowano `STATUS.md` — pelny aktualny stan z krytycznymi problemami.
+4. Zaktualizowano `TODO.md` — dodano P0: daily agent martwy, migracje PG-only, bankroll pusty, groq stale.
+5. Potwierdzono brak deprecated patterns — CZYSTO.
+6. lambda_optimizer.py cache ma invalidate_cache() — OK.
+7. dashboard.py sqlite3.connect uzywa try/finally — OK.
+
+---
 
 ## ZALECANE TESTY
 
-| Test | Co pokrywa |
-|------|-----------|
-| `test_ram_cache_eviction.py` | MAX_ENTRIES, TTL, LRU eviction dla _RAM_CACHE |
-| `test_null_bytes_guard.py` | CI check: zadne .py nie zawiera null bytes |
-| `test_daily_agent_prefilter.py` | Edge cases pre_filtruj_kursy |
-| `test_coupon_settlement_edge.py` | Partial settlement, void handling |
-| `test_referee_db_conn_cleanup.py` | SQLite context manager |
+| Test | Cel | Priorytet |
+|------|-----|-----------|
+| `test_migration_sqlite_compat.py` | Sprawdz czy migracje dzialaja na SQLite | P0 |
+| `test_ram_cache_eviction.py` | MAX_ENTRIES + TTL dla _RAM_CACHE | P1 |
+| `test_null_bytes_guard.py` | File integrity check (brak null bytes w .py) | P1 |
+| `test_daily_agent_prefilter.py` | pre_filtruj_kursy edge cases | P2 |
+| `test_coupon_settlement_edge.py` | partial settlement, void handling | P2 |
 
-## CLAUDE CODE PROMPT (caveman ultra)
+---
+
+## CLAUDE CODE PROMPT
 
 ```
-Tryb: caveman ultra. Zero gadania, sam kod.
+Tryb: caveman ultra. Projekt: F:\bot. Nie pytaj, rob.
 
-P0 FIXES (zrob TERAZ):
+KROK 1 — daily agent restart:
+python -m footstats.daily_agent
+Jesli blad → sprawdz logi logs/daily_agent.log, napraw i uruchom ponownie.
 
-1. git checkout HEAD -- src/footstats/core/response_cache.py src/footstats/ai/analyzer.py src/footstats/core/async_utils.py
+KROK 2 — migracje SQLite-kompatybilne:
+W db/migrations.py: napisz dual-dialect wrapper.
+- Zamiast SERIAL → INTEGER PRIMARY KEY AUTOINCREMENT (SQLite) / SERIAL (PG)
+- Zamiast DROP CONSTRAINT IF EXISTS → try/except lub detect dialect
+- Zamiast ALTER COLUMN → SQLite nie wspiera, uzyj recreate table pattern
+- Dodaj kolumne user_id do tabel: coupons, bankroll_state, bankroll_history w SQLite
+Test: python -c "from footstats.db.migrations import run_migrations; run_migrations()" 
 
-2. Verify: python -c "import ast; [ast.parse(open(f).read()) for f in ['src/footstats/core/response_cache.py','src/footstats/ai/analyzer.py','src/footstats/core/async_utils.py']]"
+KROK 3 — bankroll cleanup:
+Sprawdz kupon #12 (ACTIVE od 2026-04-19). Jesli mecz zakonczony → settle. Jesli nie → VOID.
+Rozważ reset bankrollu po serii strat.
 
-3. utils/cache.py — dodaj eviction do _RAM_CACHE:
-   - MAX_RAM_ENTRIES = 200
-   - W _cache_set(): if len(_RAM_CACHE) >= MAX_RAM_ENTRIES: usun najstarszy po "ts"
-   - Dodaj _ram_cache_cleanup(ttl_minutes=60) analogicznie do response_cache
+KROK 4 — .gitignore + node_modules:
+echo "node_modules/" >> .gitignore
+git rm -r --cached src/footstats/gui/node_modules/ 2>/dev/null
 
-4. pyproject.toml — przeniesc z [dependencies] do [project.optional-dependencies] nowa sekcja:
-   cloud = ["psycopg2-binary>=2.9", "sqlalchemy>=2.0", "alembic>=1.13"]
-   Usun te 3 z main dependencies.
+KROK 5 — usun smieci:
+rm -rf __pycache__/ .aider.tags.cache.v4/ tests/scratch data/.fuse_hidden*
 
-5. .gitignore — dodaj:
-   src/footstats/gui/node_modules/
-   __pycache__/
-   .aider.tags.cache.v4/
-   Potem: git rm -r --cached src/footstats/gui/node_modules/ __pycache__ .aider.tags.cache.v4/ scripts/__pycache__/
+KROK 6 — RAM cache eviction w utils/cache.py:
+Dodaj na gorze: MAX_RAM_ENTRIES = 200
+W _cache_set() dodaj po zapisie:
+  if len(_RAM_CACHE) > MAX_RAM_ENTRIES:
+      oldest = min(_RAM_CACHE, key=lambda k: _RAM_CACHE[k]["ts"])
+      del _RAM_CACHE[oldest]
 
-6. Unused imports — usun:
-   poisson.py: math, PEWNIACZEK_PROG, BZZOIRO_MAX_ROZN, HeurystaZmeczeniaRotacji, KlasyfikatorMeczu, ImportanceIndex, _wagi_mecze, AnalizaDomWyjazd
-   classifier.py: FINAL_REMIS_BOOST, IMP2_PROG_FINAL, IMP2_BONUS_FINAL, IMP2_WAKACJE
-   ensemble.py: annotations
+KROK 7 — pyproject.toml fix:
+Przenies psycopg2-binary>=2.9, sqlalchemy>=2.0, alembic>=1.13 z [project.dependencies] do:
+[project.optional-dependencies]
+cloud = ["psycopg2-binary>=2.9", "sqlalchemy>=2.0", "alembic>=1.13"]
 
-7. test_ram_cache_eviction.py:
-   - test MAX_ENTRIES overflow → oldest evicted
-   - test TTL expiry
-   - test cache_get miss po expiry
+KROK 8 — unused imports:
+- poisson.py: usun nieuzywane (math, PEWNIACZEK_PROG, BZZOIRO_MAX_ROZN, HeurystaZmeczeniaRotacji, KlasyfikatorMeczu, ImportanceIndex, _wagi_mecze, AnalizaDomWyjazd)
+- classifier.py: usun FINAL_REMIS_BOOST, IMP2_PROG_FINAL, IMP2_BONUS_FINAL, IMP2_WAKACJE
+- ensemble.py: usun annotations
 
-8. git add -A && git commit -m "fix: P0 file corruption + cache eviction + cleanup bloat"
+KROK 9 — commit:
+git add -A && git commit -m "fix: daily agent + sqlite migrations + cleanup + cache eviction"
 
-KONIEC. Nie ruszaj nic innego.
+Weryfikacja: python -c "import ast; [ast.parse(open(f).read()) for f in __import__('glob').glob('src/footstats/**/*.py', recursive=True) if 'node_modules' not in f and 'gui' not in f]; print('SYNTAX OK')"
 ```
+
+---
+
+## METRYKI SESJI
+- Pliki zrodlowe: 108
+- Pliki testow: 49
+- Syntax errors: 0 (po P0 fix)
+- Null byte files: 0 (po P0 fix)
+- Bare except: 209
+- Disk bloat: ~3.1 GB (node_modules)
+- Daily agent: MARTWY 36 dni
+- Bankroll: 8.00 PLN (krytycznie niski)
+- Stale RAG data: 33 dni
+- Migracje: PG-only, SQLite incompatible

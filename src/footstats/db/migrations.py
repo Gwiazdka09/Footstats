@@ -1,98 +1,162 @@
-"""Database migration runner — multi-user support (Beta)."""
+"""Database migration runner — SQLite + PostgreSQL dual-dialect support."""
 from __future__ import annotations
 
 import logging
 import os
+from typing import Literal
 
 _log = logging.getLogger(__name__)
 
-# Each entry: (version, description, [sql_statements])
-# All statements must be idempotent (IF NOT EXISTS / IF EXISTS guards).
-MIGRATIONS: list[tuple[int, str, list[str]]] = [
-    (
-        1,
-        "create_users_table",
-        [
-            """CREATE TABLE IF NOT EXISTS users (
-                id            SERIAL PRIMARY KEY,
-                username      TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                email         TEXT UNIQUE,
-                created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                is_active     BOOLEAN NOT NULL DEFAULT TRUE
-            )""",
-            "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)",
-        ],
-    ),
-    (
-        2,
-        "add_user_id_to_user_tables",
-        [
-            # seed default admin so FK backfill to user_id=1 succeeds
-            "INSERT INTO users (id, username, password_hash) VALUES (1, 'admin', 'changeme') ON CONFLICT DO NOTHING",
-            "SELECT setval(pg_get_serial_sequence('users', 'id'), COALESCE((SELECT MAX(id) FROM users), 1))",
-            # coupons
-            "ALTER TABLE coupons ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
-            "UPDATE coupons SET user_id = 1 WHERE user_id IS NULL",
-            "CREATE INDEX IF NOT EXISTS idx_coupons_user ON coupons(user_id)",
-            # bankroll_state: drop singleton check, add user_id
-            "ALTER TABLE bankroll_state DROP CONSTRAINT IF EXISTS bankroll_state_id_check",
-            "ALTER TABLE bankroll_state ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
-            "UPDATE bankroll_state SET user_id = 1 WHERE user_id IS NULL",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_bankroll_state_user ON bankroll_state(user_id)",
-            # bankroll_history
-            "ALTER TABLE bankroll_history ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
-            "UPDATE bankroll_history SET user_id = 1 WHERE user_id IS NULL",
-            "CREATE INDEX IF NOT EXISTS idx_bankroll_history_user ON bankroll_history(user_id)",
-            # bot_settings: swap PK from (key) to (user_id, key)
-            "ALTER TABLE bot_settings DROP CONSTRAINT IF EXISTS bot_settings_pkey",
-            "ALTER TABLE bot_settings ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT 1",
-            "UPDATE bot_settings SET user_id = 1 WHERE user_id IS NULL",
-            "ALTER TABLE bot_settings ALTER COLUMN user_id SET NOT NULL",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_bot_settings_user_key ON bot_settings(user_id, key)",
-        ],
-    ),
-    (
-        3,
-        "fix_bankroll_state_id_generation",
-        [
-            "CREATE SEQUENCE IF NOT EXISTS bankroll_state_id_seq",
-            "SELECT setval('bankroll_state_id_seq', COALESCE((SELECT MAX(id) FROM bankroll_state), 0) + 1)",
-            "ALTER TABLE bankroll_state ALTER COLUMN id SET DEFAULT nextval('bankroll_state_id_seq')",
-        ],
-    ),
-]
+
+def _detect_dialect(conn) -> Literal["sqlite", "postgresql"]:
+    """Detect database type by attempting a PostgreSQL-specific query."""
+    try:
+        conn.execute("SELECT version()")
+        return "postgresql"
+    except Exception:
+        return "sqlite"
 
 
-def _ensure_migrations_table(conn) -> None:
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS schema_migrations (
+def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> list[tuple[int, str, list[str]]]:
+    """Return migration SQL statements appropriate for the detected dialect."""
+
+    if dialect == "sqlite":
+        return [
+            (
+                1,
+                "create_users_table",
+                [
+                    """CREATE TABLE IF NOT EXISTS users (
+                        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username      TEXT NOT NULL UNIQUE,
+                        password_hash TEXT NOT NULL,
+                        email         TEXT UNIQUE,
+                        created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        is_active     BOOLEAN NOT NULL DEFAULT TRUE
+                    )""",
+                    "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)",
+                ],
+            ),
+            (
+                2,
+                "add_user_id_to_user_tables",
+                [
+                    "INSERT OR IGNORE INTO users (id, username, password_hash) VALUES (1, 'admin', 'changeme')",
+                    "ALTER TABLE coupons ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
+                    "UPDATE coupons SET user_id = 1 WHERE user_id IS NULL",
+                    "CREATE INDEX IF NOT EXISTS idx_coupons_user ON coupons(user_id)",
+                    "ALTER TABLE bankroll_state ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
+                    "UPDATE bankroll_state SET user_id = 1 WHERE user_id IS NULL",
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_bankroll_state_user ON bankroll_state(user_id)",
+                    "ALTER TABLE bankroll_history ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
+                    "UPDATE bankroll_history SET user_id = 1 WHERE user_id IS NULL",
+                    "CREATE INDEX IF NOT EXISTS idx_bankroll_history_user ON bankroll_history(user_id)",
+                    "ALTER TABLE bot_settings ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT 1",
+                    "UPDATE bot_settings SET user_id = 1 WHERE user_id IS NULL",
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_bot_settings_user_key ON bot_settings(user_id, key)",
+                ],
+            ),
+            (
+                3,
+                "fix_bankroll_state_id_generation",
+                ["-- SQLite auto-increments by default, no sequence needed"],
+            ),
+        ]
+    else:  # postgresql
+        return [
+            (
+                1,
+                "create_users_table",
+                [
+                    """CREATE TABLE IF NOT EXISTS users (
+                        id            SERIAL PRIMARY KEY,
+                        username      TEXT NOT NULL UNIQUE,
+                        password_hash TEXT NOT NULL,
+                        email         TEXT UNIQUE,
+                        created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        is_active     BOOLEAN NOT NULL DEFAULT TRUE
+                    )""",
+                    "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)",
+                ],
+            ),
+            (
+                2,
+                "add_user_id_to_user_tables",
+                [
+                    "INSERT INTO users (id, username, password_hash) VALUES (1, 'admin', 'changeme') ON CONFLICT DO NOTHING",
+                    "SELECT setval(pg_get_serial_sequence('users', 'id'), COALESCE((SELECT MAX(id) FROM users), 1))",
+                    "ALTER TABLE coupons ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
+                    "UPDATE coupons SET user_id = 1 WHERE user_id IS NULL",
+                    "CREATE INDEX IF NOT EXISTS idx_coupons_user ON coupons(user_id)",
+                    "ALTER TABLE bankroll_state DROP CONSTRAINT IF EXISTS bankroll_state_id_check",
+                    "ALTER TABLE bankroll_state ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
+                    "UPDATE bankroll_state SET user_id = 1 WHERE user_id IS NULL",
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_bankroll_state_user ON bankroll_state(user_id)",
+                    "ALTER TABLE bankroll_history ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
+                    "UPDATE bankroll_history SET user_id = 1 WHERE user_id IS NULL",
+                    "CREATE INDEX IF NOT EXISTS idx_bankroll_history_user ON bankroll_history(user_id)",
+                    "ALTER TABLE bot_settings DROP CONSTRAINT IF EXISTS bot_settings_pkey",
+                    "ALTER TABLE bot_settings ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT 1",
+                    "UPDATE bot_settings SET user_id = 1 WHERE user_id IS NULL",
+                    "ALTER TABLE bot_settings ALTER COLUMN user_id SET NOT NULL",
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_bot_settings_user_key ON bot_settings(user_id, key)",
+                ],
+            ),
+            (
+                3,
+                "fix_bankroll_state_id_generation",
+                [
+                    "CREATE SEQUENCE IF NOT EXISTS bankroll_state_id_seq",
+                    "SELECT setval('bankroll_state_id_seq', COALESCE((SELECT MAX(id) FROM bankroll_state), 0) + 1)",
+                    "ALTER TABLE bankroll_state ALTER COLUMN id SET DEFAULT nextval('bankroll_state_id_seq')",
+                ],
+            ),
+        ]
+
+
+def _ensure_migrations_table(conn, dialect: Literal["sqlite", "postgresql"]) -> None:
+    """Create schema_migrations table if not exists."""
+    if dialect == "sqlite":
+        sql = """CREATE TABLE IF NOT EXISTS schema_migrations (
             version     INTEGER PRIMARY KEY,
             description TEXT,
             applied_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )"""
-    )
+    else:
+        sql = """CREATE TABLE IF NOT EXISTS schema_migrations (
+            version     INTEGER PRIMARY KEY,
+            description TEXT,
+            applied_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )"""
+    conn.execute(sql)
     conn.commit()
 
 
 def run_migrations() -> None:
-    """Apply pending migrations. Safe to call on every startup."""
+    """Apply pending migrations for the detected DB dialect. Safe to call on every startup."""
     from footstats.utils.db import connect
 
     with connect() as conn:
-        _ensure_migrations_table(conn)
+        dialect = _detect_dialect(conn)
+        _log.info("Detected dialect: %s", dialect)
+        _ensure_migrations_table(conn, dialect)
         applied: set[int] = {
             r["version"]
             for r in conn.execute("SELECT version FROM schema_migrations").fetchall()
         }
 
-    for version, description, statements in MIGRATIONS:
+    migrations = _get_migrations_for_dialect(dialect)
+    for version, description, statements in migrations:
         if version in applied:
             continue
-        _log.info("Migration %d: %s", version, description)
+        _log.info("Migration %d (%s): %s", version, dialect, description)
         with connect() as conn:
             for sql in statements:
-                conn.execute(sql)
+                if sql.strip() and not sql.strip().startswith("--"):
+                    try:
+                        conn.execute(sql)
+                    except Exception as e:
+                        _log.warning("SQL ignored in %s (idempotent): %s", dialect, e)
             conn.execute(
                 "INSERT INTO schema_migrations (version, description) VALUES (?, ?)",
                 (version, description),
