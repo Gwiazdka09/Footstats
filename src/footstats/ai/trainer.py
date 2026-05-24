@@ -18,6 +18,8 @@ import json
 import logging
 import sys
 from datetime import datetime
+
+sys.stdout.reconfigure(encoding='utf-8')
 from pathlib import Path
 
 import os
