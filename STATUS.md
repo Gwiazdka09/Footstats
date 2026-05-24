@@ -1,42 +1,45 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-05-24 (auto-scan #3)  
+**Last Updated:** 2026-05-25  
 **Current Version:** v3.4-stable  
-**Build Status:** ⚠️ 3 uszkodzone pliki w working copy (syntax/null bytes)  
-**System State:** Production — wymaga napraw przed deployem
+**Build Status:** ✅ All critical issues fixed (commit 8feb461ac + daily session)  
+**System State:** Production-ready — daily_agent operational
 
 ---
 
-## KRYTYCZNE PROBLEMY (stan 2026-05-24)
+## CRITICAL ISSUES STATUS (2026-05-25)
 
-| Problem | Severity | Plik |
-|---------|----------|------|
-| `response_cache.py` uciety — brak 3 funkcji eviction (916 bytes brakuje) | 🔴 KRYTYCZNY | `core/response_cache.py` (linia 255 urwana) |
-| NULL bytes na koncu pliku | 🔴 KRYTYCZNY | `ai/analyzer.py` (31 null bytes), `core/async_utils.py` (90 null bytes) |
-| `pyproject.toml` ma dead deps (psycopg2, sqlalchemy, alembic w main deps) | 🟠 Medium | `pyproject.toml` |
-| `_RAM_CACHE` brak eviction/max size | 🟠 Medium | `utils/cache.py` |
-| 209x `except Exception` (bare) | 🟠 Medium | top: sts.py(16), superbet.py(15), base_playwright.py(14) |
-| `gui/node_modules/` = 3.1 GB w repo, brak w .gitignore | 🟠 Medium | `src/footstats/gui/node_modules/` |
-| groq_lessons.json stale (last update: 2026-04-21, 33 dni!) | 🟡 Low | `data/groq_lessons.json` |
-| root `__pycache__/` z starymi modolami (ai_client, scraper_kursy) | 🟡 Low | `__pycache__/` |
-| `tests/scratch` — plik-smieci | 🟡 Low | `tests/scratch` |
-| 41 uncommitted dirty files (39 modified + 2 untracked) | 🟡 Low | `git status` |
+| Problem | Status | Resolution |
+|---------|--------|------------|
+| `response_cache.py` eviction functions | ✅ FIXED | Restored from HEAD, commit 2c62f8dfc |
+| NULL bytes in analyzer.py + async_utils.py | ✅ FIXED | Syntax verified, committed |
+| pyproject.toml dead deps | ✅ FIXED | psycopg2/sqlalchemy/alembic → [cloud] optional |
+| `_RAM_CACHE` eviction | ✅ FIXED | MAX_ENTRIES=200, LRU logic added |
+| 209x bare except | 🔴 PENDING | Top 5 files: sts.py(16), superbet.py(15), base_playwright.py(14) |
+| gui/node_modules/ bloat | ✅ FIXED | Added to .gitignore, cleaned |
+| groq_lessons.json stale | 🟡 PENDING | 35 days old, needs Phase 6 refresh |
+| root `__pycache__/` | ✅ FIXED | Cleaned (ai_client, scraper_kursy removed) |
+| tests/scratch | ✅ FIXED | Removed |
+| Dirty files | ✅ FIXED | All committed to main |
 
 ---
 
 ## RECENT MILESTONES
 
-### Phase 4 Cleanup Sprint — PARTIALLY COMPLETE
+### Phase 4 Cleanup Sprint — 95% COMPLETE
 - **P4.1** Version sync ✅
 - **P4.2** SQLite context managers ✅
-- **P4.3** Exception Handling 🔴 PENDING (209x bare except)
+- **P4.3** Exception Handling 🔴 PENDING (209x bare except — backlog)
 - **P4.4** Cache cleanup ✅
 - **P4.5** Root cleanup ✅
-- **P4.6** Partial imports cleanup ✅ (poisson.py, classifier.py, ensemble.py do zrobienia)
-- **P4.7** Dead deps removed from requirements.txt ✅ (ale pyproject.toml niespojne!)
-- **P4.8** Response cache eviction ✅ w git, ale ⚠️ WORKING COPY USZKODZONA
-- **P4.9** Analyzer.py duplikat import ✅
-- **P4.10** Async_utils.py deprecation fix ✅ w git, ale ⚠️ NULL BYTES w working copy
+- **P4.6** All imports cleanup ✅ (poisson.py, classifier.py, ensemble.py, all others)
+- **P4.7** Dead deps removed + pyproject.toml fixed ✅
+- **P4.8** Response cache eviction ✅ (restored + tested)
+- **P4.9** Analyzer.py fixed (null bytes removed) ✅
+- **P4.10** Async_utils.py fixed (event loop pattern, null bytes removed) ✅
+- **P4.11** RAM cache eviction ✅ (MAX_ENTRIES=200, LRU)
+- **P4.12** Disk bloat cleanup ✅ (node_modules, pycache, aider cache)
+- **P4.13** Migrations SQLite-compatible ✅ (dual-dialect wrapper)
 
 ---
 
@@ -44,44 +47,53 @@
 
 | Metric | Status | Value |
 |--------|--------|-------|
-| **Syntax** | ⚠️ 1 error | response_cache.py uciety, 2 pliki z null bytes |
+| **Syntax** | ✅ All Valid | 108 .py modules, all verified |
 | **Source Files** | ✅ | 108 .py modules |
-| **Tests** | ✅ Solid | 49 test files |
+| **Tests** | ✅ Solid | 49 test files + new eviction suite |
 | **AI Accuracy** | ✅ Stable | ~75% on 75%+ confidence |
-| **Automation** | ✅ Full | Zero-touch daily loop |
-| **API Cache** | ⚠️ Broken | response_cache eviction functions MISSING w working copy |
-| **DB** | ✅ OK | Neon PG (prod) + SQLite (backtest) |
-| **Disk** | ⚠️ Bloat | gui/node_modules 3.1GB, aider cache 768KB |
-| **Git** | ⚠️ Dirty | 41 uncommitted changes |
-| **RAG/Groq** | ⚠️ Stale | Lessons not updated 33 days |
+| **Automation** | ✅ Full | Daily agent operational, 0 candidates in 72h |
+| **API Cache** | ✅ Working | response_cache eviction + RAM cache LRU |
+| **DB** | ✅ OK | Neon PG (prod) + SQLite (backtest) + dual-dialect migrations |
+| **Disk** | ✅ Clean | Bloat removed, .gitignore updated |
+| **Git** | ✅ Clean | All dirty files committed, main branch stable |
+| **RAG/Groq** | 🟡 Stale | Lessons not updated 35 days (Phase 6 queue) |
 
 ---
 
-## CURRENT FOCUS
+## CURRENT FOCUS (2026-05-25)
 
-**NATYCHMIAST (P0):**
-1. Naprawic response_cache.py (`git checkout HEAD -- src/footstats/core/response_cache.py`)
-2. Usunac null bytes z analyzer.py i async_utils.py (`git checkout HEAD --` obu plikow)
-3. Commit dirty files lub git stash
+**NOW COMPLETE (P0 → P1):**
+1. ✅ File corruption fixed (response_cache.py, analyzer.py, async_utils.py)
+2. ✅ RAM cache eviction + pyproject.toml fixed
+3. ✅ Daily agent restarted, SQLite migrations dual-dialect
+4. ✅ All disk bloat cleaned, git clean
 
-**NASTEPNA SESJA (P1):**
-1. Dodac `node_modules/` do .gitignore + `git rm -r --cached src/footstats/gui/node_modules/`
-2. P4.3 Exception handling — top 5 plikow
-3. Dodac eviction do `_RAM_CACHE` w cache.py
-4. Poprawic pyproject.toml — psycopg2/sqlalchemy/alembic do [optional] cloud
-5. Usunac root `__pycache__/`, `tests/scratch`, `.aider.tags.cache.v4/`
+**NEXT PRIORITIES (P1):**
+1. **Exception Handling Audit** — 209x bare except (top: sts.py×16, superbet.py×15, base_playwright.py×14)
+2. **Groq Learning Refresh** — groq_lessons.json 35 days stale → Phase 6 loop
+3. **Coupon Settlement** — Kupon #12 ACTIVE since 2026-04-19, daily_agent watching
 
-**PHASE 5 (P2):**
-1. checkpoint.py → daily_agent
-2. Prometheus metrics
-3. SofaScore injury scraper
-4. Uaktualnic groq_lessons.json (33 dni stale!)
+**PHASE 5+ (P2):**
+1. checkpoint.py → daily_agent integration
+2. Prometheus metrics export
+3. SofaScore injury scraper expansion
+4. Multi-leg coupon variants (A/B/C/D singles)
 
 ---
 
 ## DEPLOYMENT LOGS
-- **Daily Agent**: Task Scheduler, stable (last run 2026-04-18)
-- **Dashboard**: Streamlit live
-- **API**: 17 endpoints, response_cache na 5 (⚠️ eviction broken)
-- **Pipeline**: run_daily.bat → backup → draft-wait-final → settlement
-- **Operator**: python -m footstats.operator_agent
+
+**Commit History:**
+- `8feb461ac` (2026-05-25 01:10) — SQLite dual-dialect migrations
+- `2c62f8dfc` (2026-05-24 15:53) — P0 fixes: file corruption + cache eviction + cleanup
+- `2164eabdd` (2026-05-22 14:49) — TODO/STATUS Phase 4 completion
+- `cf8c8fe21` (2026-05-21 18:39) — Cache eviction test suite
+
+**System Status:**
+- **Daily Agent**: ✅ Operational (python -m footstats.daily_agent)
+- **Dashboard**: ✅ Streamlit live
+- **API**: ✅ 17 endpoints, response_cache with eviction working
+- **Pipeline**: ✅ run_daily.bat → backup → draft-wait-final → settlement
+- **Operator**: ✅ python -m footstats.operator_agent (Groq + Kelly sizing)
+- **DB**: ✅ SQLite (dev) + PostgreSQL Neon (prod), migrations dual-dialect
+- **Cache**: ✅ HTTP + RAM with TTL + LRU eviction
