@@ -26,6 +26,7 @@ from footstats.utils.console import console
 # ================================================================
 
 _RAM_CACHE: dict = {}   # football-data.org + bzzoiro (in-memory)
+MAX_RAM_ENTRIES = 200
 
 CACHE_DIR     = Path(".cache")
 AF_CACHE_FILE = CACHE_DIR / "af_cache.json"      # dane API-Football
@@ -70,7 +71,21 @@ def _cache_get(klucz: str):
             return wpis["data"]
     return None
 
+def _ram_cache_cleanup(ttl_minutes: int = 60):
+    """Remove expired entries from RAM cache."""
+    now = datetime.now()
+    expired = [k for k, v in _RAM_CACHE.items()
+               if (now - v["ts"]).total_seconds() > ttl_minutes * 60]
+    for k in expired:
+        del _RAM_CACHE[k]
+    if expired:
+        console.print(f"[dim]RAM Cache cleanup: removed {len(expired)} expired entries[/dim]")
+
 def _cache_set(klucz: str, dane):
+    if len(_RAM_CACHE) >= MAX_RAM_ENTRIES:
+        oldest_key = min(_RAM_CACHE.keys(), key=lambda k: _RAM_CACHE[k]["ts"])
+        del _RAM_CACHE[oldest_key]
+        console.print(f"[dim]RAM Cache evicted oldest: {oldest_key[:40]}[/dim]")
     _RAM_CACHE[klucz] = {"ts": datetime.now(), "data": dane}
 
 # ── Disk cache (API-Football, TTL 24h) ──────────────────────────────

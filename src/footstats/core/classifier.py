@@ -3,9 +3,8 @@ from datetime import timedelta
 from footstats.utils.helpers import _parse_date
 from footstats.config import (
     REWANZ_OKNO_DNI, REWANZ_VABANK, REWANZ_PARKING_BUS,
-    REWANZ_FORT_OBR, FINAL_REMIS_BOOST, _FINAL_STAGES,
-    _SINGLE_MATCH_COMPS, IMP2_PROG_FINAL, IMP2_BONUS_FINAL,
-    IMP2_WAKACJE,
+    REWANZ_FORT_OBR, _FINAL_STAGES,
+    _SINGLE_MATCH_COMPS,
 )
 
 # ================================================================

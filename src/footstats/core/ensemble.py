@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 _DEFAULT_WEIGHTS = {"poisson": 0.45, "bzzoiro": 0.55}
 
 

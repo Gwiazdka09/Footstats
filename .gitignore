@@ -76,3 +76,7 @@ logs/
 
 # ── Plany superpowers (lokalne notatki)
 docs/superpowers/plans/
+
+# ── Node modules i cache builds
+src/footstats/gui/node_modules/
+.aider.tags.cache.v4/

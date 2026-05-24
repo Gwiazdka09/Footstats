@@ -1,18 +1,15 @@
 import functools
-import math
 import pandas as pd
 import numpy as np
 from scipy.stats import poisson
 from datetime import datetime
 from footstats.config import (
-    MAX_GOLE, BONUS_DOMOWY, PEWNIACZEK_PROG, BZZOIRO_MAX_ROZN, OSTATNIE_N,
+    MAX_GOLE, BONUS_DOMOWY, OSTATNIE_N,
 )
-from footstats.core.fatigue import HeurystaZmeczeniaRotacji
 from footstats.core.h2h import AnalizaH2H
 from footstats.core.fortress import HomeFortress
-from footstats.core.classifier import KlasyfikatorMeczu, _korekta_dwumecz, _czy_knockout, _korekta_rewanz_v26
-from footstats.core.importance import ImportanceIndex
-from footstats.core.form import _oblicz_sile_wazona, _wagi_mecze, AnalizaDomWyjazd
+from footstats.core.classifier import _korekta_dwumecz, _czy_knockout, _korekta_rewanz_v26
+from footstats.core.form import _oblicz_sile_wazona
 from footstats.utils.console import console
 
 # ================================================================
