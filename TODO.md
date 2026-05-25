@@ -79,8 +79,8 @@
 - [ ] test_daily_agent_prefilter.py — pre_filtruj_kursy edge cases
 - [ ] test_coupon_settlement_edge.py — partial settlement, void handling
 - [ ] test_powiadomienie_windows.py — PowerShell escape
-- [ ] test_ram_cache_eviction.py — MAX_ENTRIES, TTL dla _RAM_CACHE
-- [ ] test_null_bytes_guard.py — file integrity check
+- [x] test_ram_cache_eviction.py — MAX_ENTRIES, TTL dla _RAM_CACHE ✅
+- [x] test_null_bytes_guard.py — file integrity check ✅
 
 ---
 
