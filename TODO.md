@@ -84,12 +84,12 @@
 
 ---
 
-## Stale Docs (do cleanup)
+## Stale Docs (COMPLETE) ✅
 
 - [x] `docs/archive/` vs `docs/archives/` — consolidated to archive/ ✅
-- [ ] `docs/BETA_FIX_PROMPT.md` — prawdopodobnie nieaktualny
-- [ ] `docs/session_2026-05-07.md` — notatki sesyjne, do archiwum
-- [ ] `docs/SecondBrain_Log_2026-04-17.md` — stary log
+- [x] `docs/BETA_FIX_PROMPT.md` — archived ✅
+- [x] `docs/session_2026-05-07.md` — archived ✅
+- [x] `docs/SecondBrain_Log_2026-04-17.md` — archived ✅
 
 ---
 
