@@ -48,13 +48,22 @@ async def gather_with_timeout(
 
 def cleanup_event_loop() -> None:
     """Clean up event loop (close pending tasks, drain queue)."""
+    _fresh = False
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        loop = asyncio.new_event_loop()
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            _fresh = True
 
     if loop.is_closed():
         logger.debug("[Async] Event loop already closed")
+        return
+
+    if _fresh:
+        logger.debug("[Async] Fresh loop — no pending tasks")
         return
 
     # Cancel pending tasks
@@ -63,8 +72,8 @@ def cleanup_event_loop() -> None:
         task.cancel()
         logger.debug(f"[Async] Cancelled pending task: {task.get_name()}")
 
-    # Run loop once more to process cancellations
-    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    if pending:
+        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
     logger.info(f"[Async] Cleaned up {len(pending)} pending tasks")
 
 
