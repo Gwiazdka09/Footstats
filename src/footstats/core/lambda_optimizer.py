@@ -139,6 +139,31 @@ def _predict_lambdas(hist: pd.DataFrame, home: str, away: str) -> tuple[float, f
     return lh * corr, la / corr
 
 
+def injury_correction(lambda_val: float, injuries: list[dict], is_home: bool) -> float:
+    """
+    Koryguj lambde na podstawie kontuzji kluczowych graczy.
+
+    Args:
+        lambda_val: Wyjściowa lambda (expected goals)
+        injuries: Lista słowników z danymi kontuzji (muszą mieć klucz 'position')
+        is_home: True jeśli drużyna domowa (mniej strat, domowe warunki pomagają)
+
+    Returns:
+        Skorygowana lambda (max -20%, min -5% na grę domową)
+    """
+    if not injuries:
+        return lambda_val
+
+    key_players = [i for i in injuries if i.get("position") in ("G", "D", "M")]
+    penalty = len(key_players) * 0.03  # -3% za każdego kontuzjowanego
+
+    # Drużyna domowa ma większą tolerancję na kontuzje (mniej niż gość)
+    if is_home:
+        penalty *= 0.6  # -1.8% zamiast -3%
+
+    return max(lambda_val * (1 - penalty), lambda_val * 0.8)
+
+
 # ── Główna funkcja kalibracji ─────────────────────────────────────────────
 
 def run_calibration(n_matches: int = 200, verbose: bool = True) -> dict:

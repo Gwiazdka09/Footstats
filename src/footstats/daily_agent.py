@@ -11,6 +11,7 @@ Użycie:
 """
 
 import argparse
+import logging
 import os
 import subprocess
 import sys
@@ -22,6 +23,10 @@ from rich.panel import Panel
 from rich.table import Table
 
 from footstats.utils.normalize import normalize_team_name
+from footstats.core.checkpoint import save_predictions_batch, load_predictions_batch, list_checkpoints, cleanup_old_checkpoints
+from footstats.core.lambda_optimizer import injury_correction
+
+log = logging.getLogger(__name__)
 
 console = Console()
 
@@ -122,6 +127,28 @@ def _odswiez_kursy_live(indeks: dict, dni: int = 3) -> dict:
         console.print(f"[yellow]Błąd odświeżenia kursów: {e} — używam starych kursów[/yellow]")
 
     return indeks
+
+
+# ── Krok 1b: Injury Lambda Correction ──────────────────────────────────────
+
+def _apply_injury_corrections(wyniki: list) -> None:
+    """Koryguje lambdy na podstawie kontuzji kluczowych graczy."""
+    for w in wyniki:
+        try:
+            injuries_home = w.get("injuries_home", [])
+            injuries_away = w.get("injuries_away", [])
+
+            if "bet_builder_markets" in w:
+                lh = w.get("lambda_h")
+                la = w.get("lambda_a")
+                if lh and la:
+                    lh_adj = injury_correction(lh, injuries_home, is_home=True)
+                    la_adj = injury_correction(la, injuries_away, is_home=False)
+                    w["lambda_h"] = lh_adj
+                    w["lambda_a"] = la_adj
+                    log.debug(f"{w.get('gospodarz')} vs {w.get('goscie')}: lambda_h {lh:.2f}→{lh_adj:.2f}, lambda_a {la:.2f}→{la_adj:.2f}")
+        except Exception as e:
+            log.debug(f"Injury correction error: {e}")
 
 
 # ── Krok 2: Forma SofaScore ───────────────────────────────────────────────────
@@ -726,6 +753,11 @@ def main():
     _sep("KROK 1 — Bzzoiro ML")
     wyniki, indeks = _pobierz_kandydatow(dni=args.dni)
 
+    # Checkpoint: save predictions batch for recovery
+    batch_id = f"daily_{datetime.now():%Y%m%d_%H%M}"
+    save_predictions_batch(wyniki, batch_id=batch_id)
+    log.info(f"Checkpoint saved: {batch_id} ({len(wyniki)} predictions)")
+
     # Krok 1b: Dociagnij Ekstraklase z API-Football jesli dostepny
     wyniki_ekstra = _pobierz_apifootball_ekstraklasa(args.dni)
     if wyniki_ekstra:
@@ -775,6 +807,7 @@ def main():
         _sep("KROK 2 — Forma SofaScore")
         _wzbogac_forme_top(wyniki, top_n=12)
         _wzbogac_o_betbuilder(wyniki, pobierz_superbet=args.bb)
+        _apply_injury_corrections(wyniki)
 
     _sep("KROK 3 — Groq AI")
     dane = _analizuj_groq(wyniki, cel_wygrana_a=args.cel_a, cel_wygrana_b=args.cel_b, stawka=args.stawka)
@@ -868,6 +901,9 @@ def main():
             console.print(f"[dim]Telegram niedostepny: {e}[/dim]")
     else:
         console.print("[yellow]DRY-RUN: pominięto Telegram[/yellow]")
+
+    # Cleanup old checkpoints (>7 days)
+    cleanup_old_checkpoints(days=7)
 
     console.print()
     console.print("[bold green]Gotowe.[/bold green] Powodzenia!\n")

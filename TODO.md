@@ -54,13 +54,13 @@
 
 ---
 
-## Phase 5: PRODUCTION INTEGRATION
+## Phase 5: PRODUCTION INTEGRATION (In Progress)
 
-- [x] 5.1: response_cache.py — WPIETY (⚠️ ale working copy uszkodzona)
-- [x] 5.5: Operator Agent + Kreator fix
-- [ ] 5.2: Integrate checkpoint.py into daily_agent batch flow
-- [ ] 5.3: Prometheus metrics export
-- [ ] 5.4: SofaScore injury scraper dla lambda correction
+- [x] 5.1: response_cache.py — restored + working ✅
+- [x] 5.5: Operator Agent + Kreator fix ✅
+- [x] 5.2: Checkpoint integration (save/recovery/cleanup) ✅
+- [x] 5.3: Prometheus metrics middleware + /metrics endpoint ✅
+- [x] 5.4: Injury lambda correction via injury_correction() ✅
 
 ---
 

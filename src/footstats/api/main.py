@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 import uuid
 from contextvars import ContextVar
 from pathlib import Path
@@ -65,6 +66,16 @@ class _TimeoutMiddleware(BaseHTTPMiddleware):
                 {"detail": "Request timeout", "timeout_s": self.timeout},
                 status_code=504,
             )
+
+
+class _MetricsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        from footstats.core.logging_config import metrics
+        t0 = time.perf_counter()
+        response = await call_next(request)
+        dt = time.perf_counter() - t0
+        metrics.record_request(request.url.path, response.status_code, dt)
+        return response
 
 
 _handler = logging.StreamHandler()
@@ -204,6 +215,7 @@ app = FastAPI(title="FootStats API", version="2.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(_MetricsMiddleware)
 app.add_middleware(_TimeoutMiddleware, timeout=10.0)
 app.add_middleware(_RequestIDMiddleware)
 
@@ -229,6 +241,16 @@ app.include_router(coupons_router)
 def health() -> dict:
     from footstats import __version__
     return {"status": "ok", "version": __version__}
+
+
+@app.get("/metrics", tags=["ops"])
+def metrics_endpoint():
+    try:
+        from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+        from starlette.responses import Response
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    except ImportError:
+        return {"status": "metrics-disabled", "reason": "prometheus_client not installed"}
 
 
 from fastapi_mcp import FastApiMCP as _FastApiMCP

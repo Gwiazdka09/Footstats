@@ -169,3 +169,36 @@ class TestCleanupCheckpoints:
         removed = cleanup_old_checkpoints(days=365)
         assert isinstance(removed, int)
         assert removed >= 0
+
+
+class TestCheckpointRecovery:
+    """Recovery from failed runs using checkpoints."""
+
+    def test_recovery_from_checkpoint(self, clean_checkpoint_dir):
+        """Simulate recovery: save checkpoint, load it back."""
+        batch_id = f"daily_{datetime.now():%Y%m%d_%H%M}"
+        original_predictions = [
+            {"gospodarz": "Team A", "goscie": "Team B", "pw": 45, "pp": 30},
+            {"gospodarz": "Team C", "goscie": "Team D", "pw": 55, "pp": 25},
+        ]
+
+        save_predictions_batch(original_predictions, batch_id=batch_id)
+
+        # Simulate agent crash and restart
+        recovered = load_predictions_batch(batch_id)
+
+        assert len(recovered) == 2
+        assert recovered[0]["gospodarz"] == "Team A"
+        assert recovered[1]["goscie"] == "Team D"
+
+    def test_recovery_list_most_recent(self, clean_checkpoint_dir):
+        """Find most recent checkpoint for recovery."""
+        save_predictions_batch([{"id": 1}], "daily_202605_0800")
+        time.sleep(0.1)
+        save_predictions_batch([{"id": 2}], "daily_202605_0801")
+
+        checkpoints = list_checkpoints()
+        assert len(checkpoints) >= 2
+        batch_ids = [cp["batch_id"] for cp in checkpoints]
+        assert "daily_202605_0800" in batch_ids
+        assert "daily_202605_0801" in batch_ids
