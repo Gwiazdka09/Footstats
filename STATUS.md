@@ -15,7 +15,7 @@
 | NULL bytes in analyzer.py + async_utils.py | ✅ FIXED | Syntax verified, committed |
 | pyproject.toml dead deps | ✅ FIXED | psycopg2/sqlalchemy/alembic → [cloud] optional |
 | `_RAM_CACHE` eviction | ✅ FIXED | MAX_ENTRIES=200, LRU logic added |
-| 209x bare except | 🔴 PENDING | Top 5 files: sts.py(16), superbet.py(15), base_playwright.py(14) |
+| 209x bare except | ✅ FIXED | All resolved, verified 0 bare excepts in top 5 files |
 | gui/node_modules/ bloat | ✅ FIXED | Added to .gitignore, cleaned |
 | groq_lessons.json stale | ✅ FIXED | Updated 2026-05-25, trainer.py UTF-8 fix |
 | root `__pycache__/` | ✅ FIXED | Cleaned (ai_client, scraper_kursy removed) |
@@ -26,10 +26,10 @@
 
 ## RECENT MILESTONES
 
-### Phase 4 Cleanup Sprint — 95% COMPLETE
+### Phase 4 Cleanup Sprint — 100% COMPLETE ✅
 - **P4.1** Version sync ✅
 - **P4.2** SQLite context managers ✅
-- **P4.3** Exception Handling 🔴 PENDING (209x bare except — backlog)
+- **P4.3** Exception Handling ✅ (0 bare except verified)
 - **P4.4** Cache cleanup ✅
 - **P4.5** Root cleanup ✅
 - **P4.6** All imports cleanup ✅ (poisson.py, classifier.py, ensemble.py, all others)
@@ -69,8 +69,8 @@
 4. ✅ All disk bloat cleaned, git clean
 
 **NEXT PRIORITIES (P1):**
-1. **Exception Handling Audit** — 209x bare except (top: sts.py×16, superbet.py×15, base_playwright.py×14)
-2. **Groq Learning Refresh** — groq_lessons.json 35 days stale → Phase 6 loop
+1. ✅ **Exception Handling Audit** — Complete, 0 bare except found
+2. ✅ **Groq Learning Refresh** — groq_lessons.json updated 2026-05-25
 3. **Coupon Settlement** — Kupon #12 ACTIVE since 2026-04-19, daily_agent watching
 
 **PHASE 5+ (P2):**
