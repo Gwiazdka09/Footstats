@@ -2,98 +2,155 @@
 
 ## Completed Phases (Archive)
 
-### Phase 1: STABILNOSC — COMPLETE ✅
-### Phase 2: PERFORMANCE — COMPLETE ✅
-### Phase 3: QUALITY — COMPLETE ✅
-### Phase 3.5: v3.4 Lambda Optimizer — COMPLETE ✅
-
-**108 source modules, 49 test files**
+### Phase 1–5: ALL COMPLETE ✅
+**108 source modules, 53 test files**
 
 ---
 
-## P0: KRYTYCZNE NAPRAWY (COMPLETE 2026-05-24)
+## P0: KRYTYCZNE NAPRAWY (2026-05-25) ✅
 
-- [x] **FIX** `core/response_cache.py` — restored from HEAD (916 bytes, 3 eviction functions) ✅
-- [x] **FIX** `ai/analyzer.py` — null bytes removed ✅
-- [x] **FIX** `core/async_utils.py` — null bytes removed, safe event loop pattern ✅
-- [x] **COMMIT** All dirty files committed as `2c62f8dfc` ✅
-- [x] **DAILY AGENT** — restarted, operational (0 candidates in 72h window) ✅
-- [x] **MIGRACJE DUAL-DIALECT** — SQLite + PostgreSQL support added to migrations.py ✅
-- [x] **BANKROLL** — Coupon #12 ACTIVE since 2026-04-19, daily_agent handles settlement ✅
-- [x] **GROQ/RAG REFRESHED** — `groq_lessons.json` updated 2026-05-25, trainer.py UTF-8 fix applied ✅
+- [x] **FIX** `daily_agent.py` — ucięty na linii 1286 → przywrócono z git ✅
+- [x] **FIX** `core/lambda_optimizer.py` — ucięty na linii 275 → przywrócono ✅
+- [x] **FIX** `api/main.py` — ucięty na linii 307 → przywrócono ✅ **← TO BLOKOWAŁO LOGOWANIE Admin_JG!**
+
+**UWAGA:** `api/main.py` ucięty = SyntaxError = API nie startuje = logowanie niemożliwe.
+Plik naprawiony — wymaga `git commit + redeploy` aby przywrócić logowanie na produkcji.
 
 ---
 
-## Phase 4: MAINTENANCE & HYGIENE (In Progress)
+## Phase 6: HARDENING & RELIABILITY
 
-### P4.1–P4.2: ✅ Done
-### P4.3: Exception Handling Audit ✅ COMPLETE
-- [x] Top priorytet (0/5): sts.py, superbet.py, base_playwright.py, daily_agent.py, analyzer.py ✅
-- [x] All bare excepts removed ✅
-- [x] Logging integrated ✅
+### P6.1: Brakujące timeout w requests (15 wywołań) — PRIORYTET
+Pliki wymagające dodania `timeout=15`:
+- [ ] `scrapers/bzzoiro.py` (2x: linia 39, 62)
+- [ ] `scrapers/api_football.py` (2x: linia 60, 144)
+- [ ] `scrapers/enriched.py` (2x: linia 96, 211)
+- [ ] `scrapers/results_updater.py` (3x: linia 132, 174, 402)
+- [ ] `scrapers/source_manager.py` (1x: linia 116)
+- [ ] `scrapers/lineup_scraper.py` (1x: linia 10)
+- [ ] `core/coupon_settlement.py` (1x: linia 29)
+- [ ] `ai/client.py` (1x: linia 80)
+- [ ] `utils/telegram_notify.py` (1x: linia 48)
+- [ ] `evening_agent.py` (1x: linia 107)
 
-### P4.6: Unused Imports Cleanup ✅ COMPLETE
-- [x] cli.py, data_fetcher.py, form.py
-- [x] poisson.py: 7 unused removed ✅
-- [x] classifier.py: 4 unused removed ✅
-- [x] ensemble.py: annotations removed ✅
+### P6.2: Groq/RAG Feedback Refresh
+- [ ] Przeanalizować lekcje z ostatnich kuponów (stale ~33 dni)
+- [ ] Uaktualnić feedback w RAG knowledge base
+- [ ] Sprawdzić accuracy Groq na ostatnich meczach
 
-### P4.11: pyproject.toml dependency fix ✅ COMPLETE
-- [x] psycopg2-binary, sqlalchemy, alembic → [project.optional-dependencies.cloud] ✅
-
-### P4.12: Disk bloat cleanup ✅ COMPLETE
-- [x] `node_modules/` → .gitignore ✅
-- [x] root `__pycache__/` cleaned ✅
-- [x] `.aider.tags.cache.v4/` removed ✅
-- [x] `tests/scratch` removed ✅
-- [x] `data/.fuse_hidden*` cleaned ✅
-
-### P4.13: RAM cache eviction ✅ COMPLETE
-- [x] `utils/cache.py`: MAX_RAM_ENTRIES=200, eviction logic added ✅
-- [x] test_ram_cache_eviction.py created ✅
+### P6.3: Monitoring plików (zapobieganie obcinaniu)
+- [ ] Dodać pre-commit hook sprawdzający syntax `py_compile`
+- [ ] Integrity check w run_daily.bat
 
 ---
 
-## Phase 5: PRODUCTION INTEGRATION (In Progress)
+## Phase 7: ROADMAPA DO 55-70% ACCURACY 🎯
 
-- [x] 5.1: response_cache.py — restored + working ✅
-- [x] 5.5: Operator Agent + Kreator fix ✅
-- [x] 5.2: Checkpoint integration (save/recovery/cleanup) ✅
-- [x] 5.3: Prometheus metrics middleware + /metrics endpoint ✅
-- [x] 5.4: Injury lambda correction via injury_correction() ✅
+### Cel: Z obecnych ~50% overall → 55-60% overall, 70%+ na wyselekcjonowanych meczach
 
----
+### 7.1: Systematyczny Backtest & Pomiar Accuracy (PRIORYTET #1)
+**Bez pomiaru nie wiesz co poprawiać.**
+- [ ] Skrypt `scripts/accuracy_report.py` — raport hit-rate z backtest.db:
+  - Per liga (Ekstraklasa, Premier League, Serie A...)
+  - Per typ zakładu (1, 2, X, Over 2.5, BTTS...)  
+  - Per confidence band (50-60%, 60-70%, 70-80%, 80%+)
+  - Per source (Bzzoiro ML vs API-Football vs Poisson)
+  - Wykres kalibracji: predicted prob vs actual hit-rate
+- [ ] Automatyczny raport tygodniowy (weekly_report.py rozszerzenie)
+- [ ] Dashboard tab "Accuracy" w Streamlit z wykresami hit-rate
 
-## Phase 6: GROQ LEARNING & FEEDBACK LOOP
+### 7.2: Filtr Lig — Stawiaj TYLKO Gdzie Masz Edge (PRIORYTET #2)
+**Nie wszystkie ligi są przewidywalne jednakowo.**
+- [ ] Na podstawie accuracy_report → zidentyfikuj ligi gdzie hit-rate > 55%
+- [ ] Dodaj `LIGI_WHITELIST` do config.py (ligi z udowodnioną edge)
+- [ ] Dodaj `LIGI_BLACKLIST` do config.py (ligi z hit-rate < 45%)
+- [ ] Pre-filtr w daily_agent: odrzucaj mecze z blacklist PRZED Groq
+- [ ] Cel: mniej kuponów, ale wyższy hit-rate per kupon
 
-- [ ] Przeanalizowac lekcje z ostatnich kuponow (last update 2026-04-21 — **33 dni stale!**)
-- [ ] Uaktualnic feedback w RAG knowledge base
-- [ ] Sprawdzic accuracy Groq na ostatnich meczach (75%+ confidence)
+### 7.3: Kalibracja Prawdopodobieństw (PRIORYTET #3)
+**Model mówi 70% a trafia 55% = źle skalibrowany.**
+- [ ] Platt Scaling / Isotonic Regression na historycznych predykcjach
+- [ ] Moduł `core/probability_calibrator.py`:
+  - fit() na historii (predicted_prob, actual_outcome)
+  - transform() koryguje pewnosc_pct przed Kelly
+- [ ] Integracja z daily_agent po Groq, przed Kelly
+- [ ] Test: porównaj Kelly P&L ze i bez kalibracji na backteście
+
+### 7.4: Poisson Bayesian Update (PRIORYTET #4)
+**Poisson z jedną lambdą jest zbyt prosty.**
+- [ ] Uwzględnij siłę ataku vs siłę obrony (nie jedną średnią)
+- [ ] Bayesian prior z historii ligi (średnia goli w lidze jako prior)
+- [ ] Weighting: ostatnie 5 meczów > ostatnie 20 meczów
+- [ ] Moduł `core/poisson_bayesian.py` — rozszerza obecny poisson.py
+- [ ] A/B test: stary Poisson vs Bayesian na 100 meczach z backtest.db
+
+### 7.5: Ensemble Weights Optimization (PRIORYTET #5)
+**Obecnie ensemble = 50/50 Poisson + Bzzoiro. Wagi powinny być dynamiczne.**
+- [ ] Dla każdej ligi oblicz optimal weight (Poisson vs Bzzoiro vs API-Football)
+- [ ] Moduł `core/ensemble_optimizer.py`:
+  - grid search na historii: w_poisson * P_poisson + w_bzzoiro * P_bzzoiro
+  - minimize log-loss na validation set
+- [ ] Zapisuj optymalne wagi per liga w data/ensemble_weights.json
+- [ ] Integracja z _oblicz_roznica_modeli() w daily_agent.py
+
+### 7.6: Value Bet Filter (PRIORYTET #6)
+**Nie stawiaj na mecze bez value — nawet jeśli masz 70% pewności.**
+- [ ] Rozbuduj `core/value_bet.py`:
+  - Closing Line Value (CLV) — porównaj swój kurs z kursem zamykającym
+  - Expected Value > 3% minimalny próg
+  - Kelly fraction > 1% minimum
+- [ ] Tracking CLV: scrape kursy w momencie kickoff i porównaj z draft
+- [ ] Dashboard: wykres EV vs actual P&L per tydzień
+
+### 7.7: Feature Engineering (PRIORYTET #7)
+**Dodaj dane które model jeszcze nie widzi.**
+- [ ] xG (Expected Goals) z FBref/Understat — lepsze niż surowe gole
+- [ ] Forma domowa vs wyjazdowa osobno (nie łączona)
+- [ ] Motywacja: degradacja/awans/puchar — wpływa na wynik
+- [ ] Odpoczynek: dni od ostatniego meczu (zmęczenie)
+- [ ] Pogoda: deszcz/wiatr wpływa na Under/Over
+
+### 7.8: Stop-Loss & Bankroll Protection
+**Nawet 60% accuracy = bankrut jeśli stawki źle dobrane.**
+- [ ] Dzienny stop-loss: max 3 kupony/dzień, max 10% bankroll/dzień
+- [ ] Streak detection: po 3 przegranych z rzędu → obniż stawki 50%
+- [ ] Rozbuduj calibration.py o rolling window (ostatnie 20 kuponów ważniejsze)
+- [ ] Dashboard: alert gdy bankroll spadnie > 20% w tygodniu
 
 ---
 
 ## Proposed Tests
 
 - [x] test_response_cache_eviction.py ✅
-- [ ] test_referee_db_conn_cleanup.py — sqlite context manager
+- [x] test_ram_cache_eviction.py ✅
+- [x] test_null_bytes_guard.py ✅
+- [ ] test_requests_timeout.py — grep requests bez timeout
+- [ ] test_accuracy_report.py — poprawność obliczeń hit-rate
+- [ ] test_probability_calibrator.py — Platt scaling correctness
+- [ ] test_poisson_bayesian.py — Bayesian update vs vanilla Poisson
+- [ ] test_ensemble_optimizer.py — grid search convergence
+- [ ] test_value_bet_filter.py — CLV i EV calculations
 - [ ] test_daily_agent_prefilter.py — pre_filtruj_kursy edge cases
-- [ ] test_coupon_settlement_edge.py — partial settlement, void handling
-- [ ] test_powiadomienie_windows.py — PowerShell escape
-- [x] test_ram_cache_eviction.py — MAX_ENTRIES, TTL dla _RAM_CACHE ✅
-- [x] test_null_bytes_guard.py — file integrity check ✅
+- [ ] test_coupon_settlement_edge.py — partial settlement
 
 ---
 
-## Stale Docs (COMPLETE) ✅
+## Kamienie Milowe (Milestones)
 
-- [x] `docs/archive/` vs `docs/archives/` — consolidated to archive/ ✅
-- [x] `docs/BETA_FIX_PROMPT.md` — archived ✅
-- [x] `docs/session_2026-05-07.md` — archived ✅
-- [x] `docs/SecondBrain_Log_2026-04-17.md` — archived ✅
+| Milestone | Accuracy | Opis |
+|-----------|----------|------|
+| **M0 (current)** | ~50% overall | Działający pipeline, brak systematycznego pomiaru |
+| **M1** | 55% overall | Pomiar accuracy + filtr lig + kalibracja prob |
+| **M2** | 60% overall | Bayesian Poisson + ensemble weights + value filter |
+| **M3** | 65% selected | xG + feature engineering + stop-loss |
+| **M4** | 70% selected | Pełna optymalizacja + CLV tracking + 3 mies. track record |
+
+**Realistyczny timeline:** M1 za ~2-3 tygodnie, M2 za ~6 tygodni, M3 za ~3 miesiące, M4 za ~6 miesięcy.
 
 ---
 
 ## Blockers
-- **P0**: response_cache.py uciety = cache eviction nie dziala = potencjalny memory leak w produkcji
-- P4.3 (bare except) to priorytet stabilnosci
-- groq_lessons stale 33 dni — RAG moze dawac nieaktualne rady
+- **KRYTYCZNY**: `api/main.py` naprawiony ale nie zcommitowany — Admin_JG nie może się zalogować dopóki nie deploy
+- **P6.1**: 15x requests bez timeout = ryzyko hang
+- **P6.2**: RAG lessons stale 33 dni
+- **P6.3**: Pliki regularnie się obcinają — potrzebny integrity check
