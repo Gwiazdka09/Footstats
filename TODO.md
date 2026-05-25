@@ -20,27 +20,18 @@ Plik naprawiony — wymaga `git commit + redeploy` aby przywrócić logowanie na
 
 ## Phase 6: HARDENING & RELIABILITY
 
-### P6.1: Brakujące timeout w requests (15 wywołań) — PRIORYTET
-Pliki wymagające dodania `timeout=15`:
-- [ ] `scrapers/bzzoiro.py` (2x: linia 39, 62)
-- [ ] `scrapers/api_football.py` (2x: linia 60, 144)
-- [ ] `scrapers/enriched.py` (2x: linia 96, 211)
-- [ ] `scrapers/results_updater.py` (3x: linia 132, 174, 402)
-- [ ] `scrapers/source_manager.py` (1x: linia 116)
-- [ ] `scrapers/lineup_scraper.py` (1x: linia 10)
-- [ ] `core/coupon_settlement.py` (1x: linia 29)
-- [ ] `ai/client.py` (1x: linia 80)
-- [ ] `utils/telegram_notify.py` (1x: linia 48)
-- [ ] `evening_agent.py` (1x: linia 107)
+### P6.1: Brakujące timeout w requests — COMPLETE ✅
+Wszystkie pliki miały już timeout (weryfikacja + test_requests_timeout.py PASS 2026-05-25)
 
 ### P6.2: Groq/RAG Feedback Refresh
 - [ ] Przeanalizować lekcje z ostatnich kuponów (stale ~33 dni)
 - [ ] Uaktualnić feedback w RAG knowledge base
 - [ ] Sprawdzić accuracy Groq na ostatnich meczach
 
-### P6.3: Monitoring plików (zapobieganie obcinaniu)
-- [ ] Dodać pre-commit hook sprawdzający syntax `py_compile`
-- [ ] Integrity check w run_daily.bat
+### P6.3: Monitoring plików (zapobieganie obcinaniu) — COMPLETE ✅
+- [x] Dodać pre-commit hook sprawdzający syntax `py_compile` ✅ `.git/hooks/pre-commit`
+- [x] Integrity check w run_daily.bat ✅ KROK 0b — blokuje pipeline na SyntaxError
+- [x] FIX: `api/main.py` — usunięty duplikat ogona (linie 339–360) powodujący SyntaxError ✅
 
 ---
 

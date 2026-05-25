@@ -12,6 +12,15 @@ if %errorlevel% neq 0 (
 )
 echo [%date% %time%] Backup OK >> F:\bot\data\logs\daily_agent.log
 
+REM KROK 0b: Integrity check — syntax krytycznych plików
+echo [%date% %time%] === Syntax check START === >> F:\bot\data\logs\daily_agent.log
+python -c "import py_compile; [py_compile.compile(f, doraise=True) for f in ['src/footstats/daily_agent.py','src/footstats/api/main.py','src/footstats/core/lambda_optimizer.py']]" >> F:\bot\data\logs\daily_agent.log 2>&1
+if %errorlevel% neq 0 (
+    echo [%date% %time%] BLAD: Syntax check nieudany - przerywam pipeline >> F:\bot\data\logs\daily_agent.log
+    exit /b 1
+)
+echo [%date% %time%] Syntax check OK >> F:\bot\data\logs\daily_agent.log
+
 REM KROK 1 (08:00): Draft phase + wait for final phase
 REM Script automatically:
 REM   1. Runs --faza draft
