@@ -23,10 +23,11 @@ Plik naprawiony — wymaga `git commit + redeploy` aby przywrócić logowanie na
 ### P6.1: Brakujące timeout w requests — COMPLETE ✅
 Wszystkie pliki miały już timeout (weryfikacja + test_requests_timeout.py PASS 2026-05-25)
 
-### P6.2: Groq/RAG Feedback Refresh
-- [ ] Przeanalizować lekcje z ostatnich kuponów (stale ~33 dni)
-- [ ] Uaktualnić feedback w RAG knowledge base
-- [ ] Sprawdzić accuracy Groq na ostatnich meczach
+### P6.2: Groq/RAG Feedback Refresh — COMPLETE ✅
+- [x] groq_lessons.json zaktualizowany 2026-05-25 (n=14,634 meczów) ✅
+- [x] RAG knowledge base aktywna (pobierz_rag_wzorce via SQLite ai_feedback) ✅
+- [x] Accuracy check: 42.4% win rate (14W/19L z 33 rozliczonych kuponów) — M0 baseline ✅
+- NOTE: Statusy kuponów niespójne (WIN/WON, LOSE/LOST) → do normalizacji w Phase 7
 
 ### P6.3: Monitoring plików (zapobieganie obcinaniu) — COMPLETE ✅
 - [x] Dodać pre-commit hook sprawdzający syntax `py_compile` ✅ `.git/hooks/pre-commit`
