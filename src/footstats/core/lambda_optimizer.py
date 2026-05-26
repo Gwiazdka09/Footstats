@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 from pathlib import Path
 from datetime import datetime
 
@@ -36,6 +37,7 @@ MIN_MATCHES_FOR_CAL = 30
 
 # Cache w pamięci — ładowany raz na sesję
 _cache: dict | None = None
+_cache_lock = threading.Lock()
 
 
 # ── Odczyt kalibracji ─────────────────────────────────────────────────────
@@ -48,17 +50,19 @@ def load_calibration() -> tuple[float, float]:
     global _cache
     if _cache is not None:
         return _cache["factor_home"], _cache["factor_away"]
-    try:
-        data = json.loads(CALIBRATION_PATH.read_text(encoding="utf-8"))
-        fh = float(data.get("factor_home", 1.0))
-        fa = float(data.get("factor_away", 1.0))
-        # Enforce safety rail na odczycie (zabezpieczenie przed ręczną edycją)
-        fh = max(CAL_MIN, min(CAL_MAX, fh))
-        fa = max(CAL_MIN, min(CAL_MAX, fa))
-        _cache = {"factor_home": fh, "factor_away": fa}
-        return fh, fa
-    except Exception:
-        return 1.0, 1.0
+    with _cache_lock:
+        if _cache is not None:
+            return _cache["factor_home"], _cache["factor_away"]
+        try:
+            data = json.loads(CALIBRATION_PATH.read_text(encoding="utf-8"))
+            fh = float(data.get("factor_home", 1.0))
+            fa = float(data.get("factor_away", 1.0))
+            fh = max(CAL_MIN, min(CAL_MAX, fh))
+            fa = max(CAL_MIN, min(CAL_MAX, fa))
+            _cache = {"factor_home": fh, "factor_away": fa}
+            return fh, fa
+        except Exception:
+            return 1.0, 1.0
 
 
 def invalidate_cache() -> None:
@@ -276,21 +280,6 @@ def run_calibration(n_matches: int = 200, verbose: bool = True) -> dict:
         print(f"[LambdaOptimizer] Zapisano → {CALIBRATION_PATH}")
 
     return result_dict
-
-
-# ── CLI ───────────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="FootStats Lambda Optimizer — kalibracja Poisson")
-    parser.add_argument("--n",       type=int, default=200, help="Liczba ostatnich meczów do kalibracji (domyślnie: 200)")
-    parser.add_argument("--quiet",   action="store_true",   help="Pomiń logi")
-    args = parser.parse_args()
-
-    res = run_calibration(n_matches=args.n, verbose=not args.quiet)
-    if res and "factor_home" in res:
-        print(f"\nGotowe. factor_home={res['factor_home']}, factor_away={res['factor_away']}")
-    sys.exit(0 if res else 1)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────
