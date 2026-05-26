@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-CHECKPOINT_DIR = Path(".cache/checkpoints")
+CHECKPOINT_DIR = Path("cache/checkpoints")
 
 
 def _ensure_checkpoint_dir() -> None:

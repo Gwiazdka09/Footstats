@@ -442,7 +442,7 @@ def bezpieczny_budget_use(endpoint: str,
     import json
     from pathlib import Path
 
-    cache_dir  = Path(".cache")
+    cache_dir  = Path("cache/api_football")
     budget_file = cache_dir / "af_budget.json"
 
     # Zaladuj budzet z dysku
@@ -641,7 +641,7 @@ def raport_diagnostyczny() -> dict:
         }
 
     # ── Cache ──────────────────────────────────────────────────────
-    cache_dir = Path(".cache")
+    cache_dir = Path("cache/api_football")
     raport["cache"]["katalog_istnieje"] = cache_dir.exists()
     if cache_dir.exists():
         pliki = list(cache_dir.glob("*.json"))

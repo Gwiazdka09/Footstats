@@ -28,7 +28,7 @@ from footstats.utils.console import console
 _RAM_CACHE: dict = {}   # football-data.org + bzzoiro (in-memory)
 MAX_RAM_ENTRIES = 200
 
-CACHE_DIR     = Path(".cache")
+CACHE_DIR     = Path("cache/api_football")
 AF_CACHE_FILE = CACHE_DIR / "af_cache.json"      # dane API-Football
 AF_BUDGET_FILE= CACHE_DIR / "af_budget.json"      # licznik dzienny
 

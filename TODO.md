@@ -81,7 +81,34 @@
 
 ---
 
+## Phase 9: DB CONSOLIDATION & LOGIN FIX
+
+### 9.1: Fix logowania Admin_JG — DONE ✅ (2026-05-27)
+- [x] seed_admin_user() — usuniety WHERE password_hash='changeme', env var zawsze nadpisuje hash
+- [ ] Wymaga redeploy na Cloud Run zeby zadzialalo na produkcji
+
+### 9.2: Usunac footstats.db (stara baza)
+- [ ] Usunac data/footstats.db (392 predictions, 8 coupons — stale, podzbiór backtest.db)
+- [ ] Wyczyscic referencje w scripts/czysc_baze.py i scripts/backup_db.py
+- [ ] Dodac data/footstats.db do .gitignore
+
+### 9.3: Konsolidacja cache (4 katalogi → 1)
+- [ ] .cache/af_*.json → cache/api_football/
+- [ ] cache/superoferta/ → juz OK
+- [ ] cache/form/ → juz OK
+- [ ] src/cache/flashscore/ → cache/flashscore/ (przenieść z src/)
+- [ ] Usunac .cache/ (root)
+
+### 9.4: Konsolidacja DB access (opcjonalne)
+- [ ] probability_calibrator.py: sqlite3→utils/db.py (lub zostawić — offline only)
+- [ ] ensemble_optimizer.py: sqlite3→utils/db.py (lub zostawić)
+- [ ] referee_db.py: sqlite3→utils/db.py (lub zostawić)
+- [ ] dashboard.py: sqlite3→utils/db.py (lub zostawić)
+- NOTE: Te 4 moduły czytają z backtest.db — mogą zostać na SQLite jeśli backtest jest offline
+
+---
+
 ## Blockers
-- **git index.lock** — wymaga ręcznego `del F:\bot\.git\index.lock` na Windows
 - **File truncation** — rekurencyjny problem, pre-commit hook nie wystarczy
 - **Accuracy 42%** — poniżej M1 target, wymaga dalszej kalibracji
+- **Redeploy** — login fix wymaga push + Cloud Run redeploy
