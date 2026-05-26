@@ -53,7 +53,7 @@ def _send(text: str, parse_mode: str = "HTML") -> bool:
                 "parse_mode": parse_mode,
                 "disable_web_page_preview": True,
             },
-            timeout=10,
+            timeout=15,
         )
         return r.ok
     except Exception:

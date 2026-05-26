@@ -11,7 +11,7 @@ def get_lineup(fixture_id: int, api_key: str) -> dict | None:
             f"{_BASE}/fixtures/lineups",
             params={"fixture": fixture_id},
             headers={"x-apisports-key": api_key},
-            timeout=10,
+            timeout=15,
         )
         resp.raise_for_status()
         data = resp.json().get("response", [])

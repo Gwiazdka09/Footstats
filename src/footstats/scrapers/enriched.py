@@ -94,7 +94,7 @@ def _fdb_get(endpoint: str) -> dict | None:
     url = f"https://api.football-data.org/v4{endpoint}"
     try:
         r = requests.get(url, headers={"X-Auth-Token": FOOTBALL_API_KEY},
-                         timeout=TIMEOUT_S)
+                         timeout=15)
         if r.status_code == 200:
             return r.json()
     except Exception:
@@ -211,7 +211,7 @@ def _bzz_get(path: str, params: dict = None) -> dict | None:
         r = requests.get(
             f"https://sports.bzzoiro.com/api{path}",
             headers={"Authorization": f"Token {BZZOIRO_KEY}"},
-            params=params, timeout=TIMEOUT_S,
+            params=params, timeout=15,
         )
         if r.status_code == 200:
             return r.json()

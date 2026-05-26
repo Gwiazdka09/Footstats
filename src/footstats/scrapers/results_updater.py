@@ -175,7 +175,7 @@ def _fetch_match_stats(api_key: str, fixture_id: int) -> dict:
             f"{API_BASE}/fixtures/statistics",
             headers={"x-apisports-key": api_key},
             params={"fixture": fixture_id},
-            timeout=10,
+            timeout=15,
         )
         r.raise_for_status()
         data = r.json().get("response", [])

@@ -58,7 +58,7 @@ class APIFootball:
         """
         try:
             r = requests.get(f"{self.BASE}/status",
-                             headers=self.headers, timeout=10)
+                             headers=self.headers, timeout=15)
             if r.status_code == 200:
                 d    = r.json().get("response", {})
                 used = d.get("requests", {}).get("current", 0)

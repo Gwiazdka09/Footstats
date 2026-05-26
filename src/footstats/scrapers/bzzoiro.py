@@ -37,7 +37,7 @@ class BzzoiroClient:
         """Sprawdza poprawnosc klucza."""
         try:
             r = requests.get(f"{self.BASE}/leagues/",
-                             headers=self.headers, timeout=10)
+                             headers=self.headers, timeout=15)
             if r.status_code == 200:
                 self._valid = True
                 n = len(r.json().get("results", []))
@@ -60,7 +60,7 @@ class BzzoiroClient:
         for attempt in range(3):
             try:
                 r = requests.get(f"{self.BASE}{path}",
-                                 headers=self.headers, params=params, timeout=30)
+                                 headers=self.headers, params=params, timeout=15)
                 if r.status_code == 200:
                     data = r.json()
                     _cache_set(cache_key, data)

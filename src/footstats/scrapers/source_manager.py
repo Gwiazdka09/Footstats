@@ -116,7 +116,7 @@ class SourceManager:
             r = requests.get(
                 "https://api.football-data.org/v4/competitions",
                 headers={"X-Auth-Token": self.fdb.headers["X-Auth-Token"]},
-                timeout=10
+                timeout=15
             )
             if r.status_code == 200:
                 n = len(r.json().get("competitions", []))
