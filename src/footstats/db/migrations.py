@@ -172,7 +172,11 @@ def run_migrations() -> None:
 
 
 def seed_admin_user() -> None:
-    """Insert admin user from FOOTSTATS_USER / FOOTSTATS_PASSWORD_HASH env vars if missing."""
+    """Upsert admin user from FOOTSTATS_USER / FOOTSTATS_PASSWORD_HASH env vars.
+
+    Zawsze nadpisuje hash - env var jest source of truth dla hasla admina.
+    Dzieki temu redeploy z nowym hashem natychmiast dziala.
+    """
     username = os.environ.get("FOOTSTATS_USER", "").strip()
     password_hash = os.environ.get("FOOTSTATS_PASSWORD_HASH", "").strip()
     if not username or not password_hash:
@@ -181,10 +185,11 @@ def seed_admin_user() -> None:
 
     with connect() as conn:
         conn.execute(
-            "INSERT INTO users (username, password_hash)"
-            " VALUES (?, ?) ON CONFLICT (username)"
-            " DO UPDATE SET password_hash = EXCLUDED.password_hash"
-            " WHERE users.password_hash = 'changeme'",
+            "INSERT INTO users (username, password_hash, is_active)"
+            " VALUES (?, ?, TRUE)"
+            " ON CONFLICT (username)"
+            " DO UPDATE SET password_hash = EXCLUDED.password_hash,"
+            " is_active = TRUE",
             (username, password_hash),
         )
-    _log.info("Admin user '%s' seeded.", username)
+    _log.info("Admin user '%s' seeded/updated.", username)
