@@ -63,6 +63,43 @@ def get_stats_7_dni(db_path: Path = None) -> dict:
     }
 
 
+def get_stats_per_liga(db_path: Path = None) -> list[dict]:
+    """Statystyki accuracy per liga z ostatnich 30 dni (min 3 settled)."""
+    cutoff = (datetime.now() - timedelta(days=30)).isoformat()
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT league, tip_correct
+                FROM predictions
+                WHERE match_date >= ? AND tip_correct IS NOT NULL AND league != ''
+                """,
+                (cutoff,),
+            ).fetchall()
+    except Exception:
+        return []
+
+    per_liga: dict[str, dict] = {}
+    for r in rows:
+        lg = r["league"]
+        entry = per_liga.setdefault(lg, {"total": 0, "won": 0})
+        entry["total"] += 1
+        if r["tip_correct"]:
+            entry["won"] += 1
+
+    result = []
+    for liga, d in per_liga.items():
+        if d["total"] < 3:
+            continue
+        result.append({
+            "liga": liga,
+            "total": d["total"],
+            "won": d["won"],
+            "accuracy_pct": round(d["won"] / d["total"] * 100, 1),
+        })
+    return sorted(result, key=lambda x: x["accuracy_pct"], reverse=True)
+
+
 def build_raport_prompt(stats: dict) -> str:
     """Buduje prompt dla Groq na podstawie statystyk tygodniowych."""
     return (

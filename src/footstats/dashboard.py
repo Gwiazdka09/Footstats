@@ -101,6 +101,7 @@ sekcja = st.sidebar.radio("Sekcja", [
     "Pasma pewności",
     "Oczekujące mecze",
     "Walk-Forward Backtest",
+    "Accuracy (A/B)",
 ])
 
 
@@ -438,6 +439,90 @@ elif sekcja == "Walk-Forward Backtest":
                                 "actual_res", "pred_res", "pred_conf", "correct"]
                    if c in df_wf.columns]
         st.dataframe(df_wf[cols_wf].tail(20).iloc[::-1], use_container_width=True)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  SEKCJA 8: ACCURACY (A/B) — Bayesian Poisson vs Classic
+# ════════════════════════════════════════════════════════════════════════════
+
+elif sekcja == "Accuracy (A/B)":
+    st.title("A/B: Bayesian Poisson vs Classic")
+    st.caption("Porównanie accuracy obu modeli na danych walk-forward (wymaga `--model bayesian` i `--model classic`)")
+
+    df_wf = _load_wf_results()
+
+    if df_wf.empty:
+        st.warning(
+            "Brak danych walk-forward.\n\n"
+            "Uruchom oba modele:\n"
+            "```\npython -m footstats.core.walkforward --all --model classic\n"
+            "python -m footstats.core.walkforward --all --model bayesian\n```"
+        )
+    elif "model" not in df_wf.columns:
+        st.info("Kolumna `model` niedostępna w wf_results — brak danych A/B.")
+        st.markdown("#### Accuracy ogólna (walk-forward)")
+        df_ev = df_wf.dropna(subset=["correct"])
+        if not df_ev.empty:
+            acc = round(df_ev["correct"].mean() * 100, 1)
+            st.metric("Accuracy 1X2", f"{acc}%")
+    else:
+        df_ab = df_wf.dropna(subset=["correct", "model"])
+        if df_ab.empty:
+            st.info("Brak ocenionych predykcji.")
+        else:
+            grp = (
+                df_ab.groupby("model")["correct"]
+                .agg(n="count", acc_mean="mean")
+                .reset_index()
+            )
+            grp["acc_pct"] = (grp["acc_mean"] * 100).round(1)
+
+            st.dataframe(
+                grp.rename(columns={"model": "Model", "n": "Meczów", "acc_pct": "Accuracy %"})[
+                    ["Model", "Meczów", "acc_pct"]
+                ].style.applymap(_color_accuracy, subset=["acc_pct"]),
+                use_container_width=True,
+            )
+            st.bar_chart(grp.set_index("model")["acc_pct"])
+
+            # Per-liga breakdown
+            if "league" in df_ab.columns:
+                st.markdown("### A/B per liga")
+                grp_l = (
+                    df_ab.groupby(["league", "model"])["correct"]
+                    .agg(n="count", acc_mean="mean")
+                    .reset_index()
+                )
+                grp_l["acc_pct"] = (grp_l["acc_mean"] * 100).round(1)
+                grp_l = grp_l[grp_l["n"] >= 10]
+                if not grp_l.empty:
+                    pivot = grp_l.pivot(index="league", columns="model", values="acc_pct").reset_index()
+                    st.dataframe(pivot, use_container_width=True)
+
+    # EV vs P&L scatter (używa głównych predictions)
+    st.markdown("---")
+    st.markdown("### EV vs P&L (predykcje z ai_confidence + odds)")
+    if not df_eval.empty and "odds" in df_eval.columns and "ai_confidence" in df_eval.columns:
+        df_ev2 = df_eval.dropna(subset=["odds", "ai_confidence"]).copy()
+        df_ev2["ev_pct"] = ((df_ev2["ai_confidence"] / 100) * df_ev2["odds"] - 1) * 100
+        STAWKA = 10.0
+        df_ev2["pnl"] = df_ev2.apply(
+            lambda r: (r["odds"] - 1) * STAWKA if r["tip_correct"] == 1 else -STAWKA,
+            axis=1,
+        )
+        df_ev2 = df_ev2[df_ev2["ev_pct"].between(-50, 100)]
+        if not df_ev2.empty:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**EV rozkład (%)**")
+                st.bar_chart(df_ev2["ev_pct"].round(0).value_counts().sort_index())
+            with col2:
+                st.markdown("**Skumulowany P&L vs EV-bucket**")
+                df_ev2["ev_bucket"] = (df_ev2["ev_pct"] // 5 * 5).astype(int).astype(str) + "%"
+                pnl_by_ev = df_ev2.groupby("ev_bucket")["pnl"].sum().reset_index()
+                st.bar_chart(pnl_by_ev.set_index("ev_bucket")["pnl"])
+    else:
+        st.info("Brak danych ai_confidence+odds w wybranym zakresie.")
 
 
 # ── Stopka ────────────────────────────────────────────────────────────────
