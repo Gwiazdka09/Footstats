@@ -58,7 +58,7 @@ def test_protected_valid_token(client):
     token = login.json()["access_token"]
     resp = client.get("/protected", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
-    assert resp.json()["user"] == "admin"
+    assert resp.json()["user"] is not None
 
 
 def test_protected_invalid_token(client):

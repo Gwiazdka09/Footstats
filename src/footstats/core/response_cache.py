@@ -259,22 +259,24 @@ def response_cache_info() -> dict[str, Any]:
 
 
 def _evict_oldest() -> int:
-    """Usuń najstarszy wpis jeśli cache > MAX_ENTRIES."""
-    if len(_RESPONSE_CACHE) > MAX_ENTRIES:
+    """Usuń najstarsze wpisy aż cache <= MAX_ENTRIES."""
+    evicted = 0
+    while len(_RESPONSE_CACHE) > MAX_ENTRIES:
         oldest_key = min(_RESPONSE_CACHE, key=lambda k: _RESPONSE_CACHE[k]["stored_at"])
         del _RESPONSE_CACHE[oldest_key]
-        return 1
-    return 0
+        evicted += 1
+    return evicted
 
 
 def _cleanup_expired(ttl_seconds: int = 300) -> int:
-    """Usuń wygaśnięte wpisy z cache."""
+    """Usuń wygaśnięte wpisy z cache i przytnij do MAX_ENTRIES."""
     global _RESPONSE_CACHE
     now = time.time()
     stale = [k for k, v in _RESPONSE_CACHE.items() if (now - v["stored_at"]) > ttl_seconds]
     for k in stale:
         del _RESPONSE_CACHE[k]
-    return len(stale)
+    evicted = _evict_oldest()
+    return len(stale) + evicted
 
 
 def cleanup_stale_cache(ttl_seconds: int = 300) -> int:

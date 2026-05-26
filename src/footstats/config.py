@@ -61,6 +61,26 @@ OPERATOR_SMOKE_TIMEOUT = int(os.getenv("OPERATOR_SMOKE_TIMEOUT", "120"))
 
 # Ligi do śledzenia (API-Football IDs) są teraz zdefiniowane w results_updater.py
 
+# ── P7.2: Liga Edge Filter ───────────────────────────────────────────────────
+# Based on accuracy_report: whitelist = hit-rate > 55%, blacklist = hit-rate < 30%
+LIGI_WHITELIST: frozenset[str] = frozenset({
+    "Brasileirao Serie A",
+    "PKO BP Ekstraklasa",
+    "Ekstraklasa",
+    "Primeira Liga",
+})
+
+LIGI_BLACKLIST: frozenset[str] = frozenset({
+    "Ligue 1",
+    "Serie A",
+    "Championship",
+    "Liga MX",
+    "Pro League",
+})
+
+# Jeśli True, daily_agent odrzuca mecze z LIGI_BLACKLIST przed Groq
+LIGA_FILTER_ENABLED: bool = True
+
 # Klucze .env – nazwy zmiennych srodowiskowych
 ENV_FOOTBALL   = "FOOTBALL_API_KEY"   # football-data.org
 ENV_APISPORTS  = "APISPORTS_KEY"      # api-sports.io (API-Football)

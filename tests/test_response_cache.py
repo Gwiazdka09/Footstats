@@ -189,8 +189,8 @@ class TestCacheInvalidation:
         key1 = cache_key_builder(req)
 
         from footstats.core.response_cache import _RESPONSE_CACHE
-        _RESPONSE_CACHE[key1] = {"data": {"test": 1}, "status": 200, "ts": time.time()}
-        _RESPONSE_CACHE["other_key"] = {"data": {"test": 2}, "status": 200, "ts": time.time()}
+        _RESPONSE_CACHE[key1] = {"data": {"test": 1}, "status": 200, "stored_at": time.time()}
+        _RESPONSE_CACHE["other_key"] = {"data": {"test": 2}, "status": 200, "stored_at": time.time()}
 
         cleared = clear_response_cache()
         assert cleared == 2
@@ -200,8 +200,8 @@ class TestCacheInvalidation:
         clear_response_cache()
 
         from footstats.core.response_cache import _RESPONSE_CACHE
-        _RESPONSE_CACHE["old_key"] = {"data": {"test": 1}, "status": 200, "ts": time.time() - 100}
-        _RESPONSE_CACHE["new_key"] = {"data": {"test": 2}, "status": 200, "ts": time.time()}
+        _RESPONSE_CACHE["old_key"] = {"data": {"test": 1}, "status": 200, "stored_at": time.time() - 100}
+        _RESPONSE_CACHE["new_key"] = {"data": {"test": 2}, "status": 200, "stored_at": time.time()}
 
         cleaned = cleanup_stale_cache(ttl_seconds=10)
         assert cleaned == 1
@@ -222,7 +222,7 @@ class TestCacheInfo:
         clear_response_cache()
 
         from footstats.core.response_cache import _RESPONSE_CACHE
-        _RESPONSE_CACHE["key1"] = {"data": {"test": 1}, "status": 200, "ts": time.time()}
+        _RESPONSE_CACHE["key1"] = {"data": {"test": 1}, "status": 200, "stored_at": time.time()}
 
         info = response_cache_info()
         assert info["entries"] == 1

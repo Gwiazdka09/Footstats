@@ -182,7 +182,9 @@ def seed_admin_user() -> None:
     with connect() as conn:
         conn.execute(
             "INSERT INTO users (username, password_hash)"
-            " VALUES (?, ?) ON CONFLICT (username) DO NOTHING",
+            " VALUES (?, ?) ON CONFLICT (username)"
+            " DO UPDATE SET password_hash = EXCLUDED.password_hash"
+            " WHERE users.password_hash = 'changeme'",
             (username, password_hash),
         )
     _log.info("Admin user '%s' seeded.", username)

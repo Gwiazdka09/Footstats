@@ -794,6 +794,17 @@ def main():
             f"{n_przed_filter} → {len(wyniki)} kandydatów[/dim]"
         )
 
+    # -- Pre-filtr lig (blacklist): odrzuca ligi z udowodnionym brakiem edge ──
+    from footstats.config import LIGI_BLACKLIST, LIGA_FILTER_ENABLED
+    if LIGA_FILTER_ENABLED:
+        n_przed_liga = len(wyniki)
+        wyniki = _pre_filtruj_ligi(wyniki)
+        if len(wyniki) < n_przed_liga:
+            console.print(
+                f"[dim]Pre-filtr lig (blacklist): "
+                f"{n_przed_liga} → {len(wyniki)} kandydatów[/dim]"
+            )
+
     # -- Faza draft/final: enrichment składów/sędziego (Decision Score → po Groq) ──
     if args.faza:
         _sep(f"FAZA {args.faza.upper()} — Składy + Sędzia (API-Football)")
@@ -1136,6 +1147,18 @@ def _pre_filtruj_tokenow(kandydaci: list[dict]) -> list[dict]:
             wynik.append(k)
     return wynik
 
+
+
+def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
+    """Odrzuca kandydatów z lig w LIGI_BLACKLIST (udowodniony brak edge)."""
+    from footstats.config import LIGI_BLACKLIST
+    wynik = []
+    for k in kandydaci:
+        liga = (k.get("liga") or "").strip()
+        if liga and liga in LIGI_BLACKLIST:
+            continue
+        wynik.append(k)
+    return wynik
 
 
 def _ocen_zdarzenia_decision_score(dane: dict, phase: str = "draft") -> None:

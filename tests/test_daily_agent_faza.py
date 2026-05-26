@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     roi_pct          REAL,
     groq_reasoning   TEXT,
     decision_score   INTEGER,
-    match_date_first TEXT
+    match_date_first TEXT,
+    user_id          INTEGER DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT, coupon_id INTEGER REFERENCES coupons(id)
@@ -62,15 +63,16 @@ class _SQLiteConn:
 
 _BANKROLL_SCHEMA = """
 CREATE TABLE IF NOT EXISTS bankroll_state (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     balance REAL NOT NULL,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    user_id INTEGER DEFAULT 1 UNIQUE
 );
 CREATE TABLE IF NOT EXISTS bankroll_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     change_pln REAL NOT NULL, new_balance REAL NOT NULL,
-    type TEXT NOT NULL, description TEXT
+    type TEXT NOT NULL, description TEXT, user_id INTEGER DEFAULT 1
 )
 """
 
