@@ -80,6 +80,108 @@ def process_win(payout: float, description: str = "", user_id: int = 1) -> float
     )
 
 
+# ── P7.8: Stop-Loss & Bankroll Protection ────────────────────────────────────
+
+DAILY_MAX_LOSS_PCT = 0.10   # 10% bankrolla dziennie
+WEEKLY_DRAWDOWN_ALERT_PCT = 0.20  # 20% w tygodniu → alert
+STREAK_THRESHOLD = 3        # po 3 przegranych z rzędu → reduce stakes
+STREAK_MULTIPLIER = 0.50    # 50% stawek po streak
+
+
+def get_daily_loss(user_id: int = 1) -> float:
+    """Suma strat z dzisiaj (tylko BET, nie WIN)."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(change_pln), 0) AS total"
+            " FROM bankroll_history"
+            " WHERE user_id = ? AND type = 'BET'"
+            " AND DATE(timestamp) = DATE('now')",
+            (user_id,),
+        ).fetchone()
+        return abs(float(row["total"] or 0))
+    finally:
+        conn.close()
+
+
+def check_daily_stop_loss(user_id: int = 1) -> bool:
+    """True jeśli dzienna strata przekroczyła DAILY_MAX_LOSS_PCT bankrolla."""
+    bankroll = get_current_bankroll(user_id)
+    daily_loss = get_daily_loss(user_id)
+    limit = bankroll * DAILY_MAX_LOSS_PCT
+    return daily_loss >= limit
+
+
+def get_loss_streak(user_id: int = 1, n: int = 20) -> int:
+    """Liczba aktualnych przegranych z rzędu (z ostatnich n kuponów)."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT status FROM coupons"
+            " WHERE user_id = ? AND status IN ('WON', 'WIN', 'LOST', 'LOSE')"
+            " ORDER BY created_at DESC LIMIT ?",
+            (user_id, n),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    streak = 0
+    for r in rows:
+        if r["status"] in ("LOST", "LOSE"):
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def get_stake_multiplier(user_id: int = 1) -> float:
+    """
+    Zwraca mnożnik stawki:
+    - 0.50 jeśli streak strat >= STREAK_THRESHOLD
+    - 1.00 normalnie
+    """
+    streak = get_loss_streak(user_id)
+    if streak >= STREAK_THRESHOLD:
+        return STREAK_MULTIPLIER
+    return 1.0
+
+
+def get_weekly_drawdown(user_id: int = 1) -> float:
+    """
+    Procent straty bankrolla w ostatnich 7 dniach.
+    Zwraca wartość dodatnią = % straty, ujemną = % zysku.
+    """
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT new_balance FROM bankroll_history"
+            " WHERE user_id = ?"
+            " AND timestamp <= DATETIME('now', '-7 days')"
+            " ORDER BY timestamp DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return 0.0
+    balance_7d_ago = float(row["new_balance"])
+    current = get_current_bankroll(user_id)
+    if balance_7d_ago <= 0:
+        return 0.0
+    return (balance_7d_ago - current) / balance_7d_ago
+
+
+def check_weekly_alert(user_id: int = 1) -> bool:
+    """True jeśli tygodniowy drawdown przekracza WEEKLY_DRAWDOWN_ALERT_PCT."""
+    return get_weekly_drawdown(user_id) >= WEEKLY_DRAWDOWN_ALERT_PCT
+
+
 if __name__ == "__main__":
     init_bankroll_tables()
     print(f"Aktualny bankroll: {get_current_bankroll()} PLN")
+    streak = get_loss_streak()
+    mult = get_stake_multiplier()
+    print(f"Streak strat: {streak}, mnoznik stawki: {mult}")
+    dd = get_weekly_drawdown()
+    print(f"Tygodniowy drawdown: {dd:+.1%}")

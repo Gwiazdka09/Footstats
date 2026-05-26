@@ -696,13 +696,33 @@ def main():
     args = parser.parse_args()
 
     from footstats.config import AGENT_BANKROLL
-    from footstats.core.bankroll import get_current_bankroll
+    from footstats.core.bankroll import (
+        get_current_bankroll, check_daily_stop_loss,
+        get_stake_multiplier, check_weekly_alert, get_loss_streak,
+    )
     from footstats.utils.admin_user import resolve_admin_user_id
 
     admin_uid = resolve_admin_user_id()
     current_bankroll = get_current_bankroll(user_id=admin_uid)
     date_label = args.date or datetime.now().strftime("%Y-%m-%d")
     dry_tag    = "  [yellow]⚠ DRY-RUN[/yellow]" if args.dry_run else ""
+
+    # Stop-loss check
+    if not args.dry_run and check_daily_stop_loss(user_id=admin_uid):
+        console.print("[bold red]STOP-LOSS: dzienna strata >= 10% bankrolla — przerywam.[/bold red]")
+        return
+
+    # Streak detection
+    streak = get_loss_streak(user_id=admin_uid)
+    stake_mult = get_stake_multiplier(user_id=admin_uid)
+    if streak >= 3:
+        console.print(f"[yellow]STREAK: {streak} przegranych z rzędu → stawki x{stake_mult:.0%}[/yellow]")
+        args.stawka = round(args.stawka * stake_mult, 1)
+        args.stawka_b = round(args.stawka_b * stake_mult, 1)
+
+    # Weekly drawdown alert
+    if check_weekly_alert(user_id=admin_uid):
+        console.print("[bold yellow]ALERT: tygodniowy drawdown przekroczył 20% bankrolla![/bold yellow]")
 
     console.print()
     console.print(Panel(
