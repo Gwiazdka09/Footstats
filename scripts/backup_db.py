@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 DB_PATHS = [
     Path("data/footstats_backtest.db"),
-    Path("data/footstats.db"),
 ]
 BACKUP_DIR = Path("data/backups")
 MAX_BACKUPS = 30

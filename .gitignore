@@ -80,3 +80,6 @@ docs/superpowers/plans/
 # ── Node modules i cache builds
 src/footstats/gui/node_modules/
 .aider.tags.cache.v4/
+data/footstats.db
+data/footstats.db-wal
+data/footstats.db-shm
