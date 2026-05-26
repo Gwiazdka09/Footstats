@@ -1,13 +1,23 @@
 _DEFAULT_WEIGHTS = {"poisson": 0.45, "bzzoiro": 0.55}
 
 
+def get_weights_for_league(liga: str | None = None) -> dict:
+    """Return optimized per-league weights, fall back to default."""
+    try:
+        from footstats.core.ensemble_optimizer import load_weights
+        return load_weights(liga)
+    except Exception:
+        return _DEFAULT_WEIGHTS
+
+
 def ensemble_probs(
     p_poisson: dict,
     p_bzzoiro: dict,
     wagi: dict | None = None,
+    liga: str | None = None,
 ) -> dict:
-    """Ważona średnia prawdopodobieństw z dwóch modeli."""
-    w = wagi or _DEFAULT_WEIGHTS
+    """Ważona średnia prawdopodobieństw z dwóch modeli. Liga → per-league weights."""
+    w = wagi or get_weights_for_league(liga)
     wp = w.get("poisson", 0.45)
     wb = w.get("bzzoiro", 0.55)
 

@@ -965,7 +965,8 @@ def _oblicz_roznica_modeli(wyniki: list) -> None:
                     p_loss += p
 
         p_poisson = {"win": p_win, "draw": p_draw, "loss": p_loss}
-        p_ens = ensemble_probs(p_poisson, p_bzzoiro)
+        liga = k.get("liga") or None
+        p_ens = ensemble_probs(p_poisson, p_bzzoiro, liga=liga)
         k["roznica_modeli"] = round(get_roznica(p_ens, p_poisson, p_bzzoiro), 3)
 
 
