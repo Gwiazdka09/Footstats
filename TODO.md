@@ -1,119 +1,87 @@
-# FootStats TODO — Updated 2026-05-25
+# FootStats TODO — Updated 2026-05-26
 
 ## Completed Phases (Archive)
 
 ### Phase 1–5: ALL COMPLETE ✅
-**108 source modules, 53 test files**
+### Phase 6: HARDENING — COMPLETE ✅
+### Phase 7.1–7.6, 7.8: COMPLETE ✅
 
 ---
 
-## P0: KRYTYCZNE NAPRAWY (2026-05-25) ✅
+## P0: RECURRING — File Truncation Fix (2026-05-26) ✅
 
-- [x] **FIX** `daily_agent.py` — ucięty na linii 1286 → przywrócono z git ✅
-- [x] **FIX** `core/lambda_optimizer.py` — ucięty na linii 275 → przywrócono ✅
-- [x] **FIX** `api/main.py` — ucięty na linii 307 → przywrócono ✅ **← TO BLOKOWAŁO LOGOWANIE Admin_JG!**
+- [x] 10x src/ pliki przywrócone z git HEAD (config, daily_agent, lambda_optimizer, async_utils, response_cache, value_bet, api/main, db/migrations, bankroll, ensemble)
+- [x] 5x test files przywrócone (test_auth, test_coupon_tracker, test_daily_agent_faza, test_evening_agent, test_response_cache)
+- [x] Syntax verification: 0 errors across 108 modules
 
-**UWAGA:** `api/main.py` ucięty = SyntaxError = API nie startuje = logowanie niemożliwe.
-Plik naprawiony — wymaga `git commit + redeploy` aby przywrócić logowanie na produkcji.
-
----
-
-## Phase 6: HARDENING & RELIABILITY
-
-### P6.1: Brakujące timeout w requests — COMPLETE ✅
-Wszystkie pliki miały już timeout (weryfikacja + test_requests_timeout.py PASS 2026-05-25)
-
-### P6.2: Groq/RAG Feedback Refresh — COMPLETE ✅
-- [x] groq_lessons.json zaktualizowany 2026-05-25 (n=14,634 meczów) ✅
-- [x] RAG knowledge base aktywna (pobierz_rag_wzorce via SQLite ai_feedback) ✅
-- [x] Accuracy check: 42.4% win rate (14W/19L z 33 rozliczonych kuponów) — M0 baseline ✅
-- NOTE: Statusy kuponów niespójne (WIN/WON, LOSE/LOST) → do normalizacji w Phase 7
-
-### P6.3: Monitoring plików (zapobieganie obcinaniu) — COMPLETE ✅
-- [x] Dodać pre-commit hook sprawdzający syntax `py_compile` ✅ `.git/hooks/pre-commit`
-- [x] Integrity check w run_daily.bat ✅ KROK 0b — blokuje pipeline na SyntaxError
-- [x] FIX: `api/main.py` — usunięty duplikat ogona (linie 339–360) powodujący SyntaxError ✅
+**ROOT CAUSE:** Pliki regularnie się obcinają — pre-commit hook istnieje ale nie zapobiega obcinaniu przez zewnętrzne narzędzia. Potrzebny jest monitoring integralności plików.
 
 ---
 
-## Phase 7: ROADMAPA DO 55-70% ACCURACY 🎯
+## Phase 8: RELIABILITY & PERFORMANCE
 
-### Cel: Z obecnych ~50% overall → 55-60% overall, 70%+ na wyselekcjonowanych meczach
+### 8.1: Requests Timeout — COMPLETE ✅ (commit 401d25063)
+- [x] timeout=15 dodany do 10 plików (2 już miały, skip)
+- NOTE: ai/client.py zmieniony 120→15 — rozważyć przywrócenie 120 dla Ollama
 
-### 7.1: Systematyczny Backtest & Pomiar Accuracy (PRIORYTET #1) ✅
-- [x] `scripts/accuracy_report.py` — hit-rate per liga/typ/confidence/kupon-type + P&L (2026-05-26)
+### 8.2: SQLite Context Manager — COMPLETE ✅ (commit c5e8a22d5)
+- [x] probability_calibrator.py, ensemble_optimizer.py, dashboard.py → with statement
+
+### 8.3: Cleanup — COMPLETE ✅
+- [x] 11 dirs __pycache__ usunięte
+- [x] `data/.fuse_hidden*` — nie istnieją (Windows, FUSE nie dotyczy)
+- [x] `.git/index.lock` — nie istnieje
+
+### 8.4: Thread Safety Audit — COMPLETE ✅ (commit a3f6eff64)
+- [x] response_cache: async_wrapper + response_cache_info() wrapped in _CACHE_LOCK
+- [x] lambda_optimizer: duplikat __main__ block usunięty
+- NOTE: lambda_optimizer._cache double-checked locking OK (GIL gwarantuje atomowość)
+
+---
+
+## Phase 7 (continued): ACCURACY IMPROVEMENT
+
+### 7.7: Feature Engineering (P2)
+- [ ] xG z FBref/Understat (wymaga scrapera)
+- [ ] Forma domowa vs wyjazdowa oddzielnie
+- [ ] Odpoczynek (dni od ostatniego meczu)
+
+### 7.x: Accuracy Dashboard
+- [ ] Dashboard tab "Accuracy" w Streamlit
 - [ ] Automatyczny raport tygodniowy (weekly_report.py rozszerzenie)
-- [ ] Dashboard tab "Accuracy" w Streamlit z wykresami hit-rate
-
-### 7.2: Filtr Lig — Stawiaj TYLKO Gdzie Masz Edge (PRIORYTET #2) ✅
-- [x] `LIGI_WHITELIST` / `LIGI_BLACKLIST` / `LIGA_FILTER_ENABLED` → config.py (2026-05-26)
-- [x] `_pre_filtruj_ligi()` w daily_agent — odrzuca blacklist przed Groq (2026-05-26)
-
-### 7.3: Kalibracja Prawdopodobieństw (PRIORYTET #3) ✅
-- [x] `core/probability_calibrator.py` — Isotonic Regression (sklearn), fit/load/apply (2026-05-26)
-- [x] Integracja z daily_agent: `_dodaj_kelly` używa `calibrate_confidence()` zamiast raw % (2026-05-26)
-- [x] `data/calibration.json` generowany z 351 historycznych predykcji
-
-### 7.4: Poisson Bayesian Update (PRIORYTET #4) ✅
-- [x] `core/poisson_bayesian.py` — Dixon-Coles att/def + Bayesian prior shrinkage (2026-05-26)
-- [x] Recency: ostatnie 5 meczów 3x waga; `blend_with_classic()` do A/B testów
-- [ ] A/B test na backtest.db — do wykonania osobno
-
-### 7.5: Ensemble Weights Optimization (PRIORYTET #5) ✅
-- [x] `core/ensemble_optimizer.py` — log-loss grid search per liga (2026-05-26)
-- [x] `ensemble.py`: `get_weights_for_league()` + `liga` param w `ensemble_probs()` (2026-05-26)
-- [x] Integracja z `_oblicz_roznica_modeli()` w daily_agent.py
-
-### 7.6: Value Bet Filter (PRIORYTET #6) ✅
-- [x] `core/value_bet.py`: `calculate_ev()`, `is_value_bet()`, `filter_value_bets()` (2026-05-26)
-- [x] `_pre_filtruj_value_bet()` w daily_agent: EV>3% + Kelly>1% (2026-05-26)
-- [ ] CLV tracking (scrape kursy przy kickoff) — do zrobienia przy dodatkowej infrastrukturze
-- [ ] Dashboard: wykres EV vs P&L
-
-### 7.7: Feature Engineering (PRIORYTET #7)
-- [ ] xG z FBref/Understat (wymaga zewnętrznego scrapera)
-- [ ] Forma domowa vs wyjazdowa — częściowo w DomWyjazd class (form.py)
-- [ ] Odpoczynek (dni od ostatniego meczu), pogoda — do dodania
-
-### 7.8: Stop-Loss & Bankroll Protection ✅
-- [x] `bankroll.py`: `check_daily_stop_loss` (10%), `get_loss_streak`, `get_stake_multiplier` (50% po 3L) (2026-05-26)
-- [x] `check_weekly_alert` — drawdown >20% w tygodniu (2026-05-26)
-- [x] Integracja z daily_agent: stop-loss exit, streak → reduce stawki, weekly alert
+- [ ] A/B test Bayesian Poisson vs Classic na backtest.db
+- [ ] CLV tracking (scrape kursy przy kickoff)
+- [ ] EV vs P&L wykres w dashboard
 
 ---
 
 ## Proposed Tests
 
-- [x] test_response_cache_eviction.py ✅
-- [x] test_ram_cache_eviction.py ✅
-- [x] test_null_bytes_guard.py ✅
-- [ ] test_requests_timeout.py — grep requests bez timeout
-- [ ] test_accuracy_report.py — poprawność obliczeń hit-rate
-- [ ] test_probability_calibrator.py — Platt scaling correctness
-- [ ] test_poisson_bayesian.py — Bayesian update vs vanilla Poisson
+- [x] test_file_integrity.py — 10/10 pass (commit 24b3fc1eb) ✅
+- [x] test_requests_timeout.py — verify all requests have timeout ✅ (już istniał)
+- [x] test_accuracy_report.py — hit-rate calculation correctness ✅ (7 tests)
+- [x] test_probability_calibrator.py — Platt scaling correctness ✅ (10 tests)
+- [x] test_value_bet_filter.py — EV and Kelly calculations ✅ (13 tests)
+- [x] test_daily_agent_prefilter.py — pre_filtruj edge cases ✅ (13 tests)
+- [x] test_coupon_settlement_edge.py — oblicz_tip_correct edge cases ✅ (24 tests)
+- [ ] test_poisson_bayesian.py — Bayesian update vs vanilla
 - [ ] test_ensemble_optimizer.py — grid search convergence
-- [ ] test_value_bet_filter.py — CLV i EV calculations
-- [ ] test_daily_agent_prefilter.py — pre_filtruj_kursy edge cases
-- [ ] test_coupon_settlement_edge.py — partial settlement
 
 ---
 
-## Kamienie Milowe (Milestones)
+## Milestones
 
-| Milestone | Accuracy | Opis |
-|-----------|----------|------|
-| **M0 (current)** | ~50% overall | Działający pipeline, brak systematycznego pomiaru |
-| **M1** | 55% overall | Pomiar accuracy + filtr lig + kalibracja prob |
+| Milestone | Accuracy | Status |
+|-----------|----------|--------|
+| **M0** | ~42% overall | ✅ Current (baseline measured) |
+| **M1** | 55% overall | 🔄 In progress — calibration + filters active |
 | **M2** | 60% overall | Bayesian Poisson + ensemble weights + value filter |
 | **M3** | 65% selected | xG + feature engineering + stop-loss |
-| **M4** | 70% selected | Pełna optymalizacja + CLV tracking + 3 mies. track record |
-
-**Realistyczny timeline:** M1 za ~2-3 tygodnie, M2 za ~6 tygodni, M3 za ~3 miesiące, M4 za ~6 miesięcy.
+| **M4** | 70% selected | Full optimization + CLV + 3mo track record |
 
 ---
 
 ## Blockers
-- **KRYTYCZNY**: `api/main.py` naprawiony ale nie zcommitowany — Admin_JG nie może się zalogować dopóki nie deploy
-- **P6.1**: 15x requests bez timeout = ryzyko hang
-- **P6.2**: RAG lessons stale 33 dni
-- **P6.3**: Pliki regularnie się obcinają — potrzebny integrity check
+- **git index.lock** — wymaga ręcznego `del F:\bot\.git\index.lock` na Windows
+- **File truncation** — rekurencyjny problem, pre-commit hook nie wystarczy
+- **Accuracy 42%** — poniżej M1 target, wymaga dalszej kalibracji
