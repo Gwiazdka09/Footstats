@@ -43,15 +43,15 @@
 
 ### 7.7: Feature Engineering (P2)
 - [ ] xG z FBref/Understat (wymaga scrapera)
-- [ ] Forma domowa vs wyjazdowa oddzielnie
-- [ ] Odpoczynek (dni od ostatniego meczu)
+- [x] Forma domowa vs wyjazdowa oddzielnie — zaimplementowana w core/form.py ✅
+- [x] Odpoczynek (dni od ostatniego meczu) — HeurystaZmeczeniaRotacji w core/fatigue.py ✅
 
 ### 7.x: Accuracy Dashboard
-- [ ] Dashboard tab "Accuracy" w Streamlit
-- [ ] Automatyczny raport tygodniowy (weekly_report.py rozszerzenie)
-- [ ] A/B test Bayesian Poisson vs Classic na backtest.db
-- [ ] CLV tracking (scrape kursy przy kickoff)
-- [ ] EV vs P&L wykres w dashboard
+- [x] Dashboard tab "Accuracy (A/B)" w Streamlit — sekcja 8 ✅ (commit fa4f9da96)
+- [x] Automatyczny raport tygodniowy (weekly_report.py rozszerzenie) — get_stats_per_liga() ✅
+- [x] A/B test Bayesian Poisson vs Classic na backtest.db — dashboard sekcja 8 ✅
+- [ ] CLV tracking (scrape kursy przy kickoff) — wymaga scrapera
+- [x] EV vs P&L wykres w dashboard — dashboard sekcja 8 ✅
 
 ---
 
@@ -64,8 +64,8 @@
 - [x] test_value_bet_filter.py — EV and Kelly calculations ✅ (13 tests)
 - [x] test_daily_agent_prefilter.py — pre_filtruj edge cases ✅ (13 tests)
 - [x] test_coupon_settlement_edge.py — oblicz_tip_correct edge cases ✅ (24 tests)
-- [ ] test_poisson_bayesian.py — Bayesian update vs vanilla
-- [ ] test_ensemble_optimizer.py — grid search convergence
+- [x] test_poisson_bayesian.py — Bayesian update vs vanilla ✅ (18 tests, commit fad487d93)
+- [x] test_ensemble_optimizer.py — grid search convergence ✅ (13 tests, commit fad487d93)
 
 ---
 
