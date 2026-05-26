@@ -1,40 +1,26 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-05-25 20:00  
+**Last Updated:** 2026-05-26 (auto-audit)  
 **Current Version:** v3.4-stable  
-**Build Status:** ⚠️ Phase 5 Complete — 3 pliki wymagały naprawy (ucięte)  
-**System State:** Production-ready po naprawach — daily_agent, lambda_optimizer, api/main.py restored
+**Build Status:** ⚠️ 10 plików było obciętych — przywrócono z git HEAD  
+**System State:** Production-ready po naprawach
 
 ---
 
-## CRITICAL ISSUES STATUS (2026-05-25)
+## CRITICAL ISSUES STATUS (2026-05-26)
 
 | Problem | Status | Resolution |
 |---------|--------|------------|
-| `daily_agent.py` ucięty (1286/1330 linii) | ✅ FIXED | Przywrócono brakujące 44 linie z git HEAD |
-| `core/lambda_optimizer.py` ucięty (275/293) | ✅ FIXED | Przywrócono CLI block z git HEAD |
-| `api/main.py` ucięty (307/337) | ✅ FIXED | Przywrócono SW + uvicorn block z git HEAD |
-| `response_cache.py` eviction functions | ✅ FIXED | Restored from HEAD, commit 2c62f8dfc |
-| NULL bytes in analyzer.py + async_utils.py | ✅ FIXED | Syntax verified, committed |
-| pyproject.toml dead deps | ✅ FIXED | psycopg2/sqlalchemy/alembic → [cloud] optional |
-| `_RAM_CACHE` eviction | ✅ FIXED | MAX_ENTRIES=200, LRU logic added |
-| 209x bare except | ✅ FIXED | All resolved, verified 0 bare excepts in top 5 files |
-| 15x requests bez timeout | 🟡 OPEN | Zidentyfikowano w 9 plikach — wymaga dodania timeout=15 |
-| groq_lessons.json stale | 🟡 STALE | Ostatnia aktualizacja ~33 dni temu |
-
----
-
-## RECENT MILESTONES
-
-### Phase 5 Production Integration — 100% COMPLETE ✅
-- **5.1** response_cache.py restored ✅
-- **5.2** Checkpoint recovery + cleanup ✅
-- **5.3** Prometheus metrics middleware + /metrics ✅
-- **5.4** Injury lambda correction ✅
-- **5.5** Operator Agent + Kreator ✅
-
-### Phase 4 Cleanup Sprint — 100% COMPLETE ✅
-- Wszystkie 13 sub-tasków zakończone (P4.1–P4.13)
+| 8x src/ pliki obcięte (config, daily_agent, lambda_optimizer, async_utils, response_cache, value_bet, api/main, db/migrations) | ✅ FIXED | Przywrócono z git HEAD (audit 2026-05-26) |
+| 2x dodatkowe obcięcia (bankroll, ensemble) | ✅ FIXED | Przywrócono z git HEAD |
+| 5x test files obcięte (test_auth, test_coupon_tracker, test_daily_agent_faza, test_evening_agent, test_response_cache) | ✅ FIXED | Przywrócono z git HEAD |
+| 16x requests.get/post bez timeout | ✅ FIXED | Dodano timeout=15 do 10 plików (commit 401d25063) |
+| 3x sqlite3.connect bez context manager | ✅ FIXED | Zamieniono na with (commit c5e8a22d5) |
+| `__pycache__/` w root (2MB, stare .pyc) | ✅ FIXED | 11 dirs usunięte |
+| test_file_integrity.py | ✅ NEW | 10/10 pass — sprawdza syntax + min_lines (commit 24b3fc1eb) |
+| `data/.fuse_hidden*` pliki (x12) | 🟡 CLEANUP | Orphaned FUSE handles |
+| groq_lessons.json | ✅ OK | Zaktualizowany 2026-05-25 |
+| git index.lock | 🟡 BLOCKED | Nie można commitować — wymaga ręcznego usunięcia |
 
 ---
 
@@ -42,51 +28,45 @@
 
 | Metric | Status | Value |
 |--------|--------|-------|
-| **Syntax** | ✅ Fixed | 3 pliki naprawione (ucięte), reszta OK |
-| **Source Files** | ✅ | ~108 .py modules |
-| **Tests** | ✅ Solid | 53 test files |
-| **AI Accuracy** | ✅ Stable | ~75% on 75%+ confidence |
-| **Automation** | ✅ Full | Daily agent operational |
-| **API Cache** | ✅ Working | response_cache eviction + RAM cache LRU |
-| **DB** | ✅ OK | Neon PG (prod) + SQLite (backtest) + dual-dialect migrations |
-| **HTTP Timeouts** | 🟡 Missing | 15 wywołań requests.get/post bez timeout |
-| **RAG/Groq** | 🟡 Stale | Lessons not updated ~33 days |
+| **Syntax** | ✅ OK | 0 SyntaxError po przywróceniu (108 modułów) |
+| **Source Files** | ✅ | ~108 .py modules w src/footstats/ |
+| **Tests** | ✅ | 53 test files w tests/ |
+| **Scripts** | ✅ | 13 utility scripts w scripts/ |
+| **AI Accuracy** | 🟡 | ~42.4% win rate (14W/19L z 33 kuponów) — poniżej M1 target 55% |
+| **Automation** | ✅ | Daily agent + evening agent operational |
+| **API** | ✅ | FastAPI 17 endpoints |
+| **DB** | ✅ | Neon PG (prod) + SQLite (backtest) |
+| **HTTP Timeouts** | ✅ Fixed | timeout=15 dodany do wszystkich requests (commit 401d25063) |
+| **SQLite** | ✅ Fixed | context manager w 3 plikach (commit c5e8a22d5) |
+| **Thread Safety** | 🟡 | 10x global mutation w production code |
+| **Duplicate Functions** | 🟡 | 6x `main`, 3x `zaloguj`, 3x `_zapisz_cache` |
 
 ---
 
-## CURRENT FOCUS (2026-05-25)
+## CURRENT FOCUS
 
-**NAPRAWIONE DZIŚ:**
-1. ✅ `daily_agent.py` — przywrócono _zapisz_kupon_do_db() + if __name__ block
-2. ✅ `core/lambda_optimizer.py` — przywrócono CLI block
-3. ✅ `api/main.py` — przywrócono service worker + uvicorn
+**NAPRAWIONE 2026-05-26 (auto-audit):**
+1. ✅ 10 plików .py przywróconych z git HEAD (obcięte ogony)
+2. ✅ 5 plików testowych przywróconych
+3. ✅ Pełna weryfikacja syntax — 0 błędów
 
-**OTWARTE PROBLEMY (P1):**
-1. 🟡 **15x brakujące timeout w requests** — ryzyko hang w produkcji
-2. 🟡 **RAG/Groq lessons stale** — ~33 dni bez aktualizacji feedback loop
-3. 🟡 **Coupon Settlement** — Kupon #12 ACTIVE since 2026-04-19
-
-**PHASE 6 (P2):**
-1. Dodaj timeout=15 do wszystkich requests.get/post
-2. Odśwież groq_lessons.json z ostatnich kuponów
-3. Nowe testy: referee_db_conn_cleanup, daily_agent_prefilter, coupon_settlement_edge
+**OTWARTE PROBLEMY:**
+1. 🟡 **Thread safety** — 10x global mutation bez lock
+2. 🟡 **Accuracy 42.4%** — poniżej M1 target (55%)
+3. 🟡 **ai/client.py timeout** — zmieniony 120→15, może być za krótki dla wolnych LLM
+4. 🟡 **File truncation** — rekurencyjny problem, potrzebny root cause analysis
+5. 🟡 **Accuracy 42.4%** — poniżej M1 target (55%)
 
 ---
 
-## DEPLOYMENT LOGS
+## DEPLOYMENT STATUS
 
-**Commit History (recent):**
-- `ce528cf86` — Phase 5 COMPLETE
-- `2588ba680` — checkpoint + prometheus + injury lambda
-- `b227adf3f` — null bytes guard test suite
-- `d4cc2dfb5` — Phase 4 Cleanup Sprint COMPLETE
-
-**System Status:**
 - **Daily Agent**: ✅ Operational (syntax fixed)
 - **Dashboard**: ✅ Streamlit live
 - **API**: ✅ 17 endpoints (api/main.py fixed)
 - **Pipeline**: ✅ run_daily.bat → backup → draft-wait-final → settlement
 - **Operator**: ✅ python -m footstats.operator_agent
-- **Lambda Optimizer**: ✅ CLI restored (syntax fixed)
+- **Lambda Optimizer**: ✅ CLI restored
 - **DB**: ✅ SQLite (dev) + PostgreSQL Neon (prod)
-- **Cache**: ✅ HTTP + RAM with TTL + LRU eviction
+- **Cache**: ✅ HTTP + RAM with TTL + LRU eviction (MAX_ENTRIES=500)
+- **Pre-commit hook**: ✅ py_compile check active
