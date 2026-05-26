@@ -88,12 +88,9 @@ def optimize_all_leagues() -> dict[str, dict]:
     Compute optimal weights per league. Returns mapping:
     {league_name: {"poisson": w1, "bzzoiro": w2}}
     """
-    conn = sqlite3.connect(_DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
+    with sqlite3.connect(_DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
         by_league = _load_predictions_by_league(conn)
-    finally:
-        conn.close()
 
     results: dict[str, dict] = {"_default": _DEFAULT_WEIGHTS}
     for league, records in by_league.items():

@@ -23,15 +23,12 @@ _FALLBACK_TABLE: dict[int, float] = {
 
 def _load_calibration_data() -> tuple[list[float], list[float]]:
     """Load (predicted, actual) pairs from DB predictions table."""
-    conn = sqlite3.connect(_DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
+    with sqlite3.connect(_DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
         rows = conn.execute(
             "SELECT ai_confidence, tip_correct FROM predictions "
             "WHERE tip_correct IS NOT NULL AND ai_confidence > 0"
         ).fetchall()
-    finally:
-        conn.close()
     predicted = [r["ai_confidence"] / 100.0 for r in rows]
     actual = [float(r["tip_correct"]) for r in rows]
     return predicted, actual

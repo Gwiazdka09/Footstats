@@ -28,12 +28,9 @@ def _conn(db: Path):
     if not db.exists():
         yield None
         return
-    conn = sqlite3.connect(db)
-    conn.row_factory = sqlite3.Row
-    try:
+    with sqlite3.connect(db) as conn:
+        conn.row_factory = sqlite3.Row
         yield conn
-    finally:
-        conn.close()
 
 
 def _load_predictions(days: int = 90) -> pd.DataFrame:
