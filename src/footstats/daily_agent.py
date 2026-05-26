@@ -622,9 +622,14 @@ def _dodaj_kelly(dane: dict, bankroll: float) -> None:
         multiplier = 1.0
     effective_bankroll = bankroll * multiplier
 
+    try:
+        from footstats.core.probability_calibrator import calibrate_confidence
+    except ImportError:
+        calibrate_confidence = lambda pct: pct / 100.0  # noqa: E731
+
     for kupon_key in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
         for z in dane.get(kupon_key, {}).get("zdarzenia", []):
-            p    = (z.get("pewnosc_pct") or 50) / 100.0
+            p    = calibrate_confidence(z.get("pewnosc_pct") or 50)
             odds = z.get("kurs") or 1.0
             try:
                 z["kelly_stake"] = kelly_stake(p, odds, bankroll=effective_bankroll)
@@ -632,7 +637,7 @@ def _dodaj_kelly(dane: dict, bankroll: float) -> None:
                 z["kelly_stake"] = 1.0
 
     for row in dane.get("top3", []):
-        p    = (row.get("pewnosc_pct") or 50) / 100.0
+        p    = calibrate_confidence(row.get("pewnosc_pct") or 50)
         odds = row.get("kurs") or 1.0
         try:
             row["kelly_stake"] = kelly_stake(p, odds, effective_bankroll)
