@@ -810,6 +810,15 @@ def main():
                 f"{n_przed_liga} → {len(wyniki)} kandydatów[/dim]"
             )
 
+    # -- Pre-filtr value bet: EV > 3% i Kelly > 1% (tylko kandydaci z kursami) ──
+    n_przed_ev = len(wyniki)
+    wyniki = _pre_filtruj_value_bet(wyniki)
+    if len(wyniki) < n_przed_ev:
+        console.print(
+            f"[dim]Pre-filtr value bet (EV/Kelly): "
+            f"{n_przed_ev} → {len(wyniki)} kandydatów[/dim]"
+        )
+
     # -- Faza draft/final: enrichment składów/sędziego (Decision Score → po Groq) ──
     if args.faza:
         _sep(f"FAZA {args.faza.upper()} — Składy + Sędzia (API-Football)")
@@ -1153,6 +1162,14 @@ def _pre_filtruj_tokenow(kandydaci: list[dict]) -> list[dict]:
             wynik.append(k)
     return wynik
 
+
+
+def _pre_filtruj_value_bet(kandydaci: list[dict]) -> list[dict]:
+    """Odrzuca kandydatów bez edge: EV < 3% lub Kelly < 1% (tylko gdy odds dostępne)."""
+    from footstats.core.value_bet import filter_value_bets
+    from footstats.core.probability_calibrator import calibrate_candidates
+    calibrate_candidates(kandydaci)
+    return filter_value_bets(kandydaci)
 
 
 def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
