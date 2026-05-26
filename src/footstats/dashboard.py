@@ -499,6 +499,31 @@ elif sekcja == "Accuracy (A/B)":
                     pivot = grp_l.pivot(index="league", columns="model", values="acc_pct").reset_index()
                     st.dataframe(pivot, use_container_width=True)
 
+    # CLV (Closing Line Value)
+    st.markdown("---")
+    st.markdown("### CLV — Closing Line Value")
+    try:
+        from footstats.core.clv_tracker import get_clv_report
+        clv_data = get_clv_report(days=zakres)
+        overall = clv_data.get("overall")
+        if overall:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Zakładów z CLV", overall["n"])
+            c2.metric("CLV avg", f"{overall['clv_avg']:+.1f}%",
+                      delta_color="normal" if overall["clv_avg"] >= 0 else "inverse")
+            c3.metric("% zakładów z +CLV", f"{overall['positive_pct']}%")
+            liga_stats = clv_data.get("per_liga", [])
+            if liga_stats:
+                df_clv = pd.DataFrame(liga_stats)
+                st.dataframe(df_clv.rename(columns={
+                    "liga": "Liga", "n": "N", "clv_avg": "CLV avg %",
+                    "positive_pct": "% pozytywnych"
+                }), use_container_width=True)
+        else:
+            st.info("Brak danych CLV. Uruchom `record_closing_odds()` po kickoffie.")
+    except Exception as _e:
+        st.info(f"CLV tracker niedostępny: {_e}")
+
     # EV vs P&L scatter (używa głównych predictions)
     st.markdown("---")
     st.markdown("### EV vs P&L (predykcje z ai_confidence + odds)")
