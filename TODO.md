@@ -40,74 +40,45 @@ Wszystkie pliki miały już timeout (weryfikacja + test_requests_timeout.py PASS
 
 ### Cel: Z obecnych ~50% overall → 55-60% overall, 70%+ na wyselekcjonowanych meczach
 
-### 7.1: Systematyczny Backtest & Pomiar Accuracy (PRIORYTET #1)
-**Bez pomiaru nie wiesz co poprawiać.**
-- [ ] Skrypt `scripts/accuracy_report.py` — raport hit-rate z backtest.db:
-  - Per liga (Ekstraklasa, Premier League, Serie A...)
-  - Per typ zakładu (1, 2, X, Over 2.5, BTTS...)  
-  - Per confidence band (50-60%, 60-70%, 70-80%, 80%+)
-  - Per source (Bzzoiro ML vs API-Football vs Poisson)
-  - Wykres kalibracji: predicted prob vs actual hit-rate
+### 7.1: Systematyczny Backtest & Pomiar Accuracy (PRIORYTET #1) ✅
+- [x] `scripts/accuracy_report.py` — hit-rate per liga/typ/confidence/kupon-type + P&L (2026-05-26)
 - [ ] Automatyczny raport tygodniowy (weekly_report.py rozszerzenie)
 - [ ] Dashboard tab "Accuracy" w Streamlit z wykresami hit-rate
 
-### 7.2: Filtr Lig — Stawiaj TYLKO Gdzie Masz Edge (PRIORYTET #2)
-**Nie wszystkie ligi są przewidywalne jednakowo.**
-- [ ] Na podstawie accuracy_report → zidentyfikuj ligi gdzie hit-rate > 55%
-- [ ] Dodaj `LIGI_WHITELIST` do config.py (ligi z udowodnioną edge)
-- [ ] Dodaj `LIGI_BLACKLIST` do config.py (ligi z hit-rate < 45%)
-- [ ] Pre-filtr w daily_agent: odrzucaj mecze z blacklist PRZED Groq
-- [ ] Cel: mniej kuponów, ale wyższy hit-rate per kupon
+### 7.2: Filtr Lig — Stawiaj TYLKO Gdzie Masz Edge (PRIORYTET #2) ✅
+- [x] `LIGI_WHITELIST` / `LIGI_BLACKLIST` / `LIGA_FILTER_ENABLED` → config.py (2026-05-26)
+- [x] `_pre_filtruj_ligi()` w daily_agent — odrzuca blacklist przed Groq (2026-05-26)
 
-### 7.3: Kalibracja Prawdopodobieństw (PRIORYTET #3)
-**Model mówi 70% a trafia 55% = źle skalibrowany.**
-- [ ] Platt Scaling / Isotonic Regression na historycznych predykcjach
-- [ ] Moduł `core/probability_calibrator.py`:
-  - fit() na historii (predicted_prob, actual_outcome)
-  - transform() koryguje pewnosc_pct przed Kelly
-- [ ] Integracja z daily_agent po Groq, przed Kelly
-- [ ] Test: porównaj Kelly P&L ze i bez kalibracji na backteście
+### 7.3: Kalibracja Prawdopodobieństw (PRIORYTET #3) ✅
+- [x] `core/probability_calibrator.py` — Isotonic Regression (sklearn), fit/load/apply (2026-05-26)
+- [x] Integracja z daily_agent: `_dodaj_kelly` używa `calibrate_confidence()` zamiast raw % (2026-05-26)
+- [x] `data/calibration.json` generowany z 351 historycznych predykcji
 
-### 7.4: Poisson Bayesian Update (PRIORYTET #4)
-**Poisson z jedną lambdą jest zbyt prosty.**
-- [ ] Uwzględnij siłę ataku vs siłę obrony (nie jedną średnią)
-- [ ] Bayesian prior z historii ligi (średnia goli w lidze jako prior)
-- [ ] Weighting: ostatnie 5 meczów > ostatnie 20 meczów
-- [ ] Moduł `core/poisson_bayesian.py` — rozszerza obecny poisson.py
-- [ ] A/B test: stary Poisson vs Bayesian na 100 meczach z backtest.db
+### 7.4: Poisson Bayesian Update (PRIORYTET #4) ✅
+- [x] `core/poisson_bayesian.py` — Dixon-Coles att/def + Bayesian prior shrinkage (2026-05-26)
+- [x] Recency: ostatnie 5 meczów 3x waga; `blend_with_classic()` do A/B testów
+- [ ] A/B test na backtest.db — do wykonania osobno
 
-### 7.5: Ensemble Weights Optimization (PRIORYTET #5)
-**Obecnie ensemble = 50/50 Poisson + Bzzoiro. Wagi powinny być dynamiczne.**
-- [ ] Dla każdej ligi oblicz optimal weight (Poisson vs Bzzoiro vs API-Football)
-- [ ] Moduł `core/ensemble_optimizer.py`:
-  - grid search na historii: w_poisson * P_poisson + w_bzzoiro * P_bzzoiro
-  - minimize log-loss na validation set
-- [ ] Zapisuj optymalne wagi per liga w data/ensemble_weights.json
-- [ ] Integracja z _oblicz_roznica_modeli() w daily_agent.py
+### 7.5: Ensemble Weights Optimization (PRIORYTET #5) ✅
+- [x] `core/ensemble_optimizer.py` — log-loss grid search per liga (2026-05-26)
+- [x] `ensemble.py`: `get_weights_for_league()` + `liga` param w `ensemble_probs()` (2026-05-26)
+- [x] Integracja z `_oblicz_roznica_modeli()` w daily_agent.py
 
-### 7.6: Value Bet Filter (PRIORYTET #6)
-**Nie stawiaj na mecze bez value — nawet jeśli masz 70% pewności.**
-- [ ] Rozbuduj `core/value_bet.py`:
-  - Closing Line Value (CLV) — porównaj swój kurs z kursem zamykającym
-  - Expected Value > 3% minimalny próg
-  - Kelly fraction > 1% minimum
-- [ ] Tracking CLV: scrape kursy w momencie kickoff i porównaj z draft
-- [ ] Dashboard: wykres EV vs actual P&L per tydzień
+### 7.6: Value Bet Filter (PRIORYTET #6) ✅
+- [x] `core/value_bet.py`: `calculate_ev()`, `is_value_bet()`, `filter_value_bets()` (2026-05-26)
+- [x] `_pre_filtruj_value_bet()` w daily_agent: EV>3% + Kelly>1% (2026-05-26)
+- [ ] CLV tracking (scrape kursy przy kickoff) — do zrobienia przy dodatkowej infrastrukturze
+- [ ] Dashboard: wykres EV vs P&L
 
 ### 7.7: Feature Engineering (PRIORYTET #7)
-**Dodaj dane które model jeszcze nie widzi.**
-- [ ] xG (Expected Goals) z FBref/Understat — lepsze niż surowe gole
-- [ ] Forma domowa vs wyjazdowa osobno (nie łączona)
-- [ ] Motywacja: degradacja/awans/puchar — wpływa na wynik
-- [ ] Odpoczynek: dni od ostatniego meczu (zmęczenie)
-- [ ] Pogoda: deszcz/wiatr wpływa na Under/Over
+- [ ] xG z FBref/Understat (wymaga zewnętrznego scrapera)
+- [ ] Forma domowa vs wyjazdowa — częściowo w DomWyjazd class (form.py)
+- [ ] Odpoczynek (dni od ostatniego meczu), pogoda — do dodania
 
-### 7.8: Stop-Loss & Bankroll Protection
-**Nawet 60% accuracy = bankrut jeśli stawki źle dobrane.**
-- [ ] Dzienny stop-loss: max 3 kupony/dzień, max 10% bankroll/dzień
-- [ ] Streak detection: po 3 przegranych z rzędu → obniż stawki 50%
-- [ ] Rozbuduj calibration.py o rolling window (ostatnie 20 kuponów ważniejsze)
-- [ ] Dashboard: alert gdy bankroll spadnie > 20% w tygodniu
+### 7.8: Stop-Loss & Bankroll Protection ✅
+- [x] `bankroll.py`: `check_daily_stop_loss` (10%), `get_loss_streak`, `get_stake_multiplier` (50% po 3L) (2026-05-26)
+- [x] `check_weekly_alert` — drawdown >20% w tygodniu (2026-05-26)
+- [x] Integracja z daily_agent: stop-loss exit, streak → reduce stawki, weekly alert
 
 ---
 
