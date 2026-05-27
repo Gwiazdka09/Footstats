@@ -1,23 +1,29 @@
-# ⚽ FootStats v3.3 — Ultra-Skeptical AI & Autonomous Prediction Engine
+# ⚽ FootStats v3.4 — Autonomous AI Soccer Prediction Engine
 
 [![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green.svg)](https://fastapi.tiangolo.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32-ff4b4b.svg)](https://streamlit.io/)
 [![Playwright](https://img.shields.io/badge/Playwright-1.40-45ba4b.svg)](https://playwright.dev/)
+[![Tests](https://img.shields.io/badge/tests-150%2B-brightgreen.svg)](tests/)
 
-**FootStats** to zaawansowany system autonomicznego typowania wyników piłkarskich, łączący klasyczną statystykę (Poisson) z nowoczesnym Machine Learningiem i agentami AI (LLM). Projekt został zaprojektowany z myślą o pełnej automatyzacji — od pobierania danych i analizy składów, przez generowanie kuponów, aż po rozliczanie wyników i naukę na własnych błędach (RAG Feedback Loop).
+**FootStats** to autonomiczny system typowania piłkarskiego łączący statystykę Bayesowską (Poisson), ML (CatBoost/Bzzoiro), analizę xG oraz LLM (Groq/Llama 3.1). Działa w pełni bezobsługowo: scraping → analiza → generowanie kuponu → rozliczenie → nauka na błędach.
 
 ---
 
-## 🚀 Dlaczego ten projekt? (Dla Rekrutera)
+## 🚀 Dla Rekrutera
 
-Ten projekt demonstruje umiejętności w kluczowych obszarach nowoczesnej inżynierii oprogramowania:
-- **Autonomous Agents**: System działa bezobsługowo dzięki schedulerowi i logice "Draft -> Final", która uwzględnia składy meczowe 70 min przed gwizdkiem.
-- **RAG & AI Feedback Loop**: AI (Groq/Llama 3.1) analizuje przegrane kupony, wyciąga wnioski i zapisuje je w bazie wektorowej, aby nie powtórzyć tych samych błędów w przyszłości.
-- **Advanced Scraping**: Wykorzystanie Playwrighta do omijania zabezpieczeń i pobierania danych z dynamicznych witryn (Superbet, FlashScore) oraz bezpośrednie integracje z API.
-- **Full-Stack Insights**: Backend w FastAPI, frontend statystyk w Streamlit, baza danych SQLite i pełna konteneryzacja (Docker).
-- **Quality Assurance**: Solidny zestaw testów (pytest) pokrywający krytyczną logikę matematyczną i integracje.
+Projekt demonstruje zaawansowane techniki inżynierii oprogramowania:
+
+| Obszar | Implementacja |
+|--------|--------------|
+| **Autonomous Agents** | Scheduler Draft→Final, Evening Agent (23:00), Operator Agent |
+| **RAG Feedback Loop** | Groq analizuje przegrane kupony → wektory → kontekst następnej predykcji |
+| **Feature Engineering** | Poisson + xG (Understat) + forma H/A + zmęczenie + kontuzje + sędzia |
+| **Bayesian Statistics** | Walk-forward kalibracja modelu, ensemble Poisson+ML, CLV tracking |
+| **Advanced Scraping** | Playwright (Superbet, FlashScore, STS), requests (Understat, Bzzoiro, API-Football) |
+| **Full-Stack** | FastAPI REST + Streamlit dashboard + SQLite + Cloud Run deployment |
+| **Quality** | 150+ testów pytest, regression gate na broad-except, version consistency CI |
 
 ---
 
@@ -25,106 +31,137 @@ Ten projekt demonstruje umiejętności w kluczowych obszarach nowoczesnej inżyn
 
 ```mermaid
 graph TD
-    A[Daily Agent Scheduler] -->|08:00| B(Draft Phase)
-    A -->|Match -70min| C(Final Phase)
-    
+    A[daily_agent_scheduler] -->|08:00 Draft| B(Pobierz kandydatów)
+    A -->|Match -70min Final| C(Wzbogać składy + sędzia)
+
     subgraph "Data Sources"
         D[API-Football]
-        E[Bzzoiro ML]
+        E[Bzzoiro ML / CatBoost]
         F[Playwright Scrapers]
+        G[Understat xG]
     end
-    
-    B --> D
-    B --> E
-    
-    C --> F
-    C --> G[Groq AI Analyzer]
-    
-    G -->|Context| H[(RAG: Lessons Learned)]
-    G --> I[Coupon Generation]
-    
-    I --> J[(SQLite DB)]
-    J --> K[Live Dashboard]
-    J --> L[FastAPI /api]
+
+    B --> D & E
+    C --> F & D
+
+    B --> H[Poisson Bayesian]
+    G -->|20% blend| H
+    H --> I[Groq AI Analyzer]
+
+    I -->|lekcje| J[(RAG: Lessons DB)]
+    J -->|kontekst| I
+    I --> K[Coupon Generation]
+
+    K --> L[(footstats_backtest.db)]
+    L --> M[Streamlit Dashboard]
+    L --> N[FastAPI /api]
+
+    O[Evening Agent 23:00] --> L
+    O -->|CLV| P[API-Football /odds]
+    O -->|rozliczenie| L
 ```
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Core**: Python 3.11+
-- **AI/ML**: Groq (Llama-3.1-70B/8B), CatBoost (Bzzoiro), Poisson Distribution
-- **Scraping**: Playwright, BeautifulSoup4
-- **API/Web**: FastAPI, Streamlit, Uvicorn
-- **Storage**: SQLite, Pandas, NumPy
-- **Automation**: Windows Task Scheduler / Cron
-- **DevOps**: Docker, Docker Compose, Sentry
+| Warstwa | Technologia |
+|---------|-------------|
+| **AI / ML** | Groq (Llama 3.1 70B/8B), CatBoost (Bzzoiro), Poisson Bayesian, Ensemble |
+| **Feature Eng.** | xG (Understat), forma H/A (`core/form.py`), zmęczenie (`core/fatigue.py`), kontuzje |
+| **Scraping** | Playwright, requests + BS4, Understat JSON, API-Football v3 |
+| **Backend** | FastAPI, Uvicorn, SQLite (WAL), Pydantic v2 |
+| **Frontend** | Streamlit, vis-network (Brain Graph), Rich (CLI) |
+| **Tracking** | CLV (Closing Line Value), A/B accuracy tab, weekly per-liga raport |
+| **Ops** | Windows Task Scheduler, Cloud Run (GCP), Docker, Sentry |
 
 ---
 
 ## 🌟 Główne Funkcje
 
-- **Ultra-Skeptical AI Analyzer** – Groq nie szuka "dlaczego wygrają", ale "dlaczego mogą przegrać". Każdy typ posiada obowiązkową sekcję analizy ryzyka.
-- **BetBuilder Engine** – Algorytm generujący kombinacje zdarzeń (np. 1X + Over 2.5 + Player Shots) z obliczonym EV.
-- **Referee Integration** – Statystyki sędziów (żółte kartki, rzuty karne) są wstrzykiwane do kontekstu AI.
-- **Kelly Criterion v2** – Dynamiczne zarządzanie kapitałem uwzględniające aktualną formę bota i hit-rate.
-- **Automated Settlement** – System sam sprawdza wyniki meczów i rozlicza bankroll w bazie danych.
+### Predykcja
+- **Bayesian Poisson v2.6** — walk-forward kalibracja biasu, blending 20% xG z Understat
+- **Ensemble Model** — Poisson + Bzzoiro CatBoost, `roznica_modeli` jako feature pewności
+- **xG Integration** — Understat scraper (bezpłatny), 6h cache, prefetch przed pętlą predykcji
+- **Feature Engineering** — forma domowa/wyjazdowa, H2H patent, zmęczenie, sędzia, kontuzje, murawa
 
----
+### Zarządzanie Ryzykiem
+- **Kelly Criterion v2** — dynamiczne stawki na podstawie bankrollu i hit-rate
+- **Stop-Loss** — dzienny (−10% bankrollu) + streak detection (−stawki przy 3+ z rzędu)
+- **Value Bet Filter** — EV > 3%, Kelly > 1%, pre-filtr przed Groq (oszczędność tokenów)
 
-## 🧠 "Second Mind" — AI Knowledge Graph
+### Automatyzacja
+- **Draft Phase (08:00)** — kandydaci z Bzzoiro + API-Football Ekstraklasa, Poisson, Groq
+- **Final Phase (mecz −70 min)** — składy z API-Football, decyzja kuponu, wysyłka Telegram
+- **Evening Agent (23:00)** — rozliczenie ACTIVE kuponów, CLV capture, auto-trainer po 20+ wynikach
+- **RAG Feedback Loop** — post-match AI analiza porażek → wektory → kontekst
 
-FootStats posiada wbudowany system wizualizacji wiedzy, który w czasie rzeczywistym pokazuje strukturę systemu oraz **lekcje wyciągnięte z ostatnich meczów**.
-
-- **Lokalizacja**: `brain_graph.html` (otwórz w przeglądarce)
-- **Funkcja**: Dynamiczne mapowanie wniosków (RAG) z bazy SQLite na graf relacji między drużynami, sędziami i strategiami.
-- **Premium UI**: Wykorzystuje bibliotekę `vis-network` z customowym, "hakerskim" motywem dark-mode.
+### Monitoring
+- **CLV Tracking** — automatyczny zapis closing odds z API-Football po każdym meczu
+- **Dashboard A/B** — porównanie accuracy wariantu A vs B
+- **Weekly Report** — skuteczność per liga, ROI, accuracy trend
+- **Second Mind Graph** — vis-network wizualizacja wiedzy bota (`brain_graph.html`)
 
 ---
 
 ## 📦 Struktura Projektu
 
 ```plaintext
-FootStats/
-├── src/footstats/         # Główny pakiet Python (AI, Core, Scrapers)
-├── scripts/               # Narzędzia i automatyzacja (np. wizualizacja grafu)
-├── tests/                 # Suita testowa (>100 testów)
-├── data/                  # Bazy SQLite i cache
-└── assets/                # Dokumentacja wizualna i diagramy
+src/footstats/
+├── ai/            # analyzer.py (Groq prompt), trainer.py, RAG, post_match_analyzer
+├── core/          # poisson.py, backtest.py, bankroll.py, clv_tracker.py, form.py, fatigue.py
+├── scrapers/      # bzzoiro.py, superbet.py, understat_xg.py, api_football.py, kursy.py …
+├── api/           # FastAPI routes (coupons, predictions, bankroll, status)
+├── utils/         # telegram_notify.py, db.py, normalize.py, cache.py
+├── daily_agent.py         # główny agent (1400 LOC)
+├── evening_agent.py       # rozliczanie kuponów @ 23:00
+├── daily_agent_scheduler.py
+└── operator_agent.py      # smoke + pipeline + review orchestrator
+tests/             # 150+ testów pytest
+scripts/           # preflight, backup_db, visualize_brain, run_operator.bat
+data/              # footstats_backtest.db, model_calibration.json
+cache/             # api_football/, understat_xg/, flashscore/, kursy/
 ```
+
+---
 
 ## 🛠️ Instalacja i Uruchomienie
 
-1. **Klonowanie i Środowisko**:
-   ```bash
-   git clone https://github.com/user/footstats.git
-   cd footstats
-   python -m venv .venv
-   source .venv/bin/activate  # lub .venv\Scripts\activate
-   pip install -e .
-   ```
+```bash
+# 1. Klonowanie i środowisko
+git clone https://github.com/user/footstats.git
+cd footstats
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+pip install -e .
+playwright install chromium
 
-2. **Konfiguracja**: Uzupełnij `.env` (klucze GROQ_API_KEY, API_FOOTBALL_KEY).
+# 2. Konfiguracja
+cp .env.example .env
+# Uzupełnij: GROQ_API_KEY, APISPORTS_KEY, BZZOIRO_KEY, JWT_SECRET
 
-3. **Uruchomienie Dashboardu**:
-   ```bash
-   python -m streamlit run src/footstats/dashboard.py
-   ```
+# 3. Dashboard
+streamlit run src/footstats/dashboard.py
 
-4. **Kalibracja (v3.4)**: Jeśli chcesz odświeżyć parametry modelu Poisson:
-   ```bash
-   python -m footstats.core.lambda_optimizer
-   ```
+# 4. Daily Agent (ręcznie)
+python -m footstats.daily_agent --dni 3 --faza draft
 
-5. **Wizualizacja Mózgu**:
-   ```bash
-   python scripts/visualize_brain.py
-   # Otwórz brain_graph.html w przeglądarce
-   ```
+# 5. Evening Agent (ręcznie)
+python -m footstats.evening_agent --date 2026-05-27
 
-## Operator Agent (smoke + pipeline + review)
+# 6. Kalibracja modelu Poisson
+python -m footstats.core.lambda_optimizer
 
-Orchestrator uruchamia preflight, testy API (flow Kreatora Kuponu), `daily_agent` draft i review Groq. Kupony trafiają na konto z `.env`: `OPERATOR_ADMIN_USERNAME=Admin_JG`.
+# 7. Second Mind Graph
+python scripts/visualize_brain.py
+# → otwórz brain_graph.html
+```
+
+---
+
+## 🤖 Operator Agent
+
+Orchestrator uruchamia preflight → smoke API → `daily_agent` draft → review Groq.
 
 ```bash
 python scripts/preflight_footstats.py
@@ -133,14 +170,33 @@ python -m footstats.operator_agent --faza full
 python -m footstats.operator_agent --only review
 ```
 
-Logi: `data/logs/operator_agent.log`. Raporty: `data/operator_reports/`. Harmonogram Windows: `scripts/run_operator.bat`.
+Logi: `data/logs/operator_agent.log` | Raporty: `data/operator_reports/`
 
-## Testy
+---
+
+## 🧪 Testy
 
 ```bash
-pytest tests/ -v
-pytest tests/test_coupon_wizard_api.py tests/test_operator_agent.py tests/test_admin_user.py -v
+pytest tests/ -v                          # 150+ testów
+pytest tests/test_poisson.py -v           # Bayesian Poisson + edge cases
+pytest tests/test_clv_tracker.py -v       # CLV tracking
+pytest tests/test_broad_except_audit.py   # regression gate: brak nowych broad except
+pytest tests/test_version_consistency.py  # pyproject.toml == config.VERSION
 ```
+
+---
+
+## 📊 Status Accuracy
+
+| Milestone | Cel | Status |
+|-----------|-----|--------|
+| **M0** | ~42% (baseline) | ✅ Aktualne |
+| **M1** | 55% overall | 🔄 W toku — kalibracja + xG blend |
+| **M2** | 60% overall | Bayesian ensemble + value filter |
+| **M3** | 65% selected | Full xG + stop-loss + CLV gate |
+| **M4** | 70% selected | 3-miesięczny track record |
+
+---
 
 ## Licencja
 
