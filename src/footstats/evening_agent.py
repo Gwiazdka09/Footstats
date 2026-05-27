@@ -119,6 +119,53 @@ def _fetch_results_today(api_key: str, date_str: str) -> list[dict]:
         return []
 
 
+# ── CLV ───────────────────────────────────────────────────────────────────────
+
+def _find_fixture_id(home: str, away: str, fixtures: list[dict]) -> int | None:
+    """Zwraca API-Football fixture.id dla pary drużyn, lub None."""
+    for fix in fixtures:
+        parsed = _wynik_z_fixture(fix)
+        if not parsed:
+            continue
+        fh, fa, _ = parsed
+        if (_similar(home, fh) + _similar(away, fa)) / 2 >= 0.6:
+            return fix.get("fixture", {}).get("id")
+    return None
+
+
+def _fetch_closing_odds(api_key: str, fixture_id: int) -> float | None:
+    """
+    Pobiera kurs 1X2 'Home Win' z API-Football /odds dla danego fixture.
+    Zwraca closing odds bukmachera (Bet365 id=1 lub pierwszy dostępny), lub None.
+    """
+    try:
+        r = requests.get(
+            f"{API_BASE}/odds",
+            headers={"x-apisports-key": api_key},
+            params={"fixture": fixture_id, "bet": 1},  # bet=1 → Match Winner
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return None
+        resp = r.json().get("response", [])
+        if not resp:
+            return None
+        bookmakers = resp[0].get("bookmakers", [])
+        if not bookmakers:
+            return None
+        bets = bookmakers[0].get("bets", [])
+        if not bets:
+            return None
+        values = bets[0].get("values", [])
+        # values: [{"value": "Home", "odd": "1.85"}, {"value": "Draw", ...}, ...]
+        for v in values:
+            if str(v.get("value", "")).lower() in ("home", "1"):
+                return float(v["odd"])
+    except (ValueError, KeyError, requests.RequestException):
+        pass
+    return None
+
+
 # ── Telegram ──────────────────────────────────────────────────────────────────
 
 def _send_telegram_summary(summary: dict, date_str: str) -> None:
@@ -193,6 +240,17 @@ def run_evening_agent(date_str: str | None = None) -> dict:
                     update_result(pred_id, wynik)
                 except (ValueError, KeyError) as e:
                     console.print(f"[yellow]Warning: Could not update prediction {pred_id}: {e}[/yellow]")
+
+                # CLV: zapisz kurs zamknięcia z API-Football
+                try:
+                    from footstats.core.clv_tracker import record_closing_odds
+                    fix_id = _find_fixture_id(home, away, fixtures)
+                    if fix_id:
+                        closing = _fetch_closing_odds(api_key, fix_id)
+                        if closing:
+                            record_closing_odds(pred_id, closing)
+                except (ImportError, ValueError, KeyError):
+                    pass
 
         nowy_status = _status_kuponu(nogi_statusy)
 

@@ -39,14 +39,14 @@
 ## Phase 7 (continued): ACCURACY IMPROVEMENT
 
 ### 7.7: Feature Engineering (P2)
-- [ ] xG z FBref/Understat (wymaga scrapera)
+- [x] xG z Understat — scraper + blend 20% w poisson.py ✅ (cache-only, prefetch w daily_agent)
 - [x] Forma domowa vs wyjazdowa — core/form.py ✅
 - [x] Odpoczynek — core/fatigue.py ✅
 
 ### 7.x: Accuracy Tracking
 - [x] Dashboard A/B tab ✅
 - [x] Weekly report per liga ✅
-- [ ] CLV tracking (scrape kursy przy kickoff)
+- [x] CLV tracking — auto-capture z API-Football /odds w evening_agent ✅
 
 ---
 

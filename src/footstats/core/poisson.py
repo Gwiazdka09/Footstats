@@ -193,6 +193,25 @@ def predict_match(
     lambda_g = max(0.05, lambda_g)
     lambda_a = max(0.05, lambda_a)
 
+    # ── xG blend (Understat cache-only, no live request) ─────────────
+    try:
+        from footstats.scrapers.understat_xg import _cache_get, _to_slug
+        from datetime import datetime as _dt
+        _season = _dt.now().year if _dt.now().month >= 7 else _dt.now().year - 1
+        xg_h = _cache_get(_to_slug(g), _season)
+        xg_a = _cache_get(_to_slug(a), _season)
+        if (xg_h and xg_a
+                and xg_h.get("xg_for_avg") and xg_a.get("xg_for_avg")
+                and xg_h["xg_for_avg"] > 0 and xg_a["xg_for_avg"] > 0):
+            _XG_W = 0.20
+            lambda_g = round((1 - _XG_W) * lambda_g + _XG_W * xg_h["xg_for_avg"], 4)
+            lambda_a = round((1 - _XG_W) * lambda_a + _XG_W * xg_a["xg_for_avg"], 4)
+    except (ImportError, AttributeError, OSError, ValueError, KeyError):
+        pass  # xG cache niedostępny → czyste lambdy Poissona
+
+    lambda_g = max(0.05, lambda_g)
+    lambda_a = max(0.05, lambda_a)
+
     # ── Macierz Poissona (cached) ────────────────────────────────────
     from footstats.config import FINAL_REMIS_BOOST
     N = MAX_GOLE + 1

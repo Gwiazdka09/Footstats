@@ -802,6 +802,23 @@ def main():
     # Ensemble: oblicz roznica_modeli (Poisson vs Bzzoiro) dla każdego kandydata
     _oblicz_roznica_modeli(wyniki)
 
+    # xG prefetch z Understat (wypełnia cache przed pętlą Poissona)
+    try:
+        from footstats.scrapers.understat_xg import fetch_team_xg, _to_slug, _cache_get
+        from datetime import datetime as _dt
+        _season = _dt.now().year if _dt.now().month >= 7 else _dt.now().year - 1
+        _teams = {w.get("gospodarz", "") for w in wyniki} | {w.get("goscie", "") for w in wyniki}
+        _missing = [t for t in _teams if t and not _cache_get(_to_slug(t), _season)]
+        if _missing:
+            console.print(f"[dim]xG prefetch: {len(_missing)} drużyn z Understat...[/dim]")
+            for _team in _missing:
+                try:
+                    fetch_team_xg(_team, _season)
+                except (OSError, ValueError, RuntimeError):
+                    pass
+    except (ImportError, AttributeError):
+        pass
+
     # -- Pre-filtr tokenów: odrzuca mecze bez pełnej nazwy drużyny lub ligi ──
     n_przed_token = len(wyniki)
     wyniki = _pre_filtruj_tokenow(wyniki)
