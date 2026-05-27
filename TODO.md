@@ -1,41 +1,38 @@
-# FootStats TODO — Updated 2026-05-26
+# FootStats TODO — Updated 2026-05-27
 
 ## Completed Phases (Archive)
 
 ### Phase 1–5: ALL COMPLETE ✅
 ### Phase 6: HARDENING — COMPLETE ✅
 ### Phase 7.1–7.6, 7.8: COMPLETE ✅
+### Phase 8: RELIABILITY & PERFORMANCE — COMPLETE ✅
+### Phase 9: DB CONSOLIDATION & LOGIN FIX — COMPLETE ✅
 
 ---
 
-## P0: RECURRING — File Truncation Fix (2026-05-26) ✅
+## Phase 10: CODE QUALITY & ACCURACY (aktywna)
 
-- [x] 10x src/ pliki przywrócone z git HEAD (config, daily_agent, lambda_optimizer, async_utils, response_cache, value_bet, api/main, db/migrations, bankroll, ensemble)
-- [x] 5x test files przywrócone (test_auth, test_coupon_tracker, test_daily_agent_faza, test_evening_agent, test_response_cache)
-- [x] Syntax verification: 0 errors across 108 modules
+### 10.1: Quick Fixes — COMPLETE ✅ (2026-05-27)
+- [x] `telegram_notify.py` — już miał timeout=15 (skip)
+- [x] `pyproject.toml` — 3.0 → 3.4 (commit 812cc66)
+- [x] `__pycache__/` + `data/footstats.db` usunięte (commit 241a0f2)
 
-**ROOT CAUSE:** Pliki regularnie się obcinają — pre-commit hook istnieje ale nie zapobiega obcinaniu przez zewnętrzne narzędzia. Potrzebny jest monitoring integralności plików.
+### 10.2: Broad Except Cleanup (P2) — IN PROGRESS
+- [x] sts.py — 3x zamienione na (PWTimeout, ValueError, KeyError) (commit 241a0f2) ✅
+- [ ] superbet.py (15x) — zastąpić konkretnymi wyjątkami
+- [ ] base_playwright.py (14x) — j.w.
+- [ ] daily_agent.py (14x) — j.w.
+- [ ] analyzer.py (13x) — j.w.
+- NOTE: ~233 remaining
 
----
+### 10.3: subprocess.Popen Audit — PARTIAL ✅ (commit 241a0f2)
+- [x] daily_agent.py — except Exception → except OSError + komentarz fire-and-forget
+- [ ] Pozostałe 4 (backtest, post_match_analyzer, evening_agent, cli)
 
-## Phase 8: RELIABILITY & PERFORMANCE
-
-### 8.1: Requests Timeout — COMPLETE ✅ (commit 401d25063)
-- [x] timeout=15 dodany do 10 plików (2 już miały, skip)
-- NOTE: ai/client.py zmieniony 120→15 — rozważyć przywrócenie 120 dla Ollama
-
-### 8.2: SQLite Context Manager — COMPLETE ✅ (commit c5e8a22d5)
-- [x] probability_calibrator.py, ensemble_optimizer.py, dashboard.py → with statement
-
-### 8.3: Cleanup — COMPLETE ✅
-- [x] 11 dirs __pycache__ usunięte
-- [x] `data/.fuse_hidden*` — nie istnieją (Windows, FUSE nie dotyczy)
-- [x] `.git/index.lock` — nie istnieje
-
-### 8.4: Thread Safety Audit — COMPLETE ✅ (commit a3f6eff64)
-- [x] response_cache: async_wrapper + response_cache_info() wrapped in _CACHE_LOCK
-- [x] lambda_optimizer: duplikat __main__ block usunięty
-- NOTE: lambda_optimizer._cache double-checked locking OK (GIL gwarantuje atomowość)
+### 10.4: Large File Refactoring (P3)
+- [ ] daily_agent.py (1396 LOC) — wydzielić: parsowanie CLI, enrichment, walidacja
+- [ ] analyzer.py (1393 LOC) — wydzielić: prompts, scoring, output formatting
+- [ ] superbet.py (1128 LOC) — wydzielić: auth, scraping, parsing
 
 ---
 
@@ -43,29 +40,35 @@
 
 ### 7.7: Feature Engineering (P2)
 - [ ] xG z FBref/Understat (wymaga scrapera)
-- [x] Forma domowa vs wyjazdowa oddzielnie — zaimplementowana w core/form.py ✅
-- [x] Odpoczynek (dni od ostatniego meczu) — HeurystaZmeczeniaRotacji w core/fatigue.py ✅
+- [x] Forma domowa vs wyjazdowa — core/form.py ✅
+- [x] Odpoczynek — core/fatigue.py ✅
 
-### 7.x: Accuracy Dashboard
-- [x] Dashboard tab "Accuracy (A/B)" w Streamlit — sekcja 8 ✅ (commit fa4f9da96)
-- [x] Automatyczny raport tygodniowy (weekly_report.py rozszerzenie) — get_stats_per_liga() ✅
-- [x] A/B test Bayesian Poisson vs Classic na backtest.db — dashboard sekcja 8 ✅
-- [ ] CLV tracking (scrape kursy przy kickoff) — wymaga scrapera
-- [x] EV vs P&L wykres w dashboard — dashboard sekcja 8 ✅
+### 7.x: Accuracy Tracking
+- [x] Dashboard A/B tab ✅
+- [x] Weekly report per liga ✅
+- [ ] CLV tracking (scrape kursy przy kickoff)
 
 ---
 
-## Proposed Tests
+## Phase 9 (otwarte)
 
-- [x] test_file_integrity.py — 10/10 pass (commit 24b3fc1eb) ✅
-- [x] test_requests_timeout.py — verify all requests have timeout ✅ (już istniał)
-- [x] test_accuracy_report.py — hit-rate calculation correctness ✅ (7 tests)
-- [x] test_probability_calibrator.py — Platt scaling correctness ✅ (10 tests)
-- [x] test_value_bet_filter.py — EV and Kelly calculations ✅ (13 tests)
-- [x] test_daily_agent_prefilter.py — pre_filtruj edge cases ✅ (13 tests)
-- [x] test_coupon_settlement_edge.py — oblicz_tip_correct edge cases ✅ (24 tests)
-- [x] test_poisson_bayesian.py — Bayesian update vs vanilla ✅ (18 tests, commit fad487d93)
-- [x] test_ensemble_optimizer.py — grid search convergence ✅ (13 tests, commit fad487d93)
+### 9.1 BLOCKER: Cloud Run env vars
+- [ ] Sprawdzić FOOTSTATS_USER, FOOTSTATS_PASSWORD_HASH, JWT_SECRET w Cloud Run Console
+
+### 9.5: Konsolidacja DB access (P3, opcjonalne)
+- [ ] probability_calibrator.py → utils/db.py
+- [ ] ensemble_optimizer.py → utils/db.py
+- [ ] referee_db.py → utils/db.py
+- [ ] dashboard.py → utils/db.py
+
+---
+
+## Proposed New Tests
+
+- [x] test_telegram_timeout.py — OK, już miał timeout (skip)
+- [ ] test_subprocess_cleanup.py — verify Popen processes are cleaned up
+- [x] test_version_consistency.py — pyproject.toml vs config.py VERSION match ✅
+- [x] test_broad_except_audit.py — flag new bare/broad except additions ✅ (regression gate, 63 tests)
 
 ---
 
@@ -73,42 +76,14 @@
 
 | Milestone | Accuracy | Status |
 |-----------|----------|--------|
-| **M0** | ~42% overall | ✅ Current (baseline measured) |
-| **M1** | 55% overall | 🔄 In progress — calibration + filters active |
-| **M2** | 60% overall | Bayesian Poisson + ensemble weights + value filter |
+| **M0** | ~42% overall | ✅ Current (baseline) |
+| **M1** | 55% overall | 🔄 In progress — calibration + filters |
+| **M2** | 60% overall | Bayesian Poisson + ensemble + value filter |
 | **M3** | 65% selected | xG + feature engineering + stop-loss |
 | **M4** | 70% selected | Full optimization + CLV + 3mo track record |
 
 ---
 
-## Phase 9: DB CONSOLIDATION & LOGIN FIX
-
-### 9.1: Fix logowania Admin_JG — DONE ✅ (2026-05-27)
-- [x] seed_admin_user() — usuniety WHERE password_hash='changeme', env var zawsze nadpisuje hash
-- [ ] Wymaga redeploy na Cloud Run zeby zadzialalo na produkcji
-
-### 9.2: Usunac footstats.db (stara baza)
-- [ ] Usunac data/footstats.db (392 predictions, 8 coupons — stale, podzbiór backtest.db)
-- [ ] Wyczyscic referencje w scripts/czysc_baze.py i scripts/backup_db.py
-- [ ] Dodac data/footstats.db do .gitignore
-
-### 9.3: Konsolidacja cache (4 katalogi → 1)
-- [ ] .cache/af_*.json → cache/api_football/
-- [ ] cache/superoferta/ → juz OK
-- [ ] cache/form/ → juz OK
-- [ ] src/cache/flashscore/ → cache/flashscore/ (przenieść z src/)
-- [ ] Usunac .cache/ (root)
-
-### 9.4: Konsolidacja DB access (opcjonalne)
-- [ ] probability_calibrator.py: sqlite3→utils/db.py (lub zostawić — offline only)
-- [ ] ensemble_optimizer.py: sqlite3→utils/db.py (lub zostawić)
-- [ ] referee_db.py: sqlite3→utils/db.py (lub zostawić)
-- [ ] dashboard.py: sqlite3→utils/db.py (lub zostawić)
-- NOTE: Te 4 moduły czytają z backtest.db — mogą zostać na SQLite jeśli backtest jest offline
-
----
-
 ## Blockers
-- **File truncation** — rekurencyjny problem, pre-commit hook nie wystarczy
-- **Accuracy 42%** — poniżej M1 target, wymaga dalszej kalibracji
-- **Redeploy** — login fix wymaga push + Cloud Run redeploy
+- **Cloud Run env vars** — login fix wymaga ustawienia w Cloud Run Console
+- **Accuracy 42%** — poniżej M1 target, wymaga kalibracji + feature engineering
