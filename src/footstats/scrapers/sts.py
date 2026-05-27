@@ -144,8 +144,8 @@ def pobierz_typerzy(page, max_typerzy: int = 50) -> list:
 
         logger.info(f"[STS] Pobrano {len(typerzy)} typerów")
 
-    except Exception as e:
-        logger.info(f"[STS] Błąd pobierania typerów: {e}")
+    except (PWTimeout, ValueError) as e:
+        logger.info(f"[STS] Błąd pobierania typerów: {e.__class__.__name__}: {e}")
 
     return typerzy
 
@@ -252,8 +252,8 @@ def pobierz_kupony_typera(page, nick: str) -> list:
             except Exception:
                 continue
 
-    except Exception as e:
-        logger.info(f"  [STS] Błąd kuponów dla {nick}: {e}")
+    except (PWTimeout, ValueError) as e:
+        logger.info(f"  [STS] Błąd kuponów dla {nick}: {e.__class__.__name__}: {e}")
 
     return kupony
 
@@ -311,7 +311,8 @@ Odpowiedz w JSON:
                 wynik = _json.loads(m.group())
             else:
                 wynik = {"nick": nick, "ocena": "BRAK", "komentarz": odp[:200]}
-        except Exception as e:
+        except (ValueError, KeyError) as e:
+            logger.info(f"  [AI] Błąd parsowania JSON dla {nick}: {e.__class__.__name__}: {e}")
             wynik = {"nick": nick, "ocena": "BLAD", "komentarz": str(e)}
 
         wynik["_oryginal"] = kupon

@@ -481,13 +481,14 @@ Start-Sleep -Milliseconds 8500
 $n.Dispose()
 """
     try:
+        # fire-and-forget: OK, powiadomienie Windows (czekanie blokuje pipeline)
         subprocess.Popen(
             ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-    except Exception as e:
-        console.print(f"[dim]Powiadomienie nieudane: {e}[/dim]")
+    except OSError as e:
+        console.print(f"[dim]Powiadomienie nieudane: {e.__class__.__name__}: {e}[/dim]")
 
 
 # ── Krok 5: Wyświetl wyniki ───────────────────────────────────────────────────
