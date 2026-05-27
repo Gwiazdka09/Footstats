@@ -18,7 +18,7 @@ SRC = Path(__file__).resolve().parents[1] / "src" / "footstats"
 # Reduce over time as exceptions are narrowed.
 BASELINE: dict[str, int] = {
     "ai/client.py": 2,
-    "ai/post_match_analyzer.py": 3,
+    "ai/post_match_analyzer.py": 2,
     "ai/rag.py": 2,
     "ai/rag_embeddings.py": 3,
     "ai/trainer.py": 3,
@@ -50,7 +50,7 @@ BASELINE: dict[str, int] = {
     "data/context_scraper.py": 1,
     "data/historical_loader.py": 8,
     "db/migrations.py": 2,
-    "evening_agent.py": 2,
+    "evening_agent.py": 0,
     "export/pdf_font.py": 1,
     "operator/review.py": 2,
     "operator/runner.py": 1,

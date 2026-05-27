@@ -114,7 +114,7 @@ def _fetch_results_today(api_key: str, date_str: str) -> list[dict]:
             console.print(f"[yellow]API-Football HTTP {r.status_code}[/yellow]")
             return []
         return r.json().get("response", [])
-    except Exception as e:
+    except (requests.RequestException, ValueError, KeyError) as e:
         console.print(f"[yellow]API-Football błąd sieci: {e}[/yellow]")
         return []
 
@@ -132,7 +132,7 @@ def _send_telegram_summary(summary: dict, date_str: str) -> None:
             f"Oczekujących: {summary.get('active', 0)}"
         )
         send_message(msg)
-    except Exception:
+    except (ImportError, OSError, RuntimeError):
         pass  # Telegram opcjonalny
 
 
@@ -221,10 +221,13 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     if nowe_wyniki >= 20:
         console.print(f"[green]{nowe_wyniki} nowych wyników → uruchamiam auto-trainer...[/green]")
         import subprocess
-        subprocess.Popen(
-            [sys.executable, "-m", "footstats.ai.trainer"],
-            cwd=Path(__file__).parents[2],
-        )
+        try:
+            subprocess.Popen(
+                [sys.executable, "-m", "footstats.ai.trainer"],
+                cwd=Path(__file__).parents[2],
+            )  # fire-and-forget auto-trainer
+        except OSError as e:
+            console.print(f"[red]Auto-trainer start failed: {e.__class__.__name__}: {e}[/red]")
 
     _send_telegram_summary(summary, date_str)
     return summary

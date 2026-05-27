@@ -170,7 +170,7 @@ def analizuj_porazki(days_back: int = 14, dry_run: bool = False) -> dict:
             if os.path.exists(script_path):
                 subprocess.Popen([sys.executable, script_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 print("  [OK] Visual Brain zaktualizowany w tle.")
-        except Exception as e:
+        except OSError as e:
             print(f"  [ERR] Nie udało się zaktualizować Visual Brain: {e}")
 
     return stats
