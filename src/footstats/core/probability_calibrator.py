@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 from pathlib import Path
 from typing import Optional
+
+from footstats.utils import db as _db
 
 _log = logging.getLogger(__name__)
 
 _CALIBRATION_PATH = Path(__file__).parents[3] / "data" / "calibration.json"
-_DB_PATH = Path(__file__).parents[3] / "data" / "footstats_backtest.db"
 
 # Fallback lookup: predicted_band → calibrated_prob (from empirical data 2026-05-26)
 _FALLBACK_TABLE: dict[int, float] = {
@@ -23,8 +23,7 @@ _FALLBACK_TABLE: dict[int, float] = {
 
 def _load_calibration_data() -> tuple[list[float], list[float]]:
     """Load (predicted, actual) pairs from DB predictions table."""
-    with sqlite3.connect(_DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with _db.connect() as conn:
         rows = conn.execute(
             "SELECT ai_confidence, tip_correct FROM predictions "
             "WHERE tip_correct IS NOT NULL AND ai_confidence > 0"

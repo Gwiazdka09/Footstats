@@ -3,15 +3,15 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
+from footstats.utils import db as _db
+
 _log = logging.getLogger(__name__)
 
-_DB_PATH = Path(__file__).parents[3] / "data" / "footstats_backtest.db"
 _WEIGHTS_PATH = Path(__file__).parents[3] / "data" / "ensemble_weights.json"
 
 # Default if no per-league data
@@ -29,7 +29,7 @@ def _log_loss_binary(y_true: list[float], y_pred: list[float], eps: float = 1e-9
     return total / max(len(y_true), 1)
 
 
-def _load_predictions_by_league(conn: sqlite3.Connection) -> dict[str, list[dict]]:
+def _load_predictions_by_league(conn) -> dict[str, list[dict]]:
     """Load settled predictions grouped by league."""
     rows = conn.execute(
         """
@@ -88,8 +88,7 @@ def optimize_all_leagues() -> dict[str, dict]:
     Compute optimal weights per league. Returns mapping:
     {league_name: {"poisson": w1, "bzzoiro": w2}}
     """
-    with sqlite3.connect(_DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with _db.connect() as conn:
         by_league = _load_predictions_by_league(conn)
 
     results: dict[str, dict] = {"_default": _DEFAULT_WEIGHTS}

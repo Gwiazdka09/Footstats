@@ -15,11 +15,15 @@ Usage:
 Requires: SUPERBET_LOGIN + SUPERBET_PASSWORD in .env
 """
 
+from __future__ import annotations
+
 import logging
 import re
 import time
+from typing import TYPE_CHECKING
 
-from playwright.sync_api import Page, sync_playwright
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 from footstats.betbuilder import Typ
 from footstats.scrapers.base_playwright import SUPERBET_CONFIG as _CFG, zamknij_popup
@@ -217,6 +221,7 @@ def pobierz_bb_dla_meczow(
 
     wyniki: dict[str, list[Typ]] = {}
 
+    from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=headless)
         ctx = browser.new_context(

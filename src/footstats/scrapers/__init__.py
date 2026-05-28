@@ -5,7 +5,10 @@ from footstats.scrapers.bzzoiro import BzzoiroClient
 from footstats.scrapers.source_manager import SourceManager
 from footstats.scrapers.enriched import enrich_match_data
 from footstats.scrapers.form_scraper import pobierz_forme, pobierz_forme_meczu
-from footstats.scrapers.superbet_bb import pobierz_bb_dla_meczow
+try:
+    from footstats.scrapers.superbet_bb import pobierz_bb_dla_meczow
+except ImportError:
+    pobierz_bb_dla_meczow = None  # type: ignore[assignment]
 
 __all__ = [
     "APIClient",
