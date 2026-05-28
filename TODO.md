@@ -46,7 +46,7 @@
 - [x] FOOTSTATS_USER, FOOTSTATS_PASSWORD_HASH, JWT_SECRET — ustawione, zgodne z .env
 
 ### 9.5: Konsolidacja DB access (P3)
-- [ ] referee_db.py → utils/db.py (DEFERRED — wymaga przepisania testów)
+- [x] referee_db.py → utils/db.py ✅ (testy przepisane z _SQLiteConn adapter)
 
 ---
 
