@@ -664,313 +664,7 @@ def _waliduj_kupon_groq(dane: dict, stawka: float, kupon_key: str = "kupon_a") -
     console.print(ai_sprawdz_kupon(picks_text, stawka=stawka))
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
-def main():
-    from dotenv import load_dotenv
-    load_dotenv()
-
-    parser = argparse.ArgumentParser(description="FootStats Daily Agent")
-    parser.add_argument("--stawka",   type=float, default=10.0, help="Stawka kupon A (PLN, domyslnie 10)")
-    parser.add_argument("--stawka-b", type=float, default=5.0,  help="Stawka kupon B (PLN, domyslnie 5)")
-    parser.add_argument("--dni",      type=int,   default=3,    help="Horyzont w dniach (domyslnie 3)")
-    parser.add_argument("--tylko-kupon", action="store_true",   help="Pomiń formę SofaScore")
-    parser.add_argument("--waliduj",     action="store_true",   help="Uruchom walidację Groq kuponu A")
-    parser.add_argument("--cel-a",   type=float, default=None,  help="Cel wygranej netto kupon A (PLN)")
-    parser.add_argument("--cel-b",   type=float, default=None,  help="Cel wygranej netto kupon B (PLN)")
-    parser.add_argument(
-        "--faza", choices=["draft", "final"], default=None,
-        help="Faza: draft (08:00, bez skladow) lub final (1h przed meczem, ze skladami)"
-    )
-    parser.add_argument(
-        "--date", default=None,
-        help="Data YYYY-MM-DD (domyslnie: dzis) — etykieta logów i update_pending"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Tryb podgladu: nie zapisuje do DB, TXT, nie wysyla Telegram/Windows"
-    )
-    parser.add_argument(
-        "--bb", action="store_true",
-        help="Pobierz realne kursy BetBuilder z Superbet API (wolno, ~3min)"
-    )
-    args = parser.parse_args()
-
-    from footstats.config import AGENT_BANKROLL
-    from footstats.core.bankroll import (
-        get_current_bankroll, check_daily_stop_loss,
-        get_stake_multiplier, check_weekly_alert, get_loss_streak,
-    )
-    from footstats.utils.admin_user import resolve_admin_user_id
-
-    admin_uid = resolve_admin_user_id()
-    current_bankroll = get_current_bankroll(user_id=admin_uid)
-    date_label = args.date or datetime.now().strftime("%Y-%m-%d")
-    dry_tag    = "  [yellow]⚠ DRY-RUN[/yellow]" if args.dry_run else ""
-
-    # Stop-loss check
-    if not args.dry_run and check_daily_stop_loss(user_id=admin_uid):
-        console.print("[bold red]STOP-LOSS: dzienna strata >= 10% bankrolla — przerywam.[/bold red]")
-        return
-
-    # Streak detection
-    streak = get_loss_streak(user_id=admin_uid)
-    stake_mult = get_stake_multiplier(user_id=admin_uid)
-    if streak >= 3:
-        console.print(f"[yellow]STREAK: {streak} przegranych z rzędu → stawki x{stake_mult:.0%}[/yellow]")
-        args.stawka = round(args.stawka * stake_mult, 1)
-        args.stawka_b = round(args.stawka_b * stake_mult, 1)
-
-    # Weekly drawdown alert
-    if check_weekly_alert(user_id=admin_uid):
-        console.print("[bold yellow]ALERT: tygodniowy drawdown przekroczył 20% bankrolla![/bold yellow]")
-
-    console.print()
-    console.print(Panel(
-        f"[bold]FootStats Daily Agent[/bold]  |  {date_label}{dry_tag}\n"
-        f"Horyzont: {args.dni} dni  |  Stawka A: {args.stawka} PLN  |  Stawka B: {args.stawka_b} PLN  |  Bankroll: {current_bankroll} PLN",
-        border_style="cyan",
-    ))
-
-    # Krok 0: Auto-update wynikow pending meczow (pomijamy w dry-run)
-    _sep("KROK 0 — Auto-update wynikow")
-    if args.dry_run:
-        console.print("[yellow]DRY-RUN: pomijam update_pending[/yellow]")
-    else:
-        try:
-            from footstats.scrapers.results_updater import update_pending
-            stats_upd = update_pending(days_back=3, dry_run=False, verbose=True)
-            if stats_upd["updated"] > 0:
-                console.print(f"[green]Zaktualizowano {stats_upd['updated']} wynikow w backtest.db[/green]")
-        except Exception as e:
-            console.print(f"[dim]Auto-update wynikow: {e}[/dim]")
-
-        # Krok 0b: Analiza porażek AI (Pętla Feedbacku) — uruchamiana po update wyników
-        try:
-            from footstats.ai.post_match_analyzer import analizuj_porazki
-            stats_fb = analizuj_porazki(days_back=14, dry_run=False)
-            if stats_fb["analyzed"] > 0:
-                console.print(
-                    f"[dim]Pętla Feedbacku: przeanalizowano {stats_fb['analyzed']} porażek[/dim]"
-                )
-        except Exception as e:
-            console.print(f"[dim]Analiza porażek (feedback): {e}[/dim]")
-
-        # Krok 0c: Rozliczenie ACTIVE kuponów (Settlement)
-        try:
-            from footstats.core.coupon_settlement import settle_active_coupons
-            stats_settle = settle_active_coupons(days_back=7, dry_run=False, verbose=True)
-            if stats_settle["settled"] > 0:
-                console.print(
-                    f"[green]Rozliczono {stats_settle['settled']} kuponów | "
-                    f"Częściowych: {stats_settle['partial']} | Błędów: {stats_settle['errors']}[/green]"
-                )
-        except Exception as e:
-            console.print(f"[dim]Błąd settlement kuponów: {e}[/dim]")
-
-    # Krok 0d: Aktualizacja statystyk sędziów z Zawodtyper (raz dziennie)
-    try:
-        from footstats.scrapers.zawodtyper_referees import fetch_referees_zawodtyper
-        fetch_referees_zawodtyper()
-        console.print("[green]✓ Sędziowie zaktualizowani z Zawodtyper[/green]")
-    except Exception as e:
-        console.print(f"[dim]Referee update: {e}[/dim]")
-
-    _sep("KROK 1 — Bzzoiro ML")
-    wyniki, indeks = _pobierz_kandydatow(dni=args.dni)
-
-    # Checkpoint: save predictions batch for recovery
-    batch_id = f"daily_{datetime.now():%Y%m%d_%H%M}"
-    save_predictions_batch(wyniki, batch_id=batch_id)
-    log.info(f"Checkpoint saved: {batch_id} ({len(wyniki)} predictions)")
-
-    # Krok 1b: Dociagnij Ekstraklase z API-Football jesli dostepny
-    wyniki_ekstra = _pobierz_apifootball_ekstraklasa(args.dni)
-    if wyniki_ekstra:
-        console.print(f"[dim]API-Football Ekstraklasa: +{len(wyniki_ekstra)} kandydatow[/dim]")
-        wyniki = wyniki + wyniki_ekstra
-        for w in wyniki_ekstra:
-            g = w.get("gospodarz", "")
-            a = w.get("goscie", "")
-            indeks[(_norm(g), _norm(a))] = {
-                "odds": w.get("odds", {}), "gospodarz": g, "goscie": a, "liga": w.get("liga", "")
-            }
-
-    if not wyniki:
-        _blad("Bzzoiro nie zwrocilo zadnych kandydatow.")
-
-    # Ensemble: oblicz roznica_modeli (Poisson vs Bzzoiro) dla każdego kandydata
-    _oblicz_roznica_modeli(wyniki)
-
-    # xG prefetch z Understat (wypełnia cache przed pętlą Poissona)
-    try:
-        from footstats.scrapers.understat_xg import fetch_team_xg, _to_slug, _cache_get
-        from datetime import datetime as _dt
-        _season = _dt.now().year if _dt.now().month >= 7 else _dt.now().year - 1
-        _teams = {w.get("gospodarz", "") for w in wyniki} | {w.get("goscie", "") for w in wyniki}
-        _missing = [t for t in _teams if t and not _cache_get(_to_slug(t), _season)]
-        if _missing:
-            console.print(f"[dim]xG prefetch: {len(_missing)} drużyn z Understat...[/dim]")
-            for _team in _missing:
-                try:
-                    fetch_team_xg(_team, _season)
-                except (OSError, ValueError, RuntimeError):
-                    pass
-    except (ImportError, AttributeError):
-        pass
-
-    # -- Pre-filtr tokenów: odrzuca mecze bez pełnej nazwy drużyny lub ligi ──
-    n_przed_token = len(wyniki)
-    wyniki = _pre_filtruj_tokenow(wyniki)
-    if len(wyniki) < n_przed_token:
-        console.print(
-            f"[dim]Pre-filtr tokenów (brak nazw/ligi): "
-            f"{n_przed_token} → {len(wyniki)} kandydatów[/dim]"
-        )
-
-    # -- Pre-filtr kursów: oszczędza tokeny Groq (odrzuca <1.15 i >15.0) ───────
-    n_przed_filter = len(wyniki)
-    wyniki = _pre_filtruj_kursy(wyniki)
-    if len(wyniki) < n_przed_filter:
-        console.print(
-            f"[dim]Pre-filtr kursów (1.15–15.0): "
-            f"{n_przed_filter} → {len(wyniki)} kandydatów[/dim]"
-        )
-
-    # -- Pre-filtr lig (blacklist): odrzuca ligi z udowodnionym brakiem edge ──
-    from footstats.config import LIGI_BLACKLIST, LIGA_FILTER_ENABLED
-    if LIGA_FILTER_ENABLED:
-        n_przed_liga = len(wyniki)
-        wyniki = _pre_filtruj_ligi(wyniki)
-        if len(wyniki) < n_przed_liga:
-            console.print(
-                f"[dim]Pre-filtr lig (blacklist): "
-                f"{n_przed_liga} → {len(wyniki)} kandydatów[/dim]"
-            )
-
-    # -- Pre-filtr value bet: EV > 3% i Kelly > 1% (tylko kandydaci z kursami) ──
-    n_przed_ev = len(wyniki)
-    wyniki = _pre_filtruj_value_bet(wyniki)
-    if len(wyniki) < n_przed_ev:
-        console.print(
-            f"[dim]Pre-filtr value bet (EV/Kelly): "
-            f"{n_przed_ev} → {len(wyniki)} kandydatów[/dim]"
-        )
-
-    # -- Faza draft/final: enrichment składów/sędziego (Decision Score → po Groq) ──
-    if args.faza:
-        _sep(f"FAZA {args.faza.upper()} — Składy + Sędzia (API-Football)")
-        _enrichuj_finalna_faza(wyniki, os.getenv("APISPORTS_KEY", ""))
-        console.print(f"[cyan]{args.faza.capitalize()}: {len(wyniki)} kandydatów po wzbogaceniu o składy/sędziego[/cyan]")
-
-        if args.faza == "draft":
-            _zapisz_next_final_txt(wyniki)
-
-    if not args.tylko_kupon:
-        _sep("KROK 2 — Forma SofaScore")
-        _wzbogac_forme_top(wyniki, top_n=12)
-        _wzbogac_o_betbuilder(wyniki, pobierz_superbet=args.bb)
-        _apply_injury_corrections(wyniki)
-
-    _sep("KROK 3 — Groq AI")
-    dane = _analizuj_groq(wyniki, cel_wygrana_a=args.cel_a, cel_wygrana_b=args.cel_b, stawka=args.stawka)
-
-    if args.faza == "final":
-        _sep("KROK 3b — Odświeżenie kursów LIVE (faza final)")
-        indeks = _odswiez_kursy_live(indeks, dni=args.dni)
-
-    _sep("KROK 4 — Weryfikacja kursow (anty-halucynacja)")
-    dane = _weryfikuj_kupony(dane, indeks)
-
-    # Krok 4b: Dodaj Kelly do kazdej nogi
-    _dodaj_kelly(dane, current_bankroll)
-
-    # Krok 4c: Decision Score post-Groq — teraz pewnosc_pct i ev_netto są rzeczywiste
-    if args.faza:
-        _ocen_zdarzenia_decision_score(dane, phase=args.faza)
-
-    _wyswietl(dane, args.stawka, args.stawka_b)
-
-    if args.waliduj:
-        _waliduj_kupon_groq(dane, args.stawka, "kupon_a")
-
-    # -- Faza: zapisz kupon do SQLite DB (pomijamy w dry-run) ─────────────────
-    cid = None
-    draft_legs = []
-    draft_odds = 1.0
-    if args.faza and not args.dry_run:
-        kupon_a_db = dane.get("kupon_a", {})
-        zdarzenia_db = kupon_a_db.get("zdarzenia", [])
-        kurs_db = kupon_a_db.get("kurs_laczny", 1.0) or 1.0
-        if zdarzenia_db:
-            # Sprawdzenie decision_score PRZED zapisem
-            avg_score = int(sum(z.get("decision_score", 0) for z in zdarzenia_db) / max(len(zdarzenia_db), 1))
-            from footstats.core.decision_score import PROG_FINAL, PROG_DRAFT
-            threshold = PROG_FINAL if args.faza == "final" else PROG_DRAFT
-
-            if avg_score < threshold:
-                console.print(
-                    f"[red]❌ ODRZUCONO: decision_score {avg_score}/{threshold} poniżej progu "
-                    f"({args.faza.upper()})[/red]"
-                )
-                console.print(f"[dim]Kupon nie został zapisany do bazy danych[/dim]")
-            else:
-                cid = _zapisz_kupon_do_db(
-                    zdarzenia_db,
-                    phase=args.faza,
-                    groq_resp=dane.get("_raw", ""),
-                    stake=args.stawka,
-                    total_odds=kurs_db,
-                )
-                if cid:
-                    console.print(f"[green]✅ Kupon zapisany do DB — ID: {cid} | faza: {args.faza}[/green]")
-                    draft_legs = zdarzenia_db
-                    draft_odds = kurs_db
-    elif args.dry_run and args.faza:
-        console.print("[yellow]DRY-RUN: pominięto zapis kuponu do DB[/yellow]")
-
-    # Zapisz do TXT (pomijamy w dry-run)
-    if not args.dry_run:
-        sciezka_txt = _zapisz_txt(dane, args.stawka, args.stawka_b)
-    else:
-        console.print("[yellow]DRY-RUN: pominięto zapis TXT[/yellow]")
-        sciezka_txt = None
-
-    # Powiadomienie Windows (pomijamy w dry-run)
-    kupony_info = []
-    for lbl, kkey in [("A", "kupon_a"), ("B", "kupon_b"), ("C", "kupon_c"), ("D", "kupon_d")]:
-        kp = dane.get(kkey, {})
-        if kp.get("zdarzenia"):
-            kupony_info.append(f"{lbl}: @{kp.get('kurs_laczny', 0):.2f} ({kp.get('szansa_wygranej_pct', '?')}%)")
-    if not args.dry_run and sciezka_txt:
-        notif_tekst = (
-            " | ".join(kupony_info) + f"\n{sciezka_txt.name}"
-        )
-        _powiadomienie_windows("FootStats - gotowy kupon", notif_tekst)
-
-    # Telegram (pomijamy w dry-run)
-    if not args.dry_run:
-        try:
-            from footstats.utils.telegram_notify import (
-                send_kupon, send_draft_kupon, telegram_dostepny,
-            )
-            if telegram_dostepny():
-                if args.faza == "draft" and cid and draft_legs:
-                    ok = send_draft_kupon(cid, draft_legs, draft_odds)
-                else:
-                    ok = send_kupon(dane, stawka_a=args.stawka, stawka_b=args.stawka_b)
-                console.print(f"[dim]Telegram: {'wyslano' if ok else 'blad wysylki'}[/dim]")
-        except Exception as e:
-            console.print(f"[dim]Telegram niedostepny: {e}[/dim]")
-    else:
-        console.print("[yellow]DRY-RUN: pominięto Telegram[/yellow]")
-
-    # Cleanup old checkpoints (>7 days)
-    cleanup_old_checkpoints(days=7)
-
-    console.print()
-    console.print("[bold green]Gotowe.[/bold green] Powodzenia!\n")
-
+# ── CLI ───────────────────────────────────────────────────────────────────────
 
 # ── Ensemble: roznica_modeli ─────────────────────────────────────────────────
 
@@ -1408,6 +1102,312 @@ def _zapisz_kupon_do_db(
         console.print(f"[red]BŁĄD _zapisz_kupon_do_db [{phase}]: {e}[/red]")
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
         return None
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="FootStats Daily Agent")
+    p.add_argument("--stawka",      type=float, default=10.0, help="Stawka kupon A (PLN, domyslnie 10)")
+    p.add_argument("--stawka-b",    type=float, default=5.0,  help="Stawka kupon B (PLN, domyslnie 5)")
+    p.add_argument("--dni",         type=int,   default=3,    help="Horyzont w dniach (domyslnie 3)")
+    p.add_argument("--tylko-kupon", action="store_true",      help="Pomiń formę SofaScore")
+    p.add_argument("--waliduj",     action="store_true",      help="Uruchom walidację Groq kuponu A")
+    p.add_argument("--cel-a",       type=float, default=None, help="Cel wygranej netto kupon A (PLN)")
+    p.add_argument("--cel-b",       type=float, default=None, help="Cel wygranej netto kupon B (PLN)")
+    p.add_argument("--faza",        choices=["draft", "final"], default=None,
+                   help="Faza: draft (08:00, bez skladow) lub final (1h przed meczem, ze skladami)")
+    p.add_argument("--date",        default=None,
+                   help="Data YYYY-MM-DD (domyslnie: dzis) — etykieta logów i update_pending")
+    p.add_argument("--dry-run",     action="store_true",
+                   help="Tryb podgladu: nie zapisuje do DB, TXT, nie wysyla Telegram/Windows")
+    p.add_argument("--bb",          action="store_true",
+                   help="Pobierz realne kursy BetBuilder z Superbet API (wolno, ~3min)")
+    return p
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    args = _build_parser().parse_args()
+
+    from footstats.config import AGENT_BANKROLL
+    from footstats.core.bankroll import (
+        get_current_bankroll, check_daily_stop_loss,
+        get_stake_multiplier, check_weekly_alert, get_loss_streak,
+    )
+    from footstats.utils.admin_user import resolve_admin_user_id
+
+    admin_uid = resolve_admin_user_id()
+    current_bankroll = get_current_bankroll(user_id=admin_uid)
+    date_label = args.date or datetime.now().strftime("%Y-%m-%d")
+    dry_tag    = "  [yellow]⚠ DRY-RUN[/yellow]" if args.dry_run else ""
+
+    # Stop-loss check
+    if not args.dry_run and check_daily_stop_loss(user_id=admin_uid):
+        console.print("[bold red]STOP-LOSS: dzienna strata >= 10% bankrolla — przerywam.[/bold red]")
+        return
+
+    # Streak detection
+    streak = get_loss_streak(user_id=admin_uid)
+    stake_mult = get_stake_multiplier(user_id=admin_uid)
+    if streak >= 3:
+        console.print(f"[yellow]STREAK: {streak} przegranych z rzędu → stawki x{stake_mult:.0%}[/yellow]")
+        args.stawka = round(args.stawka * stake_mult, 1)
+        args.stawka_b = round(args.stawka_b * stake_mult, 1)
+
+    # Weekly drawdown alert
+    if check_weekly_alert(user_id=admin_uid):
+        console.print("[bold yellow]ALERT: tygodniowy drawdown przekroczył 20% bankrolla![/bold yellow]")
+
+    console.print()
+    console.print(Panel(
+        f"[bold]FootStats Daily Agent[/bold]  |  {date_label}{dry_tag}\n"
+        f"Horyzont: {args.dni} dni  |  Stawka A: {args.stawka} PLN  |  Stawka B: {args.stawka_b} PLN  |  Bankroll: {current_bankroll} PLN",
+        border_style="cyan",
+    ))
+
+    # Krok 0: Auto-update wynikow pending meczow (pomijamy w dry-run)
+    _sep("KROK 0 — Auto-update wynikow")
+    if args.dry_run:
+        console.print("[yellow]DRY-RUN: pomijam update_pending[/yellow]")
+    else:
+        try:
+            from footstats.scrapers.results_updater import update_pending
+            stats_upd = update_pending(days_back=3, dry_run=False, verbose=True)
+            if stats_upd["updated"] > 0:
+                console.print(f"[green]Zaktualizowano {stats_upd['updated']} wynikow w backtest.db[/green]")
+        except Exception as e:
+            console.print(f"[dim]Auto-update wynikow: {e}[/dim]")
+
+        # Krok 0b: Analiza porażek AI (Pętla Feedbacku) — uruchamiana po update wyników
+        try:
+            from footstats.ai.post_match_analyzer import analizuj_porazki
+            stats_fb = analizuj_porazki(days_back=14, dry_run=False)
+            if stats_fb["analyzed"] > 0:
+                console.print(
+                    f"[dim]Pętla Feedbacku: przeanalizowano {stats_fb['analyzed']} porażek[/dim]"
+                )
+        except Exception as e:
+            console.print(f"[dim]Analiza porażek (feedback): {e}[/dim]")
+
+        # Krok 0c: Rozliczenie ACTIVE kuponów (Settlement)
+        try:
+            from footstats.core.coupon_settlement import settle_active_coupons
+            stats_settle = settle_active_coupons(days_back=7, dry_run=False, verbose=True)
+            if stats_settle["settled"] > 0:
+                console.print(
+                    f"[green]Rozliczono {stats_settle['settled']} kuponów | "
+                    f"Częściowych: {stats_settle['partial']} | Błędów: {stats_settle['errors']}[/green]"
+                )
+        except Exception as e:
+            console.print(f"[dim]Błąd settlement kuponów: {e}[/dim]")
+
+    # Krok 0d: Aktualizacja statystyk sędziów z Zawodtyper (raz dziennie)
+    try:
+        from footstats.scrapers.zawodtyper_referees import fetch_referees_zawodtyper
+        fetch_referees_zawodtyper()
+        console.print("[green]✓ Sędziowie zaktualizowani z Zawodtyper[/green]")
+    except Exception as e:
+        console.print(f"[dim]Referee update: {e}[/dim]")
+
+    _sep("KROK 1 — Bzzoiro ML")
+    wyniki, indeks = _pobierz_kandydatow(dni=args.dni)
+
+    # Checkpoint: save predictions batch for recovery
+    batch_id = f"daily_{datetime.now():%Y%m%d_%H%M}"
+    save_predictions_batch(wyniki, batch_id=batch_id)
+    log.info(f"Checkpoint saved: {batch_id} ({len(wyniki)} predictions)")
+
+    # Krok 1b: Dociagnij Ekstraklase z API-Football jesli dostepny
+    wyniki_ekstra = _pobierz_apifootball_ekstraklasa(args.dni)
+    if wyniki_ekstra:
+        console.print(f"[dim]API-Football Ekstraklasa: +{len(wyniki_ekstra)} kandydatow[/dim]")
+        wyniki = wyniki + wyniki_ekstra
+        for w in wyniki_ekstra:
+            g = w.get("gospodarz", "")
+            a = w.get("goscie", "")
+            indeks[(_norm(g), _norm(a))] = {
+                "odds": w.get("odds", {}), "gospodarz": g, "goscie": a, "liga": w.get("liga", "")
+            }
+
+    if not wyniki:
+        _blad("Bzzoiro nie zwrocilo zadnych kandydatow.")
+
+    # Ensemble: oblicz roznica_modeli (Poisson vs Bzzoiro) dla każdego kandydata
+    _oblicz_roznica_modeli(wyniki)
+
+    # xG prefetch z Understat (wypełnia cache przed pętlą Poissona)
+    try:
+        from footstats.scrapers.understat_xg import fetch_team_xg, _to_slug, _cache_get
+        from datetime import datetime as _dt
+        _season = _dt.now().year if _dt.now().month >= 7 else _dt.now().year - 1
+        _teams = {w.get("gospodarz", "") for w in wyniki} | {w.get("goscie", "") for w in wyniki}
+        _missing = [t for t in _teams if t and not _cache_get(_to_slug(t), _season)]
+        if _missing:
+            console.print(f"[dim]xG prefetch: {len(_missing)} drużyn z Understat...[/dim]")
+            for _team in _missing:
+                try:
+                    fetch_team_xg(_team, _season)
+                except (OSError, ValueError, RuntimeError):
+                    pass
+    except (ImportError, AttributeError):
+        pass
+
+    # -- Pre-filtr tokenów: odrzuca mecze bez pełnej nazwy drużyny lub ligi ──
+    n_przed_token = len(wyniki)
+    wyniki = _pre_filtruj_tokenow(wyniki)
+    if len(wyniki) < n_przed_token:
+        console.print(
+            f"[dim]Pre-filtr tokenów (brak nazw/ligi): "
+            f"{n_przed_token} → {len(wyniki)} kandydatów[/dim]"
+        )
+
+    # -- Pre-filtr kursów: oszczędza tokeny Groq (odrzuca <1.15 i >15.0) ───────
+    n_przed_filter = len(wyniki)
+    wyniki = _pre_filtruj_kursy(wyniki)
+    if len(wyniki) < n_przed_filter:
+        console.print(
+            f"[dim]Pre-filtr kursów (1.15–15.0): "
+            f"{n_przed_filter} → {len(wyniki)} kandydatów[/dim]"
+        )
+
+    # -- Pre-filtr lig (blacklist): odrzuca ligi z udowodnionym brakiem edge ──
+    from footstats.config import LIGI_BLACKLIST, LIGA_FILTER_ENABLED
+    if LIGA_FILTER_ENABLED:
+        n_przed_liga = len(wyniki)
+        wyniki = _pre_filtruj_ligi(wyniki)
+        if len(wyniki) < n_przed_liga:
+            console.print(
+                f"[dim]Pre-filtr lig (blacklist): "
+                f"{n_przed_liga} → {len(wyniki)} kandydatów[/dim]"
+            )
+
+    # -- Pre-filtr value bet: EV > 3% i Kelly > 1% (tylko kandydaci z kursami) ──
+    n_przed_ev = len(wyniki)
+    wyniki = _pre_filtruj_value_bet(wyniki)
+    if len(wyniki) < n_przed_ev:
+        console.print(
+            f"[dim]Pre-filtr value bet (EV/Kelly): "
+            f"{n_przed_ev} → {len(wyniki)} kandydatów[/dim]"
+        )
+
+    # -- Faza draft/final: enrichment składów/sędziego (Decision Score → po Groq) ──
+    if args.faza:
+        _sep(f"FAZA {args.faza.upper()} — Składy + Sędzia (API-Football)")
+        _enrichuj_finalna_faza(wyniki, os.getenv("APISPORTS_KEY", ""))
+        console.print(f"[cyan]{args.faza.capitalize()}: {len(wyniki)} kandydatów po wzbogaceniu o składy/sędziego[/cyan]")
+
+        if args.faza == "draft":
+            _zapisz_next_final_txt(wyniki)
+
+    if not args.tylko_kupon:
+        _sep("KROK 2 — Forma SofaScore")
+        _wzbogac_forme_top(wyniki, top_n=12)
+        _wzbogac_o_betbuilder(wyniki, pobierz_superbet=args.bb)
+        _apply_injury_corrections(wyniki)
+
+    _sep("KROK 3 — Groq AI")
+    dane = _analizuj_groq(wyniki, cel_wygrana_a=args.cel_a, cel_wygrana_b=args.cel_b, stawka=args.stawka)
+
+    if args.faza == "final":
+        _sep("KROK 3b — Odświeżenie kursów LIVE (faza final)")
+        indeks = _odswiez_kursy_live(indeks, dni=args.dni)
+
+    _sep("KROK 4 — Weryfikacja kursow (anty-halucynacja)")
+    dane = _weryfikuj_kupony(dane, indeks)
+
+    # Krok 4b: Dodaj Kelly do kazdej nogi
+    _dodaj_kelly(dane, current_bankroll)
+
+    # Krok 4c: Decision Score post-Groq — teraz pewnosc_pct i ev_netto są rzeczywiste
+    if args.faza:
+        _ocen_zdarzenia_decision_score(dane, phase=args.faza)
+
+    _wyswietl(dane, args.stawka, args.stawka_b)
+
+    if args.waliduj:
+        _waliduj_kupon_groq(dane, args.stawka, "kupon_a")
+
+    # -- Faza: zapisz kupon do SQLite DB (pomijamy w dry-run) ─────────────────
+    cid = None
+    draft_legs = []
+    draft_odds = 1.0
+    if args.faza and not args.dry_run:
+        kupon_a_db = dane.get("kupon_a", {})
+        zdarzenia_db = kupon_a_db.get("zdarzenia", [])
+        kurs_db = kupon_a_db.get("kurs_laczny", 1.0) or 1.0
+        if zdarzenia_db:
+            # Sprawdzenie decision_score PRZED zapisem
+            avg_score = int(sum(z.get("decision_score", 0) for z in zdarzenia_db) / max(len(zdarzenia_db), 1))
+            from footstats.core.decision_score import PROG_FINAL, PROG_DRAFT
+            threshold = PROG_FINAL if args.faza == "final" else PROG_DRAFT
+
+            if avg_score < threshold:
+                console.print(
+                    f"[red]❌ ODRZUCONO: decision_score {avg_score}/{threshold} poniżej progu "
+                    f"({args.faza.upper()})[/red]"
+                )
+                console.print(f"[dim]Kupon nie został zapisany do bazy danych[/dim]")
+            else:
+                cid = _zapisz_kupon_do_db(
+                    zdarzenia_db,
+                    phase=args.faza,
+                    groq_resp=dane.get("_raw", ""),
+                    stake=args.stawka,
+                    total_odds=kurs_db,
+                )
+                if cid:
+                    console.print(f"[green]✅ Kupon zapisany do DB — ID: {cid} | faza: {args.faza}[/green]")
+                    draft_legs = zdarzenia_db
+                    draft_odds = kurs_db
+    elif args.dry_run and args.faza:
+        console.print("[yellow]DRY-RUN: pominięto zapis kuponu do DB[/yellow]")
+
+    # Zapisz do TXT (pomijamy w dry-run)
+    if not args.dry_run:
+        sciezka_txt = _zapisz_txt(dane, args.stawka, args.stawka_b)
+    else:
+        console.print("[yellow]DRY-RUN: pominięto zapis TXT[/yellow]")
+        sciezka_txt = None
+
+    # Powiadomienie Windows (pomijamy w dry-run)
+    kupony_info = []
+    for lbl, kkey in [("A", "kupon_a"), ("B", "kupon_b"), ("C", "kupon_c"), ("D", "kupon_d")]:
+        kp = dane.get(kkey, {})
+        if kp.get("zdarzenia"):
+            kupony_info.append(f"{lbl}: @{kp.get('kurs_laczny', 0):.2f} ({kp.get('szansa_wygranej_pct', '?')}%)")
+    if not args.dry_run and sciezka_txt:
+        notif_tekst = (
+            " | ".join(kupony_info) + f"\n{sciezka_txt.name}"
+        )
+        _powiadomienie_windows("FootStats - gotowy kupon", notif_tekst)
+
+    # Telegram (pomijamy w dry-run)
+    if not args.dry_run:
+        try:
+            from footstats.utils.telegram_notify import (
+                send_kupon, send_draft_kupon, telegram_dostepny,
+            )
+            if telegram_dostepny():
+                if args.faza == "draft" and cid and draft_legs:
+                    ok = send_draft_kupon(cid, draft_legs, draft_odds)
+                else:
+                    ok = send_kupon(dane, stawka_a=args.stawka, stawka_b=args.stawka_b)
+                console.print(f"[dim]Telegram: {'wyslano' if ok else 'blad wysylki'}[/dim]")
+        except Exception as e:
+            console.print(f"[dim]Telegram niedostepny: {e}[/dim]")
+    else:
+        console.print("[yellow]DRY-RUN: pominięto Telegram[/yellow]")
+
+    # Cleanup old checkpoints (>7 days)
+    cleanup_old_checkpoints(days=7)
+
+    console.print()
+    console.print("[bold green]Gotowe.[/bold green] Powodzenia!\n")
+
+
 
 
 if __name__ == "__main__":
