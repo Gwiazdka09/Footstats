@@ -1,85 +1,71 @@
+
+!assets/DejaVuSans.ttf
+# ── Cache FootStats
+# ── Claude Code
+# ── Dane (DB backtest)
+# ── Edytory 
+# ── Fonty (duże pliki, pobierz osobno) 
 # ── Klucze API i sekrety 
+# ── Kopie zapasowe 
+# ── Logi i pliki tymczasowe
+# ── Node modules i cache builds
+# ── Plany superpowers (lokalne notatki)
+# ── Playwright 
+# ── Pliki generowane przez FootStats
+# ── Python 
+# ── Środowiska wirtualne 
+# ── System 
+# ── vexp (lokalny indeks kodu, nie potrzebny w repo)
+*.png
+*.py[cod]
+*.pyd
+*.pyo
+*.swo
+*.swp
+*.ttf
+*_backup.py
+*_BACKUP.py
+*~
+.aider*
+.aider.tags.cache.v4/
+.cache/
+.claude/settings.local.json
+.DS_Store
 .env
 .env.*
-env_wzor.txt
-
-# ── Python 
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
+.idea/
 .Python
-
-# ── Środowiska wirtualne 
-venv/
 .venv/
-env/
-ENV/
-
-# ── Pliki generowane przez FootStats
-FootStats_*.pdf
-Pewniaczki_*.pdf
+.vexp/
+.vscode/
+__pycache__/
+ai_analiza_*.json
 ai_kolejka_*.json
 ai_typy_*.json
-ai_analiza_*.json
-
-# ── Cache FootStats
-.cache/
 cache/
-
-# ── Claude Code
-.claude/settings.local.json
-
-# ── Dane (DB backtest)
 data/
-
-# ── Kopie zapasowe 
-footstats_BACKUP.py
-*_BACKUP.py
-*_backup.py
-
-# ── Edytory 
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# ── System 
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# ── Fonty (duże pliki, pobierz osobno) 
+data/footstats.db
+data/footstats.db-shm
+data/footstats.db-wal
 dejavu-sans-ttf-2.37/
-*.ttf
-
-# ── Playwright 
+desktop.ini
+docs/superpowers/plans/
+env/
+ENV/
+env_wzor.txt
+FootStats_*.pdf
+footstats_BACKUP.py
+logs/
+Pewniaczki_*.pdf
 playwright-report/
-test-results/
-
+src/footstats/gui/node_modules/
+src/footstats/gui/node_modules/
 sts_debug_*.png
 sts_error.png
-superoferta_debug*.png
-superoferta_error.png
 superbet_debug_*.png
 superbet_error.png
-
-# ── Logi i pliki tymczasowe
-logs/
-*.png
-.aider*
-!assets/DejaVuSans.ttf
-
-# ── vexp (lokalny indeks kodu, nie potrzebny w repo)
-.vexp/
-
-# ── Plany superpowers (lokalne notatki)
-docs/superpowers/plans/
-
-# ── Node modules i cache builds
-src/footstats/gui/node_modules/
-.aider.tags.cache.v4/
-data/footstats.db
-data/footstats.db-wal
-data/footstats.db-shm
+superoferta_debug*.png
+superoferta_error.png
+test-results/
+Thumbs.db
+venv/

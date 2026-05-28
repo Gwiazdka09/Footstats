@@ -1094,12 +1094,12 @@ def main():
                     subprocess.Popen(
                         [_sys.executable, "-m", "streamlit", "run", str(dash_path)],
                         creationflags=subprocess.CREATE_NEW_CONSOLE if hasattr(subprocess, "CREATE_NEW_CONSOLE") else 0,
-                    )
+                    )  # fire-and-forget streamlit dashboard
                     console.print("[green]Dashboard uruchomiony w nowym oknie (http://localhost:8501)[/green]")
                 except FileNotFoundError:
                     console.print("[red]Brak streamlit. Zainstaluj: pip install streamlit[/red]")
-                except Exception as _e:
-                    console.print(f"[red]Blad uruchamiania dashboard: {_e}[/red]")
+                except OSError as _e:
+                    console.print(f"[red]Blad uruchamiania dashboard: {_e.__class__.__name__}: {_e}[/red]")
 
         elif wybor == "0":
             console.print(f"\n[bold blue]Do zobaczenia! FootStats {VERSION}[/bold blue]\n")
