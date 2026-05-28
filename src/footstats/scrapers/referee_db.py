@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import sqlite3
 from datetime import datetime
-from pathlib import Path
 
-_DEFAULT_DB = Path(__file__).parents[3] / "data" / "footstats_backtest.db"
+from footstats.utils.db import connect
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS referees (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    id           SERIAL PRIMARY KEY,
     name         TEXT    NOT NULL UNIQUE,
     country      TEXT,
     avg_yellow   REAL,
@@ -17,29 +15,21 @@ CREATE TABLE IF NOT EXISTS referees (
     home_win_pct REAL,
     n_matches    INTEGER,
     updated_at   TEXT
-);
+)
 """
 
 _KARTKOWY_THRESHOLD = 4.3
 _BRAMKOWY_THRESHOLD = 3.0
 
 
-def _db(db_path: Path | None) -> Path:
-    return db_path or _DEFAULT_DB
-
-
-def init_referee_table(db_path: Path = None) -> None:
-    path = _db(db_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(path) as conn:
+def init_referee_table() -> None:
+    with connect() as conn:
         conn.execute(_DDL)
-        conn.commit()
 
 
-def upsert_referee(name: str, stats: dict, db_path: Path = None) -> None:
-    init_referee_table(db_path)
-    path = _db(db_path)
-    with sqlite3.connect(path) as conn:
+def upsert_referee(name: str, stats: dict) -> None:
+    init_referee_table()
+    with connect() as conn:
         conn.execute(
             """
             INSERT INTO referees (name, country, avg_yellow, avg_red, avg_goals,
@@ -65,14 +55,11 @@ def upsert_referee(name: str, stats: dict, db_path: Path = None) -> None:
                 datetime.now().isoformat(),
             ),
         )
-        conn.commit()
 
 
-def get_referee(name: str, db_path: Path = None) -> dict | None:
-    init_referee_table(db_path)
-    path = _db(db_path)
-    with sqlite3.connect(path) as conn:
-        conn.row_factory = sqlite3.Row
+def get_referee(name: str) -> dict | None:
+    init_referee_table()
+    with connect() as conn:
         row = conn.execute(
             "SELECT * FROM referees WHERE name = ?", (name,)
         ).fetchone()
@@ -81,9 +68,9 @@ def get_referee(name: str, db_path: Path = None) -> dict | None:
     return dict(row)
 
 
-def referee_signal(name: str, db_path: Path = None) -> str:
+def referee_signal(name: str) -> str:
     """Return one of: KARTKOWY | BRAMKOWY | NEUTRALNY | NIEZNANY"""
-    ref = get_referee(name, db_path=db_path)
+    ref = get_referee(name)
     if ref is None:
         return "NIEZNANY"
     avg_y = ref.get("avg_yellow") or 0.0
