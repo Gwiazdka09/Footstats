@@ -19,15 +19,16 @@
 
 ### 10.2: Broad Except Cleanup (P2) — IN PROGRESS
 - [x] sts.py — 3x zamienione na (PWTimeout, ValueError, KeyError) (commit 241a0f2) ✅
-- [ ] superbet.py (15x) — zastąpić konkretnymi wyjątkami
-- [ ] base_playwright.py (14x) — j.w.
-- [ ] daily_agent.py (14x) — j.w.
-- [ ] analyzer.py (13x) — j.w.
-- NOTE: ~233 remaining
+- [x] superbet.py — już czysty ✅
+- [x] analyzer.py — już czysty ✅
+- [x] base_playwright.py — 1x justified (generic retry wrapper) ✅
+- [x] daily_agent.py — 5x zawężone (13→8): OSError/ValueError/KeyError/AttributeError/TypeError
+- [ ] daily_agent.py — 8x pozostałe (orchestration log-and-continue, P3)
+- NOTE: ~220 remaining w całym projekcie
 
-### 10.3: subprocess.Popen Audit — PARTIAL ✅ (commit 241a0f2)
+### 10.3: subprocess.Popen Audit — COMPLETE ✅
 - [x] daily_agent.py — except Exception → except OSError + komentarz fire-and-forget
-- [ ] Pozostałe 4 (backtest, post_match_analyzer, evening_agent, cli)
+- [x] backtest.py, post_match_analyzer.py, evening_agent.py, cli.py — już miały OSError
 
 ### 10.4: Large File Refactoring (P3)
 - [ ] daily_agent.py (1396 LOC) — wydzielić: parsowanie CLI, enrichment, walidacja

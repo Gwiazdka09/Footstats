@@ -123,7 +123,7 @@ def _odswiez_kursy_live(indeks: dict, dni: int = 3) -> dict:
                     updated += 1
 
         console.print(f"[green]Odświeżono kursy LIVE: {updated}/{len(indeks)} meczów zaktualizowanych[/green]")
-    except Exception as e:
+    except (OSError, ValueError, KeyError) as e:
         console.print(f"[yellow]Błąd odświeżenia kursów: {e} — używam starych kursów[/yellow]")
 
     return indeks
@@ -147,7 +147,7 @@ def _apply_injury_corrections(wyniki: list) -> None:
                     w["lambda_h"] = lh_adj
                     w["lambda_a"] = la_adj
                     log.debug(f"{w.get('gospodarz')} vs {w.get('goscie')}: lambda_h {lh:.2f}→{lh_adj:.2f}, lambda_a {la:.2f}→{la_adj:.2f}")
-        except Exception as e:
+        except (AttributeError, TypeError, KeyError) as e:
             log.debug(f"Injury correction error: {e}")
 
 
@@ -189,7 +189,7 @@ def _wzbogac_forme_top(wyniki: list, top_n: int = 6) -> None:
                 w["sofa_kontuzje_g"] = ", ".join(inj_g)
             if inj_a:
                 w["sofa_kontuzje_a"] = ", ".join(inj_a)
-        except Exception:
+        except (AttributeError, TypeError, KeyError):
             pass
 
 
@@ -589,7 +589,7 @@ def _pobierz_apifootball_ekstraklasa(dni: int = 3) -> list[dict]:
         from footstats.scrapers.api_football import APIFootball
         af = APIFootball(klucz)
         return af.kandydaci_liga(api_id=106, godziny=dni * 24, prog_pw=0.50)
-    except Exception as e:
+    except (OSError, ValueError, KeyError) as e:
         console.print(f"[dim]API-Football Ekstraklasa: {e}[/dim]")
         return []
 
@@ -1044,7 +1044,7 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
         )
         resp.raise_for_status()
         fixtures = resp.json().get("response", [])
-    except Exception as e:
+    except (OSError, ValueError, KeyError) as e:
         console.print(f"[yellow]API-Football fixtures: {e} — pomijam enrichment[/yellow]")
         return
 
