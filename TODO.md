@@ -8,10 +8,10 @@
 
 ## Phase 10: CODE QUALITY & ACCURACY (aktywna)
 
-### 10.0: FILE RESTORE — 🔴 CRITICAL (2026-05-28)
-- [ ] **Restore 12 truncated/corrupted files z git HEAD** (BLOCKER)
-- [ ] Zbadać przyczynę rekurencyjnej truncation (3. raz! 05-26, 05-28)
-- [ ] Wzmocnić pre-commit hook: py_compile + null-byte check na KAŻDYM .py
+### 10.0: FILE RESTORE — COMPLETE ✅ (2026-05-28)
+- [x] **Restore 12 truncated/corrupted files z git HEAD** ✅
+- [x] Zbadać przyczynę rekurencyjnej truncation — **PRZYCZYNA**: Write tool na dużych plikach (>800 LOC) przy wysokim kontekście → truncacja. Mitygacja: pre-commit hook + test_file_integrity_v2. Używać Edit zamiast Write. ✅
+- [x] Wzmocnić pre-commit hook: py_compile + null-byte check na KAŻDYM .py ✅
 
 ### 10.1: Quick Fixes — COMPLETE ✅ (2026-05-27)
 - [x] `pyproject.toml` — 3.0 → 3.4
@@ -32,18 +32,18 @@
 - [ ] superbet.py (1128 LOC) — wydzielić: auth, scraping, parsing
 
 ### 10.5: Cleanup stale files (P2)
-- [ ] Usunąć `CLAUDE_CODE_PROMPT_PHASE9.md` (phase 9 done)
-- [ ] Usunąć `validation_errors.csv` (test artifact)
-- [ ] Usunąć `.aider.tags.cache.v4/` (orphan cache 768K)
-- [ ] Usunąć `.coverage` (stale, z 05-03)
-- [ ] Dodać `src/footstats/gui/node_modules/` do .gitignore (3.1GB!)
+- [x] Usunąć `CLAUDE_CODE_PROMPT_PHASE9.md` ✅
+- [x] Usunąć `validation_errors.csv` ✅
+- [x] Usunąć `.aider.tags.cache.v4/` ✅
+- [x] Usunąć `.coverage` ✅
+- [x] Dodać `src/footstats/gui/node_modules/` do .gitignore ✅
 
 ---
 
 ## Phase 9 (otwarte)
 
-### 9.1 BLOCKER: Cloud Run env vars
-- [ ] Sprawdzić FOOTSTATS_USER, FOOTSTATS_PASSWORD_HASH, JWT_SECRET w Cloud Run Console
+### 9.1 Cloud Run env vars — DONE ✅ (2026-05-28)
+- [x] FOOTSTATS_USER, FOOTSTATS_PASSWORD_HASH, JWT_SECRET — ustawione, zgodne z .env
 
 ### 9.5: Konsolidacja DB access (P3)
 - [ ] referee_db.py → utils/db.py (DEFERRED — wymaga przepisania testów)
@@ -52,8 +52,8 @@
 
 ## Proposed New Tests
 
-- [ ] test_file_integrity_v2.py — py_compile + null-byte check ALL .py files (regression gate)
-- [ ] test_subprocess_cleanup.py — verify Popen processes are cleaned up
+- [x] test_file_integrity_v2.py — py_compile + null-byte check ALL .py files (regression gate) ✅
+- [x] test_subprocess_cleanup.py — verify Popen processes are cleaned up ✅
 - [x] test_version_consistency.py ✅
 - [x] test_broad_except_audit.py ✅
 
@@ -72,6 +72,6 @@
 ---
 
 ## Blockers
-- 🔴 **12 broken files** — system non-functional, restore z git HEAD
-- **Cloud Run env vars** — login fix wymaga ustawienia w Cloud Run Console
+- ~~12 broken files~~ — FIXED (restore z git HEAD)
+- ~~Cloud Run env vars~~ — DONE (zgodne z .env)
 - **Accuracy 42%** — poniżej M1 target
