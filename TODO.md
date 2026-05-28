@@ -55,11 +55,11 @@
 ### 9.1 BLOCKER: Cloud Run env vars
 - [ ] Sprawdzić FOOTSTATS_USER, FOOTSTATS_PASSWORD_HASH, JWT_SECRET w Cloud Run Console
 
-### 9.5: Konsolidacja DB access (P3, opcjonalne)
-- [ ] probability_calibrator.py → utils/db.py
-- [ ] ensemble_optimizer.py → utils/db.py
-- [ ] referee_db.py → utils/db.py
-- [ ] dashboard.py → utils/db.py
+### 9.5: Konsolidacja DB access (P3, opcjonalne) — PARTIAL ✅
+- [x] probability_calibrator.py → utils/db.py ✅
+- [x] ensemble_optimizer.py → utils/db.py ✅
+- [ ] referee_db.py → utils/db.py (DEFERRED — testy używają tmp_path SQLite, wymaga przepisania testów)
+- [x] dashboard.py → utils/db.py ✅
 
 ---
 

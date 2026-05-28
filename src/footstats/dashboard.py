@@ -3,17 +3,13 @@ FootStats Dashboard — Streamlit
 Uruchom: streamlit run dashboard.py
 """
 
-import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-# ── Ścieżki do baz ────────────────────────────────────────────────────────
-BACKTEST_DB   = Path(__file__).parent.parent.parent / "data" / "footstats_backtest.db"
-WALKFORWARD_DB = Path(__file__).parent.parent.parent / "data" / "footstats_backtest.db"  # ta sama baza
+from footstats.utils import db as _db
 
 st.set_page_config(
     page_title="FootStats Dashboard",
@@ -24,24 +20,23 @@ st.set_page_config(
 # ── Pomocnicze ────────────────────────────────────────────────────────────
 
 @contextmanager
-def _conn(db: Path):
-    if not db.exists():
+def _conn():
+    try:
+        with _db.connect() as conn:
+            yield conn
+    except Exception:
         yield None
-        return
-    with sqlite3.connect(db) as conn:
-        conn.row_factory = sqlite3.Row
-        yield conn
 
 
 def _load_predictions(days: int = 90) -> pd.DataFrame:
-    with _conn(BACKTEST_DB) as conn:
+    with _conn() as conn:
         if conn is None:
             return pd.DataFrame()
         date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
         try:
             df = pd.read_sql_query(
-                "SELECT * FROM predictions WHERE match_date >= ? ORDER BY match_date ASC",
-                conn, params=(date_from,),
+                "SELECT * FROM predictions WHERE match_date >= %s ORDER BY match_date ASC",
+                conn._raw, params=(date_from,),
             )
         except Exception:
             df = pd.DataFrame()
@@ -49,12 +44,12 @@ def _load_predictions(days: int = 90) -> pd.DataFrame:
 
 
 def _load_wf_results(league_filter: str | None = None) -> pd.DataFrame:
-    with _conn(WALKFORWARD_DB) as conn:
+    with _conn() as conn:
         if conn is None:
             return pd.DataFrame()
         try:
             sql = "SELECT * FROM wf_results ORDER BY match_date ASC"
-            df = pd.read_sql_query(sql, conn)
+            df = pd.read_sql_query(sql, conn._raw)
             if league_filter:
                 df = df[df["league"] == league_filter]
         except Exception:
@@ -63,14 +58,14 @@ def _load_wf_results(league_filter: str | None = None) -> pd.DataFrame:
 
 
 def _load_pending() -> pd.DataFrame:
-    with _conn(BACKTEST_DB) as conn:
+    with _conn() as conn:
         if conn is None:
             return pd.DataFrame()
         try:
             df = pd.read_sql_query(
                 "SELECT id, match_date, team_home, team_away, league, ai_tip, ai_confidence, odds, kupon_type "
                 "FROM predictions WHERE actual_result IS NULL ORDER BY match_date DESC",
-                conn,
+                conn._raw,
             )
         except Exception:
             df = pd.DataFrame()
