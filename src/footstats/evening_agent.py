@@ -283,6 +283,8 @@ def run_evening_agent(date_str: str | None = None) -> dict:
             subprocess.Popen(
                 [sys.executable, "-m", "footstats.ai.trainer"],
                 cwd=Path(__file__).parents[2],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )  # fire-and-forget auto-trainer
         except OSError as e:
             console.print(f"[red]Auto-trainer start failed: {e.__class__.__name__}: {e}[/red]")

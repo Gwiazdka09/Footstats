@@ -179,12 +179,16 @@ def _sprawdz_auto_trening() -> None:
 
         if n > 0 and n % AUTO_TRENING_CO_N == 0:
             import subprocess, sys
-            subprocess.Popen(
-                [sys.executable, "-m", "footstats.ai.trainer"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            print(f"[Backtest] Auto-trening uruchomiony (n={n} wynikow).")
+            try:
+                subprocess.Popen(
+                    [sys.executable, "-m", "footstats.ai.trainer"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except OSError as e:
+                print(f"[Backtest] Auto-trening start failed: {e}")
+            else:
+                print(f"[Backtest] Auto-trening uruchomiony (n={n} wynikow).")
             try:
                 from footstats.utils.telegram_notify import _send, telegram_dostepny
                 if telegram_dostepny():
