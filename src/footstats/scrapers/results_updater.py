@@ -137,7 +137,7 @@ def _fetch_fixtures(api_key: str, league_id: int, date_str: str) -> list[dict]:
         )
         r.raise_for_status()
         return r.json().get("response", [])
-    except Exception as e:
+    except (requests.RequestException, ValueError, KeyError) as e:
         log.warning("API-Football fixtures error (liga=%s, date=%s): %s", league_id, date_str, e)
         return []
 
@@ -187,7 +187,7 @@ def _fetch_match_stats(api_key: str, fixture_id: int) -> dict:
             t_stats = {s["type"]: s["value"] for s in s_list}
             res[t_name] = t_stats
         return res
-    except Exception as e:
+    except (KeyError, TypeError, ValueError) as e:
         log.debug("Match stats error (id=%s): %s", fixture_id, e)
         return {}
 
@@ -301,7 +301,7 @@ def update_pending(
                 wynik_found = get_match_result(p["team_home"], p["team_away"], match_date)
                 if wynik_found:
                     stats_found = {}  # Scraper nie dostarcza pełnych statystyk xG
-            except Exception as e:
+            except (OSError, ValueError, AttributeError) as e:
                 log.debug("Fallback scraper error: %s", e)
 
         if wynik_found:
@@ -323,9 +323,9 @@ def update_pending(
                                 wynik_found,
                                 info.get("tip_correct"),
                             )
-                    except Exception:
+                    except (ImportError, OSError, RuntimeError):
                         pass
-                except Exception as e:
+                except (OSError, ValueError, RuntimeError) as e:
                     log.error("Błąd update_result ID=%s: %s", p["id"], e)
                     stats["errors"] += 1
             else:
@@ -407,7 +407,7 @@ def update_active_coupons(
             )
             r.raise_for_status()
             date_cache[date_str] = r.json().get("response", [])
-        except Exception as e:
+        except (requests.RequestException, ValueError, KeyError) as e:
             log.warning("API-Football date-fetch error (date=%s): %s", date_str, e)
             date_cache[date_str] = []
         req_count += 1
@@ -453,7 +453,7 @@ def update_active_coupons(
                         reason = "Limit API" if req_count >= 75 else "Brak w API"
                         print(f"  [COUPON SCRAPER FALLBACK] {home} vs {away} ({reason})...")
                     wynik = get_match_result(home, away, match_date[:10])
-                except Exception as e:
+                except (OSError, ValueError, AttributeError) as e:
                     log.debug("Coupon fallback scraper error: %s", e)
 
             if wynik:
@@ -506,7 +506,7 @@ def update_active_coupons(
                                 (datetime.now().isoformat(), payout, new_balance, "WIN", f"Kupon #{coupon_id} WIN"),
                             )
                 stats["closed"] += 1
-            except Exception as e:
+            except (OSError, ValueError, RuntimeError) as e:
                 log.error("Błąd zamykania kuponu ID=%s: %s", coupon_id, e)
                 stats["errors"] += 1
 

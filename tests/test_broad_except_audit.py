@@ -65,7 +65,7 @@ BASELINE: dict[str, int] = {
     "scrapers/flashscore_results.py": 4,
     "scrapers/form_scraper.py": 6,
     "scrapers/kursy.py": 3,
-    "scrapers/results_updater.py": 8,
+    "scrapers/results_updater.py": 0,
     "scrapers/source_manager.py": 1,
     "scrapers/sts.py": 13,
     "ai/analyzer.py": 13,
