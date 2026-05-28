@@ -27,7 +27,7 @@
 ### 10.3: subprocess.Popen Audit — COMPLETE ✅
 
 ### 10.4: Large File Refactoring (P3)
-- [ ] daily_agent.py (1396 LOC) — wydzielić: parsowanie CLI, enrichment, walidacja
+- [x] daily_agent.py — _build_parser() wydzielony, 11 fn po-main() przeniesione przed main() ✅
 - [ ] analyzer.py (1393 LOC) — wydzielić: prompts, scoring, output formatting
 - [ ] superbet.py (1128 LOC) — wydzielić: auth, scraping, parsing
 
