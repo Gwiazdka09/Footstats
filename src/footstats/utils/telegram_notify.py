@@ -17,14 +17,55 @@ Użycie:
         send_kupon(dane_kuponu, stawka_a=10, stawka_b=5)
 """
 
+import hashlib
+import json
 import os
 import requests
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
+_DEDUP_FILE = Path(__file__).resolve().parents[4] / "data" / "telegram_dedup.json"
+
+
+def _kupon_hash(dane: dict) -> str:
+    """Skrót treści kuponu — na podstawie mecz+typ wszystkich nóg."""
+    parts: list[str] = []
+    for key in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
+        for z in (dane.get(key) or {}).get("zdarzenia", []):
+            parts.append(f"{z.get('mecz','?')}|{z.get('typ','?')}")
+    payload = "|".join(sorted(parts))
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def _already_sent_today(h: str) -> bool:
+    dzis = datetime.now().strftime("%Y-%m-%d")
+    try:
+        data = json.loads(_DEDUP_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
+    return h in data.get(dzis, [])
+
+
+def _mark_sent(h: str) -> None:
+    dzis = datetime.now().strftime("%Y-%m-%d")
+    try:
+        data = json.loads(_DEDUP_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
+    data.setdefault(dzis, [])
+    if h not in data[dzis]:
+        data[dzis].append(h)
+    # Zachowaj tylko ostatnie 7 dni
+    cutoff = sorted(data)[-7:]
+    _DEDUP_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _DEDUP_FILE.write_text(
+        json.dumps({k: data[k] for k in cutoff}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def _get_credentials() -> tuple[str, str]:
@@ -76,6 +117,10 @@ def send_kupon(dane: dict, stawka_a: float = 10.0, stawka_b: float = 5.0) -> boo
     Formatuje i wysyła kupon na Telegram.
     dane – słownik z kluczami: kupon_a, kupon_b, top3, ostrzezenia
     """
+    h = _kupon_hash(dane)
+    if _already_sent_today(h):
+        return False  # identyczny kupon już dziś wysłany
+
     dzis   = datetime.now().strftime("%d.%m.%Y %H:%M")
     linie  = [f"<b>FootStats {dzis}</b>"]
 
@@ -120,6 +165,8 @@ def send_kupon(dane: dict, stawka_a: float = 10.0, stawka_b: float = 5.0) -> boo
 
     msg = "\n".join(linie)
     ok  = _send(msg)
+    if ok:
+        _mark_sent(h)
     return ok
 
 
