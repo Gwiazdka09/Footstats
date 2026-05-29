@@ -7,6 +7,21 @@
 
 ---
 
+## KRYTYCZNE BUGI (P0) — natychmiastowe
+
+### BUG-1: Ten sam kupon na Telegramie od kilku dni
+- [ ] Zbadać czy Bzzoiro zwraca te same mecze (brak nowych)
+- [ ] Zbadać czy scheduler uruchamia się poprawnie każdego dnia
+- [ ] Sprawdzić filtr daty w quick_picks.py (okno 48h)
+- [ ] Dodać deduplication kuponów przed wysyłką na Telegram
+
+### BUG-2: Brak logowania do /preview (Cloud Run)
+- [ ] Zbadać endpoint /preview — auth broken na produkcji
+- [ ] Sprawdzić seed_admin / env vars na Cloud Run
+- [ ] Naprawić login i zweryfikować
+
+---
+
 ## Phase 10: CODE QUALITY & ACCURACY (aktywna)
 
 ### 10.2: Broad Except Cleanup (P2) — IN PROGRESS
