@@ -52,11 +52,8 @@ def cleanup_event_loop() -> None:
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            _fresh = True
+        loop = asyncio.new_event_loop()
+        _fresh = True
 
     if loop.is_closed():
         logger.debug("[Async] Event loop already closed")

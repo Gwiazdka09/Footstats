@@ -153,7 +153,7 @@ def _ai_blok_pewniaczki(wyniki_p: list):
             pg.add_task("", total=None)
             analiza = ai_analiza_pewniaczki(wyniki_p)
         _wyswietl_ai_pewniaczki(analiza)
-    except Exception as e:
+    except Exception as e:  # noqa: broad-except
         console.print(f"[red]AI blad: {e}[/red]")
         return
 
@@ -188,7 +188,7 @@ def _ai_blok_pewniaczki(wyniki_p: list):
             border_style="cyan",
             padding=(1, 2),
         ))
-    except Exception as e:
+    except Exception as e:  # noqa: broad-except
         console.print(f"[red]AI blad: {e}[/red]")
 
 
@@ -289,7 +289,7 @@ def _analiza_kuponu(bzzoiro):
                 a_b = str(ev.get("gosc", "") or "").strip().lower()
                 if g_b and a_b:
                     bzz_indeks[g_b + "|" + a_b] = ev
-        except Exception as ex:
+        except Exception as ex:  # noqa: broad-except
             console.print(f"[yellow]Bzzoiro: {ex}[/yellow]")
 
     TYP_MAP = {
@@ -937,7 +937,7 @@ def main():
                             _pg2.add_task("", total=None)
                             try:
                                 _kursy = _kursy_ai(g, a, _liga_slug)
-                            except Exception as _e:
+                            except Exception as _e:  # noqa: broad-except
                                 console.print(f"[yellow]Kursy niedostępne: {_e}[/yellow]")
 
                     # Pobierz formę jako string
@@ -953,7 +953,7 @@ def main():
                                 else:
                                     wyniki.append("W" if r["gole_a"]>r["gole_g"] else ("R" if r["gole_g"]==r["gole_a"] else "P"))
                             return "".join(wyniki)
-                        except Exception:
+                        except (KeyError, AttributeError, TypeError):
                             return "-"
 
                     _h2h_opis = wynik_fs["h2h_g"].get("opis", "-") or "-"
@@ -1018,12 +1018,12 @@ def main():
                         if not _g and _mecz_raw is not None:
                             try:
                                 _g = str(_mecz_raw["gospodarz"]) if "gospodarz" in _mecz_raw.index else ""
-                            except Exception:
+                            except (KeyError, TypeError):
                                 pass
                         if not _a and _mecz_raw is not None:
                             try:
                                 _a = str(_mecz_raw["goscie"]) if "goscie" in _mecz_raw.index else ""
-                            except Exception:
+                            except (KeyError, TypeError):
                                 pass
                         if not _g or not _a:
                             continue  # pomijaj mecze bez nazw drużyn
@@ -1032,7 +1032,7 @@ def main():
                         if _liga_slug_j:
                             try:
                                 _k = _kursy_ai(_g, _a, _liga_slug_j)
-                            except Exception:
+                            except Exception:  # noqa: broad-except
                                 pass
                         # Pobierz formę jako string
                         def _fstr(druz, n=5):
@@ -1047,7 +1047,7 @@ def main():
                                     else:
                                         r2.append("W" if rw["gole_a"]>rw["gole_g"] else("R" if rw["gole_g"]==rw["gole_a"] else "P"))
                                 return "".join(r2)
-                            except Exception:
+                            except (KeyError, AttributeError, TypeError):
                                 return "-"
                         try:
                             _wyn = _analizuj_ai(
@@ -1067,7 +1067,7 @@ def main():
                             )
                             _pokaz_ai(_wyn)
                             _wyniki_ai_j.append(_wyn)
-                        except Exception as _e:
+                        except Exception as _e:  # noqa: broad-except
                             console.print(f"  [red]Błąd AI dla {_g} vs {_a}: {_e}[/red]")
 
                     if _wyniki_ai_j:

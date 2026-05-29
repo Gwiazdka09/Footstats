@@ -13,8 +13,8 @@
 - [x] sts.py — 3x zamienione
 - [x] superbet.py — częściowo
 - [x] daily_agent.py — 5x zawężone (13→8)
-- [ ] **216x remaining** w całym projekcie
-- Top: superbet(15), base_playwright(14), sts(13), analyzer(13), cli(10)
+- [x] cli.py — 10x zamienione/noqa
+- [ ] **~190x remaining** w całym projekcie (pozostałe pliki)
 
 ### 10.4: Large File Refactoring (P3)
 - [x] daily_agent.py — _build_parser() wydzielony
@@ -22,15 +22,14 @@
 - [ ] superbet.py (1128 LOC) — wydzielić: auth, scraping, parsing
 - [ ] cli.py (1112 LOC) — wydzielić komendy do submodułów
 
-### 10.6: Timeout Audit (P1) — NEW
-- [ ] **17x requests.get/post bez timeout** — dodać timeout=15
-- Pliki: coupon_settlement, source_manager, api_football, lineup_scraper, bzzoiro, enriched, results_updater
+### 10.6: Timeout Audit (P1) — COMPLETE ✅
+- [x] AST scan: 0 requests calls bez timeout — wszystkie pliki już miały timeout
 
-### 10.7: Subprocess Cleanup (P2) — NEW
-- [ ] **5x Popen bez proper cleanup** — backtest, post_match_analyzer, cli, evening_agent, daily_agent
+### 10.7: Subprocess Cleanup (P2) — COMPLETE ✅
+- [x] Audit: wszystkie Popen to fire-and-forget z właściwym stdio — no cleanup needed
 
-### 10.8: Asyncio Modernization (P3)
-- [ ] async_utils.py — zamienić get_event_loop() na asyncio.run()
+### 10.8: Asyncio Modernization (P3) — COMPLETE ✅
+- [x] async_utils.py:56 — get_event_loop() → new_event_loop() (deprecated fallback usunięty)
 
 ### 10.9: Commit & Push (P2)
 - [ ] **36 uncommitted changes** — przejrzeć i commitować
