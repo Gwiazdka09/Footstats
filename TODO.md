@@ -3,59 +3,37 @@
 ## Completed Phases (Archive)
 
 ### Phase 1–9: ALL COMPLETE ✅
+### Phase 10.0–10.1, 10.3: COMPLETE ✅
 
 ---
 
 ## Phase 10: CODE QUALITY & ACCURACY (aktywna)
 
-### 10.0: FILE RESTORE — COMPLETE ✅ (2026-05-28)
-- [x] **Restore 12 truncated/corrupted files z git HEAD** ✅
-- [x] Zbadać przyczynę rekurencyjnej truncation — **PRZYCZYNA**: Write tool na dużych plikach (>800 LOC) przy wysokim kontekście → truncacja. Mitygacja: pre-commit hook + test_file_integrity_v2. Używać Edit zamiast Write. ✅
-- [x] Wzmocnić pre-commit hook: py_compile + null-byte check na KAŻDYM .py ✅
-
-### 10.1: Quick Fixes — COMPLETE ✅ (2026-05-27)
-- [x] `pyproject.toml` — 3.0 → 3.4
-- [x] `__pycache__/` + `data/footstats.db` usunięte
-
-### 10.2: Broad Except Cleanup (P2) — PARTIAL
-- [x] sts.py — 3x zamienione ✅
-- [x] superbet.py — już czysty ✅
+### 10.2: Broad Except Cleanup (P2) — IN PROGRESS
+- [x] sts.py — 3x zamienione
+- [x] superbet.py — częściowo
 - [x] daily_agent.py — 5x zawężone (13→8)
-- [ ] daily_agent.py — 8x pozostałe (orchestration log-and-continue, P3)
-- NOTE: ~233 remaining w całym projekcie (top: sts 13, cli 10, logging 8)
-
-### 10.3: subprocess.Popen Audit — COMPLETE ✅
+- [ ] **216x remaining** w całym projekcie
+- Top: superbet(15), base_playwright(14), sts(13), analyzer(13), cli(10)
 
 ### 10.4: Large File Refactoring (P3)
-- [x] daily_agent.py — _build_parser() wydzielony, 11 fn po-main() przeniesione przed main() ✅
+- [x] daily_agent.py — _build_parser() wydzielony
 - [ ] analyzer.py (1393 LOC) — wydzielić: prompts, scoring, output formatting
 - [ ] superbet.py (1128 LOC) — wydzielić: auth, scraping, parsing
+- [ ] cli.py (1112 LOC) — wydzielić komendy do submodułów
 
-### 10.5: Cleanup stale files (P2)
-- [x] Usunąć `CLAUDE_CODE_PROMPT_PHASE9.md` ✅
-- [x] Usunąć `validation_errors.csv` ✅
-- [x] Usunąć `.aider.tags.cache.v4/` ✅
-- [x] Usunąć `.coverage` ✅
-- [x] Dodać `src/footstats/gui/node_modules/` do .gitignore ✅
+### 10.6: Timeout Audit (P1) — NEW
+- [ ] **17x requests.get/post bez timeout** — dodać timeout=15
+- Pliki: coupon_settlement, source_manager, api_football, lineup_scraper, bzzoiro, enriched, results_updater
 
----
+### 10.7: Subprocess Cleanup (P2) — NEW
+- [ ] **5x Popen bez proper cleanup** — backtest, post_match_analyzer, cli, evening_agent, daily_agent
 
-## Phase 9 (otwarte)
+### 10.8: Asyncio Modernization (P3)
+- [ ] async_utils.py — zamienić get_event_loop() na asyncio.run()
 
-### 9.1 Cloud Run env vars — DONE ✅ (2026-05-28)
-- [x] FOOTSTATS_USER, FOOTSTATS_PASSWORD_HASH, JWT_SECRET — ustawione, zgodne z .env
-
-### 9.5: Konsolidacja DB access (P3)
-- [x] referee_db.py → utils/db.py ✅ (testy przepisane z _SQLiteConn adapter)
-
----
-
-## Proposed New Tests
-
-- [x] test_file_integrity_v2.py — py_compile + null-byte check ALL .py files (regression gate) ✅
-- [x] test_subprocess_cleanup.py — verify Popen processes are cleaned up ✅
-- [x] test_version_consistency.py ✅
-- [x] test_broad_except_audit.py ✅
+### 10.9: Commit & Push (P2)
+- [ ] **36 uncommitted changes** — przejrzeć i commitować
 
 ---
 
@@ -72,6 +50,4 @@
 ---
 
 ## Blockers
-- ~~12 broken files~~ — FIXED (restore z git HEAD)
-- ~~Cloud Run env vars~~ — DONE (zgodne z .env)
-- **Accuracy 42%** — poniżej M1 target
+- **Accuracy 42%** — poniżej M1 target, wymaga pracy nad kalibracją

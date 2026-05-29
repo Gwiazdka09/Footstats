@@ -41,7 +41,7 @@ def browser_context(headless: bool = True, **launch_kwargs: Any) -> Generator[Br
     try:
         browser = p.chromium.launch(headless=headless, **launch_kwargs)
         yield browser
-    except Exception as e:
+    except Exception as e:  # noqa: broad-except
         logger.error("[PW] Błąd w browser context: %s", e)
         raise
     finally:
@@ -49,7 +49,7 @@ def browser_context(headless: bool = True, **launch_kwargs: Any) -> Generator[Br
             try:
                 browser.close()
                 logger.debug("[PW] Browser zamknięty")
-            except Exception as e:
+            except Exception as e:  # noqa: broad-except
                 logger.warning("[PW] Błąd przy zamykaniu browsera: %s", e)
         p.stop()
 
@@ -77,27 +77,27 @@ def page_context(browser: Browser, **context_kwargs: Any) -> Generator[Page, Non
         if page:
             try:
                 page.screenshot(path=f"pw_timeout_{datetime.now().isoformat()}.png")
-            except Exception:
+            except Exception:  # noqa: broad-except
                 pass
         raise
-    except Exception as e:
+    except Exception as e:  # noqa: broad-except
         logger.error("[PW] Błąd na stronie: %s", e)
         if page:
             try:
                 page.screenshot(path=f"pw_error_{datetime.now().isoformat()}.png")
-            except Exception:
+            except Exception:  # noqa: broad-except
                 pass
         raise
     finally:
         if page:
             try:
                 page.close()
-            except Exception as e:
+            except Exception as e:  # noqa: broad-except
                 logger.warning("[PW] Błąd przy zamykaniu page: %s", e)
         if ctx:
             try:
                 ctx.close()
-            except Exception as e:
+            except Exception as e:  # noqa: broad-except
                 logger.warning("[PW] Błąd przy zamykaniu context: %s", e)
 
 
@@ -113,7 +113,7 @@ def retry_with_backoff(
     for attempt in range(max_retries):
         try:
             return fn(*args, **kwargs)
-        except Exception as exc:
+        except Exception as exc:  # noqa: broad-except
             last_exc = exc
             if attempt < max_retries - 1:
                 delay = base_delay * (2 ** attempt)

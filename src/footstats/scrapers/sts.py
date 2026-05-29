@@ -25,7 +25,7 @@ from pathlib import Path
 from datetime import datetime
 
 try:
-    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    from playwright.sync_api import sync_playwright, Error as PWError, TimeoutError as PWTimeout
 except ImportError:
     logger.info("BŁĄD: pip install playwright  następnie  python -m playwright install chromium")
     sys.exit(1)

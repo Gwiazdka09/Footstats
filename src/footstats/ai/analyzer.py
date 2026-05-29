@@ -28,7 +28,7 @@ try:
         secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
         host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
     )
-except Exception as e:
+except Exception as e:  # noqa: broad-except
     print(f"DEBUG: Langfuse init error: {e}")
     langfuse = None
 
@@ -140,7 +140,7 @@ def _get_kalibracja_blok() -> str:
     try:
         from footstats.ai.trainer import get_kalibracja_inject
         return get_kalibracja_inject()
-    except Exception:
+    except (ImportError, AttributeError, KeyError):
         return ""
 
 
@@ -174,7 +174,7 @@ def _get_liga_statystyki_blok() -> str:
             linie.append(linia)
         linie.append("Priorytet kuponu: mecze z lig oznaczonych MARCHEWKA > pozostale.")
         return "\n".join(linie)
-    except Exception:
+    except (ImportError, KeyError, AttributeError, TypeError):
         return ""
 
 
@@ -240,7 +240,7 @@ def _kontynuuj_uciety_json(client, messages: list, partial: str, max_tokens: int
             temperature=0.1,
         )
         return partial + resp2.choices[0].message.content
-    except Exception:
+    except (AttributeError, IndexError):
         return partial
 
 
@@ -278,7 +278,7 @@ def _zapytaj_typera(prompt: str, max_tokens: int = 900) -> str:
             result = _kontynuuj_uciety_json(client, messages, result)
 
         return result
-    except Exception as e:
+    except Exception as e:  # noqa: broad-except
         return zapytaj_ai(prompt, max_tokens)
 
 
@@ -318,7 +318,7 @@ def _pobierz_podobne_mecze(home: str, away: str, n: int = 3) -> str:
             # Truncate lesson to 100 chars for readability
             header += f"{i}. {lesson[:100]}…\n"
         return header
-    except Exception:
+    except (ImportError, KeyError, AttributeError, TypeError):
         # Silently fail: RAG is optional, don't break prediction if it fails
         return ""
 
@@ -861,7 +861,7 @@ def _buduj_opis_meczu(w: dict) -> str:
         rag = pobierz_rag_kontekst(w)
         if rag:
             linie.append(f"  HISTORIA: {rag}")
-    except Exception:
+    except (ImportError, KeyError, AttributeError):
         pass
 
     return "\n".join(linie)
@@ -917,7 +917,7 @@ def _wzbogac_forme(wyniki: list, top_n: int = 12) -> None:
             if inj_a:
                 wyniki[idx]["sofa_kontuzje_a"] = ", ".join(inj_a)
         except Exception:
-            pass  # Nie blokuj AI gdy SofaScore nie odpowiada
+            pass  # noqa: broad-except — Nie blokuj AI gdy SofaScore nie odpowiada
 
 
 def _sygnaly_summary(wyniki: list) -> str:
@@ -1015,7 +1015,7 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
             try:
                 from footstats.ai.rag import wyciagnij_faktory
                 faktory = wyciagnij_faktory(w.get("pred") or {})
-            except Exception:
+            except (ImportError, KeyError, AttributeError):
                 faktory = []
             try:
                 save_prediction(
@@ -1030,7 +1030,7 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
                     prompt_version="v5_json",
                     factors=faktory,
                 )
-            except Exception:
+            except Exception:  # noqa: broad-except
                 pass
 
     if dane.get("top3"):
@@ -1115,7 +1115,7 @@ def ai_analiza_pewniaczki(
         for w in wyniki[:5]:
             try:
                 w["match_context"] = get_match_context(w.get("gospodarz",""), w.get("goscie",""), w.get("liga",""))
-            except Exception:
+            except Exception:  # noqa: broad-except
                 pass
 
     # Etap 3: Dynamiczne podsumowanie sygnałów

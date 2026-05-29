@@ -28,7 +28,7 @@ from datetime import datetime
 from pathlib import Path
 
 try:
-    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    from playwright.sync_api import sync_playwright, Error as PWError, TimeoutError as PWTimeout
 except ImportError:
     logger.error("BLAD: pip install playwright  nastepnie  python -m playwright install chromium")
     sys.exit(1)
@@ -111,7 +111,7 @@ def zaloguj(page) -> bool:
                 logger.info(f"[Superbet] Kliknieto przycisk logowania ({sel})")
                 time.sleep(3)
                 break
-            except Exception:
+            except (PWTimeout, PWError):
                 continue
 
         # Krok 2: poczekaj na formularz logowania
@@ -133,7 +133,7 @@ def zaloguj(page) -> bool:
                 email_wpisany = True
                 time.sleep(0.4)
                 break
-            except Exception:
+            except (PWTimeout, PWError):
                 continue
 
         if not email_wpisany:
@@ -155,7 +155,7 @@ def zaloguj(page) -> bool:
                 logger.info("[Superbet] Haslo wpisane")
                 time.sleep(0.4)
                 break
-            except Exception:
+            except (PWTimeout, PWError):
                 continue
 
         page.screenshot(path="superbet_debug_filled.png")
@@ -176,7 +176,7 @@ def zaloguj(page) -> bool:
                     logger.info(f"[Superbet] Submit klikniety ({sel})")
                     time.sleep(5)
                     break
-            except Exception:
+            except (PWTimeout, PWError):
                 continue
 
         # Krok 6: sprawdź czy zalogowany
@@ -204,7 +204,7 @@ def zaloguj(page) -> bool:
         return True  # kontynuuj nawet jeśli nie pewne
 
     except Exception as e:
-        logger.error(f"[Superbet] Blad logowania: {e}")
+        logger.error(f"[Superbet] Blad logowania: {e}")  # noqa: broad-except
         return False
 
 
@@ -239,7 +239,7 @@ def pobierz_kupony_api(page, max_kupony: int = 50) -> list:
                 return
             data = response.json()
             api_dane.append({'url': url, 'data': data})
-        except Exception:
+        except (ValueError, KeyError):
             pass
 
     page.on('response', _on_response)
@@ -299,7 +299,7 @@ def pobierz_kupony_api(page, max_kupony: int = 50) -> list:
                 logger.info(f"[API] Sparsowano {n} kuponow z {url}")
                 return kupony_znalezione[:max_kupony]
 
-        except Exception as e:
+        except Exception as e:  # noqa: broad-except
             logger.error(f"[API] Blad dla {url}: {e}")
 
     # Nic nie znaleziono — zapisz dump do diagnozy
@@ -531,7 +531,7 @@ def _wyciagnij_nicki_z_dom(page) -> dict:
             }
         """)
         return wynik or {}
-    except Exception as e:
+    except (PWTimeout, PWError, ValueError) as e:
         logger.error(f"[DOM] Blad ekstrakcji nicków: {e}")
         return {}
 
@@ -615,7 +615,7 @@ def pobierz_typerzy(page, max_typerzy: int = 30) -> list:
                 logger.info(f"[Superbet] Brak linków profili na {social_url}")
                 continue  # spróbuj kolejny URL
 
-        except Exception as e:
+        except Exception as e:  # noqa: broad-except
             logger.error(f"[Superbet] Blad dla {social_url}: {e}")
             continue
 
@@ -649,7 +649,7 @@ def pobierz_typerzy(page, max_typerzy: int = 30) -> list:
                 })
                 if len(typerzy) >= max_typerzy:
                     break
-            except Exception:
+            except (PWTimeout, PWError, AttributeError):
                 continue
 
         if typerzy:
@@ -726,7 +726,7 @@ def pobierz_kupony_typera(page, typer: dict) -> list:
                 kupon = _parsuj_element_kuponu(el, nick)
                 if kupon:
                     kupony.append(kupon)
-            except Exception:
+            except (PWTimeout, PWError, ValueError, KeyError):
                 continue
 
         # Jeśli brak kuponów przez selektory — fallback na surowy tekst strony
@@ -735,7 +735,7 @@ def pobierz_kupony_typera(page, typer: dict) -> list:
             if kupon:
                 kupony.append(kupon)
 
-    except Exception as e:
+    except Exception as e:  # noqa: broad-except
         logger.error(f"  [{nick}] Blad: {e}")
 
     return kupony
@@ -925,7 +925,7 @@ def _parsuj_fallback(page, nick: str, url: str) -> dict | None:
             "zrodlo":      "superbet_social_fallback",
             "pobrano":     datetime.now().strftime("%Y-%m-%d %H:%M"),
         }
-    except Exception:
+    except (ValueError, KeyError, AttributeError, IndexError):
         return None
 
 
@@ -984,7 +984,7 @@ ZADANIE: Oceń kupon i odpowiedz TYLKO w JSON:
             wynik = json.loads(m.group()) if m else {
                 "nick": nick, "ocena_ogolna": "BRAK", "komentarz": odp[:200]
             }
-        except Exception as e:
+        except (json.JSONDecodeError, ValueError, AttributeError) as e:
             wynik = {"nick": nick, "ocena_ogolna": "BLAD", "komentarz": str(e)}
 
         wynik["_oryginal"] = kupon
@@ -1071,7 +1071,7 @@ def main():
                     wszystkie_kupony.extend(kupony)
                     logger.info(f"  Zebrano {len(kupony)} kuponów")
 
-        except Exception as e:
+        except Exception as e:  # noqa: broad-except
             logger.error(f"[Superbet] Blad glowny: {e}")
             if debug:
                 page.screenshot(path="superbet_error.png")
