@@ -240,7 +240,26 @@ app.include_router(coupons_router)
 @app.get("/health", tags=["ops"])
 def health() -> dict:
     from footstats import __version__
-    return {"status": "ok", "version": __version__}
+
+    auth_ok: bool = False
+    auth_detail: str = "unknown"
+    try:
+        from footstats.utils.db import connect
+        with connect() as _conn:
+            row = _conn.execute(
+                "SELECT COUNT(*) FROM users WHERE is_active = TRUE"
+            ).fetchone()
+            n = row[0] if row else 0
+        auth_ok = n > 0
+        auth_detail = f"{n} aktywny/ch uzytkownik/ow"
+    except Exception as _e:
+        auth_detail = f"db-error: {_e}"
+
+    return {
+        "status": "ok",
+        "version": __version__,
+        "auth": {"ok": auth_ok, "detail": auth_detail},
+    }
 
 
 @app.get("/metrics", tags=["ops"])

@@ -13,10 +13,11 @@
 - [x] Zbadać filtr daty w quick_picks.py — lookback 2h wstecz usunięty (teraz tylko `teraz <= dm`)
 - [x] Dodać deduplication kuponów przed wysyłką — hash SHA256 w data/telegram_dedup.json
 
-### BUG-2: Brak logowania do /preview (Cloud Run)
-- [ ] Zbadać endpoint /preview — auth broken na produkcji
-- [ ] Sprawdzić seed_admin / env vars na Cloud Run
-- [ ] Naprawić login i zweryfikować
+### BUG-2: Brak logowania do /preview (Cloud Run) — częściowo ✅
+- [x] Root cause: FOOTSTATS_USER + FOOTSTATS_PASSWORD_HASH nie ustawione na Cloud Run → seed_admin_user() pomija
+- [x] Kod: warning log gdy brak env vars (migrations.py)
+- [x] Kod: /health rozszerzony o auth.ok + liczba aktywnych userów
+- [ ] Deployment: ustawić FOOTSTATS_USER + FOOTSTATS_PASSWORD_HASH w Cloud Run env vars
 
 ---
 

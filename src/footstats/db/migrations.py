@@ -180,6 +180,10 @@ def seed_admin_user() -> None:
     username = os.environ.get("FOOTSTATS_USER", "").strip()
     password_hash = os.environ.get("FOOTSTATS_PASSWORD_HASH", "").strip()
     if not username or not password_hash:
+        _log.warning(
+            "seed_admin_user: FOOTSTATS_USER lub FOOTSTATS_PASSWORD_HASH nie ustawione — "
+            "brak usera w DB, logowanie do /preview bedzie niemozliwe."
+        )
         return
     from footstats.utils.db import connect
 
