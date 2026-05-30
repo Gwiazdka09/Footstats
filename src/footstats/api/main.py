@@ -252,7 +252,7 @@ def health() -> dict:
             n = row[0] if row else 0
         auth_ok = n > 0
         auth_detail = f"{n} aktywny/ch uzytkownik/ow"
-    except Exception as _e:
+    except (OSError, ValueError, RuntimeError) as _e:
         auth_detail = f"db-error: {_e}"
 
     return {

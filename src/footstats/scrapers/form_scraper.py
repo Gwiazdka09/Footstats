@@ -59,8 +59,8 @@ def _load_cache(key: str) -> Optional[dict]:
         saved = datetime.fromisoformat(data.get("_cached_at", "2000-01-01T00:00:00"))
         if (datetime.now() - saved).total_seconds() / 3600 < CACHE_TTL_HOURS:
             return data
-    except Exception:
-        pass
+    except (OSError, ValueError) as e:
+        logger.debug("Błąd odczytu cache form_scraper: %s", e)
     return None
 
 

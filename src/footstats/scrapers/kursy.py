@@ -64,8 +64,8 @@ def _wczytaj_cache(liga: str) -> list | None:
             dane = json.loads(sciezka.read_text(encoding="utf-8"))
             logger.info(f"[Cache] Załadowano {len(dane)} meczów z pliku {sciezka.name}")
             return dane
-        except Exception:
-            pass
+        except (OSError, ValueError) as e:
+            logger.debug("[Cache] Błąd odczytu: %s", e)
     return None
 
 

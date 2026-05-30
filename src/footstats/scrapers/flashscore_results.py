@@ -48,7 +48,8 @@ def get_match_result(
                     if key in cache:
                         log.debug("Cache hit: %s", key)
                         return cache[key]
-            except Exception: pass
+            except (OSError, ValueError) as e:
+                log.debug("Błąd odczytu cache Flashscore: %s", e)
 
     # Oblicz offset dla Flashscore.mobi (?d=X)
     # d=0 (dzisiaj), d=-1 (wczoraj) itp.

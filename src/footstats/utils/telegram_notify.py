@@ -97,7 +97,7 @@ def _send(text: str, parse_mode: str = "HTML") -> bool:
             timeout=15,
         )
         return r.ok
-    except Exception:
+    except requests.RequestException:
         return False
 
 

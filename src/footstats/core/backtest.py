@@ -13,11 +13,14 @@ Użycie jako moduł:
 """
 
 import json
+import logging
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from footstats.utils.db import connect as _connect
+
+logger = logging.getLogger(__name__)
 from footstats.utils.betting import oblicz_tip_correct  # noqa: E402 (shared utility)
 
 try:
@@ -196,9 +199,9 @@ def _sprawdz_auto_trening() -> None:
                         f"FootStats Auto-trening\n"
                         f"Zapisano {n} wynikow — Groq aktualizuje kalibracje w tle."
                     )
-            except Exception:
+            except Exception:  # noqa: broad-except — import+network errors vary
                 pass
-    except Exception:
+    except Exception:  # noqa: broad-except — top-level guard for auto-training block
         pass
 
 
@@ -393,7 +396,7 @@ def pobierz_kalibracje_backtest(dni: int = 90, min_n: int = 5) -> str:
     """
     try:
         stats = get_stats(days=dni)
-    except Exception:
+    except Exception:  # noqa: broad-except — DB/query errors, return empty string as fallback
         return ""
 
     by_market = stats.get("by_market", {})

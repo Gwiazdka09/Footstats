@@ -69,8 +69,8 @@ def _cache_get(key: str) -> dict | None:
         saved_at = datetime.fromisoformat(data.get("_ts", "2000-01-01"))
         if datetime.now() - saved_at < timedelta(hours=CACHE_TTL_H):
             return data.get("payload")
-    except Exception:
-        pass
+    except (OSError, ValueError, KeyError) as e:
+        logger.debug("Błąd odczytu cache: %s", e)
     return None
 
 
@@ -82,8 +82,8 @@ def _cache_set(key: str, payload) -> None:
                        ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-    except Exception:
-        pass
+    except OSError as e:
+        logger.debug("Błąd zapisu cache: %s", e)
 
 
 # ── 1. Kontuzje / zawieszenia – football-data.org ────────────────────────
@@ -97,8 +97,8 @@ def _fdb_get(endpoint: str) -> dict | None:
                          timeout=15)
         if r.status_code == 200:
             return r.json()
-    except Exception:
-        pass
+    except requests.RequestException as e:
+        logger.debug("Błąd HTTP football-data.org: %s", e)
     return None
 
 
@@ -197,8 +197,8 @@ def pobierz_konferencje(nazwa_druzyny: str) -> dict | None:
             }
             _cache_set(cache_key, wynik)
             return wynik
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Błąd pobierania konferencji prasowej: %s", e)
     return None
 
 
@@ -215,8 +215,8 @@ def _bzz_get(path: str, params: dict = None) -> dict | None:
         )
         if r.status_code == 200:
             return r.json()
-    except Exception:
-        pass
+    except requests.RequestException as e:
+        logger.debug("Błąd HTTP Bzzoiro API: %s", e)
     return None
 
 

@@ -182,7 +182,7 @@ def _parsuj_daily_boost(tile) -> dict | None:
             "rodzaj":  "daily_boost",
             "scraped": datetime.now().strftime("%Y-%m-%d %H:%M"),
         }
-    except Exception:
+    except (ValueError, TypeError, KeyError, AttributeError):
         return None
 
 

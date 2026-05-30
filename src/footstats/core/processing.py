@@ -55,7 +55,7 @@ def optimize_dtypes(df: pd.DataFrame) -> pd.DataFrame:
             try:
                 df_opt[col] = df_opt[col].astype("float32")
                 logger.debug(f"[Processing] Converted {col} → float32")
-            except Exception:
+            except (TypeError, ValueError):
                 pass  # Keep float64 if conversion fails
 
     return df_opt

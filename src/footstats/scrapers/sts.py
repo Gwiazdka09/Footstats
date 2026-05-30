@@ -373,7 +373,7 @@ def main():
                     timeout=5000
                 )
                 time.sleep(1.5)
-            except Exception:
+            except Exception:  # noqa: broad-except — login button may not be present
                 pass
 
             if not zaloguj(page):

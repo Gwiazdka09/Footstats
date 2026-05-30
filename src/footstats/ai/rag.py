@@ -135,7 +135,7 @@ def pobierz_rag_wzorce(
 
         return " | ".join(wyniki[:3])
 
-    except Exception:
+    except Exception:  # noqa: broad-except — DB/query errors, return empty string as fallback
         return ""
 
 

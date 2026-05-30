@@ -30,8 +30,8 @@ def _ensure_clv_column() -> None:
             conn.execute(
                 "ALTER TABLE predictions ADD COLUMN clv_closing_odds REAL"
             )
-        except Exception:
-            pass  # kolumna już istnieje
+        except Exception:  # noqa: broad-except — DB-specific "column exists" errors vary by driver
+            pass
 
 
 def calculate_clv(bet_odds: float, closing_odds: float) -> float | None:

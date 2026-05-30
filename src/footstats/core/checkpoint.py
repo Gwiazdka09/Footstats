@@ -128,7 +128,7 @@ def list_checkpoints(limit: int = 20) -> list[dict[str, Any]]:
                 "size_kb": size_kb,
                 "timestamp": mtime.isoformat(),
             })
-        except Exception:
+        except (OSError, ValueError):
             pass
 
     return checkpoints

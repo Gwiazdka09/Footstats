@@ -13,7 +13,7 @@ def _detect_dialect(conn) -> Literal["sqlite", "postgresql"]:
     try:
         conn.execute("SELECT version()")
         return "postgresql"
-    except Exception:
+    except Exception:  # noqa: broad-except — DB probe, driver-specific exceptions vary
         return "sqlite"
 
 

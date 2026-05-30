@@ -9,12 +9,15 @@ Moduły:
 """
 
 import json
+import logging
 import os
 import re
 from datetime import datetime
 from pathlib import Path
 
 from langfuse import Langfuse
+
+logger = logging.getLogger(__name__)
 
 # Importy z pakietu footstats
 from footstats.ai.client import zapytaj_ai
@@ -916,8 +919,8 @@ def _wzbogac_forme(wyniki: list, top_n: int = 12) -> None:
                 wyniki[idx]["sofa_kontuzje_g"] = ", ".join(inj_g)
             if inj_a:
                 wyniki[idx]["sofa_kontuzje_a"] = ", ".join(inj_a)
-        except Exception:
-            pass  # noqa: broad-except — Nie blokuj AI gdy SofaScore nie odpowiada
+        except Exception:  # noqa: broad-except — nie blokuj AI gdy SofaScore nie odpowiada
+            pass
 
 
 def _sygnaly_summary(wyniki: list) -> str:
@@ -1128,7 +1131,7 @@ def ai_analiza_pewniaczki(
         k = pobierz_kalibracje_backtest()
         if k:
             kalibracja_str = f"KALIBRACJA HISTORYCZNA (backtest ~90 dni):\n{k}\n"
-    except Exception:
+    except Exception:  # noqa: broad-except — optional prompt enrichment, never block AI
         pass
 
     feedback_str = ""
@@ -1151,7 +1154,7 @@ def ai_analiza_pewniaczki(
                 + "\n".join(f"  • {w}" for w in wnioski)
                 + "\n"
             )
-    except Exception:
+    except Exception:  # noqa: broad-except — optional RAG/DB enrichment, never block AI
         pass
 
     mecze_opisy = [_buduj_opis_meczu(w) for w in wyniki[:5]]

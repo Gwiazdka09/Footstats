@@ -148,7 +148,7 @@ def _skroc_args(args: tuple, kwargs: dict, max_len: int = 120) -> str:
     try:
         s = str(args[:2])[1:-1] + (", " + str(list(kwargs.keys())) if kwargs else "")
         return s[:max_len] + "…" if len(s) > max_len else s
-    except Exception:
+    except (TypeError, AttributeError):
         return "(nieczytelne args)"
 
 

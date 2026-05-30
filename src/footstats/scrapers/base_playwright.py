@@ -222,7 +222,7 @@ def zamknij_popup(page: Page, cfg: SiteConfig) -> None:
             time.sleep(0.3)
             logger.debug("[%s] Popup zamknięty: %s", cfg.name, sel)
             return
-        except Exception:
+        except Exception:  # noqa: broad-except — Playwright errors vary by browser state
             pass
 
 
@@ -234,7 +234,7 @@ def akceptuj_cookies(page: Page, cfg: SiteConfig) -> None:
             logger.info("[%s] Zaakceptowano cookies", cfg.name)
             time.sleep(1)
             return
-        except Exception:
+        except Exception:  # noqa: broad-except — Playwright errors vary by browser state
             pass
     logger.info("[%s] Baner cookie nie pojawił się lub już zaakceptowany", cfg.name)
 
@@ -250,7 +250,7 @@ def _zaloguj_impl(page: Page, cfg: SiteConfig) -> bool:
     try:
         page.click(cfg.login_trigger_selector, timeout=3000)
         time.sleep(1.5)
-    except Exception:
+    except Exception:  # noqa: broad-except — login trigger may not exist on all pages
         pass
 
     email_combined = ", ".join(cfg.email_selectors)

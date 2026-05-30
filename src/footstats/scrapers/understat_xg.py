@@ -88,8 +88,8 @@ def _cache_get(team_slug: str, season: int) -> dict | None:
         saved_at = datetime.fromisoformat(data.get("_ts", "2000-01-01"))
         if (datetime.now() - saved_at).total_seconds() < _CACHE_TTL_H * 3600:
             return data.get("payload")
-    except Exception:
-        pass
+    except (OSError, ValueError) as e:
+        _log.debug("Błąd odczytu cache Understat: %s", e)
     return None
 
 
@@ -100,8 +100,8 @@ def _cache_set(team_slug: str, season: int, payload: dict) -> None:
                        ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-    except Exception:
-        pass
+    except OSError as e:
+        _log.debug("Błąd zapisu cache Understat: %s", e)
 
 
 def _parse_matches_json(html: str) -> list[dict] | None:

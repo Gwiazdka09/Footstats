@@ -54,7 +54,7 @@ def _get_langfuse_client():
             host=os.getenv('LANGFUSE_HOST', 'https://cloud.langfuse.com')
         )
         return _langfuse
-    except Exception:
+    except Exception:  # noqa: broad-except — Langfuse SDK init failures vary (network, auth, version)
         return None
 
 
@@ -180,7 +180,7 @@ def _run_ai_analysis(wyniki_batch: list[dict], stawka: float = 5.0) -> dict | No
             if lf:
                 try:
                     lf.event(name="groq_429_hit", metadata={"batch_size": len(wyniki_batch), "error": str(e)})
-                except Exception:
+                except Exception:  # noqa: broad-except — optional telemetry, never block pipeline
                     pass
             time.sleep(30)  # Czekaj przed następnym batchemm
             return None

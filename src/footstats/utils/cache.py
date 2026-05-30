@@ -111,8 +111,8 @@ def _af_save_disk_cache(cache: dict):
             json.dumps(cache, ensure_ascii=False, indent=None, separators=(',',':')),
             encoding="utf-8"
         )
-    except Exception:
-        pass
+    except OSError as e:
+        console.print(f"[yellow]Cache: zapis dysku nieudany: {e}[/yellow]")
 
 def _af_cache_get(klucz: str) -> dict | None:
     """
@@ -134,7 +134,7 @@ def _af_cache_get(klucz: str) -> dict | None:
                 f"[{wiek_h}h {wiek_m}min]: {klucz[:55]}[/dim yellow]"
             )
             return wpis["data"]
-    except Exception:
+    except (ValueError, KeyError):
         pass
     return None
 
@@ -174,7 +174,7 @@ def af_cache_info() -> dict:
     for w in cache.values():
         try:
             tsy.append(datetime.fromisoformat(w["ts"]))
-        except Exception:
+        except (ValueError, KeyError):
             pass
     rozm = AF_CACHE_FILE.stat().st_size // 1024 if AF_CACHE_FILE.exists() else 0
     return {
@@ -203,8 +203,8 @@ def _af_budget_load() -> dict:
             if dzien != datetime.now().strftime("%Y-%m-%d"):
                 return {"dzien": datetime.now().strftime("%Y-%m-%d"), "uzyto": 0, "historia": []}
             return d
-        except Exception:
-            pass
+        except (OSError, ValueError):
+            console.print("[yellow]Cache: błąd odczytu budżetu AF — reset do zera.[/yellow]")
     return {"dzien": datetime.now().strftime("%Y-%m-%d"), "uzyto": 0, "historia": []}
 
 def _af_budget_save(budzet: dict):
@@ -214,8 +214,8 @@ def _af_budget_save(budzet: dict):
             json.dumps(budzet, ensure_ascii=False, separators=(',',':')),
             encoding="utf-8"
         )
-    except Exception:
-        pass
+    except OSError as e:
+        console.print(f"[yellow]Cache: zapis budżetu nieudany: {e}[/yellow]")
 
 def af_budget_use(endpoint: str = "") -> int:
     """

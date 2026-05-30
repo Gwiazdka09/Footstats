@@ -65,7 +65,7 @@ def _load_calibration_curve() -> Optional[tuple[list[float], list[float]]]:
     try:
         data = json.loads(_CALIBRATION_PATH.read_text(encoding="utf-8"))
         return data["x"], data["y"]
-    except Exception:
+    except (OSError, ValueError, KeyError):
         return None
 
 

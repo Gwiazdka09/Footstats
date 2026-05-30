@@ -153,8 +153,8 @@ def run_weekly_report(
 
             msg = f"Raport tygodniowy FootStats\n\n{groq_analysis}"
             send_message(msg)
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"[yellow]Telegram unavailable: {e}[/yellow]")
 
     return stats
 

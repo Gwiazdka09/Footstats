@@ -1,6 +1,9 @@
+import logging
 import time
 from datetime import datetime, timedelta
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
@@ -103,7 +106,7 @@ def _ml_do_predykcji(pred_ml: dict | None, odds: dict | None = None) -> dict | N
             "pewnosc":   55,
             "odds":      odds,
         }
-    except Exception:
+    except (TypeError, ValueError, KeyError):
         return None
 
 

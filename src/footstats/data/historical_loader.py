@@ -538,7 +538,7 @@ def merge_xg_into_dataset(df_main: pd.DataFrame, df_xg: pd.DataFrame) -> pd.Data
                 v = xg_map.get((h, a, d2))
                 if v:
                     return pd.Series({"xg_home": v[0], "xg_away": v[1]})
-            except Exception:
+            except (ValueError, TypeError):
                 pass
         return pd.Series({"xg_home": pd.NA, "xg_away": pd.NA})
 

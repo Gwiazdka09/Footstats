@@ -88,7 +88,7 @@ def main() -> int:
         rep = json.loads(json_p.read_text(encoding="utf-8"))
         if rep.get("summary", {}).get("fail", 0) > 0:
             return 1
-    except Exception:
+    except (OSError, ValueError, KeyError):
         pass
     return 0
 
