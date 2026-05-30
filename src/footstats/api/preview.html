@@ -1116,7 +1116,11 @@
           const [bg, tc] = _COLOR_MAP[t.color] || _COLOR_MAP.slate;
           return `
             <button class="tip-btn" id="tip-${m.id}-${t.tip.replace(/\s/g,'_')}"
-                    onclick="wizSelectTip('${m.id}','${t.tip}',${t.odds},${t.prob},'${m.home}','${m.away}')"
+                    data-mid="${m.id}" data-tip="${t.tip.replace(/"/g,'&quot;')}"
+                    data-odds="${t.odds}" data-prob="${t.prob}"
+                    data-home="${String(m.home).replace(/"/g,'&quot;')}"
+                    data-away="${String(m.away).replace(/"/g,'&quot;')}"
+                    onclick="wizSelectTip(this.dataset.mid,this.dataset.tip,+this.dataset.odds,+this.dataset.prob,this.dataset.home,this.dataset.away)"
                     title="${t.label}">
               <span class="block font-bold">${t.tip}</span>
               <span class="block text-[10px] mt-0.5 opacity-70">@${fmt(t.odds)}</span>

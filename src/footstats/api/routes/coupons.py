@@ -331,6 +331,8 @@ def place_coupon(req: PlaceCouponRequest, user_id: int = Depends(require_auth)):
             (now, -req.stake_pln, new_balance, "BET",
              f"Kupon AI ({', '.join(s.tip for s in req.selections)})", user_id),
         )
+    from footstats.core.response_cache import clear_response_cache
+    clear_response_cache()
     return {"ok": True, "coupon_id": coupon_id, "new_balance": new_balance, "stake_pln": req.stake_pln}
 
 
