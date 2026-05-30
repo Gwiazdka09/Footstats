@@ -61,6 +61,14 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                 "fix_bankroll_state_id_generation",
                 ["-- SQLite auto-increments by default, no sequence needed"],
             ),
+            (
+                4,
+                "add_is_admin_to_users",
+                [
+                    "ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE",
+                    "UPDATE users SET is_admin = TRUE WHERE username = 'admin'",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -109,6 +117,14 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "CREATE SEQUENCE IF NOT EXISTS bankroll_state_id_seq",
                     "SELECT setval('bankroll_state_id_seq', COALESCE((SELECT MAX(id) FROM bankroll_state), 0) + 1)",
                     "ALTER TABLE bankroll_state ALTER COLUMN id SET DEFAULT nextval('bankroll_state_id_seq')",
+                ],
+            ),
+            (
+                4,
+                "add_is_admin_to_users",
+                [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE",
+                    "UPDATE users SET is_admin = TRUE WHERE username = 'admin'",
                 ],
             ),
         ]
@@ -185,15 +201,27 @@ def seed_admin_user() -> None:
             "brak usera w DB, logowanie do /preview bedzie niemozliwe."
         )
         return
+    import psycopg2.errors as _pg_errors
     from footstats.utils.db import connect
 
     with connect() as conn:
-        conn.execute(
-            "INSERT INTO users (username, password_hash, is_active)"
-            " VALUES (?, ?, TRUE)"
-            " ON CONFLICT (username)"
-            " DO UPDATE SET password_hash = EXCLUDED.password_hash,"
-            " is_active = TRUE",
-            (username, password_hash),
-        )
+        try:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, is_admin, is_active)"
+                " VALUES (?, ?, TRUE, TRUE)"
+                " ON CONFLICT (username)"
+                " DO UPDATE SET password_hash = EXCLUDED.password_hash,"
+                " is_admin = TRUE, is_active = TRUE",
+                (username, password_hash),
+            )
+        except _pg_errors.UndefinedColumn:
+            # is_admin column not yet added (pre-migration v4) — will be set by v4
+            conn.rollback()
+            conn.execute(
+                "INSERT INTO users (username, password_hash, is_active)"
+                " VALUES (?, ?, TRUE)"
+                " ON CONFLICT (username)"
+                " DO UPDATE SET password_hash = EXCLUDED.password_hash, is_active = TRUE",
+                (username, password_hash),
+            )
     _log.info("Admin user '%s' seeded/updated.", username)

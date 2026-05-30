@@ -83,6 +83,7 @@ _handler.setFormatter(_JsonFormatter())
 logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
 
 from footstats.api.auth import router as auth_router
+from footstats.api.routes.admin_users import router as admin_users_router
 from footstats.api.routes.bankroll import router as bankroll_router
 from footstats.api.routes.coupons import router as coupons_router
 from footstats.api.routes.settings import router as settings_router
@@ -231,6 +232,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(admin_users_router)
 app.include_router(status_router)
 app.include_router(bankroll_router)
 app.include_router(settings_router)

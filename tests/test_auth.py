@@ -14,9 +14,11 @@ os.environ.setdefault("FOOTSTATS_PASSWORD_HASH", _hash)
 
 def _make_app():
     from footstats.api.auth import router as auth_router, require_auth
+    from footstats.api.routes.admin_users import router as admin_users_router
     from fastapi import Depends
     app = FastAPI()
     app.include_router(auth_router)
+    app.include_router(admin_users_router)
 
     @app.get("/protected")
     def protected(user: str = Depends(require_auth)):
@@ -28,6 +30,13 @@ def _make_app():
 @pytest.fixture
 def client():
     return TestClient(_make_app())
+
+
+@pytest.fixture
+def admin_token(client):
+    resp = client.post("/api/auth/login", json={"username": "admin", "password": "testpass"})
+    assert resp.status_code == 200
+    return resp.json()["access_token"]
 
 
 def test_login_success(client):
@@ -76,3 +85,93 @@ def test_protected_expired_token(client):
     )
     resp = client.get("/protected", headers={"Authorization": f"Bearer {expired}"})
     assert resp.status_code == 401
+
+
+# --- require_admin tests ---
+
+def test_admin_token_contains_adm_flag(client):
+    resp = client.post("/api/auth/login", json={"username": "admin", "password": "testpass"})
+    from jose import jwt as _jwt
+    payload = _jwt.decode(
+        resp.json()["access_token"],
+        os.environ["JWT_SECRET"],
+        algorithms=["HS256"],
+    )
+    assert payload.get("adm") is True
+
+
+def test_list_users_requires_admin(client):
+    resp = client.get("/api/admin/users")
+    assert resp.status_code == 401
+
+
+def test_list_users_rejects_non_admin_token(client):
+    from datetime import datetime, timedelta, timezone
+    from jose import jwt as _jwt
+    token = _jwt.encode(
+        {"sub": "regular", "uid": 999, "adm": False, "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
+        os.environ["JWT_SECRET"],
+        algorithm="HS256",
+    )
+    resp = client.get("/api/admin/users", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 403
+
+
+def test_list_users_as_admin(client, admin_token):
+    resp = client.get("/api/admin/users", headers={"Authorization": f"Bearer {admin_token}"})
+    assert resp.status_code == 200
+    users = resp.json()
+    assert isinstance(users, list)
+    assert any(u["username"] == "admin" for u in users)
+
+
+def test_create_user_requires_admin(client):
+    resp = client.post("/api/admin/users", json={"username": "newuser", "password": "securepass"})
+    assert resp.status_code == 401
+
+
+def test_create_user_password_too_short(client, admin_token):
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "newuser", "password": "short"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_create_and_deactivate_user(client, admin_token):
+    import uuid
+    uname = f"testuser_{uuid.uuid4().hex[:8]}"
+    auth = {"Authorization": f"Bearer {admin_token}"}
+
+    # create
+    resp = client.post("/api/admin/users", json={"username": uname, "password": "securepass123"}, headers=auth)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["username"] == uname
+    assert data["is_admin"] is False
+    assert data["is_active"] is True
+    user_id = data["id"]
+
+    # duplicate → 409
+    resp2 = client.post("/api/admin/users", json={"username": uname, "password": "securepass123"}, headers=auth)
+    assert resp2.status_code == 409
+
+    # deactivate
+    resp3 = client.delete(f"/api/admin/users/{user_id}", headers=auth)
+    assert resp3.status_code == 204
+
+    # second deactivate → 404
+    resp4 = client.delete(f"/api/admin/users/{user_id}", headers=auth)
+    assert resp4.status_code == 404
+
+
+def test_cannot_deactivate_own_account(client, admin_token):
+    from jose import jwt as _jwt
+    payload = _jwt.decode(admin_token, os.environ["JWT_SECRET"], algorithms=["HS256"])
+    own_id = payload["uid"]
+    resp = client.delete(
+        f"/api/admin/users/{own_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 400

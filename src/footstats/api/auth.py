@@ -33,26 +33,26 @@ def _secret() -> str:
     return s
 
 
-def _make_token(username: str, user_id: int) -> str:
-    exp = datetime.now(timezone.utc) + timedelta(hours=_EXPIRE_HOURS)
-    return jwt.encode(
-        {"sub": username, "uid": user_id, "exp": exp},
-        _secret(),
-        algorithm=_ALGORITHM,
-    )
-
-
 def get_user_by_username(username: str) -> Optional[dict]:
-    """Fetch active user from DB. Returns dict with id, username, password_hash or None."""
+    """Fetch active user from DB. Returns dict with id, username, password_hash, is_admin or None."""
     from footstats.utils.db import connect
 
     with connect() as conn:
         row = conn.execute(
-            "SELECT id, username, password_hash FROM users"
+            "SELECT id, username, password_hash, is_admin FROM users"
             " WHERE username = ? AND is_active = TRUE",
             (username,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def _make_token(username: str, user_id: int, is_admin: bool = False) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(hours=_EXPIRE_HOURS)
+    return jwt.encode(
+        {"sub": username, "uid": user_id, "adm": is_admin, "exp": exp},
+        _secret(),
+        algorithm=_ALGORITHM,
+    )
 
 
 @router.post("/auth/login", response_model=TokenResponse)
@@ -62,7 +62,9 @@ def login(req: LoginRequest) -> TokenResponse:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not bcrypt.checkpw(req.password.encode(), user["password_hash"].encode()):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    return TokenResponse(access_token=_make_token(req.username, user["id"]))
+    return TokenResponse(
+        access_token=_make_token(req.username, user["id"], bool(user.get("is_admin", False)))
+    )
 
 
 def require_auth(
@@ -76,6 +78,24 @@ def require_auth(
         user_id: int | None = payload.get("uid")
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token — re-login required")
+        return int(user_id)
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+
+def require_admin(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> int:
+    """Validate JWT and assert is_admin=True. Returns user_id (int)."""
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
+    try:
+        payload = jwt.decode(credentials.credentials, _secret(), algorithms=[_ALGORITHM])
+        user_id: int | None = payload.get("uid")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token — re-login required")
+        if not payload.get("adm", False):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
         return int(user_id)
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")

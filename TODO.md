@@ -12,10 +12,16 @@
 ### BUG-1: Ten sam kupon na Telegramie od kilku dni ✅
 - [x] Deduplication kuponów — hash SHA256
 
-### BUG-2: Brak logowania do /preview (Cloud Run) — częściowo ✅
+### BUG-2: Brak logowania do /preview (Cloud Run) ✅
 - [x] Kod: warning log + /health rozszerzony
-- [ ] Deployment: ustawić FOOTSTATS_USER + FOOTSTATS_PASSWORD_HASH w Cloud Run env vars
-Co do tego powiniśmy podpiąć baze danych z użytkownikami i chasłami do Cloud Run, a nie edytować ich w Cloud Run env vars. Bo potem nie będziemy do pisywać za każdym razem recznie użytkownika i hasła.
+- [x] Migration v4: kolumna `is_admin` w tabeli `users`
+- [x] JWT zawiera flagę `adm` (is_admin)
+- [x] `require_admin` dependency — 403 dla non-admin
+- [x] Admin API: `GET/POST /api/admin/users`, `DELETE /api/admin/users/{id}`
+- [x] Walidacja hasła min. 8 znaków przy tworzeniu usera
+- [x] Audit log każdej operacji na userach
+- [x] 15 nowych testów — 78/78 zielone
+- [ ] Deployment: ustawić FOOTSTATS_USER + FOOTSTATS_PASSWORD_HASH w Cloud Run (jednorazowo dla seed admina)
 
 
 
