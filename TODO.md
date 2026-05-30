@@ -23,8 +23,6 @@
 - [x] 15 nowych testów — 78/78 zielone
 - [ ] Deployment: ustawić FOOTSTATS_USER + FOOTSTATS_PASSWORD_HASH w Cloud Run (jednorazowo dla seed admina)
 
-
-
 ---
 
 ## Phase 10: CODE QUALITY & ACCURACY (aktywna)
