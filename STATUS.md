@@ -1,9 +1,9 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-05-29 (auto-audit)  
+**Last Updated:** 2026-05-30 (auto-audit)  
 **Current Version:** v3.4-stable  
 **Build Status:** ✅ OK — wszystkie .py kompilują się, brak null bytes  
-**System State:** FUNCTIONAL (po restore z git 05-28)
+**System State:** FUNCTIONAL
 
 ---
 
@@ -15,11 +15,13 @@
 | **Source Files** | ✅ | ~80 .py modules w src/footstats/ |
 | **Tests** | ✅ | 67 test files w tests/ |
 | **AI Accuracy** | 🟡 | ~42.4% win rate — poniżej M1 target 55% |
-| **Automation** | ✅ | daily_agent.py kompiluje się |
+| **Automation** | ✅ | daily_agent.py OK |
 | **API** | ✅ | dashboard.py + analyzer.py OK |
-| **DB** | ✅ | Neon PG (prod) + SQLite (backtest) |
-| **Cache** | ✅ | 283MB on disk |
-| **Disk Bloat** | 🟡 | gui/node_modules 200MB (w .gitignore, nie w git) |
+| **DB** | ✅ | Neon PG (prod) + SQLite (backtest, 1.1MB) |
+| **Cache** | 🟡 | 283MB on disk, 817 plików >30 dni |
+| **Timeouts** | ✅ | Wszystkie requests.get/post mają timeout |
+| **Thread Safety** | ✅ | Lock w circuit_breaker, response_cache, lambda_optimizer |
+| **Disk Bloat** | 🟡 | gui/node_modules 200MB (w .gitignore) |
 
 ---
 
@@ -37,6 +39,9 @@
 | Cloud Run env vars | ✅ DONE | 05-28 |
 | File restore (12 plików) | ✅ DONE | 05-28 |
 | Stale files cleanup | ✅ DONE | 05-28 |
+| Timeout audit (0 remaining) | ✅ DONE | 05-29 |
+| asyncio.get_event_loop() deprecated | ✅ FIXED | 05-29 |
+| Subprocess audit (fire-and-forget OK) | ✅ DONE | 05-29 |
 
 ---
 
@@ -44,13 +49,13 @@
 
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
-| 1 | **17x requests.get/post bez timeout** | 🔴 P1 | coupon_settlement, source_manager, api_football, lineup_scraper, bzzoiro, enriched, results_updater |
-| 2 | **216x `except Exception`** | 🟡 P2 | Top: superbet(15), base_playwright(14), sts(13), analyzer(13), cli(10) |
-| 3 | **5x subprocess.Popen bez cleanup** | 🟡 P2 | backtest, post_match_analyzer, cli, evening_agent, daily_agent |
-| 4 | **Accuracy 42.4%** | 🟡 P2 | Poniżej M1 target (55%) |
-| 5 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1414), analyzer(1393), superbet(1128), cli(1112) |
-| 6 | **36 uncommitted changes** | 🟡 P2 | Wiele zmodyfikowanych plików nie commitowanych |
-| 7 | **asyncio.get_event_loop() deprecated** | 🟡 P3 | async_utils.py:56 |
+| 1 | **172x `except Exception`** | 🟡 P2 | Zmniejszone z 216, nadal dużo — top: superbet, base_playwright, sts, analyzer |
+| 2 | **Accuracy 42.4%** | 🟡 P2 | Poniżej M1 target (55%) — wymaga pracy nad kalibracją |
+| 3 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1414), analyzer(1396), superbet(1128), cli(1112) |
+| 4 | **38 uncommitted changes** | 🟡 P2 | Wiele zmodyfikowanych plików nie commitowanych |
+| 5 | **Cache bloat** | 🟡 P3 | 817 plików cache >30 dni (283MB) — rozważyć auto-eviction |
+| 6 | **23 stare pliki logów** | ⚪ P4 | logs/ — stare kupony i raporty |
+| 7 | **Zbędne skrypty** | ⚪ P4 | add_logging.py, fix_logging_fstrings.py (jednorazowe) |
 
 ---
 
