@@ -15,6 +15,9 @@
 ### BUG-2: Brak logowania do /preview (Cloud Run) — częściowo ✅
 - [x] Kod: warning log + /health rozszerzony
 - [ ] Deployment: ustawić FOOTSTATS_USER + FOOTSTATS_PASSWORD_HASH w Cloud Run env vars
+Co do tego powiniśmy podpiąć baze danych z użytkownikami i chasłami do Cloud Run, a nie edytować ich w Cloud Run env vars. Bo potem nie będziemy do pisywać za każdym razem recznie użytkownika i hasła.
+
+
 
 ---
 
