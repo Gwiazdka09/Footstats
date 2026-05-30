@@ -22,7 +22,7 @@ BASELINE: dict[str, int] = {
     "ai/rag.py": 2,
     "ai/rag_embeddings.py": 3,
     "ai/trainer.py": 3,
-    "api/main.py": 1,
+    "api/main.py": 2,  # startup DB init + health endpoint (must never return 5xx)
     "api/routes/bankroll.py": 1,
     "api/routes/coupons.py": 3,
     "api/routes/status.py": 2,

@@ -254,8 +254,8 @@ def health() -> dict:
             n = (row["n"] if row else 0) if hasattr(row, "keys") else (row[0] if row else 0)
         auth_ok = n > 0
         auth_detail = f"{n} aktywny/ch uzytkownik/ow"
-    except (OSError, ValueError, RuntimeError) as _e:
-        auth_detail = f"db-error: {_e}"
+    except Exception as _e:  # noqa: broad-except — health must never return 5xx
+        auth_detail = f"db-error: {type(_e).__name__}: {_e}"
 
     return {
         "status": "ok",
