@@ -987,7 +987,7 @@
         return `
         <div class="league-group mb-3">
           <div class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-all cursor-pointer select-none"
-               data-lid="${lid}" onclick="wizToggleLeagueSection(this.dataset.lid)">
+               data-lid="${String(lid).replace(/[^0-9a-zA-Z_-]/g,'')}" onclick="wizToggleLeagueSection(this.dataset.lid)">
             <div class="w-5 h-5 rounded border-2 border-white/20 flex items-center justify-center shrink-0 transition-all"
                  id="lcheck-${lid}" data-liga="${liga.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}"
                  onclick="event.stopPropagation(); wizToggleLeague(this.dataset.liga)">
