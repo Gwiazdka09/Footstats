@@ -76,6 +76,13 @@
 ## Blockers
 - **Accuracy 42%** — poniżej M1 target, wymaga pracy nad kalibracją
 - **38 uncommitted changes** — ryzyko utraty pracy
+- **⚠️ Kalibrator drastycznie tnie prob** (po Phase 11.2) — Bzzoiro raw 70%→40% realnej, prog domyślny 75% w `_typy_pewne` staje się nieosiągalny. Konsekwencje:
+  - Stare wywołania `szybkie_pewniaczki_2dni(b)` z domyślnym `prog=PEWNIACZEK_PROG` (75%) zwracają **0 wyników**
+  - Trzeba albo:
+    1. Wywoływać z `prog=35-40%` (workaround — patrz `_tmp_save_send.py` / kupony #14-16)
+    2. Zmienić `PEWNIACZEK_PROG` w `config.py` na 40% (breaking change dla innych modułów)
+    3. Rozbudować `_FALLBACK_TABLE` w `probability_calibrator.py` o większą próbkę (>20 predictions in DB) → `fit_calibrator()` zbuduje pełną krzywą isotonic regression
+  - **Rekomendacja**: opcja #3 — uruchomić `python -m footstats.core.probability_calibrator` po zebraniu >20 zwalidowanych predykcji
 
 ---
 
