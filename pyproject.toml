@@ -28,6 +28,7 @@ dependencies = [
 [project.optional-dependencies]
 api = [
     "sentry-sdk[fastapi]>=2.0",
+    "psycopg2-binary>=2.9",
 ]
 ai = [
     "groq>=0.4",
