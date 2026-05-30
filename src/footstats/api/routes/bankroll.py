@@ -34,10 +34,13 @@ def update_bankroll(data: BankrollUpdate, user_id: int = Depends(require_auth)):
 
 @router.get("/bankroll/history")
 def get_bankroll_history(limit: int = 50, user_id: int = Depends(require_auth)):
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT timestamp, new_balance FROM bankroll_history"
-            " WHERE user_id = ? ORDER BY timestamp ASC LIMIT ?",
-            (user_id, limit),
-        ).fetchall()
-    return [{"time": str(r["timestamp"])[:16], "balance": r["new_balance"]} for r in rows]
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT timestamp, new_balance FROM bankroll_history"
+                " WHERE user_id = ? ORDER BY timestamp ASC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+        return [{"time": str(r["timestamp"])[:16], "balance": r["new_balance"]} for r in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

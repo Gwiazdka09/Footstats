@@ -681,17 +681,35 @@
 
     async function reloadDashboard() {
       try {
-        const [statusRes, activeRes] = await Promise.all([
-          apiFetch('/api/status'), apiFetch('/api/coupons/active')
+        const safeJ = async (res) => { try { return res && res.ok ? await res.json() : null; } catch(_) { return null; } };
+        const [statusRes, activeRes, historyRes] = await Promise.all([
+          apiFetch('/api/status').catch(() => null),
+          apiFetch('/api/coupons/active').catch(() => null),
+          apiFetch('/api/coupons?limit=50').catch(() => null)
         ]);
-        const status = await statusRes.json();
-        const active = await activeRes.json();
+        const status = await safeJ(statusRes) || {};
+        const activeRaw = await safeJ(activeRes);
+        const historyRaw = await safeJ(historyRes);
+        const active = Array.isArray(activeRaw) ? activeRaw : [];
+        const history = Array.isArray(historyRaw) ? historyRaw : [];
         document.getElementById('bankroll-display').textContent = parseFloat(status.bankroll || 0).toFixed(2);
         document.getElementById('active-count-display').textContent = active.length;
         const roi = status.stats?.roi_pct ?? 0;
         const roiEl = document.getElementById('roi-display');
         roiEl.textContent = (roi >= 0 ? '+' : '') + roi + '%';
         roiEl.className = `text-3xl font-bold mb-1 ${roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+        const grid = document.getElementById('active-coupons-grid');
+        if (grid) {
+          grid.innerHTML = active.length === 0
+            ? `<div class="md:col-span-2 text-center p-12 glass-card text-slate-500 text-sm">Brak otwartych kuponów.</div>`
+            : active.map(renderCouponCard).join('');
+        }
+        const histEl = document.getElementById('history-list');
+        if (histEl) {
+          histEl.innerHTML = history.length === 0
+            ? `<div class="text-center p-12 glass-card text-slate-500 text-sm">Historia jest pusta.</div>`
+            : history.map((c,i) => renderAccordionRow(c, i)).join('');
+        }
       } catch(_) {}
     }
 
@@ -810,18 +828,19 @@
       if (!localStorage.getItem('fs_token')) { showLogin(); return; }
       applyUserDisplay();
       try {
+        const safeJson = async (res) => { try { return res && res.ok ? await res.json() : null; } catch(_) { return null; } };
         const [statusRes, activeRes, historyRes, chartRes, configRes] = await Promise.all([
-          apiFetch('/api/status'),
-          apiFetch('/api/coupons/active'),
-          apiFetch('/api/coupons?limit=50'),
-          apiFetch('/api/bankroll/history?limit=60'),
+          apiFetch('/api/status').catch(() => null),
+          apiFetch('/api/coupons/active').catch(() => null),
+          apiFetch('/api/coupons?limit=50').catch(() => null),
+          apiFetch('/api/bankroll/history?limit=60').catch(() => null),
           apiFetch('/api/config').catch(() => null)
         ]);
 
-        const status  = await statusRes.json();
-        const activeRaw  = await activeRes.json();
-        const historyRaw = await historyRes.json();
-        const chartRaw   = await chartRes.json();
+        const status  = await safeJson(statusRes) || {};
+        const activeRaw  = await safeJson(activeRes);
+        const historyRaw = await safeJson(historyRes);
+        const chartRaw   = await safeJson(chartRes);
         const active  = Array.isArray(activeRaw)  ? activeRaw  : [];
         const history = Array.isArray(historyRaw) ? historyRaw : [];
         const chart   = Array.isArray(chartRaw)   ? chartRaw   : [];
@@ -1280,9 +1299,10 @@
           `Kupon #${data.coupon_id} aktywny. Nowy bankroll: ${fmt(data.new_balance)} PLN.`;
         document.getElementById('wiz-success').classList.remove('hidden');
         document.querySelector('#wiz-step-5 .glass-card').classList.add('hidden');
-        // Odśwież bankroll w headerze dashboardu
+        // Odśwież bankroll i listy kuponów
         document.getElementById('bankroll-display').textContent = fmt(data.new_balance);
         document.getElementById('settings-bankroll-current').textContent = fmt(data.new_balance);
+        reloadDashboard();
       } catch(e) {
         err.textContent = 'Błąd: ' + e.message;
         err.classList.remove('hidden');
