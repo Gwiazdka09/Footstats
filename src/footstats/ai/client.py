@@ -16,9 +16,23 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-GROQ_MODEL   = "llama-3.1-8b-instant"
-OLLAMA_MODEL = "gemma2:2b"
-OLLAMA_URL   = "http://localhost:11434/api/generate"
+GROQ_MODEL   = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
+OLLAMA_TAGS_URL = OLLAMA_URL.rsplit("/api/", 1)[0] + "/api/tags"
+AI_PREFER_LOCAL = os.getenv("AI_PREFER_LOCAL", "0").strip() in ("1", "true", "True", "yes")
+
+
+def _ollama_available() -> bool:
+    """Sprawdza czy Ollama running + model OLLAMA_MODEL dostępny."""
+    try:
+        r = requests.get(OLLAMA_TAGS_URL, timeout=2)
+        if not r.ok:
+            return False
+        names = {m.get("name", "") for m in r.json().get("models", [])}
+        return OLLAMA_MODEL in names
+    except requests.RequestException:
+        return False
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
@@ -105,24 +119,37 @@ def _ollama(prompt: str) -> str | None:
 
 def zapytaj_ai(prompt: str, max_tokens: int = 600) -> str:
     """
-    Główna funkcja. Najpierw próbuje Groq, potem Ollama.
+    Główna funkcja. Kolejność źródeł:
+      AI_PREFER_LOCAL=1 → Ollama → Groq fallback
+      domyślnie         → Groq → Ollama fallback
     Rzuca RuntimeError jeśli oba zawodzą.
     """
-    odpowiedz = _groq(prompt, max_tokens)
-    if odpowiedz:
-        logger.info("[AI] Źródło: Groq (%s)", GROQ_MODEL)
-        return odpowiedz
-
-    odpowiedz = _ollama(prompt)
-    if odpowiedz:
-        logger.info("[AI] Źródło: Ollama (%s)", OLLAMA_MODEL)
-        return odpowiedz
+    if AI_PREFER_LOCAL and _ollama_available():
+        odpowiedz = _ollama(prompt)
+        if odpowiedz:
+            logger.info("[AI] Źródło: Ollama (%s) [PREFER_LOCAL]", OLLAMA_MODEL)
+            return odpowiedz
+        # Fallback Groq jeśli Ollama padło
+        odpowiedz = _groq(prompt, max_tokens)
+        if odpowiedz:
+            logger.info("[AI] Źródło: Groq fallback (%s)", GROQ_MODEL)
+            return odpowiedz
+    else:
+        odpowiedz = _groq(prompt, max_tokens)
+        if odpowiedz:
+            logger.info("[AI] Źródło: Groq (%s)", GROQ_MODEL)
+            return odpowiedz
+        odpowiedz = _ollama(prompt)
+        if odpowiedz:
+            logger.info("[AI] Źródło: Ollama fallback (%s)", OLLAMA_MODEL)
+            return odpowiedz
 
     raise RuntimeError(
         "Brak dostępnego AI. Sprawdź:\n"
         "  1. Klucz GROQ_API_KEY w pliku .env\n"
         "  2. Czy Ollama działa: ollama serve\n"
-        "  3. Czy model pobrany: ollama pull gemma2:2b"
+        f"  3. Czy model pobrany: ollama pull {OLLAMA_MODEL}\n"
+        "  4. AI_PREFER_LOCAL=1 w .env aby preferować Ollama"
     )
 
 

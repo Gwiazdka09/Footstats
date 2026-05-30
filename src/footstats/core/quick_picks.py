@@ -8,6 +8,7 @@ from footstats.utils.helpers import _s
 from footstats.config import PEWNIACZEK_PROG
 from footstats.scrapers.bzzoiro import BzzoiroClient, _bzz_parse_prob
 from footstats.core.weekly_picks import _typy_pewne
+from footstats.core.probability_calibrator import calibrate_confidence
 
 #  MODUL 13d – SZYBKIE PEWNIACZKI (2 DNI) + SCOUT BOT  (v2.7.1)
 # ================================================================
@@ -104,16 +105,25 @@ def szybkie_pewniaczki_2dni(
         wyp = _bzz_parse_prob(pred_ml)
         if wyp is None:
             continue
-        pw, pr, pp, bt, o25 = wyp
+        pw_raw, pr_raw, pp_raw, bt_raw, o25_raw = wyp
+
+        # ── 11.2: Probability Calibrator — koryguje overconfidence ML ──
+        # Surowe prob Bzzoiro: 70% → realna ~62% historycznie.
+        # calibrate_confidence(0-100) -> 0-1, ×100 by zachowac format.
+        pw  = round(calibrate_confidence(pw_raw)  * 100.0, 1)
+        pr  = round(calibrate_confidence(pr_raw)  * 100.0, 1)
+        pp  = round(calibrate_confidence(pp_raw)  * 100.0, 1)
+        bt  = round(calibrate_confidence(bt_raw)  * 100.0, 1)
+        o25 = round(calibrate_confidence(o25_raw) * 100.0, 1)
         u25 = round(100.0 - o25, 1)
 
-        # Zbierz typy pewne
+        # Zbierz typy pewne (na skalibrowanych prob)
         typy = _typy_pewne(pw, pr, pp, bt, o25, u25, g, a, prog)
         if not typy:
             continue
 
         # ── Scout Bot: ocena wartosci kazdego typu ──────────────────
-        # Expected Value (EV) = P * kurs - 1
+        # Expected Value (EV) = P_skalibrowane * kurs - 1
         # EV > 0 = zysk na dluga mete, EV < 0 = strata
         scout = _scout_bot_ocen(typy, odds, pw, pr, pp, bt, o25, u25)
 
@@ -131,6 +141,8 @@ def szybkie_pewniaczki_2dni(
             "typy":       typy,
             "pw": pw, "pr": pr, "pp": pp,
             "bt": bt, "o25": o25,
+            "pw_raw": pw_raw, "pr_raw": pr_raw, "pp_raw": pp_raw,
+            "bt_raw": bt_raw, "o25_raw": o25_raw,
             "wynik_g":    wg,
             "wynik_a":    wa,
             "odds":       odds,

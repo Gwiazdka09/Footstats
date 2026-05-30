@@ -247,9 +247,9 @@ def health() -> dict:
         from footstats.utils.db import connect
         with connect() as _conn:
             row = _conn.execute(
-                "SELECT COUNT(*) FROM users WHERE is_active = TRUE"
+                "SELECT COUNT(*) AS n FROM users WHERE is_active = TRUE"
             ).fetchone()
-            n = row[0] if row else 0
+            n = (row["n"] if row else 0) if hasattr(row, "keys") else (row[0] if row else 0)
         auth_ok = n > 0
         auth_detail = f"{n} aktywny/ch uzytkownik/ow"
     except (OSError, ValueError, RuntimeError) as _e:
