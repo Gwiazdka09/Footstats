@@ -17,6 +17,7 @@ from functools import wraps
 from typing import Any, Callable, Optional
 
 from fastapi import Request, Response
+from fastapi.encoders import jsonable_encoder
 from starlette.responses import JSONResponse
 
 _RESPONSE_CACHE: dict[str, dict[str, Any]] = {}
@@ -129,7 +130,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                         data = body
                     status = result.status_code
                 else:
-                    data = result
+                    data = jsonable_encoder(result)
                     status = 200
 
                 with _CACHE_LOCK:
@@ -190,7 +191,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                         data = body
                     status = result.status_code
                 else:
-                    data = result
+                    data = jsonable_encoder(result)
                     status = 200
 
                 with _CACHE_LOCK:

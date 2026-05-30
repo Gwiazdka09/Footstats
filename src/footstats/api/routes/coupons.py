@@ -96,35 +96,43 @@ class SettleRequest(BaseModel):
 @router.get("/coupons/active")
 @cached_response(ttl_seconds=900, vary_by=["user_id"])
 def get_active_coupons(user_id: int = Depends(require_auth)):
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT * FROM coupons"
-            " WHERE status IN ('ACTIVE','PENDING') AND user_id = ?"
-            " ORDER BY created_at DESC",
-            (user_id,),
-        ).fetchall()
-    result = []
-    for r in rows:
-        d = dict(r)
-        d["legs"] = json.loads(d["legs_json"])
-        result.append(d)
-    return result
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM coupons"
+                " WHERE status IN ('ACTIVE','PENDING') AND user_id = ?"
+                " ORDER BY created_at DESC",
+                (user_id,),
+            ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["legs"] = json.loads(d.get("legs_json") or "[]")
+            result.append(d)
+        return result
+    except Exception as e:
+        _log.error("get_active_coupons error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/coupons")
 @cached_response(ttl_seconds=900, vary_by=["limit", "user_id"])
 def get_coupons(limit: int = 50, user_id: int = Depends(require_auth)):
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT * FROM coupons WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
-            (user_id, limit),
-        ).fetchall()
-    result = []
-    for r in rows:
-        d = dict(r)
-        d["legs"] = json.loads(d["legs_json"])
-        result.append(d)
-    return result
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM coupons WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["legs"] = json.loads(d.get("legs_json") or "[]")
+            result.append(d)
+        return result
+    except Exception as e:
+        _log.error("get_coupons error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/stats/coupon-summary")
