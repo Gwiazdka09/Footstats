@@ -1,4 +1,4 @@
-# FootStats TODO — Updated 2026-05-30
+# FootStats TODO — Updated 2026-05-31
 
 ## Completed Phases (Archive)
 
@@ -11,6 +11,10 @@
 
 ### BUG-1: Ten sam kupon na Telegramie od kilku dni ✅
 - [x] Deduplication kuponów — hash SHA256
+
+### BUG-3: 7x truncated files (P0) ✅
+- [x] quick_picks.py, response_cache.py, bankroll.py, coupons.py, auth.py, main.py, migrations.py
+- [x] Przywrócone z git HEAD — 2026-05-31
 
 ### BUG-2: Brak logowania do /preview (Cloud Run) ✅
 - [x] Kod: warning log + /health rozszerzony
@@ -41,8 +45,8 @@
 - [ ] Dodać auto-czyszczenie cache >30 dni (817 plików, 283MB)
 - [ ] Skrypt/cron do okresowego czyszczenia
 
-### 10.9: Commit & Push (P2)
-- [ ] **38 uncommitted changes** — przejrzeć i commitować
+### 10.9: Commit & Push (P1) ⚠️
+- [ ] **50 uncommitted changes** — KRYTYCZNE, wzrost z 38→50, ryzyko utraty pracy
 
 ### 10.10: Cleanup zbędnych plików (P4) — NEW
 - [ ] Usunąć scripts/add_logging.py, scripts/fix_logging_fstrings.py (jednorazowe)

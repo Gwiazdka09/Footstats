@@ -1,8 +1,8 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-05-30 (auto-audit)  
+**Last Updated:** 2026-05-31 (auto-audit)  
 **Current Version:** v3.4-stable  
-**Build Status:** ✅ OK — wszystkie .py kompilują się, brak null bytes  
+**Build Status:** ✅ OK — 7 truncated plików przywrócone, 0 SyntaxError  
 **System State:** FUNCTIONAL
 
 ---
@@ -17,11 +17,10 @@
 | **AI Accuracy** | 🟡 | ~42.4% win rate — poniżej M1 target 55% |
 | **Automation** | ✅ | daily_agent.py OK |
 | **API** | ✅ | dashboard.py + analyzer.py OK |
-| **DB** | ✅ | Neon PG (prod) + SQLite (backtest, 1.1MB) |
-| **Cache** | 🟡 | 283MB on disk, 817 plików >30 dni |
+| **DB** | ✅ | Neon PG (prod) + SQLite (backtest) |
 | **Timeouts** | ✅ | Wszystkie requests.get/post mają timeout |
 | **Thread Safety** | ✅ | Lock w circuit_breaker, response_cache, lambda_optimizer |
-| **Disk Bloat** | 🟡 | gui/node_modules 200MB (w .gitignore) |
+| **Ollama** | ✅ | qwen2.5:7b lokalny + Groq fallback |
 
 ---
 
@@ -41,7 +40,7 @@
 | Stale files cleanup | ✅ DONE | 05-28 |
 | Timeout audit (0 remaining) | ✅ DONE | 05-29 |
 | asyncio.get_event_loop() deprecated | ✅ FIXED | 05-29 |
-| Subprocess audit (fire-and-forget OK) | ✅ DONE | 05-29 |
+| **7x file truncation (quick_picks, response_cache, bankroll, coupons, auth, main, migrations)** | ✅ FIXED | 05-31 |
 
 ---
 
@@ -49,13 +48,13 @@
 
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
-| 1 | **172x `except Exception`** | 🟡 P2 | Zmniejszone z 216, nadal dużo — top: superbet, base_playwright, sts, analyzer |
+| 1 | **174x `except Exception`** | 🟡 P2 | Top: base_playwright(14), sts(13), daily_agent(8), logging(7), historical_loader(7) |
 | 2 | **Accuracy 42.4%** | 🟡 P2 | Poniżej M1 target (55%) — wymaga pracy nad kalibracją |
 | 3 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1414), analyzer(1396), superbet(1128), cli(1112) |
-| 4 | **38 uncommitted changes** | 🟡 P2 | Wiele zmodyfikowanych plików nie commitowanych |
-| 5 | **Cache bloat** | 🟡 P3 | 817 plików cache >30 dni (283MB) — rozważyć auto-eviction |
-| 6 | **23 stare pliki logów** | ⚪ P4 | logs/ — stare kupony i raporty |
-| 7 | **Zbędne skrypty** | ⚪ P4 | add_logging.py, fix_logging_fstrings.py (jednorazowe) |
+| 4 | **50 uncommitted changes** | 🔴 P1 | Wzrost z 38→50 — ryzyko utraty pracy |
+| 5 | **25 starych logów** | ⚪ P4 | logs/ — stare kupony i raporty |
+| 6 | **Zbędne skrypty** | ⚪ P4 | add_logging.py, fix_logging_fstrings.py (jednorazowe) |
+| 7 | **10 DAILY_ANALYSIS docs** | ⚪ P4 | docs/ — rozważyć archiwizację |
 
 ---
 
@@ -63,7 +62,8 @@
 
 - **Daily Agent**: ✅ OK
 - **Dashboard**: ✅ OK
-- **API**: ✅ OK
+- **API**: ✅ OK (auth.py + bankroll.py przywrócone)
 - **Pipeline**: ✅ OK (wymaga commit)
 - **Operator**: ✅ OK
 - **DB**: ✅ SQLite (dev) + PostgreSQL Neon (prod)
+- **Ollama**: ✅ qwen2.5:7b lokalny

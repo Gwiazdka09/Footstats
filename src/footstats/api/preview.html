@@ -553,19 +553,44 @@
           <p id="admin-create-msg" class="text-xs mt-3 hidden"></p>
         </div>
         <!-- Stats -->
-        <div class="glass-card p-8 flex flex-col justify-center items-center">
-          <p class="text-5xl font-bold text-indigo-400 mb-2" id="admin-user-count">—</p>
-          <p class="text-slate-500 text-sm">aktywnych użytkowników</p>
+        <div class="glass-card p-8 flex flex-col justify-center gap-6">
+          <div class="flex justify-around">
+            <div class="text-center">
+              <p class="text-5xl font-bold text-indigo-400 mb-1" id="admin-user-count-total">—</p>
+              <p class="text-slate-500 text-xs uppercase tracking-wider">wszystkich</p>
+            </div>
+            <div class="w-px bg-white/10"></div>
+            <div class="text-center">
+              <p class="text-5xl font-bold text-emerald-400 mb-1" id="admin-user-count-active">—</p>
+              <p class="text-slate-500 text-xs uppercase tracking-wider">aktywnych</p>
+            </div>
+          </div>
         </div>
       </div>
       <!-- Lista userów -->
       <div class="glass-card overflow-hidden">
-        <div class="px-6 py-4 border-b border-white/5 flex justify-between items-center">
+        <div class="px-6 py-4 border-b border-white/5 flex flex-wrap gap-3 items-center justify-between">
           <h3 class="font-bold text-sm">Lista kont</h3>
-          <button onclick="adminLoadUsers()" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold px-3 py-1.5 rounded-lg bg-indigo-500/10 transition-all">Odśwież</button>
+          <div class="flex items-center gap-3 flex-wrap">
+            <input id="admin-search" type="text" placeholder="Szukaj…" oninput="adminSearch()" class="settings-input text-xs py-1.5 px-3 w-40" />
+            <select id="admin-per-page" onchange="adminSetPerPage()" class="settings-input text-xs py-1.5 px-3">
+              <option value="10" selected>10 / str.</option>
+              <option value="25">25 / str.</option>
+              <option value="50">50 / str.</option>
+              <option value="0">Wszystkie</option>
+            </select>
+            <button onclick="adminLoadUsers()" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold px-3 py-1.5 rounded-lg bg-indigo-500/10 transition-all">Odśwież</button>
+          </div>
         </div>
         <div id="admin-users-list" class="divide-y divide-white/5">
           <p class="text-center text-slate-500 text-sm p-8">Ładowanie…</p>
+        </div>
+        <div id="admin-pagination" class="px-6 py-3 border-t border-white/5 flex items-center justify-between hidden">
+          <span id="admin-page-info" class="text-xs text-slate-500"></span>
+          <div class="flex gap-2">
+            <button id="admin-btn-prev" onclick="adminPagePrev()" class="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed">← Poprz.</button>
+            <button id="admin-btn-next" onclick="adminPageNext()" class="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed">Nast. →</button>
+          </div>
         </div>
       </div>
     </div>
@@ -905,28 +930,88 @@
     }
 
     // ---- admin users ----
+    let _adminAllUsers = [];
+    let _adminPage = 0;
+
+    function adminGetPerPage() {
+      return parseInt(document.getElementById('admin-per-page').value, 10);
+    }
+
+    function adminSearch() {
+      _adminPage = 0;
+      adminRenderUsers();
+    }
+
+    function adminSetPerPage() {
+      _adminPage = 0;
+      adminRenderUsers();
+    }
+
+    function adminPagePrev() {
+      if (_adminPage > 0) { _adminPage--; adminRenderUsers(); }
+    }
+
+    function adminPageNext() {
+      const perPage = adminGetPerPage();
+      const query = (document.getElementById('admin-search').value || '').toLowerCase();
+      const filtered = _adminAllUsers.filter(u => u.username.toLowerCase().includes(query));
+      const maxPage = perPage > 0 ? Math.ceil(filtered.length / perPage) - 1 : 0;
+      if (_adminPage < maxPage) { _adminPage++; adminRenderUsers(); }
+    }
+
+    function adminRenderUsers() {
+      const el = document.getElementById('admin-users-list');
+      const pag = document.getElementById('admin-pagination');
+      const query = (document.getElementById('admin-search').value || '').toLowerCase();
+      const perPage = adminGetPerPage();
+      const filtered = _adminAllUsers.filter(u => u.username.toLowerCase().includes(query));
+
+      if (filtered.length === 0) {
+        el.innerHTML = '<p class="text-center text-slate-500 text-sm p-8">Brak wyników.</p>';
+        pag.classList.add('hidden');
+        return;
+      }
+
+      const start = perPage > 0 ? _adminPage * perPage : 0;
+      const page = perPage > 0 ? filtered.slice(start, start + perPage) : filtered;
+      const totalPages = perPage > 0 ? Math.ceil(filtered.length / perPage) : 1;
+
+      el.innerHTML = page.map(u => `
+        <div class="px-6 py-4 flex items-center justify-between hover:bg-white/5 transition-all">
+          <div class="flex items-center gap-3">
+            <div class="w-2 h-2 rounded-full ${u.is_active ? 'bg-emerald-400' : 'bg-slate-600'}"></div>
+            <span class="font-semibold text-sm text-slate-200">${esc(u.username)}</span>
+            ${u.is_admin ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">ADMIN</span>' : ''}
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-500">ID: ${u.id}</span>
+            ${u.is_active ? `<button onclick="adminDeactivate(${u.id})" class="text-xs px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all font-semibold">Dezaktywuj</button>` : '<span class="text-xs text-slate-600">Nieaktywny</span>'}
+          </div>
+        </div>`).join('');
+
+      if (perPage > 0 && totalPages > 1) {
+        pag.classList.remove('hidden');
+        document.getElementById('admin-page-info').textContent =
+          `Str. ${_adminPage + 1} / ${totalPages} (${filtered.length} kont)`;
+        document.getElementById('admin-btn-prev').disabled = _adminPage === 0;
+        document.getElementById('admin-btn-next').disabled = _adminPage >= totalPages - 1;
+      } else {
+        pag.classList.add('hidden');
+      }
+    }
+
     async function adminLoadUsers() {
       const el = document.getElementById('admin-users-list');
-      const countEl = document.getElementById('admin-user-count');
       try {
         const res = await apiFetch('/api/admin/users');
         if (!res.ok) { el.innerHTML = '<p class="text-center text-rose-400 text-sm p-8">Błąd ładowania.</p>'; return; }
-        const users = await res.json();
-        const active = users.filter(u => u.is_active);
-        if (countEl) countEl.textContent = active.length;
-        if (!users.length) { el.innerHTML = '<p class="text-center text-slate-500 text-sm p-8">Brak użytkowników.</p>'; return; }
-        el.innerHTML = users.map(u => `
-          <div class="px-6 py-4 flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-              <div class="w-2 h-2 rounded-full ${u.is_active ? 'bg-emerald-400' : 'bg-slate-600'}"></div>
-              <span class="font-semibold text-sm text-slate-200">${esc(u.username)}</span>
-              ${u.is_admin ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">ADMIN</span>' : ''}
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="text-xs text-slate-500">ID: ${u.id}</span>
-              ${u.is_active ? `<button onclick="adminDeactivate(${u.id})" class="text-xs px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all font-semibold">Dezaktywuj</button>` : '<span class="text-xs text-slate-600">Nieaktywny</span>'}
-            </div>
-          </div>`).join('');
+        _adminAllUsers = await res.json();
+        _adminPage = 0;
+        const totalEl = document.getElementById('admin-user-count-total');
+        const activeEl = document.getElementById('admin-user-count-active');
+        if (totalEl) totalEl.textContent = _adminAllUsers.length;
+        if (activeEl) activeEl.textContent = _adminAllUsers.filter(u => u.is_active).length;
+        adminRenderUsers();
       } catch(e) {
         el.innerHTML = '<p class="text-center text-rose-400 text-sm p-8">Błąd połączenia.</p>';
       }
