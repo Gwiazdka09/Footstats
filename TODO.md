@@ -41,16 +41,17 @@
 - [ ] superbet.py (1128 LOC) — wydzielić: auth, scraping, parsing
 - [ ] cli.py (1112 LOC) — wydzielić komendy do submodułów
 
-### 10.5: Cache Auto-Eviction (P3) — NEW
-- [ ] Dodać auto-czyszczenie cache >30 dni (817 plików, 283MB)
-- [ ] Skrypt/cron do okresowego czyszczenia
+### 10.5: Cache Auto-Eviction (P3) — COMPLETE ✅
+- [x] `utils/cache_evict.py::evict_old_cache(max_days, dry_run)` — usuwa pliki >N dni
+- [x] `scripts/evict_cache.py` — CLI wrapper z --days/--dry-run
+- [x] `POST /api/cron/evict-cache` — endpoint dla Cloud Scheduler (CRON_SECRET)
 
 ### 10.9: Commit & Push (P1) ✅
 - [x] Commity wyczyszczone — 2026-05-31
 
-### 10.10: Cleanup zbędnych plików (P4) — NEW
-- [ ] Usunąć scripts/add_logging.py, scripts/fix_logging_fstrings.py (jednorazowe)
-- [ ] Oczyścić stare logi w logs/ (>14 dni)
+### 10.10: Cleanup zbędnych plików (P4) — COMPLETE ✅
+- [x] Usunięto scripts/add_logging.py, scripts/fix_logging_fstrings.py
+- [x] Usunięto 21 starych logów z logs/ (>14 dni)
 - [ ] Rozważyć archiwizację docs/DAILY_ANALYSIS_*.md (9 plików)
 
 ---
@@ -131,11 +132,12 @@
 - [ ] Per leg dynamic stake wpięty w pipeline (quick_picks → daily_agent)
 - [ ] **Why**: long-term ROI wzrost, mniej risk na low-EV
 
-#### 11.4: Poisson + xG full path (P2) 🟢 high / 🔴 high
+#### 11.4: Poisson + xG full path (P2) — PARTIAL ✅
+- [x] `core/poisson.py::predict_match` → ensemble z Bzzoiro prob (waga 50/50) — wpięty w quick_picks.py
+- [x] Lazy-load `load_cached()` → graceful degradation gdy brak parquet
+- [x] xG blend w `poisson.py:199-213` (20%) — aktywny
 - [ ] Auto-loop top-5 lig (Brasileirão A, Champions, Bundesliga, La Liga, Premier)
-- [ ] `data/historical_loader.py` → df_mecze per liga
-- [ ] `core/poisson.py::predict_match` → ensemble z Bzzoiro prob (waga 50/50)
-- [ ] xG blend już w `poisson.py:199-213` (20%), pre-fetch Understat dla top-5
+- [ ] Pre-fetch Understat dla top-5 przed sezonem
 - [ ] **Why**: M2 target 60% accuracy
 
 #### 11.5: Referee DB join (P3) 🟡 mid / 🔴 high

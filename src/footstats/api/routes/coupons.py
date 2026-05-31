@@ -382,3 +382,19 @@ def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
     except Exception as e:
         _log.error("cron_settle error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/cron/evict-cache")
+def cron_evict_cache(x_cron_secret: str = Header(default=""), max_days: int = 30):
+    """Endpoint dla Google Cloud Scheduler — usuwa stare pliki cache."""
+    expected = os.getenv("CRON_SECRET", "")
+    if not expected or x_cron_secret != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        from footstats.utils.cache_evict import evict_old_cache
+        deleted = evict_old_cache(max_days=max_days)
+        _log.info("cron_evict_cache: usunięto %d pliki (>%dd)", deleted, max_days)
+        return {"ok": True, "deleted": deleted, "max_days": max_days}
+    except Exception as e:
+        _log.error("cron_evict_cache error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
