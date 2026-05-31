@@ -171,6 +171,10 @@
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         <span class="font-semibold text-sm">Stwórz Kupon</span>
       </div>
+      <div class="nav-item hidden" id="nav-admin" onclick="showView('admin')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span class="font-semibold text-sm">Użytkownicy</span>
+      </div>
     </nav>
     <div class="p-4 bg-white/5 rounded-xl border border-white/5 mt-auto">
       <p class="text-xs text-slate-500 uppercase tracking-tight">Właściciel</p>
@@ -357,6 +361,32 @@
         </div>
 
       </div>
+
+      <!-- Zmień hasło -->
+      <div class="glass-card p-8 mt-8">
+        <h3 class="text-base font-bold mb-6 flex items-center gap-2">
+          <svg width="18" height="18" fill="none" stroke="#818cf8" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Zmień hasło
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 font-semibold uppercase tracking-wider mb-2">Aktualne hasło</label>
+            <input id="pwd-current" type="password" class="settings-input w-full" placeholder="••••••••" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 font-semibold uppercase tracking-wider mb-2">Nowe hasło</label>
+            <input id="pwd-new" type="password" class="settings-input w-full" placeholder="min. 8 znaków" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 font-semibold uppercase tracking-wider mb-2">Potwierdź hasło</label>
+            <input id="pwd-confirm" type="password" class="settings-input w-full" placeholder="••••••••" />
+          </div>
+        </div>
+        <div class="flex items-center gap-4 mt-4">
+          <button onclick="changePassword()" class="px-5 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm rounded-xl transition-all">Zmień hasło</button>
+          <p id="pwd-msg" class="text-xs hidden"></p>
+        </div>
+      </div>
     </div>
 
     <!-- ===== KREATOR KUPONU ===== -->
@@ -488,6 +518,54 @@
             class="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm rounded-xl transition-all">
             Wróć do Dashboard
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ADMIN — UŻYTKOWNICY ===== -->
+    <div id="view-admin" class="hidden">
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold mb-1">Zarządzaj Użytkownikami</h1>
+        <p class="text-slate-500 text-sm">Twórz konta, ustawiaj role, dezaktywuj.</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        <!-- Nowy user -->
+        <div class="glass-card p-8">
+          <h3 class="text-base font-bold mb-6 flex items-center gap-2">
+            <svg width="18" height="18" fill="none" stroke="#818cf8" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+            Nowy użytkownik
+          </h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs text-slate-400 font-semibold uppercase tracking-wider mb-2">Login</label>
+              <input id="admin-new-username" type="text" class="settings-input w-full" placeholder="min. 3 znaki" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 font-semibold uppercase tracking-wider mb-2">Hasło</label>
+              <input id="admin-new-password" type="password" class="settings-input w-full" placeholder="min. 8 znaków" />
+            </div>
+            <div class="flex items-center gap-3">
+              <input id="admin-new-is-admin" type="checkbox" class="w-4 h-4 accent-indigo-500" />
+              <label class="text-sm text-slate-400">Uprawnienia admina</label>
+            </div>
+          </div>
+          <button onclick="adminCreateUser()" class="mt-6 w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm rounded-xl transition-all">Utwórz konto</button>
+          <p id="admin-create-msg" class="text-xs mt-3 hidden"></p>
+        </div>
+        <!-- Stats -->
+        <div class="glass-card p-8 flex flex-col justify-center items-center">
+          <p class="text-5xl font-bold text-indigo-400 mb-2" id="admin-user-count">—</p>
+          <p class="text-slate-500 text-sm">aktywnych użytkowników</p>
+        </div>
+      </div>
+      <!-- Lista userów -->
+      <div class="glass-card overflow-hidden">
+        <div class="px-6 py-4 border-b border-white/5 flex justify-between items-center">
+          <h3 class="font-bold text-sm">Lista kont</h3>
+          <button onclick="adminLoadUsers()" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold px-3 py-1.5 rounded-lg bg-indigo-500/10 transition-all">Odśwież</button>
+        </div>
+        <div id="admin-users-list" class="divide-y divide-white/5">
+          <p class="text-center text-slate-500 text-sm p-8">Ładowanie…</p>
         </div>
       </div>
     </div>
@@ -671,12 +749,14 @@
 
     // ---- navigation ----
     function showView(name) {
-      ['dashboard','history','settings','create'].forEach(v => {
-        document.getElementById('view-' + v).classList.toggle('hidden', v !== name);
+      ['dashboard','history','settings','create','admin'].forEach(v => {
+        const el = document.getElementById('view-' + v);
+        if (el) el.classList.toggle('hidden', v !== name);
         const nav = document.getElementById('nav-' + v);
         if (nav) nav.classList.toggle('active', v === name);
       });
       if (name === 'create' && wiz.matches.length === 0) wizLoadMatches();
+      if (name === 'admin') adminLoadUsers();
     }
 
     async function reloadDashboard() {
@@ -802,12 +882,111 @@
       }
     }
 
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    function isAdmin() {
+      try {
+        const token = localStorage.getItem('fs_token');
+        if (!token) return false;
+        return !!JSON.parse(atob(token.split('.')[1])).adm;
+      } catch(_) { return false; }
+    }
+
     function applyUserDisplay() {
       const u = localStorage.getItem('fs_user') || 'Użytkownik';
       const side = document.getElementById('sidebar-username');
       const welcome = document.getElementById('welcome-username');
       if (side) side.textContent = u;
       if (welcome) welcome.textContent = u;
+      const adminNav = document.getElementById('nav-admin');
+      if (adminNav) adminNav.classList.toggle('hidden', !isAdmin());
+    }
+
+    // ---- admin users ----
+    async function adminLoadUsers() {
+      const el = document.getElementById('admin-users-list');
+      const countEl = document.getElementById('admin-user-count');
+      try {
+        const res = await apiFetch('/api/admin/users');
+        if (!res.ok) { el.innerHTML = '<p class="text-center text-rose-400 text-sm p-8">Błąd ładowania.</p>'; return; }
+        const users = await res.json();
+        const active = users.filter(u => u.is_active);
+        if (countEl) countEl.textContent = active.length;
+        if (!users.length) { el.innerHTML = '<p class="text-center text-slate-500 text-sm p-8">Brak użytkowników.</p>'; return; }
+        el.innerHTML = users.map(u => `
+          <div class="px-6 py-4 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-2 h-2 rounded-full ${u.is_active ? 'bg-emerald-400' : 'bg-slate-600'}"></div>
+              <span class="font-semibold text-sm text-slate-200">${esc(u.username)}</span>
+              ${u.is_admin ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">ADMIN</span>' : ''}
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-slate-500">ID: ${u.id}</span>
+              ${u.is_active ? `<button onclick="adminDeactivate(${u.id})" class="text-xs px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all font-semibold">Dezaktywuj</button>` : '<span class="text-xs text-slate-600">Nieaktywny</span>'}
+            </div>
+          </div>`).join('');
+      } catch(e) {
+        el.innerHTML = '<p class="text-center text-rose-400 text-sm p-8">Błąd połączenia.</p>';
+      }
+    }
+
+    async function adminCreateUser() {
+      const username = document.getElementById('admin-new-username').value.trim();
+      const password = document.getElementById('admin-new-password').value;
+      const is_admin = document.getElementById('admin-new-is-admin').checked;
+      const msg = document.getElementById('admin-create-msg');
+      msg.classList.add('hidden');
+      try {
+        const res = await apiFetch('/api/admin/users', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username, password, is_admin})
+        });
+        const data = await res.json();
+        if (!res.ok) { msg.textContent = data.detail || 'Błąd'; msg.className = 'text-xs mt-3 text-rose-400'; msg.classList.remove('hidden'); return; }
+        msg.textContent = `Utworzono konto "${esc(data.username)}" (ID: ${data.id})`;
+        msg.className = 'text-xs mt-3 text-emerald-400';
+        msg.classList.remove('hidden');
+        document.getElementById('admin-new-username').value = '';
+        document.getElementById('admin-new-password').value = '';
+        document.getElementById('admin-new-is-admin').checked = false;
+        adminLoadUsers();
+      } catch(e) {
+        msg.textContent = 'Błąd połączenia'; msg.className = 'text-xs mt-3 text-rose-400'; msg.classList.remove('hidden');
+      }
+    }
+
+    async function adminDeactivate(userId) {
+      if (!confirm('Dezaktywować tego użytkownika?')) return;
+      try {
+        const res = await apiFetch(`/api/admin/users/${userId}`, {method: 'DELETE'});
+        if (res.ok || res.status === 204) adminLoadUsers();
+      } catch(_) {}
+    }
+
+    // ---- change password ----
+    async function changePassword() {
+      const current = document.getElementById('pwd-current').value;
+      const newPwd  = document.getElementById('pwd-new').value;
+      const confirm = document.getElementById('pwd-confirm').value;
+      const msg     = document.getElementById('pwd-msg');
+      msg.classList.add('hidden');
+      if (newPwd !== confirm) { msg.textContent = 'Hasła nie są zgodne'; msg.className = 'text-xs text-rose-400'; msg.classList.remove('hidden'); return; }
+      try {
+        const res = await apiFetch('/api/auth/change-password', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({current_password: current, new_password: newPwd})
+        });
+        const data = await res.json();
+        if (!res.ok) { msg.textContent = data.detail || 'Błąd'; msg.className = 'text-xs text-rose-400'; msg.classList.remove('hidden'); return; }
+        msg.textContent = 'Hasło zmienione!'; msg.className = 'text-xs text-emerald-400'; msg.classList.remove('hidden');
+        document.getElementById('pwd-current').value = '';
+        document.getElementById('pwd-new').value = '';
+        document.getElementById('pwd-confirm').value = '';
+      } catch(e) {
+        msg.textContent = 'Błąd połączenia'; msg.className = 'text-xs text-rose-400'; msg.classList.remove('hidden');
+      }
     }
 
     function wizUpdateAnalyzeBtn() {
