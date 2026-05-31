@@ -77,8 +77,20 @@ def create_user(
     except psycopg2.Error as e:
         _log.error("DB error przy tworzeniu usera '%s': %s", req.username, e)
         raise HTTPException(status_code=500, detail="Błąd tworzenia użytkownika")
+    new_user = UserResponse(**dict(row))
+    try:
+        from datetime import datetime
+        with connect() as conn:
+            conn.execute(
+                "INSERT INTO bankroll_state (user_id, balance, updated_at)"
+                " VALUES (?, 0.0, ?)"
+                " ON CONFLICT (user_id) DO NOTHING",
+                (new_user.id, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            )
+    except Exception as e:
+        _log.warning("Nie udało się zainicjować bankrolla dla usera %d: %s", new_user.id, e)
     _log.info("Admin %d utworzył usera '%s' (is_admin=%s)", admin_id, req.username, req.is_admin)
-    return UserResponse(**dict(row))
+    return new_user
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

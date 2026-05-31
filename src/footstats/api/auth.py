@@ -99,3 +99,27 @@ def require_admin(
         return int(user_id)
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/auth/change-password", status_code=status.HTTP_200_OK)
+def change_password(req: ChangePasswordRequest, user_id: int = Depends(require_auth)):
+    if len(req.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Nowe hasło min. 8 znaków")
+    from footstats.utils.db import connect
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT password_hash FROM users WHERE id = ? AND is_active = TRUE", (user_id,)
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
+    if not bcrypt.checkpw(req.current_password.encode(), row["password_hash"].encode()):
+        raise HTTPException(status_code=401, detail="Nieprawidłowe aktualne hasło")
+    new_hash = bcrypt.hashpw(req.new_password.encode(), bcrypt.gensalt()).decode()
+    with connect() as conn:
+        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+    return {"ok": True, "message": "Hasło zmienione"}
