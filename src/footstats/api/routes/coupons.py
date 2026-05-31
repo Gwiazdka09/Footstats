@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 import footstats.config as cfg
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from footstats.api.auth import require_auth
@@ -357,4 +357,27 @@ def settle_coupons(req: SettleRequest, user_id: int = Depends(require_auth)):
             "message": f"Rozliczono {stats.get('settled',0)}, częściowych {stats.get('partial',0)}, błędów {stats.get('errors',0)}",
         }
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/cron/settle")
+def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
+    """Endpoint dla Google Cloud Scheduler — rozlicza ACTIVE kupony."""
+    expected = os.getenv("CRON_SECRET", "")
+    if not expected or x_cron_secret != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        from footstats.core.coupon_settlement import settle_active_coupons
+        from footstats.core.response_cache import clear_response_cache
+        stats = settle_active_coupons(days_back=days_back, dry_run=False, verbose=True)
+        clear_response_cache()
+        _log.info("cron_settle: %s", stats)
+        return {
+            "ok": True,
+            "settled": stats.get("settled", 0),
+            "partial": stats.get("partial", 0),
+            "errors": stats.get("errors", 0),
+        }
+    except Exception as e:
+        _log.error("cron_settle error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
