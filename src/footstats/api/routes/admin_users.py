@@ -5,6 +5,7 @@ import logging
 from typing import Annotated
 
 import bcrypt
+import psycopg2
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
 
@@ -87,7 +88,7 @@ def create_user(
                 " ON CONFLICT (user_id) DO NOTHING",
                 (new_user.id, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             )
-    except Exception as e:
+    except psycopg2.Error as e:
         _log.warning("Nie udało się zainicjować bankrolla dla usera %d: %s", new_user.id, e)
     _log.info("Admin %d utworzył usera '%s' (is_admin=%s)", admin_id, req.username, req.is_admin)
     return new_user

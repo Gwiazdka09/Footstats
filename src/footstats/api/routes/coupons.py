@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 import footstats.config as cfg
+import psycopg2
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
@@ -110,7 +111,7 @@ def get_active_coupons(user_id: int = Depends(require_auth)):
             d["legs"] = json.loads(d.get("legs_json") or "[]")
             result.append(d)
         return result
-    except Exception as e:
+    except psycopg2.Error as e:
         _log.error("get_active_coupons error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -130,7 +131,7 @@ def get_coupons(limit: int = 50, user_id: int = Depends(require_auth)):
             d["legs"] = json.loads(d.get("legs_json") or "[]")
             result.append(d)
         return result
-    except Exception as e:
+    except psycopg2.Error as e:
         _log.error("get_coupons error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -197,7 +198,7 @@ def get_coupon_summary(days: int = 30, user_id: int = Depends(require_auth)):
         stats["streak"] = {"current": current, "max": max_s}
         stats["confidence_avg"] = 0.0
         return stats
-    except Exception as e:
+    except psycopg2.Error as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

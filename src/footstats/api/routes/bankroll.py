@@ -1,6 +1,7 @@
 """Bankroll endpoints."""
 from datetime import datetime
 
+import psycopg2
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -28,7 +29,7 @@ def update_bankroll(data: BankrollUpdate, user_id: int = Depends(require_auth)):
                 (user_id, data.balance, now),
             )
         return {"ok": True, "balance": data.balance, "updated_at": now}
-    except Exception as e:
+    except psycopg2.Error as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -42,5 +43,5 @@ def get_bankroll_history(limit: int = 50, user_id: int = Depends(require_auth)):
                 (user_id, limit),
             ).fetchall()
         return [{"time": str(r["timestamp"])[:16], "balance": r["new_balance"]} for r in rows]
-    except Exception as e:
+    except psycopg2.Error as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -177,6 +177,26 @@ def check_weekly_alert(user_id: int = 1) -> bool:
     return get_weekly_drawdown(user_id) >= WEEKLY_DRAWDOWN_ALERT_PCT
 
 
+def kelly_fraction(prob: float, kurs: float, bankroll: float, frac: float = 0.25) -> float:
+    """
+    Fractional Kelly stake w PLN.
+
+    frac=0.25 = 1/4 Kelly (domyślnie, bardziej konserwatywny).
+    Zwraca 0.0 gdy edge ujemny (nie stawiaj) lub bankroll=0.
+    Minimalny stake: 1 PLN. Maksymalny: 10% bankrolla (stop-loss guard).
+    """
+    if bankroll <= 0 or kurs <= 1.0 or prob <= 0.0:
+        return 0.0
+    b = kurs - 1.0
+    edge = b * prob - (1.0 - prob)
+    if edge <= 0:
+        return 0.0
+    full_kelly = edge / b
+    stake = round(full_kelly * frac * bankroll, 2)
+    max_stake = round(bankroll * 0.10, 2)
+    return max(1.0, min(stake, max_stake))
+
+
 if __name__ == "__main__":
     init_bankroll_tables()
     print(f"Aktualny bankroll: {get_current_bankroll()} PLN")
