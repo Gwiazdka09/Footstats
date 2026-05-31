@@ -395,6 +395,6 @@ def cron_evict_cache(x_cron_secret: str = Header(default=""), max_days: int = 30
         deleted = evict_old_cache(max_days=max_days)
         _log.info("cron_evict_cache: usunięto %d pliki (>%dd)", deleted, max_days)
         return {"ok": True, "deleted": deleted, "max_days": max_days}
-    except Exception as e:
+    except (OSError, ImportError, ValueError) as e:
         _log.error("cron_evict_cache error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

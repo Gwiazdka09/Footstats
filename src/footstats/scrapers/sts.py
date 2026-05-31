@@ -80,7 +80,7 @@ def pobierz_typerzy(page, max_typerzy: int = 50) -> list:
                 time.sleep(2)
                 logger.info("[STS] Kliknięto 'Najlepsi'")
                 break
-            except Exception:
+            except (PWError,):
                 continue
 
         # Poczekaj na karty typerów
@@ -139,7 +139,7 @@ def pobierz_typerzy(page, max_typerzy: int = 50) -> list:
                         "liczba_kuponow":  liczba_kuponow,
                         "_el_index":       len(typerzy),
                     })
-            except Exception:
+            except (PWError, ValueError, AttributeError):
                 continue
 
         logger.info(f"[STS] Pobrano {len(typerzy)} typerów")
@@ -177,7 +177,7 @@ def pobierz_kupony_typera(page, nick: str) -> list:
                         time.sleep(2)
                         kliknieto = True
                         break
-            except Exception:
+            except (PWError,):
                 continue
 
         if not kliknieto:
@@ -240,7 +240,7 @@ def pobierz_kupony_typera(page, nick: str) -> list:
                     "linie":    linie[:20],
                     "czas":     datetime.now().strftime("%H:%M"),
                 })
-            except Exception:
+            except (PWError, ValueError, AttributeError):
                 continue
 
         # Zamknij panel kuponów (kliknij X lub wróć)
@@ -249,7 +249,7 @@ def pobierz_kupony_typera(page, nick: str) -> list:
                 page.click(sel, timeout=1000)
                 time.sleep(0.5)
                 break
-            except Exception:
+            except (PWError,):
                 continue
 
     except (PWTimeout, ValueError) as e:
@@ -373,7 +373,7 @@ def main():
                     timeout=5000
                 )
                 time.sleep(1.5)
-            except Exception:  # noqa: broad-except — login button may not be present
+            except (PWError,):  # login button may not be present
                 pass
 
             if not zaloguj(page):
@@ -398,7 +398,7 @@ def main():
                     time.sleep(2)
                     logger.info("[STS] Kliknięto 'Najlepsi'")
                     break
-                except Exception:
+                except (PWError,):
                     continue
 
             # Screenshot tylko w trybie debug
@@ -459,7 +459,7 @@ def main():
                             "skutecznosc": skut,
                             "n_kuponow":  n_kuponow,
                         })
-                except Exception:
+                except (PWError, ValueError, AttributeError):
                     continue
 
             # Deduplikacja po nicku
@@ -494,7 +494,7 @@ def main():
                                 btn.click()
                                 time.sleep(2)
                                 break
-                    except Exception:
+                    except (PWError, ValueError, AttributeError):
                         continue
                 else:
                     # Fallback — kliknij po indeksie
@@ -502,7 +502,7 @@ def main():
                         try:
                             kupony_btns_aktualne[idx-1].click()
                             time.sleep(2)
-                        except Exception:
+                        except (PWError,):
                             continue
 
                 # Scrapuj kupony które się pojawiły (panel lub nowa strona)
@@ -533,7 +533,7 @@ def main():
                                     "czas": datetime.now().strftime("%Y-%m-%d %H:%M"),
                                 })
                                 logger.info(f"  Kupon: {tresc[:80]}...")
-                        except Exception:
+                        except (PWError, ValueError, AttributeError):
                             continue
                 else:
                     logger.info("  Brak kuponów do sparsowania")
@@ -550,7 +550,7 @@ def main():
                         page.click(sel, timeout=1000)
                         time.sleep(0.5)
                         break
-                    except Exception:
+                    except (PWError,):
                         continue
 
                 # Jeśli strona się zmieniła — wróć
@@ -558,7 +558,7 @@ def main():
                     page.go_back()
                     time.sleep(1.5)
 
-        except Exception as e:
+        except (PWError, ValueError, AttributeError) as e:
             logger.info(f"[STS] Błąd główny: {e}")
             page.screenshot(path="sts_error.png")
         finally:
