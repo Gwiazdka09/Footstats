@@ -26,6 +26,10 @@ def _backup_plik(db_path: Path, backup_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     nazwa = f"{db_path.stem}_{ts}.db"
     cel = backup_dir / nazwa
+    n = 0
+    while cel.exists():
+        n += 1
+        cel = backup_dir / f"{db_path.stem}_{ts}_{n}.db"
     shutil.copy2(db_path, cel)
     logger.info("Backup: %s → %s (%.1f KB)", db_path, cel, cel.stat().st_size / 1024)
     return cel

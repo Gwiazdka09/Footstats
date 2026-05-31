@@ -40,6 +40,7 @@ def szybkie_pewniaczki_2dni(
     bzzoiro: "BzzoiroClient",
     prog: float = PEWNIACZEK_PROG,
     godziny: int = 48,
+    df_mecze: object = None,
 ) -> list:
     """
     Skanuje nadchodzace mecze (domyslnie 48h) z Bzzoiro ML.
@@ -57,6 +58,13 @@ def szybkie_pewniaczki_2dni(
     if not bzzoiro or not getattr(bzzoiro, "_valid", False):
         console.print("[yellow]Bzzoiro niedostepne – brak danych ML.[/yellow]")
         return []
+
+    if df_mecze is None:
+        try:
+            from footstats.data.historical_loader import load_cached
+            df_mecze = load_cached()
+        except (FileNotFoundError, ImportError, OSError, ValueError):
+            df_mecze = None
 
     teraz    = datetime.now()
     granica  = teraz + timedelta(hours=godziny)
@@ -117,6 +125,23 @@ def szybkie_pewniaczki_2dni(
         o25 = round(calibrate_confidence(o25_raw) * 100.0, 1)
         u25 = round(100.0 - o25, 1)
 
+        # ── 11.4: Poisson ensemble — blend z Bzzoiro 50/50 ──────────────
+        poisson_blend = False
+        if df_mecze is not None:
+            try:
+                from footstats.core.poisson import predict_match
+                _pred_p = predict_match(g, a, df_mecze)
+                if _pred_p:
+                    pw  = round(pw  * 0.5 + _pred_p["p_wygrana"]   * 0.5, 1)
+                    pr  = round(pr  * 0.5 + _pred_p["p_remis"]     * 0.5, 1)
+                    pp  = round(pp  * 0.5 + _pred_p["p_przegrana"] * 0.5, 1)
+                    bt  = round(bt  * 0.5 + _pred_p["btts"]        * 0.5, 1)
+                    o25 = round(o25 * 0.5 + _pred_p["over25"]      * 0.5, 1)
+                    u25 = round(100.0 - o25, 1)
+                    poisson_blend = True
+            except (ImportError, AttributeError, ValueError, KeyError, TypeError):
+                pass  # Poisson niedostępny → zostaw Bzzoiro
+
         # Zbierz typy pewne (na skalibrowanych prob)
         typy = _typy_pewne(pw, pr, pp, bt, o25, u25, g, a, prog)
         if not typy:
@@ -145,8 +170,9 @@ def szybkie_pewniaczki_2dni(
             "bt_raw": bt_raw, "o25_raw": o25_raw,
             "wynik_g":    wg,
             "wynik_a":    wa,
-            "odds":       odds,
-            "scout":      scout,
+            "odds":         odds,
+            "scout":        scout,
+            "poisson_blend": poisson_blend,
         })
 
     # Sortuj: najpierw czasowo, potem najlepsza szansa malejaco
