@@ -1387,6 +1387,64 @@ OCENA (odpowiedz po polsku):
     return _zapytaj_typera(prompt, max_tokens=800)
 
 
+_SCOUT_VETO_THRESHOLD = 50  # score < 50 → veto kuponu
+
+
+def oceń_kupon(legs: list[dict], kontekst: str = "") -> tuple[str, int]:
+    """
+    LLM Scout filter — ocenia listę nóg kuponu i zwraca (reasoning, score 0-100).
+    Score < _SCOUT_VETO_THRESHOLD → kupon powinien być odrzucony.
+
+    legs: lista dict z kluczami home, away, tip, odds (i opcjonalnie prob, ev_netto)
+    kontekst: dodatkowy tekst (np. forma drużyn, kontuzje)
+    """
+    if not legs:
+        return ("Brak nóg kuponu.", 0)
+
+    legs_text = "\n".join(
+        f"  {i+1}. {lg.get('home','?')} vs {lg.get('away','?')} | "
+        f"Typ: {lg.get('tip','?')} @ {lg.get('odds', lg.get('kurs','?'))} | "
+        f"P(win)={lg.get('prob', lg.get('pw_cal', '?'))} "
+        f"EV={lg.get('ev_netto','?')}"
+        for i, lg in enumerate(legs)
+    )
+
+    prompt = f"""Oceń poniższy kupon jako LLM Scout (filtr jakości 0-100).
+
+NOGI KUPONU:
+{legs_text}
+{f"KONTEKST:{chr(10)}{kontekst}" if kontekst else ""}
+
+ZADANIE:
+1. Dla każdej nogi: zaznacz ryzyko (NISKIE/ŚREDNIE/WYSOKIE) i główne zastrzeżenia.
+2. Wykryj: kontuzje kluczowych zawodników, derby/finały (motywacja), mecze bez stawki (team rotation), korelację nóg.
+3. Podaj końcową ocenę 0-100 gdzie:
+   - 0-49: VETO (nie stawiać)
+   - 50-69: SŁABY (rozważyć)
+   - 70-84: DOBRY
+   - 85-100: BARDZO DOBRY
+
+Zakończ odpowiedź DOKŁADNIE w tym formacie (ostatnia linia):
+SCORE: <liczba 0-100>"""
+
+    try:
+        reasoning = _zapytaj_typera(prompt, max_tokens=600)
+    except Exception:  # noqa: broad-except — LLM fallback, nie blokuj pipeline
+        return ("LLM niedostępny — pominięto scout filter.", _SCOUT_VETO_THRESHOLD)
+
+    score = _SCOUT_VETO_THRESHOLD
+    for line in reversed(reasoning.splitlines()):
+        line = line.strip()
+        if line.upper().startswith("SCORE:"):
+            try:
+                score = max(0, min(100, int(line.split(":", 1)[1].strip())))
+            except ValueError:
+                pass
+            break
+
+    return (reasoning, score)
+
+
 def ai_groq_dostepny() -> bool:
     """Sprawdza czy Groq API jest dostępne (klucz w .env)."""
     return bool(os.getenv("GROQ_API_KEY", "").strip())

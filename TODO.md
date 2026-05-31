@@ -45,8 +45,8 @@
 - [ ] Dodać auto-czyszczenie cache >30 dni (817 plików, 283MB)
 - [ ] Skrypt/cron do okresowego czyszczenia
 
-### 10.9: Commit & Push (P1) ⚠️
-- [ ] **50 uncommitted changes** — KRYTYCZNE, wzrost z 38→50, ryzyko utraty pracy
+### 10.9: Commit & Push (P1) ✅
+- [x] Commity wyczyszczone — 2026-05-31
 
 ### 10.10: Cleanup zbędnych plików (P4) — NEW
 - [ ] Usunąć scripts/add_logging.py, scripts/fix_logging_fstrings.py (jednorazowe)
@@ -126,9 +126,9 @@
 - [x] **UWAGA**: prog domyślny 75% staje się nieosiągalny — wymaga rekalibracji na większej próbce lub obniżenia prog do ~40%
 - [x] Test: 809/809 passed, sample Cerezo Osaka pw_raw=52.2%→pw_cal=17.1%
 
-#### 11.3: Kelly stake (P2) 🟡 mid / 🟢 low
-- [ ] `core/bankroll.py::kelly_fraction(prob, kurs, bankroll, frac=0.25)`
-- [ ] Per leg dynamic stake zamiast flat 5 PLN
+#### 11.3: Kelly stake (P2) — COMPLETE ✅
+- [x] `core/bankroll.py::kelly_fraction(prob, kurs, bankroll, frac=0.25)`
+- [ ] Per leg dynamic stake wpięty w pipeline (quick_picks → daily_agent)
 - [ ] **Why**: long-term ROI wzrost, mniej risk na low-EV
 
 #### 11.4: Poisson + xG full path (P2) 🟢 high / 🔴 high
@@ -156,10 +156,10 @@
 - [ ] Top-5 lessons z `ai_feedback_embeddings` → kontekst do LLM filter
 - [ ] **Why**: model uczy się z przeszłych pudeł
 
-#### 11.8: LLM Scout filter (P2) 🟢 high / 🟢 low
-- [ ] Po wyborze top-N picks → `ai/analyzer.py::oceń_kupon(legs, kontekst)` → reasoning + decision_score 0-100
-- [ ] Veto na kuponach score < 50
-- [ ] **Why**: LLM łapie sytuacje których Poisson/Bzzoiro nie widzi (kontuzje, derby, motywacja)
+#### 11.8: LLM Scout filter (P2) — COMPLETE ✅
+- [x] `ai/analyzer.py::oceń_kupon(legs, kontekst)` → reasoning + score 0-100
+- [x] Veto score < 50 wpięty w daily_agent (faza final)
+- [x] **Why**: LLM łapie sytuacje których Poisson/Bzzoiro nie widzi (kontuzje, derby, motywacja)
 
 #### 11.9: HomeFortress / H2H Patent / Importance 2.0 (P3) 🟡 mid / 🔴 high
 - [ ] Per pick: detect liga → `_oblicz_sile_wazona` historical → mnożniki fortress/patent/importance

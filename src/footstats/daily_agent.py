@@ -1351,17 +1351,44 @@ def main():
                 )
                 console.print(f"[dim]Kupon nie został zapisany do bazy danych[/dim]")
             else:
-                cid = _zapisz_kupon_do_db(
-                    zdarzenia_db,
-                    phase=args.faza,
-                    groq_resp=dane.get("_raw", ""),
-                    stake=args.stawka,
-                    total_odds=kurs_db,
-                )
-                if cid:
-                    console.print(f"[green]✅ Kupon zapisany do DB — ID: {cid} | faza: {args.faza}[/green]")
-                    draft_legs = zdarzenia_db
-                    draft_odds = kurs_db
+                # LLM Scout filter (tylko faza final — oszczędność tokenów)
+                if args.faza == "final":
+                    from footstats.ai.analyzer import oceń_kupon, _SCOUT_VETO_THRESHOLD
+                    scout_legs = [
+                        {
+                            "home": z.get("gospodarz", z.get("home", "?")),
+                            "away": z.get("goscie", z.get("away", "?")),
+                            "tip": z.get("typ", z.get("tip", "?")),
+                            "odds": z.get("kurs", z.get("odds", 1.0)),
+                            "prob": z.get("pewnosc_pct", z.get("pw_cal")),
+                            "ev_netto": z.get("ev_netto"),
+                        }
+                        for z in zdarzenia_db
+                    ]
+                    scout_reasoning, scout_score = oceń_kupon(scout_legs)
+                    console.print(
+                        f"\n[bold]LLM Scout:[/bold] score={scout_score}/100\n"
+                        f"[dim]{scout_reasoning[:400]}[/dim]\n"
+                    )
+                    if scout_score < _SCOUT_VETO_THRESHOLD:
+                        console.print(
+                            f"[red]❌ LLM SCOUT VETO: score {scout_score} < {_SCOUT_VETO_THRESHOLD} "
+                            f"— kupon nie zapisany[/red]"
+                        )
+                        zdarzenia_db = []  # blokuj zapis poniżej
+
+                if zdarzenia_db:
+                    cid = _zapisz_kupon_do_db(
+                        zdarzenia_db,
+                        phase=args.faza,
+                        groq_resp=dane.get("_raw", ""),
+                        stake=args.stawka,
+                        total_odds=kurs_db,
+                    )
+                    if cid:
+                        console.print(f"[green]✅ Kupon zapisany do DB — ID: {cid} | faza: {args.faza}[/green]")
+                        draft_legs = zdarzenia_db
+                        draft_odds = kurs_db
     elif args.dry_run and args.faza:
         console.print("[yellow]DRY-RUN: pominięto zapis kuponu do DB[/yellow]")
 
