@@ -1,4 +1,4 @@
-# FootStats TODO — Updated 2026-05-31
+# FootStats TODO — Updated 2026-06-01
 
 ## Completed Phases (Archive)
 

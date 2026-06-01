@@ -1,8 +1,8 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-05-31 (auto-audit)  
+**Last Updated:** 2026-06-01 (auto-audit)  
 **Current Version:** v3.4-stable  
-**Build Status:** ✅ OK — 7 truncated plików przywrócone, 0 SyntaxError  
+**Build Status:** ✅ OK — 4 truncated plików przywrócone (bankroll, analyzer, admin_users, bankroll route), 0 SyntaxError  
 **System State:** FUNCTIONAL
 
 ---
@@ -41,6 +41,7 @@
 | Timeout audit (0 remaining) | ✅ DONE | 05-29 |
 | asyncio.get_event_loop() deprecated | ✅ FIXED | 05-29 |
 | **7x file truncation (quick_picks, response_cache, bankroll, coupons, auth, main, migrations)** | ✅ FIXED | 05-31 |
+| **4x file truncation (bankroll, analyzer, admin_users, bankroll route)** | ✅ FIXED | 06-01 |
 
 ---
 
@@ -48,13 +49,12 @@
 
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
-| 1 | **174x `except Exception`** | 🟡 P2 | Top: base_playwright(14), sts(13), daily_agent(8), logging(7), historical_loader(7) |
+| 1 | **157x `except Exception`** | 🟡 P2 | Top: base_playwright(14), analyzer(8), logging(7), historical_loader(7), daily_agent(7) |
 | 2 | **Accuracy 42.4%** | 🟡 P2 | Poniżej M1 target (55%) — wymaga pracy nad kalibracją |
-| 3 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1414), analyzer(1396), superbet(1128), cli(1112) |
-| 4 | **50 uncommitted changes** | 🔴 P1 | Wzrost z 38→50 — ryzyko utraty pracy |
-| 5 | **25 starych logów** | ⚪ P4 | logs/ — stare kupony i raporty |
-| 6 | **Zbędne skrypty** | ⚪ P4 | add_logging.py, fix_logging_fstrings.py (jednorazowe) |
-| 7 | **10 DAILY_ANALYSIS docs** | ⚪ P4 | docs/ — rozważyć archiwizację |
+| 3 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1401), analyzer(1454), superbet(1128), cli(1112) |
+| 4 | **50 uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT |
+| 5 | **11 DAILY_ANALYSIS docs** | ⚪ P4 | docs/ — rozważyć archiwizację |
+| 6 | **Recurring file truncation** | 🟡 P2 | 3. raz w tygodniu — prawdopodobnie dysk/proces zapisu archiwizację |
 
 ---
 
