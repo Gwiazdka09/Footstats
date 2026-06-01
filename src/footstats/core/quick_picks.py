@@ -89,6 +89,11 @@ def szybkie_pewniaczki_2dni(
         if not g or not a or not d:
             continue
 
+        # Pomiń mecze już rozegrane lub w trakcie
+        status = str(ev.get("status", "") or "").lower()
+        if status and status not in ("notstarted", "scheduled", ""):
+            continue
+
         # Filtruj tylko mecze w horyzoncie czasowym
         try:
             dm = datetime.strptime(

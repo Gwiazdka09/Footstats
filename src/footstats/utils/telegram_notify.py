@@ -21,14 +21,16 @@ import hashlib
 import json
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
-_DEDUP_FILE = Path(__file__).resolve().parents[4] / "data" / "telegram_dedup.json"
+_DEDUP_FILE = Path(__file__).resolve().parents[3] / "data" / "telegram_dedup.json"
+
+_DEDUP_WINDOW_DAYS = 3  # ile dni wstecz sprawdzamy dedup
 
 
 def _kupon_hash(dane: dict) -> str:
@@ -41,13 +43,18 @@ def _kupon_hash(dane: dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
-def _already_sent_today(h: str) -> bool:
-    dzis = datetime.now().strftime("%Y-%m-%d")
+def _already_sent_recently(h: str) -> bool:
+    """Zwraca True jeśli hash wysłany w ostatnich _DEDUP_WINDOW_DAYS dniach."""
     try:
         data = json.loads(_DEDUP_FILE.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
         data = {}
-    return h in data.get(dzis, [])
+    today = datetime.now().date()
+    for offset in range(_DEDUP_WINDOW_DAYS):
+        dzien = (today - timedelta(days=offset)).strftime("%Y-%m-%d")
+        if h in data.get(dzien, []):
+            return True
+    return False
 
 
 def _mark_sent(h: str) -> None:
@@ -118,8 +125,8 @@ def send_kupon(dane: dict, stawka_a: float = 10.0, stawka_b: float = 5.0) -> boo
     dane – słownik z kluczami: kupon_a, kupon_b, top3, ostrzezenia
     """
     h = _kupon_hash(dane)
-    if _already_sent_today(h):
-        return False  # identyczny kupon już dziś wysłany
+    if _already_sent_recently(h):
+        return False  # identyczny kupon już wysłany w ostatnich 3 dniach
 
     dzis   = datetime.now().strftime("%d.%m.%Y %H:%M")
     linie  = [f"<b>FootStats {dzis}</b>"]
