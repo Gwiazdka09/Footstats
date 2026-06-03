@@ -1,4 +1,4 @@
-# FootStats TODO — Updated 2026-06-01
+# FootStats TODO — Updated 2026-06-03
 
 ## Completed Phases (Archive)
 
@@ -84,6 +84,13 @@
 | **M4** | 70% selected | Full optimization + CLV + 3mo track record |
 
 ---
+
+## Cleanup (P4) — do zrobienia
+- [ ] Usunąć `validation_errors.csv` z root (duplikat data/)
+- [ ] Usunąć `tests/scratch` (debug plik)
+- [ ] Usunąć `data/.fuse_hidden*` (3 orphan pliki)
+- [ ] Archiwizacja 12x `docs/DAILY_ANALYSIS_*.md` do `docs/archive/`
+- [ ] Refactor `conn.close()` → context manager w bankroll.py, json_export.py, coupon_tracker.py (11 miejsc)
 
 ## Blockers
 - **Accuracy 42%** — poniżej M1 target, wymaga pracy nad kalibracją
