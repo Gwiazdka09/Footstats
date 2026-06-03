@@ -260,7 +260,7 @@ class BezpiecznyHTTP:
                 logger.error("Blad parsowania JSON: %s | %s", url, e)
                 return None
 
-            except Exception as e:
+            except (requests.exceptions.RequestException, OSError) as e:
                 logger.critical("Nieoczekiwany blad HTTP: %s | %s",
                                 url, e, exc_info=True)
                 return None
@@ -321,7 +321,7 @@ class BezpiecznyCache:
             logger.error("Brak uprawnien do zapisu cache %s: %s", sciezka, e)
         except OSError as e:
             logger.error("Blad zapisu cache %s: %s", sciezka, e)
-        except Exception as e:
+        except (ValueError, TypeError, UnicodeEncodeError) as e:
             logger.critical("Nieoczekiwany blad zapisu cache: %s", e, exc_info=True)
         finally:
             try:
@@ -424,7 +424,7 @@ def bezpieczny_parse_prob(pred_ml: dict) -> tuple | None:
     except RecursionError:
         logger.error("_bzz_parse_prob: za duze zagniezdzone (max glebokosc)")
         return None
-    except Exception as e:
+    except (KeyError, ValueError, TypeError, AttributeError) as e:
         logger.error("_bzz_parse_prob: nieoczekiwany blad: %s", e, exc_info=True)
         return None
 
@@ -593,7 +593,7 @@ def waliduj_df_wyniki(df, nazwa: str = "df_wyniki") -> bool:
                 if niezero.gt(30).any():
                     logger.warning("waliduj_df: %s.%s zawiera wartosci > 30 (podejrzane?)",
                                    nazwa, kol)
-            except Exception as e:
+            except (TypeError, AttributeError) as e:
                 logger.warning("waliduj_df: nie mozna sprawdzic %s.%s: %s", nazwa, kol, e)
 
     # Sprawdz puste nazwy druzyn
@@ -678,7 +678,7 @@ def raport_diagnostyczny() -> dict:
             bledy = [l for l in linie if " ERROR " in l or " CRITICAL " in l]
             raport["log"]["bledy_total"] = len(bledy)
             raport["log"]["ostatnie_bledy"] = [l.rstrip() for l in bledy[-3:]]
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             raport["log"]["blad_odczytu"] = str(e)
 
     return raport

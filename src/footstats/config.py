@@ -44,7 +44,7 @@ _FINAL_STAGES = {"FINAL", "THIRD_PLACE", "GROUP_STAGE", "PRELIMINARY_ROUND"}
 _SINGLE_MATCH_COMPS = {"EC", "WC"}
 
 # ── v2.7 NOWE STALE – MultiSource & Intelligence ───────────────────
-PEWNIACZEK_PROG    = 90.0  # min. prawdopodobienstwto (%) dla Pewniaczka
+PEWNIACZEK_PROG    = 40.0  # min. prawdopodobienstwto (%) dla Pewniaczka (kalibracja: raw 70%→40% realnej)
 PEWNIACZEK_DNI     = 7     # ile dni do przodu szukamy (tydzien)
 DOMWYJAZD_MIN_M    = 5     # min. mecze dom/wyjazd do analizy
 DOMWYJAZD_PODROZNIK= 0.20  # min. roznica wyjazd-dom w pkt/mecz -> "Podroznik"
