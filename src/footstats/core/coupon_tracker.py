@@ -21,20 +21,9 @@ VALID_STATUSES = {STATUS_DRAFT, STATUS_ACTIVE, STATUS_WON, STATUS_LOST, STATUS_P
 
 
 def _exec(fn):
-    """
-    Otwiera połączenie, wykonuje fn(conn), commituje i zamyka.
-    Gwarantuje conn.close() na Windows (WAL nie blokuje pliku po close).
-    """
-    conn = _connect()
-    try:
-        result = fn(conn)
-        conn.commit()
-        return result
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    """Otwiera połączenie, wykonuje fn(conn), commituje i zamyka."""
+    with _connect() as conn:
+        return fn(conn)
 
 
 def init_coupon_tables() -> None:

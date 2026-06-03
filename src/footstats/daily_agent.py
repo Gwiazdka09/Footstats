@@ -1067,7 +1067,7 @@ def _zapisz_kupon_do_db(
                     )
                     console.print(f"[green]Kupon #{draft_row['id']} DRAFT → ACTIVE[/green]")
                     return draft_row["id"]
-                except Exception as promo_err:
+                except (RuntimeError, ValueError, KeyError) as promo_err:
                     console.print(
                         f"[red]BŁĄD promote_to_active(#{draft_row['id']}): {promo_err}"
                         f" — tworzę nowy kupon ACTIVE jako fallback[/red]"
@@ -1178,7 +1178,7 @@ def main():
             stats_upd = update_pending(days_back=3, dry_run=False, verbose=True)
             if stats_upd["updated"] > 0:
                 console.print(f"[green]Zaktualizowano {stats_upd['updated']} wynikow w backtest.db[/green]")
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             console.print(f"[dim]Auto-update wynikow: {e}[/dim]")
 
         # Krok 0b: Analiza porażek AI (Pętla Feedbacku) — uruchamiana po update wyników
@@ -1189,7 +1189,7 @@ def main():
                 console.print(
                     f"[dim]Pętla Feedbacku: przeanalizowano {stats_fb['analyzed']} porażek[/dim]"
                 )
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             console.print(f"[dim]Analiza porażek (feedback): {e}[/dim]")
 
         # Krok 0c: Rozliczenie ACTIVE kuponów (Settlement)
@@ -1201,7 +1201,7 @@ def main():
                     f"[green]Rozliczono {stats_settle['settled']} kuponów | "
                     f"Częściowych: {stats_settle['partial']} | Błędów: {stats_settle['errors']}[/green]"
                 )
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             console.print(f"[dim]Błąd settlement kuponów: {e}[/dim]")
 
     # Krok 0d: Aktualizacja statystyk sędziów z Zawodtyper (raz dziennie)
@@ -1209,7 +1209,7 @@ def main():
         from footstats.scrapers.zawodtyper_referees import fetch_referees_zawodtyper
         fetch_referees_zawodtyper()
         console.print("[green]✓ Sędziowie zaktualizowani z Zawodtyper[/green]")
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         console.print(f"[dim]Referee update: {e}[/dim]")
 
     _sep("KROK 1 — Bzzoiro ML")
@@ -1423,7 +1423,7 @@ def main():
                 else:
                     ok = send_kupon(dane, stawka_a=args.stawka, stawka_b=args.stawka_b)
                 console.print(f"[dim]Telegram: {'wyslano' if ok else 'blad wysylki'}[/dim]")
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             console.print(f"[dim]Telegram niedostepny: {e}[/dim]")
     else:
         console.print("[yellow]DRY-RUN: pominięto Telegram[/yellow]")

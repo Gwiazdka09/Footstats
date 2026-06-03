@@ -919,7 +919,7 @@ def _wzbogac_forme(wyniki: list, top_n: int = 12) -> None:
                 wyniki[idx]["sofa_kontuzje_g"] = ", ".join(inj_g)
             if inj_a:
                 wyniki[idx]["sofa_kontuzje_a"] = ", ".join(inj_a)
-        except Exception:  # noqa: broad-except — nie blokuj AI gdy SofaScore nie odpowiada
+        except (KeyError, TypeError, ValueError, OSError):
             pass
 
 
@@ -1118,7 +1118,7 @@ def ai_analiza_pewniaczki(
         for w in wyniki[:5]:
             try:
                 w["match_context"] = get_match_context(w.get("gospodarz",""), w.get("goscie",""), w.get("liga",""))
-            except Exception:  # noqa: broad-except
+            except (OSError, RuntimeError):
                 pass
 
     # Etap 3: Dynamiczne podsumowanie sygnałów
@@ -1131,7 +1131,7 @@ def ai_analiza_pewniaczki(
         k = pobierz_kalibracje_backtest()
         if k:
             kalibracja_str = f"KALIBRACJA HISTORYCZNA (backtest ~90 dni):\n{k}\n"
-    except Exception:  # noqa: broad-except — optional prompt enrichment, never block AI
+    except (ImportError, OSError, RuntimeError):
         pass
 
     feedback_str = ""
@@ -1154,7 +1154,7 @@ def ai_analiza_pewniaczki(
                 + "\n".join(f"  • {w}" for w in wnioski)
                 + "\n"
             )
-    except Exception:  # noqa: broad-except — optional RAG/DB enrichment, never block AI
+    except (ImportError, OSError, RuntimeError):
         pass
 
     mecze_opisy = [_buduj_opis_meczu(w) for w in wyniki[:5]]

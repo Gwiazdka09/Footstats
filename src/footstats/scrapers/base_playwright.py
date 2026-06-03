@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Generator, TypeVar
 
-from playwright.sync_api import Browser, BrowserContext, Page, TimeoutError as PWTimeout, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Error as PWError, Page, TimeoutError as PWTimeout, sync_playwright
 
 from footstats.core.circuit_breaker import CircuitBreaker
 from footstats.core.exceptions import FootStatsCircuitOpenError
@@ -41,7 +41,7 @@ def browser_context(headless: bool = True, **launch_kwargs: Any) -> Generator[Br
     try:
         browser = p.chromium.launch(headless=headless, **launch_kwargs)
         yield browser
-    except Exception as e:  # noqa: broad-except
+    except (PWTimeout, PWError) as e:
         logger.error("[PW] Błąd w browser context: %s", e)
         raise
     finally:
@@ -49,7 +49,7 @@ def browser_context(headless: bool = True, **launch_kwargs: Any) -> Generator[Br
             try:
                 browser.close()
                 logger.debug("[PW] Browser zamknięty")
-            except Exception as e:  # noqa: broad-except
+            except (PWTimeout, PWError) as e:
                 logger.warning("[PW] Błąd przy zamykaniu browsera: %s", e)
         p.stop()
 
@@ -77,27 +77,27 @@ def page_context(browser: Browser, **context_kwargs: Any) -> Generator[Page, Non
         if page:
             try:
                 page.screenshot(path=f"pw_timeout_{datetime.now().isoformat()}.png")
-            except Exception:  # noqa: broad-except
+            except (PWTimeout, PWError, OSError):
                 pass
         raise
-    except Exception as e:  # noqa: broad-except
+    except (PWTimeout, PWError) as e:
         logger.error("[PW] Błąd na stronie: %s", e)
         if page:
             try:
                 page.screenshot(path=f"pw_error_{datetime.now().isoformat()}.png")
-            except Exception:  # noqa: broad-except
+            except (PWTimeout, PWError, OSError):
                 pass
         raise
     finally:
         if page:
             try:
                 page.close()
-            except Exception as e:  # noqa: broad-except
+            except (PWTimeout, PWError) as e:
                 logger.warning("[PW] Błąd przy zamykaniu page: %s", e)
         if ctx:
             try:
                 ctx.close()
-            except Exception as e:  # noqa: broad-except
+            except (PWTimeout, PWError) as e:
                 logger.warning("[PW] Błąd przy zamykaniu context: %s", e)
 
 
@@ -222,7 +222,7 @@ def zamknij_popup(page: Page, cfg: SiteConfig) -> None:
             time.sleep(0.3)
             logger.debug("[%s] Popup zamknięty: %s", cfg.name, sel)
             return
-        except Exception:  # noqa: broad-except — Playwright errors vary by browser state
+        except (PWTimeout, PWError):
             pass
 
 
@@ -234,7 +234,7 @@ def akceptuj_cookies(page: Page, cfg: SiteConfig) -> None:
             logger.info("[%s] Zaakceptowano cookies", cfg.name)
             time.sleep(1)
             return
-        except Exception:  # noqa: broad-except — Playwright errors vary by browser state
+        except (PWTimeout, PWError):
             pass
     logger.info("[%s] Baner cookie nie pojawił się lub już zaakceptowany", cfg.name)
 
@@ -250,7 +250,7 @@ def _zaloguj_impl(page: Page, cfg: SiteConfig) -> bool:
     try:
         page.click(cfg.login_trigger_selector, timeout=3000)
         time.sleep(1.5)
-    except Exception:  # noqa: broad-except — login trigger may not exist on all pages
+    except (PWTimeout, PWError):
         pass
 
     email_combined = ", ".join(cfg.email_selectors)
@@ -264,7 +264,7 @@ def _zaloguj_impl(page: Page, cfg: SiteConfig) -> bool:
         try:
             page.fill(sel, login, timeout=2000)
             break
-        except Exception:
+        except (PWTimeout, PWError):
             continue
 
     time.sleep(0.3)
@@ -273,7 +273,7 @@ def _zaloguj_impl(page: Page, cfg: SiteConfig) -> bool:
         try:
             page.fill(sel, haslo, timeout=2000)
             break
-        except Exception:
+        except (PWTimeout, PWError):
             continue
 
     time.sleep(0.3)
@@ -304,7 +304,7 @@ def zaloguj(page: Page, cfg: SiteConfig) -> bool:
     except FootStatsCircuitOpenError as exc:
         logger.error("[%s] Circuit open, pomijam logowanie: %s", cfg.name, exc)
         return False
-    except Exception as exc:
+    except (PWTimeout, PWError) as exc:
         logger.info("[%s] Logowanie nieudane: %s", cfg.name, exc)
         return False
 
