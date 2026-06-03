@@ -95,7 +95,7 @@ class SettleRequest(BaseModel):
 
 
 @router.get("/coupons/active")
-@cached_response(ttl_seconds=900, vary_by=["user_id"])
+@cached_response(ttl_seconds=30, vary_by=["user_id"])
 def get_active_coupons(user_id: int = Depends(require_auth)):
     try:
         with _connect() as conn:
@@ -117,7 +117,7 @@ def get_active_coupons(user_id: int = Depends(require_auth)):
 
 
 @router.get("/coupons")
-@cached_response(ttl_seconds=900, vary_by=["limit", "user_id"])
+@cached_response(ttl_seconds=30, vary_by=["limit", "user_id"])
 def get_coupons(limit: int = 50, user_id: int = Depends(require_auth)):
     try:
         with _connect() as conn:

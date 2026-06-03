@@ -780,6 +780,7 @@
         const nav = document.getElementById('nav-' + v);
         if (nav) nav.classList.toggle('active', v === name);
       });
+      if (name === 'dashboard') reloadDashboard();
       if (name === 'create' && wiz.matches.length === 0) wizLoadMatches();
       if (name === 'admin') adminLoadUsers();
     }

@@ -81,12 +81,13 @@ def create_user(
     new_user = UserResponse(**dict(row))
     try:
         from datetime import datetime
+        from footstats.config import AGENT_BANKROLL
         with connect() as conn:
             conn.execute(
                 "INSERT INTO bankroll_state (user_id, balance, updated_at)"
-                " VALUES (?, 0.0, ?)"
+                " VALUES (?, ?, ?)"
                 " ON CONFLICT (user_id) DO NOTHING",
-                (new_user.id, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                (new_user.id, AGENT_BANKROLL, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             )
     except psycopg2.Error as e:
         _log.warning("Nie udało się zainicjować bankrolla dla usera %d: %s", new_user.id, e)
