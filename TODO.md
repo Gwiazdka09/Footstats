@@ -84,11 +84,13 @@
 
 | Milestone | Accuracy | Status |
 |-----------|----------|--------|
-| **M0** | ~42% overall | ✅ Current (baseline) |
-| **M1** | 55% overall | 🔄 In progress — calibration + filters |
-| **M2** | 60% overall | Bayesian Poisson + ensemble + value filter |
-| **M3** | 65% selected | xG + feature engineering + stop-loss |
-| **M4** | 70% selected | Full optimization + CLV + 3mo track record |
+| **M0** | ~42% overall | ✅ Baseline zmierzony |
+| **M1** | 55% overall | 🔄 Features shipped (11.2 kalibracja, 11.8 LLM filter) — accuracy TBD |
+| **M2** | 60% overall | 🔄 Features shipped (11.4 Poisson+xG ensemble, 11.6 BetExplorer arbitraż) — accuracy TBD |
+| **M3** | 65% selected | 🔧 Częściowo: xG (11.4) + referee/fortress/H2H (11.5/11.9) ✅; stop-loss ❌ |
+| **M4** | 70% selected | 🔧 CLV infra ✅ (11.10); 3-mies. track record — wymaga danych |
+
+> ⚠️ Accuracy TBD — uruchom `python -m footstats.core.probability_calibrator` po >20 rozegranych predykcjach.
 
 ---
 
