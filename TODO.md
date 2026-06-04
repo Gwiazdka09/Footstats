@@ -51,9 +51,9 @@
   — `najlepszy_kurs_z_cache()` skanuje wszystkie dzisiejsze cache'e i podmienia wyższy kurs
   — STS/Superbet login-scraping: DEFER (wymaga dedykowanych scraperów z auth)
 
-### 11.7: RAG semantic lessons (P2)
-- [ ] `ai/rag.py::retrieve_relevant_lessons(query_context, k=5)` — wymaga 11.4
-- [ ] Top-5 lessons z `ai_feedback_embeddings` → kontekst do LLM filter
+### 11.7: RAG semantic lessons (P2) — COMPLETE ✅
+- [x] `ai/rag.py::retrieve_relevant_lessons(query_context, k=5)` — zaimplementowane
+- [x] Top-5 lessons z `ai_feedback_embeddings` → kontekst do LLM filter (analyzer.py L960)
 
 ### 11.9: HomeFortress / H2H Patent / Importance 2.0 (P3)
 - [ ] Per pick: `_oblicz_sile_wazona` historical → mnożniki fortress/patent/importance
