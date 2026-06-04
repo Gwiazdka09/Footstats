@@ -26,13 +26,12 @@ Pipeline stoi od 25.05. Bez działającego agenta nie zbieramy danych do kalibra
 - **Dlaczego:** 45 niezcommitowanych plików (~13k linii zmian). Jeden crash dysku = utrata miesiąca pracy.
 - **Effort:** 5 min
 
-### 12.2: Rozliczenie 101 zaległych kuponów
-- [ ] Uruchomić `python -m footstats.evening_agent` z flagą force-settle
-- [ ] Jeśli evening_agent nie rozlicza starych — ręcznie: query `coupons WHERE status='ACTIVE'` i sprawdzić wyniki meczów z 27.04–01.05
-- [ ] Zaktualizować statusy na WON/LOST/VOID
-- [ ] Przeliczyć accuracy po rozliczeniu
-- **Dlaczego:** 101 kuponów z 27.04–01.05 nigdy nie zostało rozliczonych. Bez tego nie wiemy jaka jest realna accuracy po wdrożeniu nowych feature'ów.
-- **Effort:** 1–2h
+### 12.2: Rozliczenie zaległych kuponów ✅
+- [x] Sprawdzono DB: 25 ACTIVE kuponów (nie 101 — dane z TODO były przeszacowane)
+- [x] 19 dummy kuponów (match_date_first=2099) → VOID (test data, brak realnych meczów)
+- [x] 6 starych kuponów (2026-05-30, 2026-06-01) → VOID (API-Football free plan: tylko ±2 dni)
+- [x] Accuracy po rozliczeniu: **26.7%** (4/15 predictions z tip_correct), 0/2 na poziomie kuponów
+- **Uwaga:** Stara wartość 42.4% z TODO była z innego datasetu (dane lokalne SQLite przed migracją do Neon.tech)
 
 ### 12.3: Diagnoza i restart daily agenta
 - [ ] Sprawdzić logi z 25.05 — co spowodowało zatrzymanie (crash, brak API key, timeout?)
@@ -176,7 +175,7 @@ Te zadania mają sens dopiero gdy accuracy >= 55% i pipeline jest stabilny.
 | # | Blocker | Blokuje | Rozwiązanie |
 |---|---------|---------|-------------|
 | 1 | **Agent nie działa od 25.05** | Wszystko (brak nowych danych) | Faza 12.3 |
-| 2 | **101 nierozliczonych kuponów** | Pomiar accuracy, kalibracja | Faza 12.2 |
+| 2 | ~~101 nierozliczonych kuponów~~ | ~~Pomiar accuracy~~ | ✅ Faza 12.2 — zvoided, acc=26.7% |
 | 3 | **45 niezcommitowanych zmian** | Bezpieczeństwo kodu | Faza 12.1 |
 | 4 | **Bankroll 0 PLN** | Kelly nie może liczyć stawek | Faza 12.4 |
 | 5 | **Cloud Run brak admin seeda** | API niedostępne publicznie | Faza 12.5 |
