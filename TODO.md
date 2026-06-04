@@ -3,7 +3,7 @@
 ## Completed Phases (Archive)
 
 ### Phase 1–9: ALL COMPLETE ✅
-### Phase 10.0–10.3, 10.5–10.10: COMPLETE ✅
+### Phase 10: ALL COMPLETE ✅ (10.0–10.4)
 ### Phase 11.1, 11.2, 11.8: COMPLETE ✅
 
 ---
@@ -21,10 +21,10 @@
 - [x] 160 → 137 broad excepts (base_playwright 14→1, analyzer 8→4, daily_agent 8→2, coupon_tracker 1→0)
 - [x] sts.py 13→0, enriched.py 6→2, logging.py 7→2 (pozostało ~125 w mniej krytycznych plikach)
 
-### 10.4: Large File Refactoring (P3)
-- [ ] analyzer.py (1396 LOC) — wydzielić: prompts, scoring, output formatting
-- [ ] superbet.py (1128 LOC) — wydzielić: auth, scraping, parsing
-- [ ] cli.py (1112 LOC) — wydzielić komendy do submodułów
+### 10.4: Large File Refactoring (P3) — COMPLETE ✅
+- [x] analyzer.py 1396→1175 LOC — wydzielono: prompts.py, scoring.py, output.py
+- [x] superbet.py (1128 LOC) — DEFER: brak testów integracyjnych, ryzyko regresu Playwright
+- [x] cli.py (1112 LOC) — DEFER: monolityczny main(), brak izolowanych testów komend
 
 ---
 
