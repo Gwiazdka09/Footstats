@@ -76,6 +76,29 @@ def szybkie_pewniaczki_2dni(
         console.print(f"[red]Bzzoiro blad: {e}[/red]")
         return []
 
+    # 11.4: Understat xG prefetch dla drużyn z top-5 lig przed pętlą Poissona
+    try:
+        from footstats.scrapers.understat_xg import fetch_team_xg, _to_slug, _cache_get
+        from footstats.config import LIGI_POISSON_TOP5
+        _season = teraz.year if teraz.month >= 7 else teraz.year - 1
+        _top5_vals = set(LIGI_POISSON_TOP5.values())
+        _top5_teams = {
+            t for m in lista_ml
+            if (m.get("liga") or "") in _top5_vals
+            for t in (m.get("gospodarz", ""), m.get("goscie", ""))
+            if t
+        }
+        _missing = [t for t in _top5_teams if not _cache_get(_to_slug(t), _season)]
+        if _missing:
+            console.print(f"[dim]xG prefetch top-5: {len(_missing)} drużyn...[/dim]")
+            for _team in _missing:
+                try:
+                    fetch_team_xg(_team, _season)
+                except (OSError, ValueError, RuntimeError):
+                    pass
+    except (ImportError, AttributeError):
+        pass
+
     console.print(f"[dim]   Pobrano {len(lista_ml)} wydarzen.[/dim]")
 
     wyniki = []

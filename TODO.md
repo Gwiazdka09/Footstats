@@ -34,11 +34,11 @@
 - [x] `core/bankroll.py::kelly_fraction(prob, kurs, bankroll, frac=0.25)`
 - [x] Per leg dynamic stake: `_dodaj_kelly()` w daily_agent.py:1322 + pre-filtr EV/Kelly w value_bet.py
 
-### 11.4: Poisson + xG full path (P2) — PARTIAL
+### 11.4: Poisson + xG full path (P2) — COMPLETE ✅
 - [x] `core/poisson.py::predict_match` → ensemble z Bzzoiro (50/50) w quick_picks.py
 - [x] xG blend 20% aktywny
-- [ ] Auto-loop top-5 lig (Brasileirão A, Champions, Bundesliga, La Liga, Premier)
-- [ ] Pre-fetch Understat dla top-5 przed sezonem
+- [x] `LIGI_POISSON_TOP5` w config.py (E0/SP1/D1/F1/I1)
+- [x] Understat xG prefetch w szybkie_pewniaczki_2dni przed pętlą Poissona (top-5 lig)
 
 ### 11.5: Referee DB join (P3)
 - [ ] Brak `referee_name` w Bzzoiro feed → join niemożliwy

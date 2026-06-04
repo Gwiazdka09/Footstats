@@ -61,6 +61,16 @@ OPERATOR_SMOKE_TIMEOUT = int(os.getenv("OPERATOR_SMOKE_TIMEOUT", "120"))
 
 # Ligi do śledzenia (API-Football IDs) są teraz zdefiniowane w results_updater.py
 
+# ── 11.4: Top-5 lig dla Poissona (auto-loop + Understat prefetch) ────────────
+# FDCO kod → nazwa ligi (jak w df_mecze["liga"])
+LIGI_POISSON_TOP5: dict[str, str] = {
+    "E0":  "ENG-Premier League",
+    "SP1": "ESP-La Liga",
+    "D1":  "GER-Bundesliga",
+    "F1":  "FRA-Ligue 1",
+    "I1":  "ITA-Serie A",
+}
+
 # ── P7.2: Liga Edge Filter ───────────────────────────────────────────────────
 # Based on accuracy_report: whitelist = hit-rate > 55%, blacklist = hit-rate < 30%
 LIGI_WHITELIST: frozenset[str] = frozenset({
