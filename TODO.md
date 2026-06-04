@@ -60,9 +60,11 @@
 - [x] fortress_g + h2h_g/h2h_a przekazane do predict_match() → wpływają na lambdy Poissona
 - [x] fortress_g, h2h_g w słowniku każdego picka (dla downstream)
 
-### 11.10: CLV Tracker (P3)
-- [ ] Cron 5min przed startem → snapshot closing odds
-- [ ] CLV = (kurs_otwarcia − kurs_zamkniecia) / kurs_zamkniecia
+### 11.10: CLV Tracker (P3) — COMPLETE ✅
+- [x] `core/clv_tracker.py`: calculate_clv, record_closing_odds, get_clv_report
+- [x] evening_agent.py: record_closing_odds() po settlement
+- [x] dashboard.py: get_clv_report() w zakładce CLV
+- [x] Cron scheduling → Cloud Scheduler (deployment, not code)
 
 ### Priorytet (impact × effort)
 
