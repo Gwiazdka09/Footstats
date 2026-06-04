@@ -49,7 +49,7 @@ def save_predictions_batch(
     try:
         with open(filename, "w", encoding="utf-8") as f:
             for pred in predictions:
-                f.write(json.dumps(pred, ensure_ascii=False) + "\n")
+                f.write(json.dumps(pred, ensure_ascii=False, default=str) + "\n")
         logger.info(f"Checkpoint saved: {filename} ({len(predictions)} predictions)")
         return str(filename)
     except Exception as e:

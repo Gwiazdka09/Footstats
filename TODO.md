@@ -33,14 +33,14 @@ Pipeline stoi od 25.05. Bez działającego agenta nie zbieramy danych do kalibra
 - [x] Accuracy po rozliczeniu: **26.7%** (4/15 predictions z tip_correct), 0/2 na poziomie kuponów
 - **Uwaga:** Stara wartość 42.4% z TODO była z innego datasetu (dane lokalne SQLite przed migracją do Neon.tech)
 
-### 12.3: Diagnoza i restart daily agenta
-- [ ] Sprawdzić logi z 25.05 — co spowodowało zatrzymanie (crash, brak API key, timeout?)
-- [ ] Sprawdzić czy Groq API key / Ollama nadal działają: `python -c "from footstats.ai.client import ..."`
-- [ ] Sprawdzić czy scraperzy (Bzzoiro, API-Football, Understat) zwracają dane
-- [ ] Uruchomić `python -m footstats.daily_agent` ręcznie i obserwować logi
-- [ ] Jeśli OK → przywrócić automatyczny scheduling (run_daily.bat / Cloud Scheduler)
-- **Dlaczego:** Agent nie generuje predykcji od 10 dni. Użytkownicy nie dostają kuponów.
-- **Effort:** 2–4h (zależy od przyczyny)
+### 12.3: Diagnoza i restart daily agenta ✅
+- [x] Przyczyna crash: `bankroll.py` używał SQLite `DATETIME('now','-7 days')` → PostgreSQL crash
+- [x] Fix: zmieniono na `NOW() - INTERVAL '7 days'` (bankroll.py:141)
+- [x] Fix: `checkpoint.py` — datetime nieserializable → `json.dumps(..., default=str)`
+- [x] Fix: Playwright Chromium nie był zainstalowany → `playwright install chromium`
+- [x] Groq AI ✅, Bzzoiro ✅ (50 lig), SofaScore ✅, Understat 404 dla nie-top5 lig (normalnie)
+- [x] Daily agent działa end-to-end — kupon zapisany: `logs/kupon_2026-06-04.txt`
+- [ ] TODO: przywrócić automatyczny scheduling (run_daily.bat / Cloud Scheduler) — osobne zadanie
 
 ### 12.4: Reset bankrollu
 - [ ] Ustawić bankroll na nową wartość startową (np. 500 PLN) w `bankroll_state`
@@ -174,7 +174,7 @@ Te zadania mają sens dopiero gdy accuracy >= 55% i pipeline jest stabilny.
 
 | # | Blocker | Blokuje | Rozwiązanie |
 |---|---------|---------|-------------|
-| 1 | **Agent nie działa od 25.05** | Wszystko (brak nowych danych) | Faza 12.3 |
+| 1 | ~~Agent nie działa od 25.05~~ | ~~Wszystko~~ | ✅ Faza 12.3 — naprawiono 3 bugi (bankroll/checkpoint/playwright) |
 | 2 | ~~101 nierozliczonych kuponów~~ | ~~Pomiar accuracy~~ | ✅ Faza 12.2 — zvoided, acc=26.7% |
 | 3 | **45 niezcommitowanych zmian** | Bezpieczeństwo kodu | Faza 12.1 |
 | 4 | **Bankroll 0 PLN** | Kelly nie może liczyć stawek | Faza 12.4 |

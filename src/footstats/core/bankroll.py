@@ -138,7 +138,7 @@ def get_weekly_drawdown(user_id: int = 1) -> float:
         row = conn.execute(
             "SELECT new_balance FROM bankroll_history"
             " WHERE user_id = ?"
-            " AND timestamp <= DATETIME('now', '-7 days')"
+            " AND timestamp <= NOW() - INTERVAL '7 days'"
             " ORDER BY timestamp DESC LIMIT 1",
             (user_id,),
         ).fetchone()
