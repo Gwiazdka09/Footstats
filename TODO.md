@@ -55,9 +55,10 @@
 - [x] `ai/rag.py::retrieve_relevant_lessons(query_context, k=5)` — zaimplementowane
 - [x] Top-5 lessons z `ai_feedback_embeddings` → kontekst do LLM filter (analyzer.py L960)
 
-### 11.9: HomeFortress / H2H Patent / Importance 2.0 (P3)
-- [ ] Per pick: `_oblicz_sile_wazona` historical → mnożniki fortress/patent/importance
-- [ ] Dependency: 11.4
+### 11.9: HomeFortress / H2H Patent / Importance 2.0 (P3) — COMPLETE ✅
+- [x] HomeFortress + AnalizaH2H inicjalizowane przed pętlą w szybkie_pewniaczki_2dni
+- [x] fortress_g + h2h_g/h2h_a przekazane do predict_match() → wpływają na lambdy Poissona
+- [x] fortress_g, h2h_g w słowniku każdego picka (dla downstream)
 
 ### 11.10: CLV Tracker (P3)
 - [ ] Cron 5min przed startem → snapshot closing odds

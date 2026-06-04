@@ -99,6 +99,18 @@ def szybkie_pewniaczki_2dni(
     except (ImportError, AttributeError):
         pass
 
+    # 11.9: Inicjalizacja HomeFortress + AnalizaH2H przed pętlą
+    fortress_sys = None
+    h2h_sys = None
+    if df_mecze is not None:
+        try:
+            from footstats.core.fortress import HomeFortress
+            from footstats.core.h2h import AnalizaH2H
+            fortress_sys = HomeFortress(df_mecze)
+            h2h_sys      = AnalizaH2H(df_mecze)
+        except (ImportError, AttributeError):
+            pass
+
     console.print(f"[dim]   Pobrano {len(lista_ml)} wydarzen.[/dim]")
 
     wyniki = []
@@ -153,12 +165,21 @@ def szybkie_pewniaczki_2dni(
         o25 = round(calibrate_confidence(o25_raw) * 100.0, 1)
         u25 = round(100.0 - o25, 1)
 
-        # ── 11.4: Poisson ensemble — blend z Bzzoiro 50/50 ──────────────
+        # ── 11.4+11.9: Poisson ensemble z fortress/h2h — blend z Bzzoiro 50/50 ──
         poisson_blend = False
+        _fort_g = None
+        _h2h_g  = None
+        _h2h_a  = None
         if df_mecze is not None:
             try:
                 from footstats.core.poisson import predict_match
-                _pred_p = predict_match(g, a, df_mecze)
+                _fort_g = fortress_sys.analiza(g) if fortress_sys else None
+                _h2h_g  = h2h_sys.analiza(g, a)  if h2h_sys  else None
+                _h2h_a  = h2h_sys.analiza(a, g)  if h2h_sys  else None
+                _pred_p = predict_match(
+                    g, a, df_mecze,
+                    fortress_g=_fort_g, h2h_g=_h2h_g, h2h_a=_h2h_a,
+                )
                 if _pred_p:
                     pw  = round(pw  * 0.5 + _pred_p["p_wygrana"]   * 0.5, 1)
                     pr  = round(pr  * 0.5 + _pred_p["p_remis"]     * 0.5, 1)
@@ -201,6 +222,8 @@ def szybkie_pewniaczki_2dni(
             "odds":         odds,
             "scout":        scout,
             "poisson_blend": poisson_blend,
+            "fortress_g":   _fort_g,
+            "h2h_g":        _h2h_g,
         })
 
     # Sortuj: najpierw czasowo, potem najlepsza szansa malejaco
