@@ -40,10 +40,10 @@
 - [x] `LIGI_POISSON_TOP5` w config.py (E0/SP1/D1/F1/I1)
 - [x] Understat xG prefetch w szybkie_pewniaczki_2dni przed pętlą Poissona (top-5 lig)
 
-### 11.5: Referee DB join (P3)
-- [ ] Brak `referee_name` w Bzzoiro feed → join niemożliwy
-- [ ] FlashScore scraper → wyciąg sędziego z URL meczu
-- [ ] Korekta BTTS/Over per sędzia (strict ref → mniej goli)
+### 11.5: Referee DB join (P3) — COMPLETE ✅
+- [x] `referee_name` z API-Football + FlashScore fallback w `_enrichuj_finalna_faza()`
+- [x] `referee_signal()` → KARTKOWY/BRAMKOWY/NEUTRALNY/NIEZNANY
+- [x] `referee_prob_adjustment()` → delta o25/btts per sędzia (w faza draft/final)
 
 ### 11.6: STS/Superbet live odds (P2)
 - [ ] `daily_agent --bb` real BetBuilder Superbet API (~3min Playwright)

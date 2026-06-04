@@ -1299,6 +1299,19 @@ def main():
         _enrichuj_finalna_faza(wyniki, os.getenv("APISPORTS_KEY", ""))
         console.print(f"[cyan]{args.faza.capitalize()}: {len(wyniki)} kandydatów po wzbogaceniu o składy/sędziego[/cyan]")
 
+        # 11.5: Korekta BTTS/Over2.5 per sędzia (po enrichmencie)
+        try:
+            from footstats.scrapers.referee_db import referee_prob_adjustment
+            for k in wyniki:
+                sig = k.get("referee_signal")
+                if sig:
+                    d_over, d_btts = referee_prob_adjustment(sig)
+                    if d_over or d_btts:
+                        k["o25"] = max(0.0, min(100.0, (k.get("o25") or 0.0) + d_over))
+                        k["bt"]  = max(0.0, min(100.0, (k.get("bt")  or 0.0) + d_btts))
+        except ImportError:
+            pass
+
         if args.faza == "draft":
             _zapisz_next_final_txt(wyniki)
 

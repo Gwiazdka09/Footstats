@@ -80,3 +80,17 @@ def referee_signal(name: str) -> str:
     if avg_g > _BRAMKOWY_THRESHOLD:
         return "BRAMKOWY"
     return "NEUTRALNY"
+
+
+def referee_prob_adjustment(signal: str) -> tuple[float, float]:
+    """
+    Returns (delta_over25_pct, delta_btts_pct) based on referee type.
+
+    BRAMKOWY (avg_goals > 3.0): open game → more goals
+    KARTKOWY (avg_yellow > 4.3): physical/tense game → fewer goals
+    """
+    if signal == "BRAMKOWY":
+        return (+5.0, +4.0)
+    if signal == "KARTKOWY":
+        return (-3.0, -2.0)
+    return (0.0, 0.0)
