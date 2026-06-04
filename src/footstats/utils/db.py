@@ -17,6 +17,14 @@ def _get_pool() -> "psycopg2.pool.ThreadedConnectionPool":
         import psycopg2.pool as _pg_pool
         url = os.environ.get("DATABASE_URL")
         if not url:
+            try:
+                from dotenv import load_dotenv
+                from pathlib import Path
+                load_dotenv(Path(__file__).parents[3] / ".env")
+                url = os.environ.get("DATABASE_URL")
+            except ImportError:
+                pass
+        if not url:
             raise RuntimeError("DATABASE_URL env var not set — add Neon.tech connection string to Cloud Run")
         _pool = _pg_pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=url)
     return _pool
