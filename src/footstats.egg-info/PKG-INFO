@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: footstats
-Version: 3.0
+Version: 3.4
 Summary: Football statistics and prediction engine (Poisson + ML)
 Requires-Python: >=3.11
 License-File: LICENSE
@@ -18,11 +18,10 @@ Requires-Dist: bcrypt>=4.0
 Requires-Dist: slowapi>=0.1.9
 Requires-Dist: httpx>=0.27
 Requires-Dist: fastapi-mcp>=0.3
-Requires-Dist: psycopg2-binary>=2.9
-Requires-Dist: sqlalchemy>=2.0
-Requires-Dist: alembic>=1.13
+Requires-Dist: tenacity>=8.0
 Provides-Extra: api
 Requires-Dist: sentry-sdk[fastapi]>=2.0; extra == "api"
+Requires-Dist: psycopg2-binary>=2.9; extra == "api"
 Provides-Extra: ai
 Requires-Dist: groq>=0.4; extra == "ai"
 Requires-Dist: langfuse>=2.0; extra == "ai"
@@ -33,4 +32,8 @@ Requires-Dist: pytest>=7.4; extra == "dev"
 Requires-Dist: pytest-cov; extra == "dev"
 Provides-Extra: dashboard
 Requires-Dist: streamlit>=1.32; extra == "dashboard"
+Provides-Extra: cloud
+Requires-Dist: psycopg2-binary>=2.9; extra == "cloud"
+Requires-Dist: sqlalchemy>=2.0; extra == "cloud"
+Requires-Dist: alembic>=1.13; extra == "cloud"
 Dynamic: license-file

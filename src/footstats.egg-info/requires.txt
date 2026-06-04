@@ -12,9 +12,7 @@ bcrypt>=4.0
 slowapi>=0.1.9
 httpx>=0.27
 fastapi-mcp>=0.3
-psycopg2-binary>=2.9
-sqlalchemy>=2.0
-alembic>=1.13
+tenacity>=8.0
 
 [ai]
 groq>=0.4
@@ -22,6 +20,12 @@ langfuse>=2.0
 
 [api]
 sentry-sdk[fastapi]>=2.0
+psycopg2-binary>=2.9
+
+[cloud]
+psycopg2-binary>=2.9
+sqlalchemy>=2.0
+alembic>=1.13
 
 [dashboard]
 streamlit>=1.32

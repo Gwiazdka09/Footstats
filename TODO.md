@@ -1,101 +1,193 @@
-# FootStats TODO — Updated 2026-06-03
+# FootStats TODO — Czerwiec / Lipiec 2026
 
-## Completed Phases (Archive)
-
-### Phase 1–9: ALL COMPLETE ✅
-### Phase 10: ALL COMPLETE ✅ (10.0–10.4)
-### Phase 11.1, 11.2, 11.8: COMPLETE ✅
-
----
-
-## KRYTYCZNE BUGI (P0)
-
-### BUG-2: Deployment — jednorazowo
-- [ ] Ustawić FOOTSTATS_USER + FOOTSTATS_PASSWORD_HASH w Cloud Run (seed admin)
+**Ostatnia aktualizacja:** 2026-06-04  
+**Wersja:** v3.4-stable  
+**Accuracy baseline:** 42.4% (14/33 settled kuponów)  
+**Cel na koniec lipca:** M1 = 55% win rate
 
 ---
 
-## Phase 10: CODE QUALITY (aktywna)
+## Archiwum ukończonych faz
 
-### 10.2: Broad Except Cleanup (P2) — COMPLETE ✅
-- [x] 160 → 137 broad excepts (base_playwright 14→1, analyzer 8→4, daily_agent 8→2, coupon_tracker 1→0)
-- [x] sts.py 13→0, enriched.py 6→2, logging.py 7→2 (pozostało ~125 w mniej krytycznych plikach)
+Phase 1–9: ✅ DONE  
+Phase 10 (Code Quality): ✅ DONE (10.0–10.4)  
+Phase 11 (Accuracy Features): ✅ DONE (11.1–11.10)  
 
-### 10.4: Large File Refactoring (P3) — COMPLETE ✅
-- [x] analyzer.py 1396→1175 LOC — wydzielono: prompts.py, scoring.py, output.py
-- [x] superbet.py (1128 LOC) — DEFER: brak testów integracyjnych, ryzyko regresu Playwright
-- [x] cli.py (1112 LOC) — DEFER: monolityczny main(), brak izolowanych testów komend
+Wszystkie feature'y accuracy już shipped (Poisson+xG, Kelly, RAG semantic, referee, H2H/Fortress, CLV, kalibracja, LLM filter, BetExplorer arbitraż). Problem: accuracy nadal 42% — feature'y wdrożone, ale **nie zmierzone na żywych danych** bo agent nie działa od 25.05.
 
 ---
 
-## Phase 11: ACCURACY IMPROVEMENT
+## 🔴 FAZA 12: RATOWANIE PIPELINE'U (P0 — tydzień 1)
 
-### 11.3: Kelly stake (P2) — COMPLETE ✅
-- [x] `core/bankroll.py::kelly_fraction(prob, kurs, bankroll, frac=0.25)`
-- [x] Per leg dynamic stake: `_dodaj_kelly()` w daily_agent.py:1322 + pre-filtr EV/Kelly w value_bet.py
+Pipeline stoi od 25.05. Bez działającego agenta nie zbieramy danych do kalibracji i nie dostarczamy predykcji użytkownikom. To blokuje wszystko inne.
 
-### 11.4: Poisson + xG full path (P2) — COMPLETE ✅
-- [x] `core/poisson.py::predict_match` → ensemble z Bzzoiro (50/50) w quick_picks.py
-- [x] xG blend 20% aktywny
-- [x] `LIGI_POISSON_TOP5` w config.py (E0/SP1/D1/F1/I1)
-- [x] Understat xG prefetch w szybkie_pewniaczki_2dni przed pętlą Poissona (top-5 lig)
+### 12.1: Git commit niezapisanych zmian
+- [ ] `git add -A && git commit -m "sync: 45 uncommitted changes from May/June"`
+- **Dlaczego:** 45 niezcommitowanych plików (~13k linii zmian). Jeden crash dysku = utrata miesiąca pracy.
+- **Effort:** 5 min
 
-### 11.5: Referee DB join (P3) — COMPLETE ✅
-- [x] `referee_name` z API-Football + FlashScore fallback w `_enrichuj_finalna_faza()`
-- [x] `referee_signal()` → KARTKOWY/BRAMKOWY/NEUTRALNY/NIEZNANY
-- [x] `referee_prob_adjustment()` → delta o25/btts per sędzia (w faza draft/final)
+### 12.2: Rozliczenie 101 zaległych kuponów
+- [ ] Uruchomić `python -m footstats.evening_agent` z flagą force-settle
+- [ ] Jeśli evening_agent nie rozlicza starych — ręcznie: query `coupons WHERE status='ACTIVE'` i sprawdzić wyniki meczów z 27.04–01.05
+- [ ] Zaktualizować statusy na WON/LOST/VOID
+- [ ] Przeliczyć accuracy po rozliczeniu
+- **Dlaczego:** 101 kuponów z 27.04–01.05 nigdy nie zostało rozliczonych. Bez tego nie wiemy jaka jest realna accuracy po wdrożeniu nowych feature'ów.
+- **Effort:** 1–2h
 
-### 11.6: STS/Superbet live odds (P2) — COMPLETE ✅
-- [x] `daily_agent --bb` real BetBuilder Superbet API — już istniał
-- [x] Arbitraż Bzzoiro vs BetExplorer w `_weryfikuj_kupony()` (cache-only, bez Playwright)
-  — `najlepszy_kurs_z_cache()` skanuje wszystkie dzisiejsze cache'e i podmienia wyższy kurs
-  — STS/Superbet login-scraping: DEFER (wymaga dedykowanych scraperów z auth)
+### 12.3: Diagnoza i restart daily agenta
+- [ ] Sprawdzić logi z 25.05 — co spowodowało zatrzymanie (crash, brak API key, timeout?)
+- [ ] Sprawdzić czy Groq API key / Ollama nadal działają: `python -c "from footstats.ai.client import ..."`
+- [ ] Sprawdzić czy scraperzy (Bzzoiro, API-Football, Understat) zwracają dane
+- [ ] Uruchomić `python -m footstats.daily_agent` ręcznie i obserwować logi
+- [ ] Jeśli OK → przywrócić automatyczny scheduling (run_daily.bat / Cloud Scheduler)
+- **Dlaczego:** Agent nie generuje predykcji od 10 dni. Użytkownicy nie dostają kuponów.
+- **Effort:** 2–4h (zależy od przyczyny)
 
-### 11.7: RAG semantic lessons (P2) — COMPLETE ✅
-- [x] `ai/rag.py::retrieve_relevant_lessons(query_context, k=5)` — zaimplementowane
-- [x] Top-5 lessons z `ai_feedback_embeddings` → kontekst do LLM filter (analyzer.py L960)
+### 12.4: Reset bankrollu
+- [ ] Ustawić bankroll na nową wartość startową (np. 500 PLN) w `bankroll_state`
+- [ ] Wyczyścić lub zarchiwizować starą `bankroll_history`
+- **Dlaczego:** Bankroll = 0.0 PLN, agent nie może kalkulować stawek Kelly.
+- **Effort:** 15 min
 
-### 11.9: HomeFortress / H2H Patent / Importance 2.0 (P3) — COMPLETE ✅
-- [x] HomeFortress + AnalizaH2H inicjalizowane przed pętlą w szybkie_pewniaczki_2dni
-- [x] fortress_g + h2h_g/h2h_a przekazane do predict_match() → wpływają na lambdy Poissona
-- [x] fortress_g, h2h_g w słowniku każdego picka (dla downstream)
+### 12.5: Cloud Run env vars (BUG-2)
+- [ ] Ustawić `FOOTSTATS_USER` + `FOOTSTATS_PASSWORD_HASH` w Cloud Run
+- [ ] Zweryfikować czy API startuje poprawnie po deploy
+- **Dlaczego:** Bez seed admina API nie pozwala na logowanie. Blokuje dashboard dla użytkowników.
+- **Effort:** 30 min
 
-### 11.10: CLV Tracker (P3) — COMPLETE ✅
-- [x] `core/clv_tracker.py`: calculate_clv, record_closing_odds, get_clv_report
-- [x] evening_agent.py: record_closing_odds() po settlement
-- [x] dashboard.py: get_clv_report() w zakładce CLV
-- [x] Cron scheduling → Cloud Scheduler (deployment, not code)
+---
 
-### Priorytet (impact × effort)
+## 🟡 FAZA 13: KALIBRACJA I POMIAR (P1 — tydzień 2–3)
 
-| # | Fix | Impact | Effort | Days |
-|---|-----|--------|--------|------|
-| 11.3 | Kelly stake wiring | 🟡 | 🟢 | 0.5 |
-| 11.6 | STS live odds | 🟡 | 🟡 | 2 |
-| 11.10 | CLV tracker | 🟡 | 🟡 | 2 |
-| 11.4 | Poisson full (top-5 lig) | 🟢 | 🔴 | 5 |
-| 11.7 | RAG semantic | 🟢 | 🟡 | 2 (po 11.4) |
-| 11.9 | Fortress/H2H/Importance | 🟡 | 🔴 | 3 (po 11.4) |
-| 11.5 | Referee DB join | 🟡 | 🔴 | 3 (po 11.4) |
+Agent znów działa (po fazie 12). Teraz zbieramy dane i kalibrujemy model.
+
+### 13.1: Zebranie minimum 50 nowych predykcji z live'u
+- [ ] Przez ~2 tygodnie daily agent generuje i rozlicza kupony automatycznie
+- [ ] Monitorować logi codziennie (5 min/dzień)
+- [ ] Cel: minimum 50 settled kuponów z nowymi feature'ami (Poisson+xG, referee, H2H)
+- **Dlaczego:** Kalibrator potrzebuje danych. Dotychczasowe 33 settled to za mało, a dane sprzed wdrożenia feature'ów nie są miarodajne.
+- **Effort:** ~2 tygodnie pasywnego zbierania
+
+### 13.2: Uruchomienie kalibratora
+- [ ] `python -m footstats.core.probability_calibrator`
+- [ ] Wygenerować nową krzywą isotonic regression z danych po feature'ach 11.x
+- [ ] Sprawdzić czy Bzzoiro raw 70% → kalibrowane prob jest bliższe realności
+- [ ] Zapisać `data/model_calibration.json` z nową krzywą
+- **Dlaczego:** Kalibrator to kluczowy element. Bzzoiro mówi 70% pewności, a realnie trafia w 42%. Kalibracja powinna to skorygować i dać lepsze decyzje Kelly.
+- **Effort:** 1h (po zebraniu danych)
+
+### 13.3: Pomiar accuracy per feature
+- [ ] Porównać accuracy meczów z top-5 lig Poissona vs reszta
+- [ ] Porównać accuracy meczów z danymi sędziowskimi vs bez
+- [ ] Porównać accuracy meczów z H2H/Fortress vs bez
+- [ ] Wyciągnąć wnioski: które feature'y realnie pomagają
+- **Dlaczego:** Mamy 8 feature'ów accuracy, ale nie wiemy który działa. Może Poisson pomaga a referee nie — trzeba wiedzieć co dalej optymalizować.
+- **Effort:** 2–3h (query + analiza)
+
+### 13.4: A/B test — ensemble wagi
+- [ ] Przetestować różne wagi ensemble: 50/50 Poisson/Bzzoiro → 60/40 → 70/30
+- [ ] Backtest na zebranych danych (walkforward validation)
+- [ ] Ustawić optymalne wagi w config
+- **Dlaczego:** Domyślne 50/50 mogło nie być optymalne. Z danymi z live'u możemy to zmierzyć.
+- **Effort:** 3–4h
+
+---
+
+## 🟡 FAZA 14: STABILIZACJA PRODUKCJI (P2 — tydzień 3–4)
+
+### 14.1: Monitoring i alerting
+- [ ] Dodać health check endpoint → `/health` zwraca: last_prediction_date, bankroll, api_status
+- [ ] Alert Telegram jeśli agent nie wygenerował predykcji >24h
+- [ ] Alert jeśli accuracy spada poniżej 35% (rolling 20 kuponów)
+- **Dlaczego:** Agent cicho umarł na 10 dni i nikt nie zauważył. Monitoring to zapobiega.
+- **Effort:** 3–4h
+
+### 14.2: Auto-settlement cron
+- [ ] evening_agent jako scheduled job (Cloud Scheduler lub cron)
+- [ ] Rozliczenie kuponów automatycznie co wieczór o 23:00
+- [ ] Retry logic jeśli API wyników nie odpowiada
+- **Dlaczego:** 101 nierozliczonych kuponów = brak feedbacku → brak kalibracji → accuracy nie rośnie.
+- **Effort:** 2h
+
+### 14.3: Broad except cleanup — runda 2
+- [ ] Zredukować z ~125 do <50 broad excepts
+- [ ] Priorytet: daily_agent, analyzer, scraperzy (te co mogą cicho połknąć błędy pipeline'u)
+- **Dlaczego:** Broad except może tłumić prawdziwe błędy. Agent mógł umrzeć właśnie przez to — błąd został złapany ale nie obsłużony.
+- **Effort:** 4–6h
+
+### 14.4: Testy integracyjne pipeline'u
+- [ ] Test end-to-end: daily_agent → scrape → predict → kupon → DB (z mockami API)
+- [ ] Test: evening_agent → fetch results → settle → feedback → RAG update
+- [ ] Dodać do CI (GitHub Actions)
+- **Dlaczego:** 431 unit testów przechodzi, ale nie testujemy czy cały pipeline od A do Z działa razem.
+- **Effort:** 1 dzień
+
+---
+
+## ⚪ FAZA 15: NOWE FEATURE'Y (P3 — lipiec, po osiągnięciu M1)
+
+Te zadania mają sens dopiero gdy accuracy >= 55% i pipeline jest stabilny.
+
+### 15.1: Stop-loss mechanizm
+- [ ] Automatyczne zatrzymanie agenta gdy strata > X% bankrollu w ciągu dnia/tygodnia
+- [ ] Konfigurowalny próg w config.py (np. -20% dziennie, -40% tygodniowo)
+- [ ] Powiadomienie Telegram + log
+- **Dlaczego:** Brak stop-loss = agent może spalić cały bankroll w jeden zły dzień.
+- **Effort:** 3–4h
+
+### 15.2: STS/Superbet scraper z auth
+- [ ] Dedykowany scraper z logowaniem na STS
+- [ ] Dedykowany scraper z logowaniem na Superbet
+- [ ] Porównanie kursów STS vs Superbet vs BetExplorer → najlepszy kurs do kuponu
+- **Dlaczego:** Aktualnie używamy BetExplorer cache-only. Prawdziwe kursy bukmacherów mogą dać lepsze arbitraże.
+- **Effort:** 3–5 dni (każdy bukmacher to osobny Playwright scraper z auth)
+
+### 15.3: Dashboard UX
+- [ ] Filtrowanie po lidze, dacie, typie zakładu
+- [ ] Wykres accuracy over time (rolling 20-kupon window)
+- [ ] Wykres bankroll over time
+- [ ] Export kuponów do PDF/CSV
+- **Dlaczego:** Dashboard istnieje ale jest podstawowy. Użytkownik nie widzi trendów.
+- **Effort:** 1–2 dni
+
+### 15.4: Multi-user support
+- [ ] Różne profile ryzyka (conservative / balanced / aggressive)
+- [ ] Per-user bankroll tracking
+- [ ] Per-user Telegram notifications
+- **Dlaczego:** Obecnie system jest single-user. Dla skalowalności trzeba to rozdzielić.
+- **Effort:** 3–5 dni
 
 ---
 
 ## Milestones
 
-| Milestone | Accuracy | Status |
-|-----------|----------|--------|
-| **M0** | ~42% overall | ✅ Baseline zmierzony |
-| **M1** | 55% overall | 🔄 Features shipped (11.2 kalibracja, 11.8 LLM filter) — accuracy TBD |
-| **M2** | 60% overall | 🔄 Features shipped (11.4 Poisson+xG ensemble, 11.6 BetExplorer arbitraż) — accuracy TBD |
-| **M3** | 65% selected | 🔧 Częściowo: xG (11.4) + referee/fortress/H2H (11.5/11.9) ✅; stop-loss ❌ |
-| **M4** | 70% selected | 🔧 CLV infra ✅ (11.10); 3-mies. track record — wymaga danych |
-
-> ⚠️ Accuracy TBD — uruchom `python -m footstats.core.probability_calibrator` po >20 rozegranych predykcjach.
+| Milestone | Cel | Status | Warunek |
+|-----------|-----|--------|---------|
+| **M0** | 42% baseline | ✅ Done | Zmierzony na 33 kuponach |
+| **M1** | 55% win rate | 🔴 Blocked | Pipeline nie działa, brak nowych danych. **Faza 12 → 13 odblokuje** |
+| **M2** | 60% win rate | ⏸️ | Po M1 — tuning wag ensemble + kalibracja |
+| **M3** | 65% (selected) | ⏸️ | Po M2 — stop-loss + filtrowanie na pewne ligi |
+| **M4** | 70% (selected) | ⏸️ | 3 miesiące track record + CLV pozytywne |
 
 ---
 
-## Blockers
+## Blockers (stan na 2026-06-04)
 
-- **Accuracy 42%** — poniżej M1 target, wymaga pracy nad kalibracją
-- **⚠️ Kalibrator drastycznie tnie prob**: Bzzoiro raw 70%→40% realnej. ✅ `PEWNIACZEK_PROG` obniżony 90→40% w config.py.
-  - **Rekomendacja**: zebrać >20 zwalidowanych predykcji → `python -m footstats.core.probability_calibrator` → pełna krzywa isotonic regression
+| # | Blocker | Blokuje | Rozwiązanie |
+|---|---------|---------|-------------|
+| 1 | **Agent nie działa od 25.05** | Wszystko (brak nowych danych) | Faza 12.3 |
+| 2 | **101 nierozliczonych kuponów** | Pomiar accuracy, kalibracja | Faza 12.2 |
+| 3 | **45 niezcommitowanych zmian** | Bezpieczeństwo kodu | Faza 12.1 |
+| 4 | **Bankroll 0 PLN** | Kelly nie może liczyć stawek | Faza 12.4 |
+| 5 | **Cloud Run brak admin seeda** | API niedostępne publicznie | Faza 12.5 |
+| 6 | **Accuracy 42%** | Zaufanie użytkowników | Faza 13 (kalibracja po danych) |
+
+---
+
+## Porządki (nice-to-have, robimy przy okazji)
+
+- [ ] Usunąć duplikat `validation_errors.csv` z root (zostawić w `data/`)
+- [ ] Usunąć `tests/scratch` (debug plik)
+- [ ] Usunąć `data/.fuse_hidden*` (3 orphan pliki)
+- [ ] Zarchiwizować 12 plików DAILY_ANALYSIS z `docs/`
+- [ ] Naprawić 11x `conn.close()` bez context manager (bankroll.py, json_export.py, coupon_tracker.py)
