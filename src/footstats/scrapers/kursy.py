@@ -205,6 +205,31 @@ def szukaj_kursy_meczu(gospodarz: str, goscie: str, liga: str = "premier-league"
     return None
 
 
+def najlepszy_kurs_z_cache(gospodarz: str, goscie: str) -> dict | None:
+    """
+    Szuka najlepszych kursów 1X2 z wszystkich dzisiejszych cache'ów BetExplorer.
+    Nie odpala Playwright — tylko lokalny cache. Zwraca {'k1', 'kX', 'k2'} lub None.
+    """
+    dzis = datetime.now().strftime("%Y%m%d")
+    if not CACHE_DIR.exists():
+        return None
+
+    g_low = gospodarz.lower()
+    a_low = goscie.lower()
+
+    for cache_file in CACHE_DIR.glob(f"*_{dzis}.json"):
+        try:
+            mecze = json.loads(cache_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for mecz in mecze:
+            m_g = mecz.get("gospodarz", "").lower()
+            m_a = mecz.get("goscie", "").lower()
+            if (g_low in m_g or m_g in g_low) and (a_low in m_a or m_a in a_low):
+                return {"k1": mecz.get("k1"), "kX": mecz.get("kX"), "k2": mecz.get("k2")}
+    return None
+
+
 def pokaz_dostepne_ligi():
     logger.info("\nDostępne ligi dla scrapera:")
     for slug, url in LIGI_BETEXPLORER.items():

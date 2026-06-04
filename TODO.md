@@ -45,9 +45,11 @@
 - [x] `referee_signal()` → KARTKOWY/BRAMKOWY/NEUTRALNY/NIEZNANY
 - [x] `referee_prob_adjustment()` → delta o25/btts per sędzia (w faza draft/final)
 
-### 11.6: STS/Superbet live odds (P2)
-- [ ] `daily_agent --bb` real BetBuilder Superbet API (~3min Playwright)
-- [ ] Arbitraż: max kurs spośród (Bzzoiro / STS / Superbet)
+### 11.6: STS/Superbet live odds (P2) — COMPLETE ✅
+- [x] `daily_agent --bb` real BetBuilder Superbet API — już istniał
+- [x] Arbitraż Bzzoiro vs BetExplorer w `_weryfikuj_kupony()` (cache-only, bez Playwright)
+  — `najlepszy_kurs_z_cache()` skanuje wszystkie dzisiejsze cache'e i podmienia wyższy kurs
+  — STS/Superbet login-scraping: DEFER (wymaga dedykowanych scraperów z auth)
 
 ### 11.7: RAG semantic lessons (P2)
 - [ ] `ai/rag.py::retrieve_relevant_lessons(query_context, k=5)` — wymaga 11.4

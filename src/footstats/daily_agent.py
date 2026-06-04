@@ -381,6 +381,19 @@ def _weryfikuj_kupony(dane: dict, indeks: dict) -> dict:
                     z["mecz"]      = f"{wpis['gospodarz']} vs {wpis['goscie']}"
                     z["_verified"] = True
 
+                    # 11.6: Arbitraż — porównaj z BetExplorer cache (bez Playwright)
+                    try:
+                        from footstats.scrapers.kursy import najlepszy_kurs_z_cache
+                        be = najlepszy_kurs_z_cache(wpis["gospodarz"], wpis["goscie"])
+                        if be:
+                            _be_map = {"odds_1": be.get("k1"), "odds_x": be.get("kX"), "odds_2": be.get("k2")}
+                            be_kurs = _be_map.get(odds_key)
+                            if be_kurs and be_kurs > z["kurs"]:
+                                z["kurs"]   = float(be_kurs)
+                                z["_zrodlo"] = "betexplorer"
+                    except (ImportError, AttributeError, TypeError):
+                        pass
+
             zweryfikowane.append(z)
 
         # Przenumeruj
