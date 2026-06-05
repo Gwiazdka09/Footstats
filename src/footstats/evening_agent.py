@@ -298,7 +298,7 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     try:
         from footstats.utils.telegram_notify import check_and_alert_agent_down
         check_and_alert_agent_down()
-    except Exception:
+    except (ImportError, OSError, RuntimeError):
         pass
 
     return summary

@@ -208,7 +208,7 @@ try:
     from footstats.db.migrations import run_migrations, seed_admin_user
     run_migrations()
     seed_admin_user()
-except Exception as _db_err:
+except (OSError, ValueError, ImportError, RuntimeError) as _db_err:
     _logging.getLogger(__name__).error("DB init failed: %s", _db_err, exc_info=True)
 
 app = FastAPI(title="FootStats API", version="2.0")
