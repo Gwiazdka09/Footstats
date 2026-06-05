@@ -42,11 +42,10 @@ Pipeline stoi od 25.05. Bez działającego agenta nie zbieramy danych do kalibra
 - [x] Daily agent działa end-to-end — kupon zapisany: `logs/kupon_2026-06-04.txt`
 - [ ] TODO: przywrócić automatyczny scheduling (run_daily.bat / Cloud Scheduler) — osobne zadanie
 
-### 12.4: Reset bankrollu
-- [ ] Ustawić bankroll na nową wartość startową (np. 500 PLN) w `bankroll_state`
-- [ ] Wyczyścić lub zarchiwizować starą `bankroll_history`
-- **Dlaczego:** Bankroll = 0.0 PLN, agent nie może kalkulować stawek Kelly.
-- **Effort:** 15 min
+### 12.4: Reset bankrollu ✅
+- [x] user_id=1 (system): 58 PLN → 500 PLN
+- [x] user_id=2 (admin): 150 PLN → 500 PLN
+- [x] bankroll_history zachowana (archiwum historyczne)
 
 ### 12.5: Cloud Run env vars (BUG-2)
 - [ ] Ustawić `FOOTSTATS_USER` + `FOOTSTATS_PASSWORD_HASH` w Cloud Run
@@ -177,7 +176,7 @@ Te zadania mają sens dopiero gdy accuracy >= 55% i pipeline jest stabilny.
 | 1 | ~~Agent nie działa od 25.05~~ | ~~Wszystko~~ | ✅ Faza 12.3 — naprawiono 3 bugi (bankroll/checkpoint/playwright) |
 | 2 | ~~101 nierozliczonych kuponów~~ | ~~Pomiar accuracy~~ | ✅ Faza 12.2 — zvoided, acc=26.7% |
 | 3 | **45 niezcommitowanych zmian** | Bezpieczeństwo kodu | Faza 12.1 |
-| 4 | **Bankroll 0 PLN** | Kelly nie może liczyć stawek | Faza 12.4 |
+| 4 | ~~Bankroll 0 PLN~~ | ~~Kelly~~ | ✅ Faza 12.4 — reset do 500 PLN |
 | 5 | **Cloud Run brak admin seeda** | API niedostępne publicznie | Faza 12.5 |
 | 6 | **Accuracy 42%** | Zaufanie użytkowników | Faza 13 (kalibracja po danych) |
 
