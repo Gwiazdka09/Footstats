@@ -246,3 +246,52 @@ def send_trening_raport(n_matches: int, marchewki: list, kije: list) -> bool:
             linie.append(f"  - {k.get('mit', k) if isinstance(k, dict) else k}")
 
     return _send("\n".join(linie))
+
+
+def send_alert(title: str, body: str) -> bool:
+    """Wysyła alert operacyjny (agent down, accuracy drop, itp.)."""
+    text = f"⚠️ <b>ALERT: {title}</b>\n{body}"
+    return _send(text)
+
+
+def check_and_alert_agent_down() -> bool:
+    """True jeśli wysłano alert (agent >26h bez predykcji)."""
+    from datetime import datetime, timedelta
+    try:
+        from footstats.utils.db import connect
+        with connect() as _conn:
+            row = _conn.execute(
+                "SELECT MAX(created_at) AS last FROM predictions"
+            ).fetchone()
+            last = row["last"] if row else None
+        if last is None or last < datetime.now() - timedelta(hours=26):
+            age = "brak danych" if last is None else f"{int((datetime.now()-last).total_seconds()/3600)}h temu"
+            send_alert("Agent DOWN", f"Ostatnia predykcja: {age}. Sprawdź logi!")
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def check_and_alert_accuracy(threshold_pct: float = 35.0, window: int = 20) -> bool:
+    """True jeśli wysłano alert (rolling accuracy poniżej progu)."""
+    try:
+        from footstats.utils.db import connect
+        with connect() as _conn:
+            row = _conn.execute(
+                "SELECT COUNT(*) AS cnt, SUM(CASE WHEN tip_correct=1 THEN 1 ELSE 0 END) AS won"
+                " FROM (SELECT tip_correct FROM predictions WHERE tip_correct IS NOT NULL"
+                " ORDER BY created_at DESC LIMIT ?) sub",
+                (window,),
+            ).fetchone()
+        if row and row["cnt"] >= window:
+            acc = (row["won"] or 0) / row["cnt"] * 100
+            if acc < threshold_pct:
+                send_alert(
+                    "Accuracy DROP",
+                    f"Rolling {window}: {acc:.1f}% < {threshold_pct}% progu. Sprawdź kalibrację!",
+                )
+                return True
+    except Exception:
+        pass
+    return False

@@ -242,9 +242,15 @@ app.include_router(coupons_router)
 @app.get("/health", tags=["ops"])
 def health() -> dict:
     from footstats import __version__
+    from datetime import datetime, timedelta
 
     auth_ok: bool = False
     auth_detail: str = "unknown"
+    last_prediction_date: str | None = None
+    agent_ok: bool = False
+    bankroll: float | None = None
+    rolling_accuracy: float | None = None
+
     try:
         from footstats.utils.db import connect
         with connect() as _conn:
@@ -257,10 +263,43 @@ def health() -> dict:
     except Exception as _e:  # noqa: broad-except — health must never return 5xx
         auth_detail = f"db-error: {type(_e).__name__}: {_e}"
 
+    try:
+        from footstats.utils.db import connect
+        with connect() as _conn:
+            row = _conn.execute(
+                "SELECT MAX(created_at) AS last_pred FROM predictions"
+            ).fetchone()
+            last_pred = row["last_pred"] if row else None
+            if last_pred:
+                last_prediction_date = str(last_pred)
+                agent_ok = last_pred >= datetime.now() - timedelta(hours=26)
+            # Rolling accuracy last 20 settled predictions
+            row2 = _conn.execute(
+                "SELECT COUNT(*) AS cnt, SUM(CASE WHEN tip_correct=1 THEN 1 ELSE 0 END) AS won"
+                " FROM (SELECT tip_correct FROM predictions WHERE tip_correct IS NOT NULL"
+                " ORDER BY created_at DESC LIMIT 20) sub"
+            ).fetchone()
+            if row2 and row2["cnt"]:
+                rolling_accuracy = round((row2["won"] or 0) / row2["cnt"] * 100, 1)
+            # Bankroll admin user
+            row3 = _conn.execute(
+                "SELECT balance FROM bankroll_state WHERE user_id = 2"
+            ).fetchone()
+            if row3:
+                bankroll = float(row3["balance"])
+    except Exception:  # noqa: broad-except — health must never return 5xx
+        pass
+
     return {
         "status": "ok",
         "version": __version__,
         "auth": {"ok": auth_ok, "detail": auth_detail},
+        "agent": {
+            "ok": agent_ok,
+            "last_prediction_date": last_prediction_date,
+        },
+        "bankroll_pln": bankroll,
+        "rolling_accuracy_pct": rolling_accuracy,
     }
 
 

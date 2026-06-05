@@ -95,12 +95,11 @@ Agent znów działa (po fazie 12). Teraz zbieramy dane i kalibrujemy model.
 
 ## 🟡 FAZA 14: STABILIZACJA PRODUKCJI (P2 — tydzień 3–4)
 
-### 14.1: Monitoring i alerting
-- [ ] Dodać health check endpoint → `/health` zwraca: last_prediction_date, bankroll, api_status
-- [ ] Alert Telegram jeśli agent nie wygenerował predykcji >24h
-- [ ] Alert jeśli accuracy spada poniżej 35% (rolling 20 kuponów)
-- **Dlaczego:** Agent cicho umarł na 10 dni i nikt nie zauważył. Monitoring to zapobiega.
-- **Effort:** 3–4h
+### 14.1: Monitoring i alerting ✅
+- [x] `/health` rozbudowane: last_prediction_date, agent_ok (>26h), bankroll_pln, rolling_accuracy_pct
+- [x] `telegram_notify.send_alert()` — ogólny alert
+- [x] `check_and_alert_agent_down()` — wywołane w evening_agent po settlement
+- [x] `check_and_alert_accuracy(35%, window=20)` — wywołane w daily_agent na starcie
 
 ### 14.2: Auto-settlement cron
 - [ ] evening_agent jako scheduled job (Cloud Scheduler lub cron)

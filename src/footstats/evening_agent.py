@@ -290,6 +290,14 @@ def run_evening_agent(date_str: str | None = None) -> dict:
             console.print(f"[red]Auto-trainer start failed: {e.__class__.__name__}: {e}[/red]")
 
     _send_telegram_summary(summary, date_str)
+
+    # Alert jeśli daily agent nie generował predykcji >26h
+    try:
+        from footstats.utils.telegram_notify import check_and_alert_agent_down
+        check_and_alert_agent_down()
+    except Exception:
+        pass
+
     return summary
 
 

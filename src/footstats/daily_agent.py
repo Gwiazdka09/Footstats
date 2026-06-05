@@ -1174,6 +1174,13 @@ def main():
     if check_weekly_alert(user_id=admin_uid):
         console.print("[bold yellow]ALERT: tygodniowy drawdown przekroczył 20% bankrolla![/bold yellow]")
 
+    # Rolling accuracy alert (ciche — nie blokuje agenta)
+    try:
+        from footstats.utils.telegram_notify import check_and_alert_accuracy
+        check_and_alert_accuracy(threshold_pct=35.0, window=20)
+    except Exception:
+        pass
+
     console.print()
     console.print(Panel(
         f"[bold]FootStats Daily Agent[/bold]  |  {date_label}{dry_tag}\n"
