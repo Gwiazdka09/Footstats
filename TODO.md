@@ -1,6 +1,6 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-05  
+**Ostatnia aktualizacja:** 2026-06-05 (auto-audit)  
 **Wersja:** v3.4-stable  
 **Accuracy baseline:** 26.7% (4/15 z live Neon.tech)  
 **Cel na koniec lipca:** M1 = 55% win rate
@@ -40,6 +40,36 @@ Nie wymaga kodowania. Daily agent zbiera dane automatycznie.
 
 ---
 
+## 🔧 TECH DEBT (do zrobienia przy okazji)
+
+### TD1: Commit uncommitted changes (P1)
+- [ ] `git add -A && git commit -m "v3.4: daily sync"` — 40 zmienionych plików
+- **Effort:** 5 min
+
+### TD2: Naprawić 2 failing testy (P3)
+- [ ] `test_quick_picks_ensemble::test_blend_50_50_applied` — prawdopodobnie mock issue
+- [ ] `test_telegram::test_send_kupon_test_data` — brak test credentials
+- **Effort:** 1–2h
+
+### TD3: Redukcja broad except (P2)
+- [ ] 78x `except Exception` → specyficzne wyjątki (top: cli 6, superbet 5, form_scraper 5)
+- **Effort:** 3–4h
+
+### TD4: Rozbicie dużych plików (P3)
+- [ ] daily_agent.py (1474 LOC) → wydzielić kroki do osobnych modułów
+- [ ] analyzer.py (1175 LOC) → wydzielić helpery
+- **Effort:** 4–6h
+
+### TD5: Usunąć duplikat validation_errors.csv z root (P4)
+- [ ] `rm validation_errors.csv` (kopia jest w data/)
+- **Effort:** 1 min
+
+### TD6: footstats.log → dodać do .gitignore (P4)
+- [ ] Dodać `footstats.log` do .gitignore
+- **Effort:** 1 min
+
+---
+
 ## ⚪ FAZA 15: NOWE FEATURE'Y (P3 — lipiec, po M1=55%)
 
 ### 15.1: Stop-loss mechanizm
@@ -75,11 +105,4 @@ Nie wymaga kodowania. Daily agent zbiera dane automatycznie.
 
 ## Blockers (stan na 2026-06-05)
 
-Wszystkie blokery z fazy 12 zlikwidowane. Jedyne ograniczenie: brak danych do kalibracji (zbieramy na żywo).
-
----
-
-## Drobne porządki
-
-- [ ] 12.5: Cloud Run — admin seed ✅ done, zweryfikowane przez /health
-- [ ] Naprawić 2 pre-existing testy: `test_quick_picks_ensemble::test_blend_50_50_applied` + `test_telegram::test_send_kupon_test_data`
+Wszystkie blokery z fazy 12 zlikwidowane. Jedyne ograniczenie: brak danych do kalibracji (zbieramy na żywo, ~15/50 kuponów).
