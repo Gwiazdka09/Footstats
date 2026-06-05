@@ -110,12 +110,12 @@ Agent znów działa (po fazie 12). Teraz zbieramy dane i kalibrujemy model.
 - [x] Priorytet: daily_agent, analyzer, scraperzy (te co mogą cicho połknąć błędy pipeline'u)
 - **Wynik:** 28 plików — narrowing do konkretnych typów (OSError/ValueError/RuntimeError) + noqa dla AI SDK/Playwright
 
-### 14.4: Testy integracyjne pipeline'u
-- [ ] Test end-to-end: daily_agent → scrape → predict → kupon → DB (z mockami API)
-- [ ] Test: evening_agent → fetch results → settle → feedback → RAG update
-- [ ] Dodać do CI (GitHub Actions)
-- **Dlaczego:** 431 unit testów przechodzi, ale nie testujemy czy cały pipeline od A do Z działa razem.
-- **Effort:** 1 dzień
+### 14.4: Testy integracyjne pipeline'u ✅
+- [x] Test end-to-end: daily_agent → scrape → predict → kupon → DB (z mockami API)
+- [x] Test: evening_agent → fetch results → settle → feedback → RAG update
+- [x] 26 testów integracyjnych: test_integration_daily_pipeline.py + test_integration_evening_pipeline.py
+- [x] Testy dodane do istniejącego CI (pytest tests/ już je pokrywa)
+- **Bonus:** Naprawiono bug w coupon_settlement.py (conn po context manager + dry_run stats)
 
 ---
 
