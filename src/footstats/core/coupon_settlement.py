@@ -25,6 +25,7 @@ from footstats.utils.normalize import normalize_team_name
 def _get_fixtures_api(api_key: str, date_str: str) -> list[dict]:
     """Pobiera fixtures z API-Football dla całej daty (bez filtrowania po lidze)."""
     import requests
+    from requests import RequestException
     try:
         r = requests.get(
             "https://v3.football.api-sports.io/fixtures",
@@ -34,7 +35,7 @@ def _get_fixtures_api(api_key: str, date_str: str) -> list[dict]:
         )
         r.raise_for_status()
         return r.json().get("response", [])
-    except Exception as e:
+    except (RequestException, ValueError, KeyError) as e:
         log.debug("API-Football error for date %s: %s", date_str, e)
         return []
 
@@ -140,12 +141,16 @@ def settle_active_coupons(
 
             # Fallback na predictions table (dla wyników już w DB)
             if not res:
-                pred_row = conn.execute(
-                    "SELECT actual_result FROM predictions WHERE match_date=? AND (team_home LIKE ? OR team_away LIKE ?) LIMIT 1",
-                    (mdate, f"%{home}%", f"%{away}%")
-                ).fetchone()
-                if pred_row and pred_row["actual_result"]:
-                    res = pred_row["actual_result"]
+                try:
+                    with _connect() as pred_conn:
+                        pred_row = pred_conn.execute(
+                            "SELECT actual_result FROM predictions WHERE match_date=? AND (team_home LIKE ? OR team_away LIKE ?) LIMIT 1",
+                            (mdate, f"%{home}%", f"%{away}%")
+                        ).fetchone()
+                    if pred_row and pred_row["actual_result"]:
+                        res = pred_row["actual_result"]
+                except (OSError, ValueError, RuntimeError):
+                    pass
 
             correct = oblicz_tip_correct(leg["tip"], res)
             leg_results.append(correct)
@@ -192,7 +197,7 @@ def settle_active_coupons(
                     )
                     _send_to_rag_feedback(coupon_id, legs, lost_reason, verbose=verbose)
                     stats["settled"] += 1
-                except Exception as e:
+                except (KeyError, TypeError, ValueError, OSError) as e:
                     log.error("Błąd rozliczania kuponu ID=%s: %s", coupon_id, e)
                     stats["errors"] += 1
             else:
@@ -269,9 +274,11 @@ def settle_active_coupons(
                         _send_to_rag_feedback(coupon_id, legs, lose_reason, verbose=verbose)
 
                 stats["settled"] += 1
-            except Exception as e:
+            except (KeyError, TypeError, ValueError, OSError) as e:
                 log.error("Błąd rozliczania kuponu ID=%s: %s", coupon_id, e)
                 stats["errors"] += 1
+        else:
+            stats["settled"] += 1  # dry_run: count without DB write
 
     if verbose:
         print(
@@ -309,7 +316,7 @@ def _send_to_rag_feedback(coupon_id: int, legs: list, reason: str, verbose: bool
 
         if verbose:
             log.info("Wysłano feedback do RAG dla kuponu #%s: %s", coupon_id, reason)
-    except Exception as e:
+    except (ImportError, AttributeError, TypeError, ValueError) as e:
         log.warning("Błąd wysyłania feedback do RAG: %s", e)
 
 
