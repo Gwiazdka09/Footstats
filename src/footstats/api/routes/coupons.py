@@ -218,7 +218,7 @@ def get_matches_today(user_id: int = Depends(require_auth)):
         except (ValueError, TypeError):
             continue
     future.sort(key=lambda m: (m.get("data", ""), m.get("godzina", "")))
-    _MATCHES_CACHE = future[:15] if future else []
+    _MATCHES_CACHE = future[:30] if future else []
     return _MATCHES_CACHE
 
 

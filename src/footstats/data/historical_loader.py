@@ -66,7 +66,7 @@ def _get(url: str, timeout: int = 30) -> bytes | None:
         r = requests.get(url, timeout=timeout, headers={"User-Agent": "FootStats/3.0"})
         r.raise_for_status()
         return r.content
-    except Exception as e:
+    except (requests.RequestException, OSError) as e:
         log.warning("HTTP error %s → %s", url, e)
         return None
 
@@ -89,7 +89,7 @@ def _download_fdco_season(league_code: str, season: str) -> pd.DataFrame | None:
         return None
     try:
         df = pd.read_csv(io.BytesIO(raw), encoding="latin-1", on_bad_lines="skip")
-    except Exception as e:
+    except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as e:
         log.warning("Błąd parsowania %s: %s", url, e)
         return None
     if df.empty or "HomeTeam" not in df.columns:
@@ -171,7 +171,7 @@ def _download_fdco_new(country_code: str) -> pd.DataFrame | None:
         return None
     try:
         df = pd.read_csv(io.BytesIO(raw), encoding="latin-1", on_bad_lines="skip")
-    except Exception as e:
+    except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as e:
         log.warning("Błąd parsowania %s: %s", url, e)
         return None
     if df.empty or "Home" not in df.columns:
@@ -237,7 +237,7 @@ def _download_xgabora_matches() -> pd.DataFrame | None:
         return None
     try:
         df = pd.read_csv(io.BytesIO(raw), encoding="utf-8", on_bad_lines="skip", low_memory=False)
-    except Exception as e:
+    except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as e:
         log.warning("Błąd xgabora matches: %s", e)
         return None
     if df.empty:
@@ -260,7 +260,7 @@ def _download_xgabora_elo() -> pd.DataFrame | None:
         return None
     try:
         df = pd.read_csv(io.BytesIO(raw), encoding="utf-8", on_bad_lines="skip", low_memory=False)
-    except Exception as e:
+    except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as e:
         log.warning("Błąd xgabora elo: %s", e)
         return None
     if df.empty:
@@ -365,7 +365,7 @@ def _download_fbref_one(league: str, season: str) -> pd.DataFrame | None:
     try:
         fbref = sd.FBref(leagues=fbref_league, seasons=int(season))
         sched = fbref.read_schedule()
-    except Exception as e:
+    except (ValueError, KeyError, AttributeError, OSError) as e:
         log.warning("FBref schedule error %s %s: %s", league, season, e)
         return None
 
@@ -425,7 +425,7 @@ def _try_fbref_shooting(fbref, league: str, sched, date_col, home_col, away_col)
     """Fallback: pobierz xG ze statystyk drużynowych jeśli nie ma w schedule."""
     try:
         shots = fbref.read_team_match_stats(stat_type="shooting")
-    except Exception as e:
+    except (ValueError, KeyError, AttributeError, OSError) as e:
         log.debug("FBref shooting fallback error: %s", e)
         return None
 
