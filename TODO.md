@@ -47,16 +47,16 @@ Pipeline stoi od 25.05. Bez działającego agenta nie zbieramy danych do kalibra
 - [x] user_id=2 (admin): 150 PLN → 500 PLN
 - [x] bankroll_history zachowana (archiwum historyczne)
 
-### 12.5: Cloud Run env vars (BUG-2) — RĘCZNA AKCJA
-- [ ] **Krok 1:** Wygeneruj bcrypt hash lokalnie:
+### 12.5: Cloud Run env vars (BUG-2) — RĘCZNA AKCJA ✅
+- [x] **Krok 1:** Wygeneruj bcrypt hash lokalnie:
   ```
   python -c "import bcrypt; print(bcrypt.hashpw(b'TWOJE_HASLO', bcrypt.gensalt()).decode())"
   ```
-- [ ] **Krok 2:** GCP Console → Cloud Run → `footstats-api` → Edit & Deploy New Revision → Variables & Secrets
-- [ ] **Krok 3:** Dodaj zmienne środowiskowe:
+- [x] **Krok 2:** GCP Console → Cloud Run → `footstats-api` → Edit & Deploy New Revision → Variables & Secrets
+- [x] **Krok 3:** Dodaj zmienne środowiskowe:
   - `FOOTSTATS_USER=Admin_JG` (lub inna nazwa)
   - `FOOTSTATS_PASSWORD_HASH=<output z kroku 1>`
-- [ ] **Krok 4:** Deploy → zweryfikuj: `curl https://<service-url>/health` → `"auth": {"ok": true}`
+- [x] **Krok 4:** Deploy → zweryfikuj: `curl https://<service-url>/health` → `"auth": {"ok": true}`
 - **Dlaczego:** `seed_admin_user()` czyta te zmienne przy starcie → bez nich brak konta admina → brak loginu
 - **Alternatywa CLI:** `! gcloud run services update footstats-api --region=europe-west1 --set-env-vars="FOOTSTATS_USER=...,FOOTSTATS_PASSWORD_HASH=..."`
 - **Effort:** 15 min
@@ -179,7 +179,7 @@ Te zadania mają sens dopiero gdy accuracy >= 55% i pipeline jest stabilny.
 | 1 | ~~Agent nie działa od 25.05~~ | ~~Wszystko~~ | ✅ Faza 12.3 — naprawiono 3 bugi (bankroll/checkpoint/playwright) |
 | 2 | ~~101 nierozliczonych kuponów~~ | ~~Pomiar accuracy~~ | ✅ Faza 12.2 — zvoided, acc=26.7% |
 | 3 | ~~Bankroll 0 PLN~~ | ~~Kelly~~ | ✅ Faza 12.4 — reset do 500 PLN |
-| 4 | **Cloud Run brak admin seeda** | API niedostępne publicznie | Faza 12.5 |
+| 4 | ~~Cloud Run brak admin seeda~~ | ~~API niedostępne publicznie~~ | ✅ Faza 12.5 — env vars ustawione, auth ok |
 | 5 | **Accuracy 42%** | Zaufanie użytkowników | Faza 13 (kalibracja po danych) |
 
 ---
