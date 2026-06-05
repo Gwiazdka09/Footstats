@@ -1,5 +1,0 @@
-match_date,team_home,team_away,_error
-invalid-date,TeamC,TeamD,"1 validation error for GameRecord
-match_date
-  Value error, Invalid date format: invalid-date [type=value_error, input_value='invalid-date', input_type=str]
-    For further information visit https://errors.pydantic.dev/2.13/v/value_error"

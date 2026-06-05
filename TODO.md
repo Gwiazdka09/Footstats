@@ -47,10 +47,12 @@ Pipeline stoi od 25.05. Bez działającego agenta nie zbieramy danych do kalibra
 - [x] user_id=2 (admin): 150 PLN → 500 PLN
 - [x] bankroll_history zachowana (archiwum historyczne)
 
-### 12.5: Cloud Run env vars (BUG-2)
-- [ ] Ustawić `FOOTSTATS_USER` + `FOOTSTATS_PASSWORD_HASH` w Cloud Run
-- [ ] Zweryfikować czy API startuje poprawnie po deploy
-- **Dlaczego:** Bez seed admina API nie pozwala na logowanie. Blokuje dashboard dla użytkowników.
+### 12.5: Cloud Run env vars (BUG-2) — RĘCZNA AKCJA
+- [ ] W Cloud Console → Cloud Run → footstats-api → Edit → Variables:
+  - `FOOTSTATS_USER=<username>`
+  - `FOOTSTATS_PASSWORD_HASH=<bcrypt_hash>`
+- [ ] Zweryfikować: `curl https://<service-url>/health`
+- **Uwaga:** gcloud niedostępny lokalnie — wymaga Cloud Console lub ! gcloud run services update
 - **Effort:** 30 min
 
 ---
