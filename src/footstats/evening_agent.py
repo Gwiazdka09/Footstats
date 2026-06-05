@@ -101,22 +101,25 @@ def _status_kuponu(nogi_statusy: list[str]) -> str:
 
 # ── API ───────────────────────────────────────────────────────────────────────
 
-def _fetch_results_today(api_key: str, date_str: str) -> list[dict]:
-    """Pobiera zakończone mecze z API-Football dla daty YYYY-MM-DD."""
-    try:
-        r = requests.get(
-            f"{API_BASE}/fixtures",
-            headers={"x-apisports-key": api_key},
-            params={"date": date_str, "status": "FT"},
-            timeout=15,
-        )
-        if r.status_code != 200:
-            console.print(f"[yellow]API-Football HTTP {r.status_code}[/yellow]")
-            return []
-        return r.json().get("response", [])
-    except (requests.RequestException, ValueError, KeyError) as e:
-        console.print(f"[yellow]API-Football błąd sieci: {e}[/yellow]")
-        return []
+def _fetch_results_today(api_key: str, date_str: str, retries: int = 3) -> list[dict]:
+    """Pobiera zakończone mecze z API-Football dla daty YYYY-MM-DD (retry x3)."""
+    import time
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(
+                f"{API_BASE}/fixtures",
+                headers={"x-apisports-key": api_key},
+                params={"date": date_str, "status": "FT"},
+                timeout=15,
+            )
+            if r.status_code == 200:
+                return r.json().get("response", [])
+            console.print(f"[yellow]API-Football HTTP {r.status_code} (próba {attempt}/{retries})[/yellow]")
+        except (requests.RequestException, ValueError, KeyError) as e:
+            console.print(f"[yellow]API-Football błąd sieci (próba {attempt}/{retries}): {e}[/yellow]")
+        if attempt < retries:
+            time.sleep(10 * attempt)
+    return []
 
 
 # ── CLV ───────────────────────────────────────────────────────────────────────

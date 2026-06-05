@@ -101,12 +101,9 @@ Agent znów działa (po fazie 12). Teraz zbieramy dane i kalibrujemy model.
 - [x] `check_and_alert_agent_down()` — wywołane w evening_agent po settlement
 - [x] `check_and_alert_accuracy(35%, window=20)` — wywołane w daily_agent na starcie
 
-### 14.2: Auto-settlement cron
-- [ ] evening_agent jako scheduled job (Cloud Scheduler lub cron)
-- [ ] Rozliczenie kuponów automatycznie co wieczór o 23:00
-- [ ] Retry logic jeśli API wyników nie odpowiada
-- **Dlaczego:** 101 nierozliczonych kuponów = brak feedbacku → brak kalibracji → accuracy nie rośnie.
-- **Effort:** 2h
+### 14.2: Auto-settlement cron ✅
+- [x] FootStats-EveningAgent w Windows Task Scheduler (23:00 codziennie)
+- [x] Retry x3 z backoff 10s/20s jeśli API-Football nie odpowiada (evening_agent.py)
 
 ### 14.3: Broad except cleanup — runda 2
 - [ ] Zredukować z ~125 do <50 broad excepts
