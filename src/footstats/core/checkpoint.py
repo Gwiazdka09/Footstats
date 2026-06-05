@@ -52,7 +52,7 @@ def save_predictions_batch(
                 f.write(json.dumps(pred, ensure_ascii=False, default=str) + "\n")
         logger.info(f"Checkpoint saved: {filename} ({len(predictions)} predictions)")
         return str(filename)
-    except Exception as e:
+    except (OSError, ValueError) as e:
         logger.error(f"Failed to save checkpoint {batch_id}: {e}")
         raise
 
@@ -87,7 +87,7 @@ def load_predictions_batch(batch_id: str) -> list[dict[str, Any]]:
                     predictions.append(json.loads(line))
         logger.info(f"Checkpoint loaded: {newest} ({len(predictions)} predictions)")
         return predictions
-    except Exception as e:
+    except (OSError, ValueError) as e:
         logger.error(f"Failed to load checkpoint {newest}: {e}")
         return []
 
@@ -154,7 +154,7 @@ def cleanup_old_checkpoints(days: int = 7) -> int:
             try:
                 file.unlink()
                 removed += 1
-            except Exception as e:
+            except OSError as e:
                 logger.error(f"Failed to remove checkpoint {file}: {e}")
 
     if removed > 0:

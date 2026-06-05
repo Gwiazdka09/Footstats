@@ -126,7 +126,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                     try:
                         import json
                         data = json.loads(body) if isinstance(body, str) else body
-                    except Exception:
+                    except ValueError:
                         data = body
                     status = result.status_code
                 else:
@@ -187,7 +187,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                     try:
                         import json
                         data = json.loads(body) if isinstance(body, str) else body
-                    except Exception:
+                    except ValueError:
                         data = body
                     status = result.status_code
                 else:

@@ -171,7 +171,7 @@ def _run_ai_analysis(wyniki_batch: list[dict], stawka: float = 5.0) -> dict | No
             stawka=stawka,
         )
         return result
-    except Exception as e:
+    except Exception as e:  # noqa: broad-except — AI SDK raises varied types incl. 429 check
         err_str = str(e).lower()
         # 429 / Rate Limit — czekaj i loguj, nie wywalaj
         if "429" in err_str or "rate" in err_str or "too many requests" in err_str:
@@ -295,7 +295,7 @@ def _save_prediction_and_result(eval_result: dict, stawka: float) -> int | None:
         )
         update_result(pred_id, eval_result["score"])
         return pred_id
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, OSError) as e:
         logger.error(f"Błąd zapisu prediction: {e}")
         return None
 
@@ -339,7 +339,7 @@ Odpowiedz wyłącznie tekstem wniosku, bez nagłówków.
                 gen.update(output=lesson)
         else:
             lesson = zapytaj_ai(prompt, max_tokens=250).strip()
-    except Exception as e:
+    except Exception as e:  # noqa: broad-except — zapytaj_ai raises varied AI SDK errors
         logger.warning(f"Błąd AI Reflexion: {e}. Fallback do lekcji deterministycznej.")
         # Fallback do starej logiki deterministycznej
         gh, ga = [int(x) for x in score.split("-")]
@@ -379,7 +379,7 @@ def _flush_langfuse():
         try:
             lf.flush()
             logger.info("Langfuse flush() — dane wysłane do serwera")
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning(f"Langfuse flush błąd: {e}")
 
 

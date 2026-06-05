@@ -53,7 +53,7 @@ def get_status(user_id: int = Depends(require_auth)):
                 "roi_pct": roi,
             },
         }
-    except Exception as e:
+    except (ValueError, KeyError, AttributeError, TypeError) as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -67,7 +67,7 @@ def get_calibration(user_id: int = Depends(require_auth)):
         return data
     except FileNotFoundError:
         return {"updated_at": None, "factor_home": None, "factor_away": None, "n_matches": 0}
-    except Exception as e:
+    except (ValueError, KeyError, AttributeError, TypeError) as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

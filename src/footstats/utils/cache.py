@@ -99,7 +99,7 @@ def _af_load_disk_cache() -> dict:
     if AF_CACHE_FILE.exists():
         try:
             return json.loads(AF_CACHE_FILE.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, ValueError):
             return {}
     return {}
 

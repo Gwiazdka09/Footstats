@@ -190,7 +190,7 @@ def predict_match(
         _cal_h, _cal_a = load_calibration()
         lambda_g *= _cal_h
         lambda_a *= _cal_a
-    except Exception:
+    except (ImportError, OSError, ValueError):
         pass  # Brak pliku kalibracji → działaj z domyślnymi lambdami
 
     lambda_g = max(0.05, lambda_g)

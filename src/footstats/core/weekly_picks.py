@@ -205,7 +205,7 @@ def pewniaczki_tygodnia(
                     "ikony": "", "klas": {"typ": "LIGA", "etykieta_pdf": "[LIGA]"},
                 }
             console.print(f"[dim]   Bzzoiro: {n_w_oknie} meczow w przedziale tygodnia[/dim]")
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             console.print(f"[yellow]Bzzoiro blad: {e}[/yellow]")
 
     # ── WARSTWA 2: Biezaca liga – Poisson (0 req) ───────────────
@@ -302,7 +302,7 @@ def pewniaczki_tygodnia(
                 try:
                     df_nad_l = api_fdb.nadchodzace(liga["kod"], 30)
                     time.sleep(SLEEP_LOOP)  # rate limit FDB: 10 req/min
-                except Exception:
+                except (OSError, ValueError, RuntimeError):
                     continue
                 if df_nad_l is None or df_nad_l.empty:
                     continue

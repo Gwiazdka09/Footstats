@@ -98,7 +98,7 @@ def load_lessons() -> dict:
     if LESSONS_FILE.exists():
         try:
             return json.loads(LESSONS_FILE.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, ValueError):
             return {}
     return {}
 
@@ -141,7 +141,7 @@ def ask_groq_trainer(report_text: str, n_matches: int) -> dict | None:
         except json.JSONDecodeError as e:
             log.warning("Groq SDK JSON error: %s", e)
             return None
-        except Exception as e:
+        except Exception as e:  # noqa: broad-except — Groq SDK raises varied APIError subtypes
             log.error("Groq SDK error: %s", e)
             return None
 
@@ -175,7 +175,7 @@ def ask_groq_trainer(report_text: str, n_matches: int) -> dict | None:
     except json.JSONDecodeError as e:
         log.warning("Groq HTTP JSON error: %s", e)
         return None
-    except Exception as e:
+    except (OSError, KeyError) as e:
         log.error("Groq HTTP error: %s", e)
         return None
 

@@ -72,7 +72,7 @@ class EmbeddingStore:
                     (feedback_id, blob, self.model_name, self.dim),
                 )
             return True
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             logger.error(f"[RAG] Failed to upsert embedding for feedback_id={feedback_id}: {e}")
             return False
 
@@ -93,7 +93,7 @@ class EmbeddingStore:
                 np.frombuffer(bytes(row["embedding"]), dtype=np.float32) for row in rows
             ])
             return ids, embeddings
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             logger.error(f"[RAG] Failed to fetch all embeddings: {e}")
             return [], None
 
@@ -145,7 +145,7 @@ def backfill_embeddings(db_path: Optional[Path] = None, verbose: bool = False):
                     logger.info(f"[RAG] Backfilled {count}/{len(rows)} embeddings")
 
         logger.info(f"[RAG] Backfill complete: {count}/{len(rows)} embeddings stored")
-    except Exception as e:
+    except (OSError, ValueError, TypeError) as e:
         logger.error(f"[RAG] Backfill failed: {e}")
 
 

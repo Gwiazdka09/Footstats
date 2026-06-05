@@ -113,7 +113,7 @@ def load_weights(league: Optional[str] = None) -> dict[str, float]:
         return _DEFAULT_WEIGHTS
     try:
         data = json.loads(_WEIGHTS_PATH.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, ValueError):
         return _DEFAULT_WEIGHTS
     if league and league in data:
         return data[league]

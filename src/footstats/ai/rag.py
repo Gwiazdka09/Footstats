@@ -228,7 +228,7 @@ def retrieve_relevant_lessons(query_context: str, k: int = 5, min_score: float =
         logger.debug(f"[RAG] Retrieved {len(lessons)} lessons (top-{k}, min_score={min_score})")
         return lessons
 
-    except Exception as e:
+    except (OSError, ValueError, TypeError) as e:
         import logging
         logger = logging.getLogger(__name__)
         logger.debug(f"[RAG] Semantic retrieval failed: {e}")

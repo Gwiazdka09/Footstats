@@ -41,7 +41,7 @@ def _fetch_predictions() -> list:
         preds = client.predykcje_tygodnia()
         _log.info("Bzzoiro returned %d predictions", len(preds) if preds else 0)
         return preds if preds else _mock_predictions()
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         _log.error("_fetch_predictions error: %s", e, exc_info=True)
         return _mock_predictions()
 
@@ -357,7 +357,7 @@ def settle_coupons(req: SettleRequest, user_id: int = Depends(require_auth)):
             "errors": stats.get("errors", 0),
             "message": f"Rozliczono {stats.get('settled',0)}, częściowych {stats.get('partial',0)}, błędów {stats.get('errors',0)}",
         }
-    except Exception as e:
+    except (ValueError, KeyError, AttributeError, TypeError) as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

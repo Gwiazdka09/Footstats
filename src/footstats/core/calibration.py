@@ -44,7 +44,7 @@ def _last_coupon_statuses(n: int) -> list[str]:
                 (n,),
             ).fetchall()
         return [r["status"] for r in rows]
-    except Exception:
+    except (OSError, ValueError, RuntimeError):  # noqa: broad-except — DB conn varies (SQLite/PG)
         return []
 
 
@@ -89,7 +89,7 @@ def get_stake_multiplier(n: int = LOOKBACK_N) -> float:
                 " ORDER BY created_at DESC, id DESC LIMIT ?",
                 (n,),
             ).fetchall()
-    except Exception:
+    except (OSError, ValueError, RuntimeError):  # noqa: broad-except — DB conn varies (SQLite/PG)
         return MULTIPLIER_NEUTRAL
 
     if not rows:
@@ -114,7 +114,7 @@ def calibration_summary(n: int = LOOKBACK_N) -> dict:
                 " WHERE status IN ('WON', 'LOST') ORDER BY created_at DESC LIMIT ?",
                 (n,),
             ).fetchall()
-    except Exception:
+    except (OSError, ValueError, RuntimeError):  # noqa: broad-except — DB conn varies (SQLite/PG)
         return {"error": "Brak dostępu do DB", "multiplier": MULTIPLIER_NEUTRAL}
 
     if not rows:

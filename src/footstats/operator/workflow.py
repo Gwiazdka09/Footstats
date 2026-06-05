@@ -57,7 +57,7 @@ class OperatorWorkflow:
 
             if telegram_dostepny():
                 send_message(text)
-        except Exception as exc:
+        except (ImportError, OSError, RuntimeError) as exc:
             log.warning("Telegram: %s", exc)
 
     def run_preflight(self) -> RunResult:

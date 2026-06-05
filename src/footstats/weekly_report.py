@@ -30,7 +30,7 @@ def get_stats_7_dni(db_path: Path = None) -> dict:
                 "SELECT status, stake_pln, payout_pln FROM coupons WHERE created_at >= ?",
                 (cutoff,),
             ).fetchall()
-    except Exception:
+    except (OSError, ValueError, RuntimeError):
         return _empty
 
     counts: dict[str, int] = {}
@@ -76,7 +76,7 @@ def get_stats_per_liga(db_path: Path = None) -> list[dict]:
                 """,
                 (cutoff,),
             ).fetchall()
-    except Exception:
+    except (OSError, ValueError, RuntimeError):
         return []
 
     per_liga: dict[str, dict] = {}
@@ -142,7 +142,7 @@ def run_weekly_report(
             )
             groq_analysis = resp.choices[0].message.content
             console.print(f"[green]Groq analiza:[/green]\n{groq_analysis}")
-        except Exception as e:
+        except Exception as e:  # noqa: broad-except — Groq SDK raises varied APIError subtypes
             console.print(f"[yellow]Groq unavailable: {e}[/yellow]")
 
     stats["groq_analysis"] = groq_analysis
@@ -153,7 +153,7 @@ def run_weekly_report(
 
             msg = f"Raport tygodniowy FootStats\n\n{groq_analysis}"
             send_message(msg)
-        except Exception as e:
+        except (ImportError, OSError, RuntimeError) as e:
             console.print(f"[yellow]Telegram unavailable: {e}[/yellow]")
 
     return stats

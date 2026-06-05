@@ -36,7 +36,7 @@ def resolve_admin_user_id(fallback: int = 1) -> int:
             username,
             fallback,
         )
-    except Exception as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         log.warning("resolve_admin_user_id: %s - fallback user_id=%s", exc, fallback)
     return fallback
 

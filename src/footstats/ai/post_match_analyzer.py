@@ -72,7 +72,7 @@ def _zapisz_feedback(match_id: int, prediction_details: dict, reason: str) -> No
         from footstats.ai.rag_embeddings import EmbeddingStore
         store = EmbeddingStore()
         store.upsert(feedback_id, reason)
-    except Exception as e:
+    except (ImportError, OSError, ValueError, TypeError) as e:
         # Log but don't fail — embedding is nice-to-have, not critical
         log.debug(f"[RAG] Auto-embed failed for feedback_id={feedback_id}: {e}")
 
@@ -148,7 +148,7 @@ def analizuj_porazki(days_back: int = 14, dry_run: bool = False) -> dict:
             _zapisz_feedback(p["id"], prediction_details, reason)
             print(f"  [OK] {label} → {reason[:80]}…")
             stats["analyzed"] += 1
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, OSError) as e:
             log.error("Błąd analizy ID=%s: %s", p["id"], e)
             print(f"  [ERR] {label} → {e}")
             stats["errors"] += 1

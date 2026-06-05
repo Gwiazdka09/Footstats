@@ -105,11 +105,10 @@ Agent znów działa (po fazie 12). Teraz zbieramy dane i kalibrujemy model.
 - [x] FootStats-EveningAgent w Windows Task Scheduler (23:00 codziennie)
 - [x] Retry x3 z backoff 10s/20s jeśli API-Football nie odpowiada (evening_agent.py)
 
-### 14.3: Broad except cleanup — runda 2
-- [ ] Zredukować z ~125 do <50 broad excepts
-- [ ] Priorytet: daily_agent, analyzer, scraperzy (te co mogą cicho połknąć błędy pipeline'u)
-- **Dlaczego:** Broad except może tłumić prawdziwe błędy. Agent mógł umrzeć właśnie przez to — błąd został złapany ale nie obsłużony.
-- **Effort:** 4–6h
+### 14.3: Broad except cleanup — runda 2 ✅
+- [x] Zredukowano z 125 do 45 broad excepts (cel <50 osiągnięty)
+- [x] Priorytet: daily_agent, analyzer, scraperzy (te co mogą cicho połknąć błędy pipeline'u)
+- **Wynik:** 28 plików — narrowing do konkretnych typów (OSError/ValueError/RuntimeError) + noqa dla AI SDK/Playwright
 
 ### 14.4: Testy integracyjne pipeline'u
 - [ ] Test end-to-end: daily_agent → scrape → predict → kupon → DB (z mockami API)
@@ -173,10 +172,9 @@ Te zadania mają sens dopiero gdy accuracy >= 55% i pipeline jest stabilny.
 |---|---------|---------|-------------|
 | 1 | ~~Agent nie działa od 25.05~~ | ~~Wszystko~~ | ✅ Faza 12.3 — naprawiono 3 bugi (bankroll/checkpoint/playwright) |
 | 2 | ~~101 nierozliczonych kuponów~~ | ~~Pomiar accuracy~~ | ✅ Faza 12.2 — zvoided, acc=26.7% |
-| 3 | **45 niezcommitowanych zmian** | Bezpieczeństwo kodu | Faza 12.1 |
-| 4 | ~~Bankroll 0 PLN~~ | ~~Kelly~~ | ✅ Faza 12.4 — reset do 500 PLN |
-| 5 | **Cloud Run brak admin seeda** | API niedostępne publicznie | Faza 12.5 |
-| 6 | **Accuracy 42%** | Zaufanie użytkowników | Faza 13 (kalibracja po danych) |
+| 3 | ~~Bankroll 0 PLN~~ | ~~Kelly~~ | ✅ Faza 12.4 — reset do 500 PLN |
+| 4 | **Cloud Run brak admin seeda** | API niedostępne publicznie | Faza 12.5 |
+| 5 | **Accuracy 42%** | Zaufanie użytkowników | Faza 13 (kalibracja po danych) |
 
 ---
 

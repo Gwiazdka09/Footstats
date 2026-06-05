@@ -6,7 +6,7 @@ def get_weights_for_league(liga: str | None = None) -> dict:
     try:
         from footstats.core.ensemble_optimizer import load_weights
         return load_weights(liga)
-    except Exception:
+    except (ImportError, ValueError, KeyError):
         return _DEFAULT_WEIGHTS
 
 

@@ -61,7 +61,7 @@ def load_calibration() -> tuple[float, float]:
             fa = max(CAL_MIN, min(CAL_MAX, fa))
             _cache = {"factor_home": fh, "factor_away": fa}
             return fh, fa
-        except Exception:
+        except (OSError, ValueError, KeyError):
             return 1.0, 1.0
 
 

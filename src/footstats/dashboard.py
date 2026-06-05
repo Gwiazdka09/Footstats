@@ -24,7 +24,7 @@ def _conn():
     try:
         with _db.connect() as conn:
             yield conn
-    except Exception:
+    except (OSError, ValueError, RuntimeError):
         yield None
 
 
@@ -38,7 +38,7 @@ def _load_predictions(days: int = 90) -> pd.DataFrame:
                 "SELECT * FROM predictions WHERE match_date >= %s ORDER BY match_date ASC",
                 conn._raw, params=(date_from,),
             )
-        except Exception:
+        except (OSError, ValueError, KeyError):
             df = pd.DataFrame()
     return df
 
@@ -52,7 +52,7 @@ def _load_wf_results(league_filter: str | None = None) -> pd.DataFrame:
             df = pd.read_sql_query(sql, conn._raw)
             if league_filter:
                 df = df[df["league"] == league_filter]
-        except Exception:
+        except (OSError, ValueError, KeyError):
             df = pd.DataFrame()
     return df
 
@@ -67,7 +67,7 @@ def _load_pending() -> pd.DataFrame:
                 "FROM predictions WHERE actual_result IS NULL ORDER BY match_date DESC",
                 conn._raw,
             )
-        except Exception:
+        except (OSError, ValueError, KeyError):
             df = pd.DataFrame()
     return df
 
@@ -516,7 +516,7 @@ elif sekcja == "Accuracy (A/B)":
                 }), use_container_width=True)
         else:
             st.info("Brak danych CLV. Uruchom `record_closing_odds()` po kickoffie.")
-    except Exception as _e:
+    except (ImportError, OSError, ValueError, KeyError) as _e:
         st.info(f"CLV tracker niedostępny: {_e}")
 
     # EV vs P&L scatter (używa głównych predictions)

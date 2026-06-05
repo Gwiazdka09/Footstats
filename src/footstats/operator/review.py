@@ -50,14 +50,14 @@ def review_coupons(
             try:
                 ctx = get_match_context(home, away, liga)
                 contexts.append({"home": home, "away": away, "context": ctx})
-            except Exception as exc:
+            except (OSError, ValueError, RuntimeError) as exc:
                 log.warning("context %s vs %s: %s", home, away, exc)
                 contexts.append({"home": home, "away": away, "error": str(exc)})
 
         picks = _picks_text(legs, stake)
         try:
             ai_text = ai_sprawdz_kupon(picks, stawka=stake)
-        except Exception as exc:
+        except Exception as exc:  # noqa: broad-except — AI SDK raises varied error types
             ai_text = f"Groq error: {exc}"
 
         results.append({

@@ -253,7 +253,7 @@ def _wzbogac_o_betbuilder(wyniki: list, pobierz_superbet: bool = False) -> None:
     console.print(f"[dim]BetBuilder Superbet: pobieranie kursow dla {len(mecze_input)} meczow (moze ~3min)...[/dim]")
     try:
         bb_data = pobierz_bb_dla_meczow(mecze_input, headless=True)
-    except Exception as e:
+    except Exception as e:  # noqa: broad-except — Playwright raises varied types
         console.print(f"[yellow]BetBuilder Superbet error: {e}[/yellow]")
         return
 
@@ -1110,7 +1110,7 @@ def _zapisz_kupon_do_db(
             process_bet(stake, f"Kupon A ID={cid} ({phase})", user_id=admin_uid)
 
         return cid
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, OSError) as e:
         import traceback
         console.print(f"[red]BŁĄD _zapisz_kupon_do_db [{phase}]: {e}[/red]")
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
@@ -1178,7 +1178,7 @@ def main():
     try:
         from footstats.utils.telegram_notify import check_and_alert_accuracy
         check_and_alert_accuracy(threshold_pct=35.0, window=20)
-    except Exception:
+    except (ImportError, OSError, RuntimeError):
         pass
 
     console.print()

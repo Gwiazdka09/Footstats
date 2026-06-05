@@ -268,7 +268,7 @@ def check_and_alert_agent_down() -> bool:
             age = "brak danych" if last is None else f"{int((datetime.now()-last).total_seconds()/3600)}h temu"
             send_alert("Agent DOWN", f"Ostatnia predykcja: {age}. Sprawdź logi!")
             return True
-    except Exception:
+    except (OSError, ValueError, RuntimeError):
         pass
     return False
 
@@ -292,6 +292,6 @@ def check_and_alert_accuracy(threshold_pct: float = 35.0, window: int = 20) -> b
                     f"Rolling {window}: {acc:.1f}% < {threshold_pct}% progu. Sprawdź kalibrację!",
                 )
                 return True
-    except Exception:
+    except (OSError, ValueError, RuntimeError):
         pass
     return False
