@@ -48,12 +48,18 @@ Pipeline stoi od 25.05. Bez działającego agenta nie zbieramy danych do kalibra
 - [x] bankroll_history zachowana (archiwum historyczne)
 
 ### 12.5: Cloud Run env vars (BUG-2) — RĘCZNA AKCJA
-- [ ] W Cloud Console → Cloud Run → footstats-api → Edit → Variables:
-  - `FOOTSTATS_USER=<username>`
-  - `FOOTSTATS_PASSWORD_HASH=<bcrypt_hash>`
-- [ ] Zweryfikować: `curl https://<service-url>/health`
-- **Uwaga:** gcloud niedostępny lokalnie — wymaga Cloud Console lub ! gcloud run services update
-- **Effort:** 30 min
+- [ ] **Krok 1:** Wygeneruj bcrypt hash lokalnie:
+  ```
+  python -c "import bcrypt; print(bcrypt.hashpw(b'TWOJE_HASLO', bcrypt.gensalt()).decode())"
+  ```
+- [ ] **Krok 2:** GCP Console → Cloud Run → `footstats-api` → Edit & Deploy New Revision → Variables & Secrets
+- [ ] **Krok 3:** Dodaj zmienne środowiskowe:
+  - `FOOTSTATS_USER=Admin_JG` (lub inna nazwa)
+  - `FOOTSTATS_PASSWORD_HASH=<output z kroku 1>`
+- [ ] **Krok 4:** Deploy → zweryfikuj: `curl https://<service-url>/health` → `"auth": {"ok": true}`
+- **Dlaczego:** `seed_admin_user()` czyta te zmienne przy starcie → bez nich brak konta admina → brak loginu
+- **Alternatywa CLI:** `! gcloud run services update footstats-api --region=europe-west1 --set-env-vars="FOOTSTATS_USER=...,FOOTSTATS_PASSWORD_HASH=..."`
+- **Effort:** 15 min
 
 ---
 
