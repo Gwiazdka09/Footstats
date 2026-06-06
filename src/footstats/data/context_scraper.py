@@ -1,17 +1,9 @@
-import requests
-import re
 import json
 import logging
-import time
-from bs4 import BeautifulSoup
 from pathlib import Path
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 
 from footstats.utils.normalize import _norm_ascii
-
-# Załaduj .env
-load_dotenv()
 
 log = logging.getLogger(__name__)
 
