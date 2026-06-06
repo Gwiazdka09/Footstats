@@ -9,7 +9,12 @@ import requests
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta
 from pathlib import Path
-from bs4 import BeautifulSoup
+try:
+    from bs4 import BeautifulSoup
+    _BS4_OK = True
+except ImportError:
+    BeautifulSoup = None  # type: ignore[assignment, misc]
+    _BS4_OK = False
 from footstats.utils.normalize import normalize_team_name, team_similarity
 
 log = logging.getLogger(__name__)

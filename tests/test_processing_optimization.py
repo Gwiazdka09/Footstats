@@ -60,8 +60,8 @@ class TestOptimizeDtypes:
             "team_home": [f"Team_{i}" for i in range(100)],  # 100% unique
         })
         opt = optimize_dtypes(df)
-        # High cardinality stays object
-        assert opt["team_home"].dtype == "object" or opt["team_home"].dtype.name == "category"
+        # High cardinality stays object/str (pandas 2.x uses StringDtype)
+        assert opt["team_home"].dtype.name in ("object", "category", "str", "string")
 
     def test_preserves_int_columns(self):
         df = pd.DataFrame({

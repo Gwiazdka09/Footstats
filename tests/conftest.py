@@ -1,7 +1,29 @@
 """Fixtures wspólne dla wszystkich testów FootStats."""
+import os
 import pandas as pd
 import pytest
 from datetime import datetime, timedelta
+
+
+@pytest.fixture(autouse=True)
+def _patch_auth_db_when_no_database_url(monkeypatch):
+    """Patch get_user_by_username to use env vars when DATABASE_URL not set (CI)."""
+    if os.environ.get("DATABASE_URL"):
+        yield
+        return
+
+    import footstats.api.auth as _auth
+
+    pw_hash = os.environ.get("FOOTSTATS_PASSWORD_HASH", "")
+    admin_user = os.environ.get("FOOTSTATS_USER", "admin")
+
+    def _fake_get_user(username: str):
+        if username == admin_user and pw_hash:
+            return {"id": 1, "username": username, "password_hash": pw_hash, "is_admin": True}
+        return None
+
+    monkeypatch.setattr(_auth, "get_user_by_username", _fake_get_user)
+    yield
 
 
 @pytest.fixture(autouse=True)

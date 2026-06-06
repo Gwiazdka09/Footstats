@@ -67,11 +67,9 @@ def test_handles_apostrophe():
     assert "'" not in normalize_team_name("Borussia M'gladbach")
 
 def test_handles_saint_germain():
-    # Spacja, nie myślnik w znormalizowanej formie
+    # PSG is in team mapping → normalizes to "psg"
     result = normalize_team_name("Paris Saint-Germain")
-    assert "paris" in result
-    assert "saint" in result
-    assert "germain" in result
+    assert result == "psg"
 
 
 # ── Przypadki brzegowe ───────────────────────────────────────────────────

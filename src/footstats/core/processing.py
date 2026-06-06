@@ -41,8 +41,8 @@ def optimize_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     for col in df_opt.columns:
         dtype = df_opt[col].dtype
 
-        # Convert object (string) → category if <50% unique
-        if dtype == "object":
+        # Convert object/string → category if <50% unique (handles pandas StringDtype too)
+        if dtype == "object" or (hasattr(dtype, "name") and dtype.name in ("string", "str")):
             n_unique = df_opt[col].nunique()
             n_total = len(df_opt[col])
             cardinality = n_unique / n_total if n_total > 0 else 1.0

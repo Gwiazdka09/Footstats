@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 import numpy as np
 
+pytest.importorskip("sentence_transformers")
+
 from src.footstats.ai.rag_embeddings import EmbeddingStore, ensure_schema, backfill_embeddings
 
 

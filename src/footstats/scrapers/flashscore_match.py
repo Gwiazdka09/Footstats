@@ -11,7 +11,13 @@ import time
 import json
 import re
 from typing import Optional, Dict, List
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+try:
+    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    _PLAYWRIGHT_OK = True
+except ImportError:
+    sync_playwright = None  # type: ignore[assignment]
+    PWTimeout = Exception  # type: ignore[assignment, misc]
+    _PLAYWRIGHT_OK = False
 
 _UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -77,7 +83,7 @@ def scrape_flashscore_match_details(match_id: str) -> Dict:
 
             result["success"] = True
             browser.close()
-    except (PWTimeout, RuntimeError, AttributeError) as e:
+    except (PWTimeout, RuntimeError, AttributeError, TypeError) as e:
         logger.error(f"Error: {e}")
     return result
 
@@ -98,7 +104,7 @@ def search_flashscore_match_id(page, home: str, away: str):
             if away.lower()[:5] in row_text:
                 desc = l.get_attribute("aria-describedby")
                 if desc and desc.startswith("g_1_"): return desc.replace("g_1_", "")
-    except (PWTimeout, RuntimeError, AttributeError) as e: logger.warning(f"search_flashscore_match_id({home}, {away}): {e}")
+    except (PWTimeout, RuntimeError, AttributeError, TypeError) as e: logger.warning(f"search_flashscore_match_id({home}, {away}): {e}")
     return None
 
 def scrape_match_with_search(h, a):
@@ -109,7 +115,7 @@ def scrape_match_with_search(h, a):
             mid = search_flashscore_match_id(page, h, a)
             browser.close()
             if mid: return scrape_flashscore_match_details(mid)
-    except (PWTimeout, RuntimeError, AttributeError) as e: logger.error(f"scrape_match_with_search({h}, {a}): {e}")
+    except (PWTimeout, RuntimeError, AttributeError, TypeError) as e: logger.error(f"scrape_match_with_search({h}, {a}): {e}")
     return {"success": False}
 
 if __name__ == "__main__":

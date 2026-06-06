@@ -91,7 +91,10 @@ def _cache_set(klucz: str, dane):
 # ── Disk cache (API-Football, TTL 24h) ──────────────────────────────
 
 def _af_ensure_dir():
-    CACHE_DIR.mkdir(exist_ok=True)
+    try:
+        CACHE_DIR.mkdir(exist_ok=True)
+    except OSError:
+        pass
 
 def _af_load_disk_cache() -> dict:
     """Laduje caly plik cache z dysku."""
