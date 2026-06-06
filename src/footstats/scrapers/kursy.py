@@ -21,9 +21,12 @@ from datetime import datetime
 # Playwright musi być zainstalowany: pip install playwright && playwright install chromium
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    _PLAYWRIGHT_OK = True
 except ImportError:
     logger.info("BŁĄD: pip install playwright  następnie  playwright install chromium")
-    sys.exit(1)
+    sync_playwright = None  # type: ignore[assignment]
+    PWTimeout = Exception  # type: ignore[assignment, misc]
+    _PLAYWRIGHT_OK = False
 
 # ── Konfiguracja ─────────────────────────────────────────────────────
 HEADERS = {
@@ -93,6 +96,9 @@ def scrape_betexplorer(liga_slug: str = "premier-league", headless: bool = True)
         logger.info(f"[Scraper] Nieznana liga: {liga_slug}")
         logger.info(f"[Scraper] Dostępne: {', '.join(LIGI_BETEXPLORER.keys())}")
         return []
+
+    if not _PLAYWRIGHT_OK:
+        raise RuntimeError("playwright nie zainstalowany: pip install playwright && playwright install chromium")
 
     logger.info(f"[Scraper] Scrapuję: {url}")
     mecze = []
