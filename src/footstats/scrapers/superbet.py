@@ -203,8 +203,8 @@ def zaloguj(page) -> bool:
             page.screenshot(path="superbet_debug_login_fail.png")
         return True  # kontynuuj nawet jeśli nie pewne
 
-    except Exception as e:
-        logger.error(f"[Superbet] Blad logowania: {e}")  # noqa: broad-except
+    except (RuntimeError, AttributeError, OSError) as e:
+        logger.error(f"[Superbet] Blad logowania: {e}")
         return False
 
 

@@ -153,7 +153,7 @@ def _ai_blok_pewniaczki(wyniki_p: list):
             pg.add_task("", total=None)
             analiza = ai_analiza_pewniaczki(wyniki_p)
         _wyswietl_ai_pewniaczki(analiza)
-    except Exception as e:  # noqa: broad-except
+    except (ValueError, KeyError, RuntimeError, OSError) as e:
         console.print(f"[red]AI blad: {e}[/red]")
         return
 
@@ -188,7 +188,7 @@ def _ai_blok_pewniaczki(wyniki_p: list):
             border_style="cyan",
             padding=(1, 2),
         ))
-    except Exception as e:  # noqa: broad-except
+    except (ValueError, KeyError, RuntimeError, AttributeError) as e:
         console.print(f"[red]AI blad: {e}[/red]")
 
 
@@ -289,7 +289,7 @@ def _analiza_kuponu(bzzoiro):
                 a_b = str(ev.get("gosc", "") or "").strip().lower()
                 if g_b and a_b:
                     bzz_indeks[g_b + "|" + a_b] = ev
-        except Exception as ex:  # noqa: broad-except
+        except (ValueError, KeyError, RuntimeError, OSError, ConnectionError) as ex:
             console.print(f"[yellow]Bzzoiro: {ex}[/yellow]")
 
     TYP_MAP = {
@@ -937,7 +937,7 @@ def main():
                             _pg2.add_task("", total=None)
                             try:
                                 _kursy = _kursy_ai(g, a, _liga_slug)
-                            except Exception as _e:  # noqa: broad-except
+                            except (ValueError, KeyError, RuntimeError, OSError) as _e:
                                 console.print(f"[yellow]Kursy niedostępne: {_e}[/yellow]")
 
                     # Pobierz formę jako string
@@ -1032,7 +1032,7 @@ def main():
                         if _liga_slug_j:
                             try:
                                 _k = _kursy_ai(_g, _a, _liga_slug_j)
-                            except Exception:  # noqa: broad-except
+                            except (ValueError, KeyError, RuntimeError, OSError):
                                 pass
                         # Pobierz formę jako string
                         def _fstr(druz, n=5):
@@ -1067,7 +1067,7 @@ def main():
                             )
                             _pokaz_ai(_wyn)
                             _wyniki_ai_j.append(_wyn)
-                        except Exception as _e:  # noqa: broad-except
+                        except (ValueError, KeyError, RuntimeError, OSError) as _e:
                             console.print(f"  [red]Błąd AI dla {_g} vs {_a}: {_e}[/red]")
 
                     if _wyniki_ai_j:

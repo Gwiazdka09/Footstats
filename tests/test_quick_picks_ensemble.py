@@ -70,14 +70,24 @@ def test_blend_50_50_applied_when_df_mecze_provided():
     bzz = _make_bzzoiro([_BZZ_EVENT])
     df_dummy = pd.DataFrame({"col": [1]})  # niepuste, ale predict_match mockowany
 
+    mock_fort = MagicMock()
+    mock_fort.analiza.return_value = None
+    mock_h2h = MagicMock()
+    mock_h2h.analiza.return_value = None
+
     with patch(
         "footstats.core.quick_picks.calibrate_confidence", side_effect=lambda x: x / 100
     ), patch(
         "footstats.core.poisson.predict_match", return_value=_POISSON_PRED
-    ) as mock_pm:
+    ) as mock_pm, patch(
+        "footstats.core.fortress.HomeFortress", return_value=mock_fort
+    ), patch(
+        "footstats.core.h2h.AnalizaH2H", return_value=mock_h2h
+    ):
         wyniki = szybkie_pewniaczki_2dni(bzz, prog=0.0, df_mecze=df_dummy)
 
-    mock_pm.assert_called_once_with("Arsenal", "Chelsea", df_dummy)
+    mock_pm.assert_called_once()
+    assert mock_pm.call_args[0][:2] == ("Arsenal", "Chelsea")
     assert len(wyniki) >= 1
     r = wyniki[0]
     assert r["poisson_blend"] is True

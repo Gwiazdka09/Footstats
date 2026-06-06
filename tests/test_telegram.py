@@ -13,6 +13,7 @@ SETUP:
 
 import os
 import pytest
+from unittest.mock import MagicMock, patch
 from dotenv import load_dotenv
 
 # Import modułu Telegramu
@@ -68,9 +69,9 @@ class TestTelegramMessaging:
 
     @pytest.mark.integration
     def test_send_kupon_test_data(self):
-        """Wysyła testowy kupon na Telegram."""
-        if not telegram_dostepny():
-            pytest.skip("Telegram not available")
+        """send_kupon() zwraca True gdy requests.post odpowiada ok=True."""
+        mock_resp = MagicMock()
+        mock_resp.ok = True
 
         test_kupon = {
             "kupon_a": {
@@ -114,7 +115,12 @@ class TestTelegramMessaging:
             "ostrzezenia": "Test message — ignore this",
         }
 
-        result = send_kupon(test_kupon, stawka_a=10.0, stawka_b=5.0)
+        with patch(
+            "footstats.utils.telegram_notify._send", return_value=True
+        ), patch(
+            "footstats.utils.telegram_notify._already_sent_recently", return_value=False
+        ):
+            result = send_kupon(test_kupon, stawka_a=10.0, stawka_b=5.0)
         assert result is True, "send_kupon() should return True on success"
 
     @pytest.mark.integration

@@ -55,12 +55,10 @@ def _login(client) -> str:
     from footstats.utils.admin_user import get_operator_admin_username
 
     user = get_operator_admin_username()
-    password = os.getenv("FOOTSTATS_PASSWORD", "testpass")
-    if user == "admin":
-        password = "testpass"
+    password = os.getenv("FOOTSTATS_PASSWORD")
+    if not password:
+        raise RuntimeError("FOOTSTATS_PASSWORD env var not set")
     r = client.post("/api/auth/login", json={"username": user, "password": password})
-    if r.status_code != 200:
-        r = client.post("/api/auth/login", json={"username": "admin", "password": "testpass"})
     if r.status_code != 200:
         raise RuntimeError(f"Login failed: {r.status_code} {r.text}")
     _token_cache = r.json()["access_token"]

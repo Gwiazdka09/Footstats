@@ -150,7 +150,7 @@ def znajdz_url_meczu(page: Page, dom: str, gost: str) -> str | None:
             logger.info("[BB] Pierwszy wynik: %s", hrefs[0])
             return hrefs[0]
 
-    except Exception as e:
+    except (RuntimeError, AttributeError) as e:
         logger.warning("[BB] Błąd search: %s", e)
 
     logger.warning("[BB] Nie znaleziono: %s vs %s", dom, gost)
@@ -175,7 +175,7 @@ def pobierz_kursy_bb(page: Page, match_url: str) -> list[Typ]:
         page.goto(match_url, wait_until="domcontentloaded", timeout=20000)
         time.sleep(2)
         zamknij_popup(page, _CFG)
-    except Exception as e:
+    except (RuntimeError, AttributeError, TimeoutError) as e:
         logger.warning("[BB] Nawigacja do kursy nieudana: %s", e)
 
     # Direct API call
@@ -186,7 +186,7 @@ def pobierz_kursy_bb(page: Page, match_url: str) -> list[Typ]:
             logger.warning("[BB] API %d: %s", resp.status, api_url)
             return []
         data = resp.json()
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         logger.error("[BB] API call failed: %s", e)
         return []
 
@@ -258,7 +258,7 @@ def pobierz_bb_dla_meczow(
                 try:
                     wyniki[klucz] = pobierz_kursy_bb(page, match_url)
                     logger.info("[BB] %s → %d kursów", klucz, len(wyniki[klucz]))
-                except Exception as e:
+                except (RuntimeError, AttributeError, ValueError, KeyError) as e:
                     logger.error("[BB] Błąd %s: %s", klucz, e)
                     wyniki[klucz] = []
 

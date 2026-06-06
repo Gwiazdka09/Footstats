@@ -85,10 +85,10 @@ def _sofa_fetch(page, path: str) -> Optional[dict]:
         # JSON jest w <pre> lub bezpośrednio w body
         try:
             content = page.inner_text("pre")
-        except Exception:
+        except (ValueError, RuntimeError, AttributeError):
             content = page.evaluate("() => document.body.innerText")
         return json.loads(content)
-    except Exception as e:
+    except (json.JSONDecodeError, RuntimeError, OSError) as e:
         logger.info(f"[SofaScore] Wyjątek {path}: {e}")
         return None
 
@@ -205,7 +205,7 @@ def get_form_sofascore(team_id: int, team_name: str, page=None) -> dict:
                 ts = ev.get("startTimestamp", 0)
                 try:
                     date_str = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
-                except Exception:
+                except (ValueError, OSError, OverflowError):
                     date_str = "?"
 
                 result["matches"].append({
@@ -310,10 +310,10 @@ def get_form_flashscore(team_name: str, page=None) -> Optional[dict]:
                     "date": "?",
                 })
                 count += 1
-            except Exception:
+            except (KeyError, ValueError, TypeError, AttributeError):
                 continue
 
-    except Exception as e:
+    except (json.JSONDecodeError, RuntimeError, OSError) as e:
         logger.info(f"[FlashScore] Błąd: {e}")
         return None
     finally:

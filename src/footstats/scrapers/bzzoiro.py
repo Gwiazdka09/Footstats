@@ -48,7 +48,7 @@ class BzzoiroClient:
             else:
                 self._valid = False
                 return False, f"HTTP {r.status_code}"
-        except Exception as e:
+        except (requests.RequestException, ConnectionError) as e:
             self._valid = False
             return False, str(e)
 
@@ -72,7 +72,7 @@ class BzzoiroClient:
                     continue
                 logger.error(f"Bzzoiro HTTP {r.status_code} na {path}")
                 return None
-            except Exception as e:
+            except (requests.RequestException, ConnectionError) as e:
                 delay = 2 ** attempt
                 logger.error(f"Bzzoiro request error na {path} (próba {attempt+1}/3): {e}")
                 if attempt < 2:
@@ -150,7 +150,7 @@ class BzzoiroClient:
                 try:
                     mg, ma = mls_raw.split("-", 1)
                     mls = {"home": int(mg), "away": int(ma)}
-                except Exception:
+                except (ValueError, AttributeError):
                     mls = {"home": 1, "away": 0}
 
                 pred_ml = {
@@ -235,7 +235,7 @@ class BzzoiroClient:
                     + (f" [ALERT: roznica {r:.0f}%!]" if alert else "")
                 ),
             }
-        except Exception:
+        except (KeyError, ValueError, TypeError, AttributeError):
             return {"zgodnosc": None, "opis": "Bzzoiro: blad parsowania ML"}
 
 
