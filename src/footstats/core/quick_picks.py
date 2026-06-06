@@ -72,7 +72,7 @@ def szybkie_pewniaczki_2dni(
     console.print(f"[dim]🔍 Skanowanie Bzzoiro ML na {godziny}h...[/dim]")
     try:
         lista_ml = bzzoiro.predykcje_tygodnia()
-    except Exception as e:
+    except (RuntimeError, OSError, ValueError) as e:
         console.print(f"[red]Bzzoiro blad: {e}[/red]")
         return []
 

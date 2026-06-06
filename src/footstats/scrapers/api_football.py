@@ -84,7 +84,7 @@ class APIFootball:
             else:
                 self._valid = False
                 return False, f"HTTP {r.status_code}"
-        except Exception as e:
+        except (requests.RequestException, ValueError, KeyError) as e:
             self._valid = False
             return False, str(e)
 
@@ -177,7 +177,7 @@ class APIFootball:
             console.print("[yellow]API-Football: timeout – uzywam cache.[/yellow]")
             stare = _af_load_disk_cache().get(cache_key, {}).get("data")
             return stare
-        except Exception as e:
+        except (requests.RequestException, ValueError, KeyError) as e:
             console.print(f"[yellow]API-Football blad sieci: {e}[/yellow]")
             return None
 

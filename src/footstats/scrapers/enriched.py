@@ -197,7 +197,7 @@ def pobierz_konferencje(nazwa_druzyny: str) -> dict | None:
             }
             _cache_set(cache_key, wynik)
             return wynik
-    except Exception as e:
+    except (KeyError, ValueError, AttributeError) as e:
         logger.debug("Błąd pobierania konferencji prasowej: %s", e)
     return None
 
@@ -339,7 +339,7 @@ def enrich_match_data(team_home: str, team_away: str, match_date: str = None) ->
         try:
             wynik[key] = fn(team)
             logger.info(f"[Enriched] {key}: {'OK' if wynik[key] else 'brak'}")
-        except Exception as e:
+        except (KeyError, ValueError, AttributeError) as e:
             logger.info(f"[Enriched] {key}: błąd – {e}")
 
     logger.info("[Enriched] Gotowe.")

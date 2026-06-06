@@ -153,7 +153,7 @@ def run_api_check(check: str, cap_id: str, timeout_s: int = 60) -> RunResult:
             stdout_tail=check,
             stderr_tail="" if ok else f"check={check} failed",
         )
-    except Exception as exc:
+    except (RuntimeError, ValueError, KeyError) as exc:
         duration = time.monotonic() - t0
         log.exception("run_api_check %s", check)
         return RunResult(

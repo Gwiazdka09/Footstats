@@ -115,7 +115,7 @@ def _parse_matches_json(html: str) -> list[dict] | None:
         # Understat używa unicode escapes i odwróconych ukośników
         raw = raw.encode("utf-8").decode("unicode_escape")
         return json.loads(raw)
-    except Exception as e:
+    except (requests.RequestException, ValueError, KeyError) as e:
         _log.debug("Błąd parsowania matchesData: %s", e)
         return None
 
@@ -157,7 +157,7 @@ def fetch_team_xg(
             _log.warning("[Understat] HTTP %d dla %s", resp.status_code, url)
             return None
         html = resp.text
-    except Exception as e:
+    except (requests.RequestException, ValueError, KeyError) as e:
         _log.error("[Understat] Błąd HTTP: %s", e)
         return None
 

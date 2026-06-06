@@ -71,7 +71,7 @@ def validate_games(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
                 xg_a=row.get("xg_a"),
             )
             valid_records.append(rec.model_dump())
-        except Exception as exc:
+        except (OSError, ValueError, KeyError) as exc:
             error_msg = str(exc)
             logger.warning(f"[Data] Validation error row {idx}: {error_msg}")
             row_copy = row.to_dict()

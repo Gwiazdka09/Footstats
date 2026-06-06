@@ -166,10 +166,10 @@ def scrape_betexplorer(liga_slug: str = "premier-league", headless: bool = True)
                         "liga":      liga_slug,
                         "zrodlo":    "betexplorer",
                     })
-                except Exception:
+                except (json.JSONDecodeError, KeyError):
                     continue
 
-        except Exception as e:
+        except (json.JSONDecodeError, RuntimeError, OSError) as e:
             logger.info(f"[Scraper] Błąd: {e}")
         finally:
             browser.close()

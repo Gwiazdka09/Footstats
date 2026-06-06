@@ -135,7 +135,7 @@ async def async_retry(
             logger.warning(
                 f"[Async] Attempt {attempt + 1}/{max_retries} timeout ({timeout}s)"
             )
-        except Exception as exc:
+        except (RuntimeError, OSError, ValueError) as exc:
             last_exc = exc
             logger.warning(f"[Async] Attempt {attempt + 1}/{max_retries} failed: {exc}")
 

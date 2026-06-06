@@ -83,7 +83,7 @@ def fetch_referees_zawodtyper() -> None:
             
             logger.info(f"[ZawodTyper] Zaktualizowano pomyślnie {ref_count} sędziów z {len(tables)} lig.")
             
-    except Exception as e:
+    except (requests.RequestException, ValueError, RuntimeError) as e:
         logger.error(f"[ZawodTyper] Błąd scrape'owania: {e}")
 
 if __name__ == "__main__":

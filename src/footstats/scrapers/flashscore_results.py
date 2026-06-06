@@ -31,7 +31,7 @@ def get_match_result(
     """
     try:
         date_obj = datetime.fromisoformat(match_date)
-    except Exception:
+    except (json.JSONDecodeError, RuntimeError) as exc:
         log.warning("Niepoprawny format daty: %s", match_date)
         return None
 
@@ -91,12 +91,12 @@ def get_match_result(
                 data[key] = result
                 with open(cache_file, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2)
-            except Exception as e:
+            except (KeyError, ValueError, AttributeError) as e:
                 log.warning("Błąd zapisu cache: %s", e)
 
         return result
 
-    except Exception as e:
+    except (json.JSONDecodeError, RuntimeError, OSError) as e:
         log.error("Błąd scrapowania FlashScore (%s vs %s): %s", home_team, away_team, e)
         return None
 

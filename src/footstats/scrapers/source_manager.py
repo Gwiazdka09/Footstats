@@ -125,7 +125,7 @@ class SourceManager:
                 return False, "Nieprawidlowy klucz (403)"
             else:
                 return False, f"HTTP {r.status_code}"
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, KeyError) as e:
             return False, str(e)[:40]
 
     def dodaj_klucz_interaktywnie(self, env_name: str):

@@ -379,7 +379,7 @@ def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
             "partial": stats.get("partial", 0),
             "errors": stats.get("errors", 0),
         }
-    except Exception as e:
+    except (ValueError, KeyError, RuntimeError) as e:
         _log.error("cron_settle error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 

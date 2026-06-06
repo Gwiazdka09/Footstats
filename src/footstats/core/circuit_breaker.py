@@ -77,7 +77,7 @@ class CircuitBreaker:
                 return wynik
             except FootStatsCircuitOpenError:
                 raise
-            except Exception as exc:
+            except (RuntimeError, OSError, ValueError) as exc:
                 self._po_bledzie(exc)
                 raise
 

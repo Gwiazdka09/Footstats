@@ -171,7 +171,7 @@ def run_migrations() -> None:
                 if sql.strip() and not sql.strip().startswith("--"):
                     try:
                         conn.execute(sql)
-                    except Exception as e:
+                    except (RuntimeError, ValueError, KeyError) as e:
                         _log.warning("SQL ignored in %s (idempotent): %s", dialect, e)
             conn.execute(
                 "INSERT INTO schema_migrations (version, description) VALUES (?, ?)",

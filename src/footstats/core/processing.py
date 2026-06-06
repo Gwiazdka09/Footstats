@@ -99,7 +99,7 @@ def apply_chunked(df: pd.DataFrame, func, chunk_size: int = 1000, **kwargs):
         try:
             result = func(chunk, **kwargs)
             results.append(result)
-        except Exception as exc:
+        except (KeyError, ValueError, TypeError) as exc:
             logger.error(f"[Processing] Chunk {i} failed: {exc}")
 
     return results

@@ -132,7 +132,7 @@ def _parsuj_superoferta_1x2(btn, debug: bool = False) -> dict | None:
             "rodzaj":  "superoferta_1x2",
             "scraped": datetime.now().strftime("%Y-%m-%d %H:%M"),
         }
-    except Exception as e:
+    except (RuntimeError, AttributeError) as e:
         if debug:
             logger.info(f"  DBG ERR 1x2: {e}")
         return None
@@ -256,7 +256,7 @@ def pobierz_superoferty(debug: bool = False) -> list:
                         seen_mecze.add(klucz)
                         wyniki.append(wynik)
 
-        except Exception as e:
+        except (RuntimeError, AttributeError, ValueError) as e:
             logger.info(f"[SuperOferta] Błąd: {e}")
             if debug:
                 page.screenshot(path="superoferta_error.png")
@@ -283,7 +283,7 @@ def dodaj_ev_bzzoiro(oferty: list) -> list:
             return oferty
         mecze_bzz = klient.predykcje_tygodnia()
         logger.info(f"[EV] Bzzoiro: {len(mecze_bzz)} meczów")
-    except Exception as e:
+    except (RuntimeError, AttributeError, OSError) as e:
         logger.info(f"[EV] Błąd Bzzoiro: {e}")
         return oferty
 

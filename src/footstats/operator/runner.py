@@ -96,7 +96,7 @@ def run_capability(
             stderr_tail=f"Timeout after {cap.timeout_s}s",
             needs_cursor=True,
         )
-    except Exception as exc:
+    except (RuntimeError, OSError, ValueError) as exc:
         duration = time.monotonic() - t0
         log.exception("run_capability %s", cap.id)
         return RunResult(
