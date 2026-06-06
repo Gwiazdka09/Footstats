@@ -1,8 +1,8 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-03 (auto-audit)  
+**Last Updated:** 2026-06-06 (auto-audit)  
 **Current Version:** v3.4-stable  
-**Build Status:** ✅ OK — 0 SyntaxError, 0 null bytes  
+**Build Status:** ✅ OK — 0 SyntaxError (ast.parse), 0 null bytes  
 **System State:** FUNCTIONAL
 
 ---
@@ -11,17 +11,18 @@
 
 | Metric | Status | Value |
 |--------|--------|-------|
-| **Syntax** | ✅ OK | 0 SyntaxError w 80+ .py |
-| **Source Files** | ✅ | ~80 .py modules w src/footstats/ (22.5k LOC) |
-| **Tests** | ✅ | 67 test files w tests/ |
-| **AI Accuracy** | 🟡 | ~42.4% win rate — poniżej M1 target 55% |
-| **Automation** | ✅ | daily_agent.py OK |
-| **API** | ✅ | FastAPI + dashboard OK |
-| **DB** | ✅ | Neon PG (prod) + SQLite (backtest) |
+| **Syntax** | ✅ OK | 0 SyntaxError w 110+ .py (ast.parse OK) |
+| **Source Files** | ✅ | ~110 .py modules w src/footstats/ |
+| **Tests** | ✅ | 70 test files |
+| **AI Accuracy** | 🟡 | 26.7% live (15 kuponów Neon) — Faza 13 kalibracja pasywna |
+| **Automation** | ✅ | daily_agent.py + evening_agent.py OK |
+| **API** | ✅ | FastAPI + dashboard + MCP endpoint OK |
+| **DB** | ✅ | Neon PG (prod) + SQLite (backtest), pool maxconn=10 |
 | **Timeouts** | ✅ | Wszystkie requests.get/post mają timeout |
 | **Thread Safety** | ✅ | Lock w circuit_breaker, response_cache, lambda_optimizer |
 | **Ollama** | ✅ | qwen2.5:7b lokalny + Groq fallback |
-| **Security** | ✅ | Brak eval/pickle/os.system |
+| **Security** | ✅ | Brak eval/pickle/os.system, _exec w coupon_tracker to wrapper DB |
+| **Cache** | ✅ | response_cache: MAX_ENTRIES=500, eviction + TTL cleanup OK |
 
 ---
 
@@ -29,23 +30,24 @@
 
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
-| 1 | **160x `except Exception`** | 🟡 P2 | Top: base_playwright(14), analyzer(8), daily_agent(8), logging(7) |
-| 2 | **Accuracy 42.4%** | 🟡 P2 | Poniżej M1 target (55%) — wymaga pracy nad kalibracją |
-| 3 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1441), analyzer(1454), superbet(1128), cli(1112) |
-| 4 | **38 uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT |
-| 5 | **12 DAILY_ANALYSIS docs** | ⚪ P4 | docs/ — archiwizacja zalecana |
-| 6 | **Duplicate: validation_errors.csv** | ⚪ P4 | Duplikat w root i data/ — usunąć root |
-| 7 | **tests/scratch** | ⚪ P4 | Debug plik — do usunięcia |
-| 8 | **data/.fuse_hidden*** | ⚪ P4 | 3 orphan pliki FUSE — do usunięcia |
-| 9 | **11x conn.close() bez context manager** | 🟡 P3 | bankroll.py(6), json_export.py(2), coupon_tracker.py(1) |
+| 1 | **67x `except Exception`** | 🟡 P2 | Top: superbet(5), superbet_bb(4), flashscore_match(4), bzzoiro(4), backtest_engine(4), analyzer(4) |
+| 2 | **Accuracy 26.7% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 13 kalibracja pasywna |
+| 3 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1474), analyzer(1175), superbet(1128), cli(1112) |
+| 4 | **48 uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT |
+| 5 | **Duplicate: validation_errors.csv** | ⚪ P4 | Duplikat w root i data/ — usunąć root |
+| 6 | **footstats.log + validation_errors.csv** | ⚪ P4 | Dodać do .gitignore |
+| 7 | **smoke_api.py hardcoded "testpass"** | 🟡 P3 | Fallback password hardcoded — przenieść do env |
+| 8 | **11x __pycache__ w src/** | ⚪ P4 | Wyczyścić, upewnić się że w .gitignore |
+| 9 | **subprocess.Popen fire-and-forget (5x)** | ⚪ P4 | Brak monitoringu procesów potomnych |
 
 ---
 
 ## DEPLOYMENT STATUS
 
-- **Daily Agent**: ✅ OK (logi z 2026-05-25 — ostatni kupon wysłany)
-- **Dashboard**: ✅ OK
-- **API**: ✅ OK (auth + bankroll przywrócone)
+- **Daily Agent**: ✅ OK (checkpointy z 2026-06-06)
+- **Evening Agent**: ✅ OK
+- **Dashboard**: ✅ OK (Streamlit)
+- **API**: ✅ OK (FastAPI + auth + MCP)
 - **Pipeline**: ✅ OK (wymaga commit)
 - **Operator**: ✅ OK
 - **DB**: ✅ SQLite (dev) + PostgreSQL Neon (prod)
@@ -70,3 +72,8 @@
 | asyncio.get_event_loop() deprecated | ✅ FIXED | 05-29 |
 | 7x file truncation (05-31) | ✅ FIXED | 05-31 |
 | 4x file truncation (06-01) | ✅ FIXED | 06-01 |
+| 160→78→67 broad except | ✅ Reduced | 06-06 |
+| tests/scratch + data/.fuse_hidden | ✅ Cleaned | 06-03 |
+| Timeout audit (all requests covered) | ✅ Verified | 06-06 |
+| DB connections (all use context manager) | ✅ Verified | 06-06 |
+| Cache eviction (MAX_ENTRIES + TTL) | ✅ Verified | 06-06 |

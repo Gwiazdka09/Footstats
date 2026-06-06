@@ -72,3 +72,4 @@ venv/
 footstats.log
 
 footstats.log
+validation_errors.csv
