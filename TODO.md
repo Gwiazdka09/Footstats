@@ -43,8 +43,8 @@ Nie wymaga kodowania. Daily agent zbiera dane automatycznie.
 ## 🔧 TECH DEBT (do zrobienia przy okazji)
 
 ### TD1: Commit uncommitted changes (P1)
-- [ ] `git add -A && git commit -m "v3.4: daily sync"` — 48 zmienionych plików
-- **Effort:** 5 min
+- [x] Wszystko committed i pushed (commit 4c0a4ad6d)
+- **Effort:** 5 min ✅
 
 ### TD2: Naprawić 2 failing testy (P3)
 - [x] `test_quick_picks_ensemble::test_blend_50_50_applied` — naprawiony (mock HomeFortress/H2H)
@@ -52,10 +52,9 @@ Nie wymaga kodowania. Daily agent zbiera dane automatycznie.
 - **Effort:** 1–2h ✅
 
 ### TD3: Redukcja broad except (P2)
-- [x] cli.py 6x → specyficzne (ValueError, KeyError, RuntimeError, OSError)
-- [x] form_scraper.py 4x → (json.JSONDecodeError, RuntimeError, KeyError, ValueError, OSError)
-- [ ] Pozostałe pliki (~55x) — superbet_bb, flashscore_match, bzzoiro, backtest_engine, analyzer
-- **Effort:** 3–4h (częściowo done)
+- [x] cli.py 6x, form_scraper.py 4x, bzzoiro.py 4x, superbet.py 1x, superbet_bb.py 4x, flashscore_match.py 4x
+- [ ] Pozostałe (~37x) — backtest_engine, analyzer, pozostałe
+- **Effort:** ~2h pozostało
 
 ### TD4: Rozbicie dużych plików (P3)
 - [ ] daily_agent.py (1474 LOC) → wydzielić kroki do osobnych modułów
@@ -71,8 +70,8 @@ Nie wymaga kodowania. Daily agent zbiera dane automatycznie.
 - **Effort:** 1 min ✅
 
 ### TD7: smoke_api.py hardcoded password (P3)
-- [ ] Usunąć fallback `password = "testpass"` — używać tylko env var
-- **Effort:** 10 min
+- [x] Usunięto testpass fallback, RuntimeError gdy brak FOOTSTATS_PASSWORD
+- **Effort:** 10 min ✅
 
 ### TD8: Wyczyścić __pycache__ (P4)
 - [ ] `find src/ -name __pycache__ -exec rm -rf {} +` — 11 katalogów
