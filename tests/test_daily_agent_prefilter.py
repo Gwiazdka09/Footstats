@@ -9,49 +9,67 @@ from footstats.daily_agent import (
 )
 
 
-BLACKLIST = {"Ligue 1", "MLS", "Saudi Pro League"}
-
-
 # ── _pre_filtruj_ligi ─────────────────────────────────────────────────────
 
-def test_ligi_blacklisted_removed():
+def test_ligi_friendlies_removed():
     kandydaci = [
-        {"liga": "Ligue 1", "gospodarz": "PSG"},
+        {"liga": "Friendlies International", "gospodarz": "Haiti"},
         {"liga": "Bundesliga", "gospodarz": "Bayern"},
     ]
-    with patch("footstats.config.LIGI_BLACKLIST", BLACKLIST):
-        result = _pre_filtruj_ligi(kandydaci)
+    result = _pre_filtruj_ligi(kandydaci)
     assert len(result) == 1
     assert result[0]["liga"] == "Bundesliga"
 
 
+def test_ligi_afc_removed():
+    kandydaci = [{"liga": "AFC Asian Qualifiers", "gospodarz": "Singapore"}]
+    result = _pre_filtruj_ligi(kandydaci)
+    assert result == []
+
+
+def test_ligi_concacaf_removed():
+    kandydaci = [{"liga": "CONCACAF Nations League", "gospodarz": "Mexico"}]
+    result = _pre_filtruj_ligi(kandydaci)
+    assert result == []
+
+
+def test_ligi_copa_america_removed():
+    kandydaci = [{"liga": "Copa America", "gospodarz": "Argentina"}]
+    result = _pre_filtruj_ligi(kandydaci)
+    assert result == []
+
+
+def test_ligi_known_good_kept():
+    kandydaci = [
+        {"liga": "Premier League", "gospodarz": "Arsenal"},
+        {"liga": "PKO BP Ekstraklasa", "gospodarz": "Lech"},
+        {"liga": "Bundesliga", "gospodarz": "Bayern"},
+        {"liga": "Eredivisie", "gospodarz": "Ajax"},
+    ]
+    result = _pre_filtruj_ligi(kandydaci)
+    assert len(result) == 4
+
+
 def test_ligi_empty_liga_kept():
     kandydaci = [{"liga": "", "gospodarz": "Bayern"}]
-    with patch("footstats.config.LIGI_BLACKLIST", BLACKLIST):
-        result = _pre_filtruj_ligi(kandydaci)
+    result = _pre_filtruj_ligi(kandydaci)
     assert len(result) == 1
 
 
 def test_ligi_missing_liga_key_kept():
     kandydaci = [{"gospodarz": "Bayern"}]
-    with patch("footstats.config.LIGI_BLACKLIST", BLACKLIST):
-        result = _pre_filtruj_ligi(kandydaci)
+    result = _pre_filtruj_ligi(kandydaci)
     assert len(result) == 1
 
 
-def test_ligi_all_blacklisted():
-    kandydaci = [
-        {"liga": "Ligue 1"},
-        {"liga": "MLS"},
-    ]
-    with patch("footstats.config.LIGI_BLACKLIST", BLACKLIST):
-        result = _pre_filtruj_ligi(kandydaci)
-    assert result == []
-
-
 def test_ligi_empty_input():
-    with patch("footstats.config.LIGI_BLACKLIST", BLACKLIST):
-        assert _pre_filtruj_ligi([]) == []
+    assert _pre_filtruj_ligi([]) == []
+
+
+def test_ligi_keyword_case_insensitive():
+    kandydaci = [{"liga": "FRIENDLIES INTERNATIONAL", "gospodarz": "X"}]
+    result = _pre_filtruj_ligi(kandydaci)
+    assert result == []
 
 
 # ── _pre_filtruj_kursy ────────────────────────────────────────────────────
@@ -69,13 +87,13 @@ def test_kursy_out_of_range_removed():
 
 
 def test_kursy_no_odds_kept():
-    kandydaci = [{"gospodarz": "Bayern"}]  # no 'odds' field
+    kandydaci = [{"gospodarz": "Bayern"}]
     result = _pre_filtruj_kursy(kandydaci)
     assert len(result) == 1
 
 
 def test_kursy_mixed_values_kept_if_one_valid():
-    kandydaci = [{"odds": {"1": 0.5, "2": 2.0}}]  # 2.0 valid
+    kandydaci = [{"odds": {"1": 0.5, "2": 2.0}}]
     result = _pre_filtruj_kursy(kandydaci)
     assert len(result) == 1
 

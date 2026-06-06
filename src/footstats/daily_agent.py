@@ -918,13 +918,20 @@ def _pre_filtruj_value_bet(kandydaci: list[dict]) -> list[dict]:
 
 
 def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
-    """Odrzuca kandydatów z lig w LIGI_BLACKLIST (udowodniony brak edge)."""
-    from footstats.config import LIGI_BLACKLIST
+    """Odrzuca kandydatów z lig bez danych Poissona (towarzyskie, Afryka, Azja, CONCACAF)."""
+    from footstats.config import LIGI_WHITELIST, LIGI_BLACKLIST_KEYWORDS
     wynik = []
     for k in kandydaci:
         liga = (k.get("liga") or "").strip()
-        if liga and liga in LIGI_BLACKLIST:
+        liga_lower = liga.lower()
+        # Odrzuć po słowach kluczowych (towarzyskie, Africa, AFC, CONCACAF...)
+        if any(kw.lower() in liga_lower for kw in LIGI_BLACKLIST_KEYWORDS):
             continue
+        # Przyjmij jeśli na whitelist
+        if liga in LIGI_WHITELIST:
+            wynik.append(k)
+            continue
+        # Przyjmij jeśli liga nieznana (nie blokuj — może być Ekstraklasa z inną nazwą)
         wynik.append(k)
     return wynik
 
@@ -1374,8 +1381,13 @@ def main():
         if zdarzenia_db:
             # Sprawdzenie decision_score PRZED zapisem
             avg_score = int(sum(z.get("decision_score", 0) for z in zdarzenia_db) / max(len(zdarzenia_db), 1))
-            from footstats.core.decision_score import PROG_FINAL, PROG_DRAFT
-            threshold = PROG_FINAL if args.faza == "final" else PROG_DRAFT
+            from footstats.core.decision_score import PROG_FINAL, PROG_DRAFT, PROG_DRAFT_FALLBACK
+            if args.faza == "final":
+                threshold = PROG_FINAL
+            elif len(zdarzenia_db) < 3:
+                threshold = PROG_DRAFT_FALLBACK  # mało kandydatów → łagodniejszy próg
+            else:
+                threshold = PROG_DRAFT
 
             if avg_score < threshold:
                 console.print(

@@ -112,8 +112,8 @@ def test_perfect_candidate_scores_80_in_draft():
 
 
 def test_is_go_draft_threshold():
-    assert is_go(40, "draft") is True
-    assert is_go(39, "draft") is False
+    assert is_go(50, "draft") is True
+    assert is_go(49, "draft") is False
 
 
 def test_is_go_final_threshold():

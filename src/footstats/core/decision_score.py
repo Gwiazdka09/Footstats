@@ -12,10 +12,11 @@ Kryteria i punkty:
     Kluczowi zawodnicy w składzie   +10
     Sędzia neutralny                +10
 
-Progi: draft >= 40 | final >= 60
+Progi: draft >= 50 | final >= 60 | fallback draft >= 40 gdy < 3 kandydatow
 """
 
-PROG_DRAFT = 40
+PROG_DRAFT = 50
+PROG_DRAFT_FALLBACK = 40  # gdy za malo kandydatow
 PROG_FINAL = 60
 
 

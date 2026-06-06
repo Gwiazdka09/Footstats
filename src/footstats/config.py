@@ -71,24 +71,51 @@ LIGI_POISSON_TOP5: dict[str, str] = {
     "I1":  "ITA-Serie A",
 }
 
-# ── P7.2: Liga Edge Filter ───────────────────────────────────────────────────
-# Based on accuracy_report: whitelist = hit-rate > 55%, blacklist = hit-rate < 30%
+# ── Liga Edge Filter ─────────────────────────────────────────────────────────
+# Ligi z danymi Poissona (Understat top-5 + Ekstraklasa + inne z historią)
 LIGI_WHITELIST: frozenset[str] = frozenset({
-    "Brasileirao Serie A",
-    "PKO BP Ekstraklasa",
-    "Ekstraklasa",
+    "Premier League", "ENG-Premier League",
+    "La Liga", "ESP-La Liga",
+    "Bundesliga", "GER-Bundesliga",
+    "Ligue 1", "FRA-Ligue 1",
+    "Serie A", "ITA-Serie A",
+    "PKO BP Ekstraklasa", "Ekstraklasa",
+    "Eredivisie",
     "Primeira Liga",
-})
-
-LIGI_BLACKLIST: frozenset[str] = frozenset({
-    "Ligue 1",
-    "Serie A",
+    "Jupiler Pro League",
+    "Super Lig",
     "Championship",
+    "Serie B",
+    "Brasileirao Serie A",
     "Liga MX",
-    "Pro League",
 })
 
-# Jeśli True, daily_agent odrzuca mecze z LIGI_BLACKLIST przed Groq
+# Słowa kluczowe → odrzuć nawet jeśli liga nie jest w blackliście
+LIGI_BLACKLIST_KEYWORDS: tuple[str, ...] = (
+    "friendl",          # Friendlies International, Friendly
+    "towarzysk",        # polskie towarzyskie
+    "Africa Cup",
+    "AFCON",
+    "CAF",
+    "AFC Asian",
+    "AFC Qual",
+    "CONCACAF",
+    "Gold Cup",
+    "Copa America",     # bez danych historycznych
+    "Nations League A", # tylko jeśli nie mamy danych
+    "World Cup Qual",
+    "WC Qual",
+    "Oceania",
+    "OFC",
+    "COSAFA",
+    "CECAFA",
+    "WAFU",
+    "UNAF",
+    "AFF",              # ASEAN Football Federation
+    "SAFF",             # South Asian
+)
+
+# Jeśli True, daily_agent odrzuca mecze bez danych Poissona
 LIGA_FILTER_ENABLED: bool = True
 
 # Klucze .env – nazwy zmiennych srodowiskowych
