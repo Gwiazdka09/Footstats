@@ -161,6 +161,8 @@ tests/test_form_analysis.py
 tests/test_h2h_classifier.py
 tests/test_health.py
 tests/test_helpers.py
+tests/test_integration_daily_pipeline.py
+tests/test_integration_evening_pipeline.py
 tests/test_kelly.py
 tests/test_lineup_scraper.py
 tests/test_metrics_middleware.py

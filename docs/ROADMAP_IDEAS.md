@@ -136,6 +136,61 @@
 
 ---
 
+---
+
+## 🧠 POMYSŁY — AI / MODEL
+
+### 19. Personalizowany scoring per użytkownik
+- Każdy użytkownik ma historię trafień → fine-tune wag dla jego profilu
+- Aggressive user: wyższy próg odds, Conservative: niższy
+- **Effort:** 1 tydzień
+
+### 20. Sentiment analysis z social media
+- Twitter/X scraper dla top meczów → sentyment kibiców vs model
+- Kontrarian sygnał: gdy 80% kibiców obstawia drużynę A → model ważniejszy
+- **Effort:** 3–5 dni
+
+### 21. Pogoda jako feature
+- API pogodowe → deszcz/wiatr zmniejsza liczbę goli (Under 2.5 bias)
+- Sprawdzone w badaniach: deszcz przy >10mm/h zmniejsza gole o ~8%
+- **Effort:** 1–2 dni
+
+### 22. Forma sędziego jako feature
+- Mamy referee_db → dodaj: srednia żółtych/czerwonych, faule na mecz
+- Surowy sędzia + grający styl → więcej przerw → mniej goli
+- **Effort:** 2–3h (dane już w bazie, brakuje integracji z scoring)
+
+### 23. Expected Points (xPTS) zamiast win rate
+- Win rate fluktuuje mocno przy małej próbce
+- xPTS mierzy długoterminowy edge lepiej (jak CLV)
+- **Effort:** 1–2 dni
+
+---
+
+## 🔒 BEZPIECZEŃSTWO / INFRASTRUKTURA
+
+### 24. Rate limiting na API endpoints
+- Teraz brak — można spamować `/api/predict`
+- FastAPI middleware: max 10 req/min per IP/token
+- **Effort:** 2h
+
+### 25. Audit log dla zmian statusu kuponów
+- Kto i kiedy zmienił ACTIVE → VOID/WON/LOSE
+- Tabela `coupon_audit_log` z user_id + timestamp + old_status + new_status
+- **Effort:** 2–3h
+
+### 26. Health check monitoring zewnętrzny
+- UptimeRobot lub BetterUptime pinguje `/health` co 5 min
+- Alert na email/Telegram gdy down
+- **Effort:** 30 min (konfiguracja zewnętrznego serwisu)
+
+### 27. Backup bazy danych
+- Neon.tech ma wbudowane backupy, ale warto mieć własny cron
+- `pg_dump` raz dziennie → Google Drive lub S3
+- **Effort:** 1–2h
+
+---
+
 ## Notatki / Odrzucone pomysły
 
 - **Arbitraż** — wymaga kont u wielu bukmacherów równocześnie, limity kont; poza scopem
