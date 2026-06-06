@@ -873,68 +873,10 @@ def _zapisz_next_final_txt(wyniki: list) -> None:
 
 # ── Nowe: fazy i decision score ────────────────────────────────────────────
 
-def _pre_filtruj_kursy(kandydaci: list[dict]) -> list[dict]:
-    """
-    Pre-filtr kursów (przed Groq): odrzuca kandydatów bez żadnego kursu w 1.15–15.0.
-    Cel: mniej tokenów do Groq, szybsze i tańsze uruchamianie.
-    Kandydaci bez pola 'odds' (np. z API-Football) są zawsze zachowywani.
-    """
-    MIN_KURS, MAX_KURS = 1.15, 15.0
-    wynik = []
-    for k in kandydaci:
-        odds_dict = k.get("odds") or {}
-        if not odds_dict:
-            wynik.append(k)  # brak danych → zostaw
-            continue
-        wartosci = [v for v in odds_dict.values() if isinstance(v, (int, float)) and v > 0]
-        if any(MIN_KURS <= v <= MAX_KURS for v in wartosci):
-            wynik.append(k)
-    return wynik
-
-
-def _pre_filtruj_tokenow(kandydaci: list[dict]) -> list[dict]:
-    """
-    Walidacja zabezpieczająca tokeny: odrzuca mecze bez pełnej nazwy drużyny 
-    lub przypisanej ligi. Zapobiega to marnowaniu zapytań do gorszych lig/braków danych.
-    """
-    wynik = []
-    for k in kandydaci:
-        gospodarz = k.get("gospodarz") or k.get("home", "")
-        goscie = k.get("goscie") or k.get("away", "")
-        liga = k.get("liga", "")
-        
-        if gospodarz and str(gospodarz).strip() and goscie and str(goscie).strip() and liga and str(liga).strip():
-            wynik.append(k)
-    return wynik
-
-
-
-def _pre_filtruj_value_bet(kandydaci: list[dict]) -> list[dict]:
-    """Odrzuca kandydatów bez edge: EV < 3% lub Kelly < 1% (tylko gdy odds dostępne)."""
-    from footstats.core.value_bet import filter_value_bets
-    from footstats.core.probability_calibrator import calibrate_candidates
-    calibrate_candidates(kandydaci)
-    return filter_value_bets(kandydaci)
-
-
-def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
-    """Odrzuca kandydatów z lig bez danych Poissona (towarzyskie, Afryka, Azja, CONCACAF)."""
-    from footstats.config import LIGI_WHITELIST, LIGI_BLACKLIST_KEYWORDS
-    wynik = []
-    for k in kandydaci:
-        liga = (k.get("liga") or "").strip()
-        liga_lower = liga.lower()
-        # Odrzuć po słowach kluczowych (towarzyskie, Africa, AFC, CONCACAF...)
-        if any(kw.lower() in liga_lower for kw in LIGI_BLACKLIST_KEYWORDS):
-            continue
-        # Przyjmij jeśli na whitelist
-        if liga in LIGI_WHITELIST:
-            wynik.append(k)
-            continue
-        # Przyjmij jeśli liga nieznana (nie blokuj — może być Ekstraklasa z inną nazwą)
-        wynik.append(k)
-    return wynik
-
+from footstats.core.daily_filters import (
+    _pre_filtruj_kursy, _pre_filtruj_tokenow,
+    _pre_filtruj_value_bet, _pre_filtruj_ligi,
+)
 
 def _ocen_zdarzenia_decision_score(dane: dict, phase: str = "draft") -> None:
     """
@@ -1019,110 +961,7 @@ def _filtruj_przez_decision_score(
     return wynik
 
 
-def _zapisz_kupon_do_db(
-    kandydaci: list[dict],
-    phase: str,
-    groq_resp: str | None,
-    stake: float,
-    total_odds: float,
-) -> int | None:
-    """
-    Zapisuje kupon do SQLite coupon_tracker. Zwraca coupon_id lub None.
-
-    DRAFT → nowy rekord status=DRAFT.
-    FINAL → szuka dzisiejszego DRAFT i promuje do ACTIVE;
-            jeśli brak DRAFT — tworzy nowy rekord (fallback).
-    """
-    try:
-        from footstats.core.coupon_tracker import (
-            save_coupon, init_coupon_tables,
-            get_draft_today, promote_to_active
-        )
-        from footstats.core.bankroll import process_bet, get_current_bankroll
-        from footstats.utils.admin_user import resolve_admin_user_id
-
-        admin_uid = resolve_admin_user_id()
-        init_coupon_tables()
-        current_bankroll = get_current_bankroll(user_id=admin_uid)
-        
-        def _parse_home_away(k: dict) -> tuple[str, str]:
-            """Wyciąga home/away: wprost z pól lub przez split 'mecz'."""
-            home = k.get("gospodarz") or k.get("home", "")
-            away = k.get("goscie")    or k.get("away", "")
-            if not home and not away:
-                mecz = k.get("mecz", "")
-                if " vs " in mecz:
-                    parts = mecz.split(" vs ", 1)
-                    home, away = parts[0].strip(), parts[1].strip()
-                elif " - " in mecz:
-                    parts = mecz.split(" - ", 1)
-                    home, away = parts[0].strip(), parts[1].strip()
-            return home, away
-
-        legs = []
-        for k in kandydaci:
-            home, away = _parse_home_away(k)
-            legs.append({
-                "home":           home,
-                "away":           away,
-                "tip":            k.get("typ") or k.get("tip", ""),
-                "odds":           k.get("kurs", 1.0),
-                "decision_score": k.get("decision_score", 0),
-                "mecz":           k.get("mecz", f"{home} vs {away}"),
-            })
-        from datetime import datetime as _dt
-        match_date = _dt.now().strftime("%Y-%m-%d")
-        avg_score = int(sum(k.get("decision_score", 0) for k in kandydaci) / max(len(kandydaci), 1))
-
-        if phase == "final":
-            draft_row = get_draft_today(user_id=admin_uid)
-            if draft_row:
-                try:
-                    promote_to_active(
-                        coupon_id=draft_row["id"],
-                        legs=legs,
-                        groq_reasoning=groq_resp or "",
-                        decision_score=avg_score,
-                        total_odds=round(total_odds, 2),
-                    )
-                    console.print(f"[green]Kupon #{draft_row['id']} DRAFT → ACTIVE[/green]")
-                    return draft_row["id"]
-                except (RuntimeError, ValueError, KeyError) as promo_err:
-                    console.print(
-                        f"[red]BŁĄD promote_to_active(#{draft_row['id']}): {promo_err}"
-                        f" — tworzę nowy kupon ACTIVE jako fallback[/red]"
-                    )
-            else:
-                console.print("[yellow]Brak dzisiejszego DRAFT — tworzę nowy kupon ACTIVE[/yellow]")
-
-        cid = save_coupon(
-            phase=phase,
-            kupon_type="A",
-            legs=legs,
-            total_odds=round(total_odds, 2),
-            stake_pln=stake,
-            groq_reasoning=groq_resp or "",
-            decision_score=avg_score,
-            match_date_first=match_date,
-            user_id=admin_uid,
-        )
-
-        # Faza final: save_coupon tworzy DRAFT — od razu promuj do ACTIVE
-        if cid and phase == "final":
-            from footstats.core.coupon_tracker import update_coupon_status, STATUS_ACTIVE
-            update_coupon_status(cid, STATUS_ACTIVE)
-            console.print(f"[green]Kupon #{cid} → ACTIVE[/green]")
-
-        if cid and stake > 0:
-            process_bet(stake, f"Kupon A ID={cid} ({phase})", user_id=admin_uid)
-
-        return cid
-    except (ValueError, KeyError, TypeError, OSError) as e:
-        import traceback
-        console.print(f"[red]BŁĄD _zapisz_kupon_do_db [{phase}]: {e}[/red]")
-        console.print(f"[dim]{traceback.format_exc()}[/dim]")
-        return None
-
+from footstats.core.daily_io import _zapisz_kupon_do_db
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="FootStats Daily Agent")

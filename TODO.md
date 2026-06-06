@@ -53,15 +53,12 @@
 
 ## 🔧 TECH DEBT
 
-### TD3: Redukcja broad except (P2)
-- [x] cli.py 6x, form_scraper.py 4x, bzzoiro.py 4x, superbet.py 1x, superbet_bb.py 4x, flashscore_match.py 4x
-- [ ] Pozostałe ~25x: circuit_breaker, async_utils, api_football, enriched, flashscore_results, understat_xg, superoferta, kursy, migrations, runner, smoke_api
-- **Effort:** ~2h
+### ~~TD3~~ — ✅ DONE
+- superbet.py 4x narrowed; pozostałe pliki z listy były już czyste lub justified noqa
 
-### TD4: Rozbicie dużych plików (P3)
-- [ ] `daily_agent.py` (1474 LOC) → wydzielić kroki do osobnych modułów
-- [ ] `analyzer.py` (1175 LOC) → wydzielić helpery
-- **Effort:** 4–6h
+### ~~TD4~~ — ✅ DONE
+- `daily_agent.py` 1486→1325 LOC: filtry→`core/daily_filters.py`, zapis DB→`core/daily_io.py`
+- `analyzer.py` 1175→959 LOC: helpery→`ai/analyzer_helpers.py`
 
 ### ~~TD1~~ ~~TD2~~ ~~TD5~~ ~~TD6~~ ~~TD7~~ ~~TD8~~ — ✅ DONE
 

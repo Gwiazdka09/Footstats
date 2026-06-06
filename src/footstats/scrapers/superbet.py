@@ -299,7 +299,7 @@ def pobierz_kupony_api(page, max_kupony: int = 50) -> list:
                 logger.info(f"[API] Sparsowano {n} kuponow z {url}")
                 return kupony_znalezione[:max_kupony]
 
-        except Exception as e:  # noqa: broad-except
+        except (PWTimeout, PWError, ValueError, KeyError, OSError) as e:
             logger.error(f"[API] Blad dla {url}: {e}")
 
     # Nic nie znaleziono — zapisz dump do diagnozy
@@ -615,7 +615,7 @@ def pobierz_typerzy(page, max_typerzy: int = 30) -> list:
                 logger.info(f"[Superbet] Brak linków profili na {social_url}")
                 continue  # spróbuj kolejny URL
 
-        except Exception as e:  # noqa: broad-except
+        except (PWTimeout, PWError, RuntimeError) as e:
             logger.error(f"[Superbet] Blad dla {social_url}: {e}")
             continue
 
@@ -735,7 +735,7 @@ def pobierz_kupony_typera(page, typer: dict) -> list:
             if kupon:
                 kupony.append(kupon)
 
-    except Exception as e:  # noqa: broad-except
+    except (PWTimeout, PWError, RuntimeError) as e:
         logger.error(f"  [{nick}] Blad: {e}")
 
     return kupony
@@ -1071,7 +1071,7 @@ def main():
                     wszystkie_kupony.extend(kupony)
                     logger.info(f"  Zebrano {len(kupony)} kuponów")
 
-        except Exception as e:  # noqa: broad-except
+        except (PWTimeout, PWError, RuntimeError) as e:
             logger.error(f"[Superbet] Blad glowny: {e}")
             if debug:
                 page.screenshot(path="superbet_error.png")

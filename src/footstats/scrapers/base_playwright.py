@@ -113,7 +113,7 @@ def retry_with_backoff(
     for attempt in range(max_retries):
         try:
             return fn(*args, **kwargs)
-        except Exception as exc:  # noqa: broad-except
+        except Exception as exc:  # noqa: broad-except — retry wrapper must catch any callable exception
             last_exc = exc
             if attempt < max_retries - 1:
                 delay = base_delay * (2 ** attempt)
