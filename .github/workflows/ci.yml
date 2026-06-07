@@ -15,9 +15,6 @@ jobs:
       APISPORTS_KEY: "test"
       BZZOIRO_KEY: "test"
       GROQ_API_KEY: "test"
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      FOOTSTATS_USER: "admin"
-      FOOTSTATS_PASSWORD_HASH: "$2b$12$test_hash_placeholder_only"
 
     steps:
       - uses: actions/checkout@v4

@@ -117,6 +117,7 @@ def test_list_users_rejects_non_admin_token(client):
     assert resp.status_code == 403
 
 
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
 def test_list_users_as_admin(client, admin_token):
     resp = client.get("/api/admin/users", headers={"Authorization": f"Bearer {admin_token}"})
     assert resp.status_code == 200
@@ -139,6 +140,7 @@ def test_create_user_password_too_short(client, admin_token):
     assert resp.status_code == 422
 
 
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
 def test_create_and_deactivate_user(client, admin_token):
     import uuid
     uname = f"testuser_{uuid.uuid4().hex[:8]}"

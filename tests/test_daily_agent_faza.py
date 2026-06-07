@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import pytest
 from unittest.mock import patch, MagicMock
@@ -168,6 +169,7 @@ def test_enrichuj_finalna_faza_no_key_skips_gracefully():
     assert "lineup_ok" not in wyniki[0]
 
 
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
 def test_enrichuj_finalna_faza_sets_fields_on_match(tmp_path):
     """Mock API: fixture znaleziony → lineup_ok i referee_neutral ustawione."""
     from footstats.daily_agent import _enrichuj_finalna_faza

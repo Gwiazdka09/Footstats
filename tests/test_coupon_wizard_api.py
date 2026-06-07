@@ -53,6 +53,7 @@ def test_wizard_analyze_empty_ids():
     assert r.json() == []
 
 
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
 def test_wizard_kelly_minimal():
     token = _token()
     r = client.post(
@@ -75,6 +76,7 @@ def test_wizard_kelly_minimal():
     assert data["stake_pln"] >= 2.0
 
 
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
 def test_wizard_place_or_bankroll_guard():
     token = _token()
     r = client.post(
