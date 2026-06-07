@@ -69,33 +69,31 @@
 
 ---
 
-## ⚪ FAZA 15: NOWE FEATURE'Y (po M1=55%)
+## ⚪ FAZA 15: NOWE FEATURE'Y
 
-### 15.1: Stop-loss mechanizm
-- [ ] Auto-pause gdy strata > 20% bankrollu w ciągu 7 dni
-- [ ] Telegram alert + status `PAUSED` + wznowienie przez dashboard
-- **Effort:** 3–4h
+### ~~15.1~~ — ✅ DONE
+- `data/agent_state.json` pause flag; `is_agent_paused`, `set_agent_paused`, `check_and_auto_pause` w bankroll.py
+- daily_agent: check na starcie + auto-pause + Telegram `send_stop_loss_alert`
+- dashboard: PAUSED status, drawdown metric, Resume/Pause buttons
 
-### 15.2: CLV tracking (Closing Line Value)
-- [ ] Porównaj kurs obstawiania vs kurs zamknięcia
-- [ ] Kolumny w tabeli `predictions` już przygotowane
-- **Effort:** 3–5h
+### ~~15.2~~ — ✅ DONE (było wcześniej)
+- `clv_tracker.py` + evening_agent `record_closing_odds` + dashboard CLV section
 
 ### 15.3: Odds comparison — STS/Fortuna/LV BET
 - [ ] Playwright login → porównaj kursy, wybierz najwyższy
-- **Effort:** 1–2 tygodnie
+- **Effort:** 1–2 tygodnie | ⏸️ odkładamy
 
-### 15.4: Dashboard UX v2
-- [ ] Filtrowanie po lidze/dacie/typie, accuracy per liga, bankroll chart
-- **Effort:** 1–2 dni
+### ~~15.4~~ — ✅ DONE
+- Sidebar filtry liga + typ zakładu (multiselect) — `dashboard.py`
+- accuracy per liga, bankroll chart, CLV — były wcześniej
 
-### 15.5: Telegram komendy interaktywne
-- [ ] `/status`, `/kupon`, `/void <id>`, `/stats`
-- **Effort:** 4–6h
+### ~~15.5~~ — ✅ DONE
+- `telegram_bot.py` — raw HTTP polling, /status /kupon /void /stats /help
+- Uruchomienie: `python -m footstats.telegram_bot`
 
 ### 15.6: Multi-user support
 - [ ] Per-user bankroll, risk profile, Telegram chat_id
-- **Effort:** 3–5 dni
+- **Effort:** 3–5 dni | ⏸️ po M1
 
 ---
 

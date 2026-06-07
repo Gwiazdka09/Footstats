@@ -3,9 +3,14 @@ bankroll.py – Zarządzanie kapitałem (Bankroll Management) dla FootStats.
 Obsługuje trwałość salda w SQLite oraz logikę reinvestmentu.
 """
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
+
 from footstats.config import AGENT_BANKROLL, AGENT_KELLY_FRACTION
 from footstats.utils.db import connect as _db_connect
+
+_STATE_FILE = Path(__file__).parent.parent.parent.parent / "data" / "agent_state.json"
 
 
 def _connect():
@@ -175,6 +180,49 @@ def kelly_fraction(prob: float, kurs: float, bankroll: float, frac: float = 0.25
     stake = round(full_kelly * frac * bankroll, 2)
     max_stake = round(bankroll * 0.10, 2)
     return max(1.0, min(stake, max_stake))
+
+
+# ── 15.1: Agent pause state (stop-loss auto-pause) ──────────────────────────
+
+def is_agent_paused() -> bool:
+    """Zwraca True jeśli agent jest zapauzowany przez stop-loss."""
+    try:
+        return bool(json.loads(_STATE_FILE.read_text(encoding="utf-8")).get("paused", False))
+    except (FileNotFoundError, ValueError, OSError):
+        return False
+
+
+def set_agent_paused(paused: bool, reason: str = "") -> None:
+    """Ustawia status pauzy agenta. paused=False → wznowienie."""
+    data = {
+        "paused": paused,
+        "paused_at": datetime.now(timezone.utc).isoformat() if paused else None,
+        "reason": reason,
+    }
+    _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _STATE_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def get_pause_state() -> dict:
+    """Zwraca pełny stan pauzy: {paused, paused_at, reason}."""
+    try:
+        return json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError, OSError):
+        return {"paused": False, "paused_at": None, "reason": ""}
+
+
+def check_and_auto_pause(user_id: int = 1) -> bool:
+    """
+    Sprawdza tygodniowy drawdown i pauzuje agenta jeśli >= WEEKLY_DRAWDOWN_ALERT_PCT.
+    Zwraca True jeśli właśnie zapauzowano (nowe zdarzenie), False jeśli OK.
+    """
+    if is_agent_paused():
+        return False  # już zapauzowany — nie duplikuj alertu
+    dd = get_weekly_drawdown(user_id)
+    if dd >= WEEKLY_DRAWDOWN_ALERT_PCT:
+        set_agent_paused(True, reason=f"Tygodniowy drawdown {dd:.1%} >= {WEEKLY_DRAWDOWN_ALERT_PCT:.0%}")
+        return True
+    return False
 
 
 if __name__ == "__main__":

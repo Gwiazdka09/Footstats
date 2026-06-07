@@ -106,6 +106,27 @@ df_all = _load_predictions(days=zakres)
 df_eval = df_all[df_all["tip_correct"].notna()].copy() if not df_all.empty else pd.DataFrame()
 df_pending = _load_pending()
 
+# 15.4: Sidebar filtry liga + typ — zasilone danymi
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Filtry**")
+_ligi_opcje = ["— wszystkie —"]
+if not df_all.empty and "league" in df_all.columns:
+    _ligi_opcje += sorted(df_all["league"].dropna().unique().tolist())
+_sidebar_liga = st.sidebar.selectbox("Liga", _ligi_opcje)
+_typy_opcje = sorted(df_all["ai_tip"].dropna().unique().tolist()) if not df_all.empty and "ai_tip" in df_all.columns else []
+_sidebar_typy = st.sidebar.multiselect("Typ zakładu", _typy_opcje)
+
+if _sidebar_liga != "— wszystkie —":
+    if "league" in df_eval.columns:
+        df_eval = df_eval[df_eval["league"] == _sidebar_liga]
+    if "league" in df_all.columns:
+        df_all = df_all[df_all["league"] == _sidebar_liga]
+if _sidebar_typy:
+    if "ai_tip" in df_eval.columns:
+        df_eval = df_eval[df_eval["ai_tip"].isin(_sidebar_typy)]
+    if "ai_tip" in df_all.columns:
+        df_all = df_all[df_all["ai_tip"].isin(_sidebar_typy)]
+
 n_total   = len(df_all)
 n_eval    = len(df_eval)
 n_correct = int(df_eval["tip_correct"].sum()) if n_eval else 0
@@ -195,6 +216,43 @@ elif sekcja == "Bankroll & ROI":
         net_pnl = df_curve["pnl"].sum()
         st.metric("Łączny P&L (brutto)", f"{net_pnl:+.1f} PLN",
                   delta=f"{net_pnl * 0.88:+.1f} PLN po podatku 12%")
+
+    # 15.1: Stop-loss status + resume
+    st.divider()
+    st.subheader("Stop-Loss — Status Agenta")
+    try:
+        from footstats.core.bankroll import (
+            is_agent_paused, set_agent_paused, get_pause_state,
+            get_weekly_drawdown, get_current_bankroll,
+        )
+        from footstats.utils.admin_user import resolve_admin_user_id
+        _uid = resolve_admin_user_id()
+        pause_state = get_pause_state()
+        dd = get_weekly_drawdown(_uid)
+        bankroll_now = get_current_bankroll(_uid)
+
+        col_s1, col_s2, col_s3 = st.columns(3)
+        col_s1.metric("Drawdown 7 dni", f"{dd:+.1%}", delta_color="inverse")
+        col_s2.metric("Bankroll", f"{bankroll_now:.0f} PLN")
+        col_s3.metric("Status agenta", "⛔ PAUZOWANY" if pause_state.get("paused") else "✅ AKTYWNY")
+
+        if pause_state.get("paused"):
+            st.error(
+                f"⛔ Agent zapauzowany od `{pause_state.get('paused_at', '?')[:16]}`\n\n"
+                f"Powód: {pause_state.get('reason', '—')}"
+            )
+            if st.button("▶ Wznów agenta", type="primary"):
+                set_agent_paused(False, reason="")
+                st.success("Agent wznowiony. Uruchom Task Scheduler ręcznie lub poczekaj do 08:00.")
+                st.rerun()
+        else:
+            st.success("Agent aktywny. Stop-loss wyzwoli przy drawdownie tygodniowym >= 20%.")
+            if st.button("⏸ Ręcznie zapauzuj agenta"):
+                set_agent_paused(True, reason="Ręczna pauza z dashboardu")
+                st.warning("Agent zapauzowany ręcznie.")
+                st.rerun()
+    except (ImportError, OSError, RuntimeError) as _e:
+        st.warning(f"Brak danych stop-loss: {_e}")
 
 
 # ════════════════════════════════════════════════════════════════════════════

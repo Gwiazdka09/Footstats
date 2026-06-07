@@ -254,6 +254,17 @@ def send_alert(title: str, body: str) -> bool:
     return _send(text)
 
 
+def send_stop_loss_alert(drawdown_pct: float, bankroll: float) -> bool:
+    """Alert stop-loss: agent zapauzowany z powodu tygodniowego drawdownu."""
+    text = (
+        "🛑 <b>STOP-LOSS — AGENT ZAPAUZOWANY</b>\n"
+        f"Tygodniowy drawdown: <b>{drawdown_pct:.1%}</b> (próg 20%)\n"
+        f"Aktualny bankroll: <b>{bankroll:.0f} PLN</b>\n"
+        "Wznów przez dashboard → sekcja Bankroll → 'Wznów agenta'"
+    )
+    return _send(text)
+
+
 def check_and_alert_agent_down() -> bool:
     """True jeśli wysłano alert (agent >26h bez predykcji)."""
     from datetime import datetime, timedelta

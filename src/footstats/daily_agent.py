@@ -995,6 +995,7 @@ def main():
     from footstats.core.bankroll import (
         get_current_bankroll, check_daily_stop_loss,
         get_stake_multiplier, check_weekly_alert, get_loss_streak,
+        is_agent_paused, check_and_auto_pause, get_weekly_drawdown,
     )
     from footstats.utils.admin_user import resolve_admin_user_id
 
@@ -1003,7 +1004,17 @@ def main():
     date_label = args.date or datetime.now().strftime("%Y-%m-%d")
     dry_tag    = "  [yellow]⚠ DRY-RUN[/yellow]" if args.dry_run else ""
 
-    # Stop-loss check
+    # 15.1: Pause check (weekly stop-loss)
+    if not args.dry_run and is_agent_paused():
+        console.print("[bold red]⛔ AGENT ZAPAUZOWANY (stop-loss 20% tygodniowy). Wznów przez dashboard.[/bold red]")
+        try:
+            from footstats.utils.telegram_notify import send_alert
+            send_alert("FootStats PAUSED", "Agent zapauzowany (stop-loss). Wznów przez dashboard → Bankroll.")
+        except (ImportError, OSError, RuntimeError):
+            pass
+        return
+
+    # Daily stop-loss check
     if not args.dry_run and check_daily_stop_loss(user_id=admin_uid):
         console.print("[bold red]STOP-LOSS: dzienna strata >= 10% bankrolla — przerywam.[/bold red]")
         return
@@ -1016,8 +1027,17 @@ def main():
         args.stawka = round(args.stawka * stake_mult, 1)
         args.stawka_b = round(args.stawka_b * stake_mult, 1)
 
-    # Weekly drawdown alert
-    if check_weekly_alert(user_id=admin_uid):
+    # 15.1: Weekly drawdown → auto-pause jeśli >= 20%
+    if not args.dry_run and check_and_auto_pause(user_id=admin_uid):
+        dd = get_weekly_drawdown(user_id=admin_uid)
+        console.print(f"[bold red]⛔ STOP-LOSS: tygodniowy drawdown {dd:.1%} >= 20% — PAUZUJĘ agenta![/bold red]")
+        try:
+            from footstats.utils.telegram_notify import send_stop_loss_alert
+            send_stop_loss_alert(dd, current_bankroll)
+        except (ImportError, OSError, RuntimeError):
+            pass
+        return
+    elif check_weekly_alert(user_id=admin_uid):
         console.print("[bold yellow]ALERT: tygodniowy drawdown przekroczył 20% bankrolla![/bold yellow]")
 
     # Rolling accuracy alert (ciche — nie blokuje agenta)
