@@ -166,7 +166,10 @@ def _handle(message: dict) -> None:
     text = message.get("text", "").strip()
 
     allowed = _allowed_chat()
-    if allowed and chat_id != allowed:
+    if not allowed:
+        logger.error("TELEGRAM_CHAT_ID nie ustawiony — odrzucam wszystkie wiadomości")
+        return
+    if chat_id != allowed:
         logger.warning("Odrzucono wiadomość z nieautoryzowanego chat_id: %s", chat_id)
         return
 
@@ -201,6 +204,8 @@ def run_polling() -> None:
     """Długi polling — uruchom jako daemon (Windows Task Scheduler lub nssm)."""
     if not _token():
         raise RuntimeError("TELEGRAM_BOT_TOKEN nie ustawiony w .env")
+    if not _allowed_chat():
+        raise RuntimeError("TELEGRAM_CHAT_ID nie ustawiony w .env — bot nie startuje bez autoryzacji")
     logger.info("FootStats Telegram bot — start polling")
     offset: int | None = None
     while True:
