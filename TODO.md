@@ -1,6 +1,6 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-06  
+**Ostatnia aktualizacja:** 2026-06-07  
 **Wersja:** v3.4-stable  
 **Accuracy baseline:** 26.7% (15 live settled, Neon.tech)  
 **Cel na koniec lipca:** M1 = 55% win rate
@@ -22,21 +22,15 @@
 
 ## 🔴 FAZA 16: ACCURACY FIXES (przed betą — teraz)
 
-### 16.1: Filtr ligowy — odrzucaj mecze bez danych Poisson
-- [ ] W daily_agent (krok 1): sprawdź czy `predict_match()` != None przed dodaniem meczu
-- [ ] Jeśli None → skip (towarzyskie Afryka/Azja/CONCACAF bez historii Poissona)
-- [ ] Dodać `ALLOWED_LEAGUES` whitelist w `config.py`
-- **Efekt:** mniej kuponów ale znacznie lepsze; koniec z decision_score=25
-- **Effort:** 2–3h | Plik: `daily_agent.py` KROK 1 + `config.py`
+### ~~16.1~~ — ✅ DONE
+- `LIGI_WHITELIST` + `LIGI_BLACKLIST_KEYWORDS` + `LIGA_FILTER_ENABLED=True` w config.py
+- `_pre_filtruj_ligi` wywoływana w KROK 1 daily_agent; fix `ImportError: LIGI_BLACKLIST`
 
-### 16.2: Podnieść próg PROG_DRAFT → 50
-- [ ] `core/decision_score.py`: `PROG_DRAFT = 50` (było 40)
-- [ ] Fallback: jeśli < 3 kandydatów po filtrze → akceptuj 40 (nie generuj śmieciowego kuponu)
-- **Effort:** 30 min
+### ~~16.2~~ — ✅ DONE
+- `PROG_DRAFT=50`, `PROG_DRAFT_FALLBACK=40` w `decision_score.py`; fallback aktywny w main()
 
-### 16.3: Void kupon #33 (Ajax vs PSV — sezon skończony)
-- [ ] `UPDATE coupons SET status='VOID' WHERE id=33`
-- **Effort:** 2 min
+### ~~16.3~~ — ✅ DONE
+- Kupon #33 (Legia/Ajax-PSV) → VOID w Neon.tech
 
 ### 16.4: Kalibracja modelu (po 50 settled)
 - [ ] `python -m footstats.core.probability_calibrator`
@@ -59,6 +53,17 @@
 ### ~~TD4~~ — ✅ DONE
 - `daily_agent.py` 1486→1325 LOC: filtry→`core/daily_filters.py`, zapis DB→`core/daily_io.py`
 - `analyzer.py` 1175→959 LOC: helpery→`ai/analyzer_helpers.py`
+
+### TD9: Commit + push (80 uncommitted changes)
+- [ ] `git add -A && git commit -m "v3.4: fix truncation, restore 30 files, gitignore update"`
+- [ ] `git push origin main`
+- **Priorytet:** 🔴 P1 — ryzyko utraty pracy
+
+### TD10: Zbadać przyczynę powtarzającej się truncacji plików
+- [ ] 06-07: 26 plików truncated + 4 z null bytes (kolejny raz!)
+- [ ] Prawdopodobna przyczyna: Claude Code edycja dużych plików lub dysk/antywirus
+- [ ] Rozwiązanie: backup pre-edit hook w `.claude/hooks/`
+- **Priorytet:** 🔴 P1
 
 ### ~~TD1~~ ~~TD2~~ ~~TD5~~ ~~TD6~~ ~~TD7~~ ~~TD8~~ — ✅ DONE
 

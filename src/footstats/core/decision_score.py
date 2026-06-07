@@ -112,5 +112,5 @@ def score_kandydat(
 
 
 def is_go(score: int, phase: str = "draft") -> bool:
-    """True jeśli score >= progu dla fazy. draft=40, final=60."""
+    """True jeśli score >= progu dla fazy. draft=50, final=60."""
     return score >= (PROG_FINAL if phase == "final" else PROG_DRAFT)

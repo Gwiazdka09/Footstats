@@ -1140,7 +1140,7 @@ def main():
         )
 
     # -- Pre-filtr lig (blacklist): odrzuca ligi z udowodnionym brakiem edge ──
-    from footstats.config import LIGI_BLACKLIST, LIGA_FILTER_ENABLED
+    from footstats.config import LIGA_FILTER_ENABLED
     if LIGA_FILTER_ENABLED:
         n_przed_liga = len(wyniki)
         wyniki = _pre_filtruj_ligi(wyniki)
