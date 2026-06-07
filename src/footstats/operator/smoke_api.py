@@ -18,12 +18,12 @@ _TEST_HASH: str | None = None
 
 def _ensure_test_env() -> None:
     global _TEST_HASH
-    os.environ.setdefault("JWT_SECRET", "testsecret1234567890abcdef12345678")
+    os.environ.setdefault("JWT_SECRET", os.getenv("SMOKE_JWT_SECRET", ""))
     os.environ.setdefault("FOOTSTATS_USER", "admin")
     import bcrypt
 
     if _TEST_HASH is None:
-        _TEST_HASH = bcrypt.hashpw(b"testpass", bcrypt.gensalt()).decode()
+        _TEST_HASH = bcrypt.hashpw(os.getenv("SMOKE_TEST_PASS", "changeme").encode(), bcrypt.gensalt()).decode()
     os.environ.setdefault("FOOTSTATS_PASSWORD_HASH", _TEST_HASH)
 
 

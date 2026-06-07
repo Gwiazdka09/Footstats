@@ -1,9 +1,9 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-06 (auto-audit)  
+**Last Updated:** 2026-06-07 (auto-audit)  
 **Current Version:** v3.4-stable  
-**Build Status:** ✅ OK — 0 SyntaxError (ast.parse), 0 null bytes  
-**System State:** FUNCTIONAL
+**Build Status:** ✅ OK — 0 SyntaxError (ast.parse), 0 null bytes (po naprawie)  
+**System State:** FUNCTIONAL (po przywróceniu 26+4 plików)
 
 ---
 
@@ -11,17 +11,17 @@
 
 | Metric | Status | Value |
 |--------|--------|-------|
-| **Syntax** | ✅ OK | 0 SyntaxError w 110+ .py (ast.parse OK) |
-| **Source Files** | ✅ | ~110 .py modules w src/footstats/ |
+| **Syntax** | ✅ OK | 0 SyntaxError w 193 .py (121 src + 72 tests) |
+| **Source Files** | ✅ | 121 .py modules w src/footstats/ |
 | **Tests** | ✅ | 70 test files |
-| **AI Accuracy** | 🟡 | 26.7% live (15 kuponów Neon) — Faza 13 kalibracja pasywna |
+| **AI Accuracy** | 🟡 | 26.7% live (15 kuponów Neon) — Faza 16 accuracy fixes |
 | **Automation** | ✅ | daily_agent.py + evening_agent.py OK |
 | **API** | ✅ | FastAPI + dashboard + MCP endpoint OK |
 | **DB** | ✅ | Neon PG (prod) + SQLite (backtest), pool maxconn=10 |
 | **Timeouts** | ✅ | Wszystkie requests.get/post mają timeout |
 | **Thread Safety** | ✅ | Lock w circuit_breaker, response_cache, lambda_optimizer |
 | **Ollama** | ✅ | qwen2.5:7b lokalny + Groq fallback |
-| **Security** | ✅ | Brak eval/pickle/os.system, _exec w coupon_tracker to wrapper DB |
+| **Security** | ✅ | Brak eval/pickle/os.system |
 | **Cache** | ✅ | response_cache: MAX_ENTRIES=500, eviction + TTL cleanup OK |
 
 ---
@@ -30,21 +30,19 @@
 
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
-| 1 | **67x `except Exception`** | 🟡 P2 | Top: superbet(5), superbet_bb(4), flashscore_match(4), bzzoiro(4), backtest_engine(4), analyzer(4) |
-| 2 | **Accuracy 26.7% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 13 kalibracja pasywna |
-| 3 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1474), analyzer(1175), superbet(1128), cli(1112) |
-| 4 | **48 uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT |
-| 5 | **Duplicate: validation_errors.csv** | ⚪ P4 | Duplikat w root i data/ — usunąć root |
-| 6 | **footstats.log + validation_errors.csv** | ⚪ P4 | Dodać do .gitignore |
-| 7 | **smoke_api.py hardcoded "testpass"** | 🟡 P3 | Fallback password hardcoded — przenieść do env |
-| 8 | **11x __pycache__ w src/** | ⚪ P4 | Wyczyścić, upewnić się że w .gitignore |
-| 9 | **subprocess.Popen fire-and-forget (5x)** | ⚪ P4 | Brak monitoringu procesów potomnych |
+| 1 | **Accuracy 26.7% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku |
+| 2 | **80 uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT + PUSH |
+| 3 | **25x `except Exception`** | 🟡 P2 | Top: backtest_engine(4), backtest(3), analyzer(3) |
+| 4 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1325), superbet(1128), cli(1112) |
+| 5 | **smoke_api.py hardcoded "testpass"** | 🟡 P3 | Fallback password hardcoded — przenieść do env |
+| 6 | **subprocess.Popen fire-and-forget (5x)** | ⚪ P4 | Brak monitoringu procesów potomnych |
+| 7 | **11x __pycache__ w src/** | ⚪ P4 | Wyczyścić |
 
 ---
 
 ## DEPLOYMENT STATUS
 
-- **Daily Agent**: ✅ OK (checkpointy z 2026-06-06)
+- **Daily Agent**: ✅ OK
 - **Evening Agent**: ✅ OK
 - **Dashboard**: ✅ OK (Streamlit)
 - **API**: ✅ OK (FastAPI + auth + MCP)
@@ -60,6 +58,8 @@
 
 | Problem | Status | Data |
 |---------|--------|------|
+| 26x file truncation + 4x null bytes | ✅ FIXED | 06-07 |
+| .gitignore: footstats.log + validation_errors.csv | ✅ FIXED | 06-07 |
 | 12x file truncation/null bytes | ✅ FIXED | 05-28 |
 | 16x requests bez timeout | ✅ FIXED | 05-26 |
 | 3x sqlite3 bez context manager | ✅ FIXED | 05-26 |
@@ -68,11 +68,10 @@
 | pyproject.toml version sync (3.0→3.4) | ✅ FIXED | 05-27 |
 | sts.py broad except (3x) | ✅ FIXED | 05-27 |
 | Cloud Run env vars | ✅ DONE | 05-28 |
-| File restore (12 plików) | ✅ DONE | 05-28 |
 | asyncio.get_event_loop() deprecated | ✅ FIXED | 05-29 |
 | 7x file truncation (05-31) | ✅ FIXED | 05-31 |
 | 4x file truncation (06-01) | ✅ FIXED | 06-01 |
-| 160→78→67 broad except | ✅ Reduced | 06-06 |
+| 160→78→67→25 broad except | ✅ Reduced | 06-07 |
 | tests/scratch + data/.fuse_hidden | ✅ Cleaned | 06-03 |
 | Timeout audit (all requests covered) | ✅ Verified | 06-06 |
 | DB connections (all use context manager) | ✅ Verified | 06-06 |

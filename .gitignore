@@ -1,75 +1,86 @@
-
-!assets/DejaVuSans.ttf
-# ── Cache FootStats
-# ── Claude Code
-# ── Dane (DB backtest)
-# ── Edytory 
-# ── Fonty (duże pliki, pobierz osobno) 
-# ── Klucze API i sekrety 
-# ── Kopie zapasowe 
-# ── Logi i pliki tymczasowe
-# ── Node modules i cache builds
-# ── Plany superpowers (lokalne notatki)
-# ── Playwright 
-# ── Pliki generowane przez FootStats
-# ── Python 
-# ── Środowiska wirtualne 
-# ── System 
-# ── vexp (lokalny indeks kodu, nie potrzebny w repo)
-*.png
+# ── Python
+__pycache__/
 *.py[cod]
 *.pyd
 *.pyo
-*.swo
-*.swp
-*.ttf
-*_backup.py
-*_BACKUP.py
-*~
-.aider*
-.aider.tags.cache.v4/
-.cache/
-.claude/settings.local.json
-.DS_Store
+.Python
+
+# ── Środowiska wirtualne
+.venv/
+venv/
+env/
+ENV/
+
+# ── Klucze API i sekrety
 .env
 .env.*
-.idea/
-.Python
-.venv/
-.vexp/
-.vscode/
-__pycache__/
+
+# ── Dane (DB backtest)
+data/
+
+# ── Logi i pliki tymczasowe
+logs/
+footstats.log
+validation_errors.csv
+*.swo
+*.swp
+*~
+
+# ── Fonty (duże pliki, pobierz osobno)
+*.ttf
+!assets/DejaVuSans.ttf
+
+# ── Pliki generowane przez FootStats
+FootStats_*.pdf
+Pewniaczki_*.pdf
 ai_analiza_*.json
 ai_kolejka_*.json
 ai_typy_*.json
-cache/
-data/
-data/footstats.db
-data/footstats.db-shm
-data/footstats.db-wal
-dejavu-sans-ttf-2.37/
-desktop.ini
-docs/superpowers/plans/
-env/
-ENV/
-env_wzor.txt
-FootStats_*.pdf
 footstats_BACKUP.py
-logs/
-Pewniaczki_*.pdf
+*_backup.py
+*_BACKUP.py
+
+# ── Cache FootStats
+cache/
+.cache/
+
+# ── Playwright
 playwright-report/
-src/footstats/gui/node_modules/
-src/footstats/gui/node_modules/
+test-results/
 sts_debug_*.png
 sts_error.png
 superbet_debug_*.png
 superbet_error.png
 superoferta_debug*.png
 superoferta_error.png
-test-results/
-Thumbs.db
-venv/
-footstats.log
+*.png
 
-footstats.log
-validation_errors.csv
+# ── Node modules i cache builds
+src/footstats/gui/node_modules/
+
+# ── Edytory
+.vscode/
+.idea/
+.cursor/
+
+# ── Claude Code
+.claude/
+.aider*
+.aider.tags.cache.v4/
+
+# ── vexp (lokalny indeks kodu)
+.vexp/
+
+# ── Plany superpowers (lokalne notatki)
+docs/superpowers/plans/
+
+# ── Kopie zapasowe
+# (objęte przez *_backup.py i *_BACKUP.py wyżej)
+
+# ── System
+.DS_Store
+Thumbs.db
+desktop.ini
+.fuse_hidden*
+dejavu-sans-ttf-2.37/
+env_wzor.txt
