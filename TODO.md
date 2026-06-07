@@ -100,3 +100,8 @@
 ## Fazy ukończone
 
 Phase 1–14: ✅ DONE — szczegóły: `git log`, `docs/archive/`
+
+## Pomysły na zmiany od betatesterów
+
+- Przycisk od kreatora kuponów "Analizuj wybrane mecze" powinien być dla wygody poruszać się na dole ekranu po prawej stronie na dole.
+- Flagi przy ligach w kreatorze kuponów. 
