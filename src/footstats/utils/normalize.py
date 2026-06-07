@@ -8,7 +8,7 @@ Użycie:
     from footstats.utils.normalize import normalize_team_name
     normalize_team_name("KS Lechia Gdańsk")   # -> "lechia gdansk"
     normalize_team_name("FC Augsburg")         # -> "augsburg"
-    normalize_team_name("Paris Saint-Germain") # -> "paris saint germain"
+    normalize_team_name("Paris Saint-Germain") # -> "psg"
 """
 
 from __future__ import annotations
@@ -141,7 +141,7 @@ def normalize_team_name(name: str, use_mappings: bool = True) -> str:
         >>> normalize_team_name("Al-Taawoun")
         'taawoun'
         >>> normalize_team_name("Paris Saint-Germain")
-        'paris saint germain'
+        'psg'
     """
     if not name:
         return ""
