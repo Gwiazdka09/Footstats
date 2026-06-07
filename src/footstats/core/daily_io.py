@@ -62,7 +62,10 @@ def _zapisz_kupon_do_db(
             })
 
         from datetime import datetime as _dt
-        match_date = _dt.now().strftime("%Y-%m-%d")
+        # Użyj daty meczu z kandydata jeśli dostępna, fallback: dziś
+        match_date = (
+            kandydaci[0].get("data") or kandydaci[0].get("match_date") or _dt.now().strftime("%Y-%m-%d")
+        ) if kandydaci else _dt.now().strftime("%Y-%m-%d")
         avg_score = int(sum(k.get("decision_score", 0) for k in kandydaci) / max(len(kandydaci), 1))
 
         if phase == "final":

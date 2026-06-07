@@ -36,7 +36,7 @@ def get_match_result(
     """
     try:
         date_obj = datetime.fromisoformat(match_date)
-    except (json.JSONDecodeError, RuntimeError) as exc:
+    except ValueError as exc:
         log.warning("Niepoprawny format daty: %s", match_date)
         return None
 
@@ -101,7 +101,7 @@ def get_match_result(
 
         return result
 
-    except (json.JSONDecodeError, RuntimeError, OSError) as e:
+    except (requests.RequestException, RuntimeError, OSError) as e:
         log.error("Błąd scrapowania FlashScore (%s vs %s): %s", home_team, away_team, e)
         return None
 
