@@ -179,6 +179,13 @@ def backfill(dry_run: bool = False) -> dict:
             res = _find_fdb(home, away, fdb_matches)
             if not res:
                 res = _find_af(home, away, af_matches)
+            # Źródło 3: FlashScore (~7 dni wstecz)
+            if not res:
+                try:
+                    from footstats.scrapers.flashscore_results import get_match_result
+                    res = get_match_result(home, away, date_str, cache_enabled=True)
+                except (ImportError, OSError, RuntimeError) as e:
+                    log.debug("FlashScore %s vs %s: %s", home, away, e)
 
             correct = oblicz_tip_correct(tip, res) if res else None
             updated_legs[leg_idx]["result"]  = res

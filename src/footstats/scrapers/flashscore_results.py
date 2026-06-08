@@ -64,46 +64,44 @@ def get_match_result(
     # Flashscore.mobi obsługuje zwykle około 7 dni wstecz/przód
     if abs(diff) > 7:
         log.info("Data %s jest poza zasięgiem Flashscore.mobi (offset %d).", match_date, diff)
-        # Tu można by dodać fallback na search, ale na razie logujemy błąd
         return None
 
-    url = f"{FLASHSCORE_MOBI_URL}/?d={diff}&s=1"
-    print(f"[FlashScore] Pobieram wyniki z: {url}")
-    
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 13_5 like Mac OS X) AppleWebKit/605.1.15"
-        }
-        r = requests.get(url, headers=headers, timeout=10)
-        r.raise_for_status()
-        
-        # Log fragmentu treści (jak prosił użytkownik)
-        snippet = r.text[:300].replace('\n', ' ')
-        print(f"[FlashScore] Treść (fragment): {snippet}...")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 13_5 like Mac OS X) AppleWebKit/605.1.15"
+    }
+    # Próbuj diff, diff+1, diff-1 — FlashScore czasem datuje mecze późnonocne na następny dzień
+    for offset in [diff, diff + 1, diff - 1]:
+        if abs(offset) > 7:
+            continue
+        url = f"{FLASHSCORE_MOBI_URL}/?d={offset}&s=1"
+        log.debug("[FlashScore] Próba offset=%d: %s", offset, url)
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+            r.raise_for_status()
+            result = _parse_mobi_html(r.text, home_team, away_team)
+            if not result:
+                continue
+            log.info("[FlashScore] Znaleziono %s vs %s = %s (offset=%d)", home_team, away_team, result, offset)
+            if cache_enabled:
+                try:
+                    import json
+                    cache_file = CACHE_DIR / f"{match_date}.json"
+                    data = {}
+                    if cache_file.exists():
+                        with open(cache_file, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                    key = f"{normalize_team_name(home_team)}_{normalize_team_name(away_team)}"
+                    data[key] = result
+                    with open(cache_file, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=2)
+                except (KeyError, ValueError, AttributeError) as e:
+                    log.warning("Błąd zapisu cache: %s", e)
+            return result
+        except (requests.RequestException, RuntimeError, OSError) as e:
+            log.debug("FlashScore offset=%d błąd: %s", offset, e)
 
-        result = _parse_mobi_html(r.text, home_team, away_team)
-        
-        if result and cache_enabled:
-            # Zapisz do cache
-            try:
-                import json
-                cache_file = CACHE_DIR / f"{match_date}.json"
-                data = {}
-                if cache_file.exists():
-                    with open(cache_file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                key = f"{normalize_team_name(home_team)}_{normalize_team_name(away_team)}"
-                data[key] = result
-                with open(cache_file, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2)
-            except (KeyError, ValueError, AttributeError) as e:
-                log.warning("Błąd zapisu cache: %s", e)
-
-        return result
-
-    except (requests.RequestException, RuntimeError, OSError) as e:
-        log.error("Błąd scrapowania FlashScore (%s vs %s): %s", home_team, away_team, e)
-        return None
+    log.debug("[FlashScore] Brak wyniku %s vs %s dla %s", home_team, away_team, match_date)
+    return None
 
 def _parse_mobi_html(html: str, home: str, away: str) -> str | None:
     """
@@ -145,8 +143,10 @@ def _parse_mobi_html(html: str, home: str, away: str) -> str | None:
                     print(f"  [FlashScore] Potencjalne dopasowanie: {t_home_raw} - {t_away_raw} ({score}) | sim={total_score:.2f}")
                 
                 if total_score > 0.85 and total_score > best_score:
-                    if score != "-:-" and ":" in score:
-                        best_match = score.replace(":", "-")
+                    # FlashScore zwraca "1-0" (myślnik) lub "1:0" (dwukropek)
+                    norm_score = score.replace(":", "-").strip()
+                    if norm_score not in ("-:-", "--") and re.match(r"^\d+-\d+", norm_score):
+                        best_match = norm_score
                         best_score = total_score
                         
     if best_match:
