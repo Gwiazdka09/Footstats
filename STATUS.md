@@ -1,9 +1,9 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-07 (auto-audit)  
+**Last Updated:** 2026-06-08 (auto-audit)  
 **Current Version:** v3.4-stable  
-**Build Status:** ✅ OK — 0 SyntaxError (ast.parse), 0 null bytes (po naprawie)  
-**System State:** FUNCTIONAL (po przywróceniu 26+4 plików)
+**Build Status:** ✅ OK — 0 SyntaxError (ast.parse), 0 null bytes  
+**System State:** FUNCTIONAL
 
 ---
 
@@ -31,12 +31,14 @@
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
 | 1 | **Accuracy 26.7% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku |
-| 2 | **80 uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT + PUSH |
-| 3 | **25x `except Exception`** | 🟡 P2 | Top: backtest_engine(4), backtest(3), analyzer(3) |
-| 4 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1325), superbet(1128), cli(1112) |
-| 5 | **smoke_api.py hardcoded "testpass"** | 🟡 P3 | Fallback password hardcoded — przenieść do env |
-| 6 | **subprocess.Popen fire-and-forget (5x)** | ⚪ P4 | Brak monitoringu procesów potomnych |
-| 7 | **11x __pycache__ w src/** | ⚪ P4 | Wyczyścić |
+| 2 | **27 uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT + PUSH |
+| 3 | **__init__.py version 2.7** | 🔴 P1 | Desync: config=3.4, pyproject=3.4, __init__=2.7 |
+| 4 | **25x `except Exception`** | 🟡 P2 | Top: backtest_engine(4), backtest(3), analyzer(3) |
+| 5 | **2x subprocess.run bez timeout** | 🟡 P2 | daily_agent_scheduler.py linie 23, 67 |
+| 6 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1345), superbet(1128), cli(1112) |
+| 7 | **5x subprocess.Popen fire-and-forget** | ⚪ P4 | evening_agent, cli, daily_agent, backtest, post_match |
+| 8 | **docs/PROJECT_STATE.md stale (v3.3)** | ⚪ P4 | Referencje do v3.3, nieaktualne |
+| 9 | **.fuse_hidden + __pycache__ do czyszczenia** | ⚪ P4 | 11x __pycache__ w src/, 1x scripts/, 1x .fuse_hidden |
 
 ---
 
@@ -76,3 +78,7 @@
 | Timeout audit (all requests covered) | ✅ Verified | 06-06 |
 | DB connections (all use context manager) | ✅ Verified | 06-06 |
 | Cache eviction (MAX_ENTRIES + TTL) | ✅ Verified | 06-06 |
+| smoke_api.py testpass → env var | ✅ FIXED | 06-08 |
+| Syntax + null bytes audit (193/193 OK) | ✅ Verified | 06-08 |
+| DB connections (context mgr) | ✅ Verified | 06-08 |
+| Timeout audit (requests.get/post) | ✅ Verified | 06-08 |

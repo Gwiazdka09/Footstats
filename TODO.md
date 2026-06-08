@@ -1,6 +1,6 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-07  
+**Ostatnia aktualizacja:** 2026-06-08  
 **Wersja:** v3.4-stable  
 **Accuracy baseline:** 26.7% (15 live settled, Neon.tech)  
 **Cel na koniec lipca:** M1 = 55% win rate
@@ -64,6 +64,21 @@
 - [ ] Prawdopodobna przyczyna: Claude Code edycja dużych plików lub dysk/antywirus
 - [ ] Rozwiązanie: backup pre-edit hook w `.claude/hooks/`
 - **Priorytet:** 🔴 P1
+
+### TD11: __init__.py version desync
+- [ ] `src/footstats/__init__.py` ma `__version__ = "2.7"` — powinno być `"3.4"`
+- **Priorytet:** 🔴 P1 — 1 minuta fix
+
+### TD12: subprocess.run bez timeout w daily_agent_scheduler.py
+- [ ] Linia 23 i 67: `subprocess.run(...)` bez `timeout=`
+- [ ] Dodać `timeout=7200` (2h max na fazę draft/final)
+- **Priorytet:** 🟡 P2
+
+### TD13: Wyczyść __pycache__ i .fuse_hidden
+- [ ] `find . -name __pycache__ -not -path ./.venv/\* -exec rm -rf {} +`
+- [ ] `rm .fuse_hidden*`
+- [ ] Dodać `DAILY_REPORT_*.md` do .gitignore
+- **Priorytet:** ⚪ P4
 
 ### ~~TD1~~ ~~TD2~~ ~~TD5~~ ~~TD6~~ ~~TD7~~ ~~TD8~~ — ✅ DONE
 
