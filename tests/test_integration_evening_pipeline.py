@@ -191,7 +191,7 @@ class TestSettleActiveCoupons:
         with conn_factory() as conn:
             row = conn.execute("SELECT status, payout_pln FROM coupons WHERE id=?", (cid,)).fetchone()
 
-        assert row["status"] == "WIN"
+        assert row["status"] == "WON"
         assert row["payout_pln"] == pytest.approx(10.0 * 1.85, rel=0.01)
         assert stats["settled"] >= 1
 
@@ -216,7 +216,7 @@ class TestSettleActiveCoupons:
         with conn_factory() as conn:
             row = conn.execute("SELECT status, payout_pln FROM coupons WHERE id=?", (cid,)).fetchone()
 
-        assert row["status"] == "LOSE"
+        assert row["status"] == "LOST"
         assert row["payout_pln"] == 0.0
 
     def test_ako_first_leg_lose_settles_immediately(self, tmp_path, monkeypatch):
@@ -246,7 +246,7 @@ class TestSettleActiveCoupons:
         with conn_factory() as conn:
             row = conn.execute("SELECT status FROM coupons WHERE id=?", (cid,)).fetchone()
 
-        assert row["status"] == "LOSE"
+        assert row["status"] == "LOST"
         mock_rag.assert_called_once()
 
     def test_missing_results_stays_partial(self, tmp_path, monkeypatch):

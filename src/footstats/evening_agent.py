@@ -243,7 +243,7 @@ def run_evening_agent(date_str: str | None = None) -> dict:
         for leg_idx, leg in enumerate(legs):
             home   = leg.get("gospodarz") or leg.get("home", "")
             away   = leg.get("goscie")    or leg.get("away", "")
-            ai_tip = leg.get("tip") or leg.get("ai_tip", "")  # fix: był "typ"
+            ai_tip = leg.get("tip") or leg.get("typ") or leg.get("ai_tip", "")
 
             wynik = _find_result(home, away, fixtures)
             if wynik is None:
