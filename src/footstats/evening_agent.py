@@ -33,6 +33,9 @@ from footstats.core.backtest import init_db, update_result
 from footstats.utils.betting import oblicz_tip_correct
 from footstats.core.bankroll import process_win
 
+import logging
+log = logging.getLogger(__name__)
+
 console = Console()
 
 API_BASE = "https://v3.football.api-sports.io"
@@ -79,6 +82,20 @@ def _find_result(home: str, away: str, fixtures: list[dict]) -> str | None:
             best_score = score
             best_result = wynik
     return best_result
+
+
+def _save_coupon_legs(coupon_id: int, updated_legs: list[dict]) -> None:
+    """Zapisuje zaktualizowane legs_json (z result/leg_won per leg) do DB."""
+    import json
+    from footstats.utils.db import connect as _db_connect
+    try:
+        with _db_connect() as conn:
+            conn.execute(
+                "UPDATE coupons SET legs_json=? WHERE id=?",
+                (json.dumps(updated_legs, ensure_ascii=False), coupon_id),
+            )
+    except (OSError, ValueError) as e:
+        log.warning("Błąd zapisu legs_json dla kuponu #%s: %s", coupon_id, e)
 
 
 def _status_kuponu(nogi_statusy: list[str]) -> str:
@@ -221,22 +238,30 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     for kupon in active_coupons:
         legs = get_coupon_legs(kupon["id"])
         nogi_statusy: list[str] = []
+        updated_legs = [dict(leg) for leg in legs]  # kopia z per-leg results
 
-        for leg in legs:
-            home    = leg.get("gospodarz") or leg.get("home", "")
-            away    = leg.get("goscie")    or leg.get("away", "")
-            ai_tip  = leg.get("typ")       or leg.get("ai_tip", "")
+        for leg_idx, leg in enumerate(legs):
+            home   = leg.get("gospodarz") or leg.get("home", "")
+            away   = leg.get("goscie")    or leg.get("away", "")
+            ai_tip = leg.get("tip") or leg.get("ai_tip", "")  # fix: był "typ"
 
             wynik = _find_result(home, away, fixtures)
             if wynik is None:
                 nogi_statusy.append("PENDING")
+                updated_legs[leg_idx]["result"] = None
+                updated_legs[leg_idx]["leg_won"] = None
                 continue
 
             correct = oblicz_tip_correct(ai_tip, wynik)
             nogi_statusy.append("WIN" if correct == 1 else ("LOSS" if correct == 0 else "VOID"))
+
+            # Zapisz per-leg wynik
+            updated_legs[leg_idx]["result"] = wynik
+            updated_legs[leg_idx]["leg_won"] = (
+                True if correct == 1 else (False if correct == 0 else None)
+            )
             nowe_wyniki += 1
 
-            # Aktualizuj predictions jeśli mamy prediction_id
             pred_id = leg.get("prediction_id")
             if pred_id:
                 try:
@@ -244,7 +269,6 @@ def run_evening_agent(date_str: str | None = None) -> dict:
                 except (ValueError, KeyError) as e:
                     console.print(f"[yellow]Warning: Could not update prediction {pred_id}: {e}[/yellow]")
 
-                # CLV: zapisz kurs zamknięcia z API-Football
                 try:
                     from footstats.core.clv_tracker import record_closing_odds
                     fix_id = _find_fixture_id(home, away, fixtures)
@@ -255,6 +279,9 @@ def run_evening_agent(date_str: str | None = None) -> dict:
                 except (ImportError, ValueError, KeyError):
                     pass
 
+        # Zapisz per-leg wyniki do DB
+        _save_coupon_legs(kupon["id"], updated_legs)
+
         nowy_status = _status_kuponu(nogi_statusy)
 
         if nowy_status != STATUS_ACTIVE:
@@ -263,10 +290,9 @@ def run_evening_agent(date_str: str | None = None) -> dict:
                 stake = kupon["stake_pln"] or 10.0
                 odds  = kupon["total_odds"] or 1.0
                 payout = round(stake * odds * 0.88, 2)  # podatek 12%
-            # Zintegrowane dodawanie do bankrolla
             if nowy_status == "WON" and payout:
                 process_win(payout, f"Wygrana kuponu ID={kupon['id']}")
-                
+
             update_coupon_status(kupon["id"], nowy_status, payout_pln=payout)
             key = nowy_status.lower()
             summary[key] = summary.get(key, 0) + 1

@@ -1,14 +1,20 @@
 """
-coupon_settlement.py – Rozliczanie ACTIVE kuponów z fallback na FlashScore.
+coupon_settlement.py – Rozliczanie ACTIVE kuponów z fallback na FlashScore/football-data.org.
 
-Gdy API-Football brakuje wyniku, fallback na scraper FlashScore.
+Hierarchia źródeł wyników (każdy kolejny to fallback):
+  1. API-Football (v3.football.api-sports.io) – tylko ~3 dni wstecz (Free plan)
+  2. football-data.org – pełna historia
+  3. FlashScore mobi – ~7 dni wstecz
+  4. Tabela predictions w DB
+
 Po rozliczeniu:
   - WIN: zaktualizuj bankroll
   - LOSE: wyślij do post_match_analyzer (RAG feedback)
+  - legs_json: każdy leg dostaje pola `result` i `leg_won` dla UI
 
 Użycie:
     from footstats.core.coupon_settlement import settle_active_coupons
-    settle_active_coupons(days_back=3, dry_run=False, verbose=True)
+    settle_active_coupons(days_back=60, dry_run=False, verbose=True)
 """
 
 import json
@@ -38,6 +44,51 @@ def _get_fixtures_api(api_key: str, date_str: str) -> list[dict]:
     except (RequestException, ValueError, KeyError) as e:
         log.debug("API-Football error for date %s: %s", date_str, e)
         return []
+
+
+def _get_matches_fdb(fdb_key: str, date_str: str) -> list[dict]:
+    """Pobiera zakończone mecze z football-data.org (pełna historia)."""
+    import requests
+    from requests import RequestException
+    if not fdb_key:
+        return []
+    try:
+        r = requests.get(
+            "https://api.football-data.org/v4/matches",
+            headers={"X-Auth-Token": fdb_key},
+            params={"dateFrom": date_str, "dateTo": date_str, "status": "FINISHED"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return r.json().get("matches", [])
+    except (RequestException, ValueError, KeyError) as e:
+        log.debug("football-data.org error for date %s: %s", date_str, e)
+        return []
+
+
+def _znajdz_wynik_fdb(home: str, away: str, matches: list[dict]) -> str | None:
+    """Fuzzy-match meczu w danych z football-data.org. Zwraca 'HG-AG' lub None."""
+    from difflib import SequenceMatcher
+    best_score = 0.0
+    best_result: str | None = None
+    for m in matches:
+        fh = m.get("homeTeam", {}).get("name", "")
+        fa = m.get("awayTeam", {}).get("name", "")
+        nh = normalize_team_name(home)
+        nfh = normalize_team_name(fh)
+        na = normalize_team_name(away)
+        nfa = normalize_team_name(fa)
+        score = (
+            SequenceMatcher(None, nh, nfh).ratio()
+            + SequenceMatcher(None, na, nfa).ratio()
+        ) / 2
+        if score >= 0.6 and score > best_score:
+            ft = m.get("score", {}).get("fullTime", {})
+            hg, ag = ft.get("home"), ft.get("away")
+            if hg is not None and ag is not None:
+                best_score = score
+                best_result = f"{hg}-{ag}"
+    return best_result
 
 
 def settle_active_coupons(
@@ -80,9 +131,12 @@ def settle_active_coupons(
     if verbose:
         print(f"[CouponSettlement] ACTIVE kuponów do sprawdzenia: {len(rows)}")
 
+    import os
     api_key = _get_api_key()
+    fdb_key = os.getenv("FOOTBALL_API_KEY", "").strip()
     stats = {"settled": 0, "partial": 0, "errors": 0}
     fixtures_cache: dict[str, list] = {}
+    fdb_cache: dict[str, list] = {}
 
     for row in rows:
         coupon_id = row["id"]
@@ -103,15 +157,14 @@ def settle_active_coupons(
             pass
 
         leg_results: list[int | None] = []
-        any_leg_lost = False  # Flaga dla AKO: wystarczy JEDEN przegrany, aby cały kupon przegrał
+        any_leg_lost = False
+        updated_legs = [dict(leg) for leg in legs]  # kopia do zapisu per-leg results
 
         for leg_idx, leg in enumerate(legs):
             home = leg.get("home", "")
             away = leg.get("away", "")
-            tip_val = leg.get("tip", "")
 
             if not home or not away:
-                # Fallback: parsuj z pola "mecz" jeśli brak home/away
                 mecz = leg.get("mecz", "")
                 if " vs " in mecz:
                     home, away = mecz.split(" vs ", 1)
@@ -119,15 +172,13 @@ def settle_active_coupons(
                     home, away = mecz.split(" - ", 1)
                 home, away = home.strip(), away.strip()
 
-            # Pobierz fixtures dla daty (cache)
+            # Źródło 1: API-Football (cache per data)
             if mdate not in fixtures_cache:
                 fixtures_cache[mdate] = _get_fixtures_api(api_key, mdate) if api_key else []
 
-            # Zbuduj pending_mock zgodnie z sygnaturą _znajdz_wynik(pending_dict, fixtures_list)
             pending_mock = {"team_home": home, "team_away": away}
             res = _znajdz_wynik(pending_mock, fixtures_cache[mdate])
 
-            # Próba z normalizedymi nazwami
             if not res:
                 norm_home = normalize_team_name(home)
                 norm_away = normalize_team_name(away)
@@ -135,11 +186,17 @@ def settle_active_coupons(
                     norm_mock = {"team_home": norm_home, "team_away": norm_away}
                     res = _znajdz_wynik(norm_mock, fixtures_cache[mdate])
 
-            # Fallback na FlashScore
+            # Źródło 2: football-data.org (pełna historia)
+            if not res:
+                if mdate not in fdb_cache:
+                    fdb_cache[mdate] = _get_matches_fdb(fdb_key, mdate)
+                res = _znajdz_wynik_fdb(home, away, fdb_cache[mdate])
+
+            # Źródło 3: FlashScore mobi (~7 dni)
             if not res:
                 res = get_match_result(home, away, mdate, cache_enabled=True)
 
-            # Fallback na predictions table (dla wyników już w DB)
+            # Źródło 4: tabela predictions w DB
             if not res:
                 try:
                     with _connect() as pred_conn:
@@ -155,63 +212,39 @@ def settle_active_coupons(
             correct = oblicz_tip_correct(leg["tip"], res)
             leg_results.append(correct)
 
+            # Zapisz per-leg wynik do updated_legs (dla UI)
+            updated_legs[leg_idx]["result"] = res
+            updated_legs[leg_idx]["leg_won"] = (
+                True if correct == 1 else (False if correct == 0 else None)
+            )
+
             if verbose:
                 status_text = "OK" if correct == 1 else "MISS" if correct == 0 else "WAITING"
-                print(f"    - {leg['home']} vs {leg['away']} (Tip: {leg['tip']}, Res: {res or '?'}) -> {status_text}")
+                print(f"    - {leg.get('home','?')} vs {leg.get('away','?')} (Tip: {leg['tip']}, Res: {res or '?'}) -> {status_text}")
 
-            # ⚡ REGUŁA AKO: Jeśli JAKIKOLWIEK leg przegrał (correct == 0),
-            # cały kupon natychmiast przegrywa — nie czekamy na pozostałe
             if correct == 0:
                 any_leg_lost = True
-                if verbose:
-                    print(f"    [LOSE] Leg #{leg_idx + 1} przegrany — cały kupon AKO przegrywa!")
-                break
 
-        # Oceń kupon
-        if any_leg_lost:
-            # ⚡ AKO RULE: Wystarczy JEDEN leg LOSE, aby cały kupon był LOSE
-            new_status = "LOSE"
-            payout = 0.0
-            roi = -100.0
-
-            if verbose:
-                tag = "DRY" if dry_run else "SETTLE"
-                print(f"  [{tag}] Kupon #{coupon_id} → {new_status} | wypłata: {payout} PLN | ROI: {roi}%\n")
-
+        # PARTIAL: nie wszystkie wyniki znane
+        if None in leg_results and not any_leg_lost:
+            # Zapisz tymczasowo znane per-leg wyniki (partial update)
             if not dry_run:
                 try:
                     with _connect() as conn:
                         conn.execute(
-                            "UPDATE coupons SET status=?, payout_pln=?, roi_pct=? WHERE id=?",
-                            (new_status, payout, roi, coupon_id),
+                            "UPDATE coupons SET legs_json=? WHERE id=?",
+                            (json.dumps(updated_legs, ensure_ascii=False), coupon_id),
                         )
-                        print(f"[DB] Kupon #{coupon_id} updated: status={new_status} | payout={payout} | roi={roi}")
-                    lost_leg = legs[leg_idx]
-                    lost_reason = (
-                        f"PRZEGRANY kupon AKO ({len(legs)} legów). "
-                        f"Leg #{leg_idx + 1}: {lost_leg.get('home', '?')} vs {lost_leg.get('away', '?')} "
-                        f"({lost_leg.get('liga', lost_leg.get('league', '?'))}). "
-                        f"Tip: {lost_leg.get('tip', '?')} @ {lost_leg.get('odds', lost_leg.get('kurs', '?'))}. "
-                        f"Wynik: {lost_leg.get('result', '?')}. "
-                        f"Score AI: {lost_leg.get('decision_score', '?')}/100."
-                    )
-                    _send_to_rag_feedback(coupon_id, legs, lost_reason, verbose=verbose)
-                    stats["settled"] += 1
-                except (KeyError, TypeError, ValueError, OSError) as e:
-                    log.error("Błąd rozliczania kuponu ID=%s: %s", coupon_id, e)
-                    stats["errors"] += 1
-            else:
-                stats["settled"] += 1
-            continue
-
-        if None in leg_results:
+                except (OSError, ValueError) as e:
+                    log.debug("Błąd zapisu partial legs_json dla #%s: %s", coupon_id, e)
             stats["partial"] += 1
             if verbose:
                 print(f"  [PARTIAL] Kupon #{coupon_id} — czekam na brakujące wyniki\n")
             continue
 
-        all_correct = all(r == 1 for r in leg_results)
-        new_status = "WIN" if all_correct else "LOSE"
+        # Finalne rozliczenie
+        all_correct = all(r == 1 for r in leg_results) and not any_leg_lost
+        new_status = "WON" if all_correct else "LOST"
         payout = round(stake * total_odds, 2) if all_correct else 0.0
         roi = round((payout - stake) / stake * 100, 1) if stake else 0.0
 
@@ -222,14 +255,13 @@ def settle_active_coupons(
         if not dry_run:
             try:
                 with _connect() as conn:
-                    # Aktualizuj status kuponu
                     conn.execute(
-                        "UPDATE coupons SET status=?, payout_pln=?, roi_pct=? WHERE id=?",
-                        (new_status, payout, roi, coupon_id),
+                        "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, legs_json=? WHERE id=?",
+                        (new_status, payout, roi,
+                         json.dumps(updated_legs, ensure_ascii=False), coupon_id),
                     )
-                    print(f"[DB] Kupon #{coupon_id} updated: status={new_status} | payout={payout} | roi={roi}")
+                    log.info("Kupon #%s → %s | payout=%.2f | roi=%.1f%%", coupon_id, new_status, payout, roi)
 
-                    # Dla WIN: aktualizuj bankroll
                     if all_correct and payout > 0:
                         cur_balance = conn.execute(
                             "SELECT balance FROM bankroll_state ORDER BY id DESC LIMIT 1"
@@ -250,28 +282,22 @@ def settle_active_coupons(
                                     payout,
                                     new_balance,
                                     "WIN",
-                                    f"Kupon #{coupon_id} WIN",
+                                    f"Kupon #{coupon_id} WON",
                                 ),
                             )
 
-                    # Dla LOSE: wyślij do RAG feedback
-                    if not all_correct:
-                        failed = [
-                            (i, lg) for i, (lg, r) in enumerate(zip(legs, leg_results)) if r == 0
-                        ]
-                        parts = []
-                        for i, lg in failed:
-                            parts.append(
-                                f"Leg #{i+1}: {lg.get('home','?')} vs {lg.get('away','?')} "
-                                f"({lg.get('liga', lg.get('league','?'))}), "
-                                f"Tip: {lg.get('tip','?')} @ {lg.get('odds', lg.get('kurs','?'))}, "
-                                f"Wynik: {lg.get('result','?')}, Score: {lg.get('decision_score','?')}/100"
-                            )
-                        lose_reason = (
-                            f"PRZEGRANY kupon ({len(legs)} legów, {len(failed)} chybionych). "
-                            + "; ".join(parts)
-                        )
-                        _send_to_rag_feedback(coupon_id, legs, lose_reason, verbose=verbose)
+                if not all_correct:
+                    failed_legs = [lg for lg in updated_legs if lg.get("leg_won") is False]
+                    parts = [
+                        f"Leg #{i+1}: {lg.get('home','?')} vs {lg.get('away','?')} "
+                        f"Tip:{lg.get('tip','?')} Wynik:{lg.get('result','?')}"
+                        for i, lg in enumerate(updated_legs) if lg.get("leg_won") is False
+                    ]
+                    lose_reason = (
+                        f"PRZEGRANY kupon ({len(legs)} legów, {len(failed_legs)} chybionych). "
+                        + "; ".join(parts)
+                    )
+                    _send_to_rag_feedback(coupon_id, updated_legs, lose_reason, verbose=verbose)
 
                 stats["settled"] += 1
             except (KeyError, TypeError, ValueError, OSError) as e:

@@ -249,13 +249,21 @@ def analyze_matches(req: AnalyzeRequest, user_id: int = Depends(require_auth)):
                 return None
             return round(1 / (1 / a + 1 / b), 2)
 
-        tips = []
-        if odds.get("home"): tips.append({"tip": "1", "label": "1 – Gosp.", "odds": odds["home"], "prob": ph, "color": "indigo"})
-        if odds.get("draw"): tips.append({"tip": "X", "label": "X – Remis", "odds": odds["draw"], "prob": pr, "color": "slate"})
-        if odds.get("away"): tips.append({"tip": "2", "label": "2 – Gość", "odds": odds["away"], "prob": pp, "color": "violet"})
-        dc1x = _dc_odds(odds.get("home"), odds.get("draw"))
+        def _fair_odds(prob_pct: float) -> float:
+            return round(100.0 / prob_pct, 2) if prob_pct > 0 else 0.0
+
+        o1  = odds.get("home") or _fair_odds(ph)
+        ox  = odds.get("draw") or _fair_odds(pr)
+        o2  = odds.get("away") or _fair_odds(pp)
+
+        tips = [
+            {"tip": "1",  "label": "1 – Gosp.", "odds": o1, "prob": ph, "color": "indigo"},
+            {"tip": "X",  "label": "X – Remis", "odds": ox, "prob": pr, "color": "slate"},
+            {"tip": "2",  "label": "2 – Gość",  "odds": o2, "prob": pp, "color": "violet"},
+        ]
+        dc1x = _dc_odds(o1, ox)
         if dc1x: tips.append({"tip": "1X", "label": "1X", "odds": dc1x, "prob": round(ph + pr, 1), "color": "blue"})
-        dcx2 = _dc_odds(odds.get("draw"), odds.get("away"))
+        dcx2 = _dc_odds(ox, o2)
         if dcx2: tips.append({"tip": "X2", "label": "X2", "odds": dcx2, "prob": round(pr + pp, 1), "color": "purple"})
         if odds.get("over_2_5"): tips.append({"tip": "Over 2.5", "label": "Over 2.5", "odds": odds["over_2_5"], "prob": po, "color": "emerald"})
         if odds.get("btts"): tips.append({"tip": "BTTS", "label": "Obie strzelą", "odds": odds["btts"], "prob": pbt, "color": "amber"})

@@ -732,6 +732,87 @@ const DashboardHome = ({ user, status, history, coupons, calibration, onSeeAll, 
   </motion.div>
 );
 
+const HistoryCouponRow = ({ c }) => {
+  const [expanded, setExpanded] = useState(false);
+  const isWon = ['WON', 'WIN'].includes(c.status);
+  const isLost = ['LOST', 'LOSE'].includes(c.status);
+  const legs = c.legs || [];
+  const wonCount = legs.filter(l => l.leg_won === true).length;
+  const lostCount = legs.filter(l => l.leg_won === false).length;
+
+  return (
+    <div className="glass-card overflow-hidden">
+      <div
+        className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer hover:bg-white/[0.02] transition-colors"
+        onClick={() => legs.length > 0 && setExpanded(e => !e)}
+      >
+        <div className="flex items-center gap-4">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isWon ? 'bg-emerald-500/10 text-emerald-400' : isLost ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'}`}>
+            {isWon ? <CheckCircle2 /> : isLost ? <XCircle /> : <Clock />}
+          </div>
+          <div>
+            <p className="font-bold text-lg">Kupon #{c.id} - {c.phase?.toUpperCase()}</p>
+            <p className="text-sm text-slate-500">{new Date(c.created_at).toLocaleString()}</p>
+            {legs.length > 0 && (
+              <p className="text-xs text-slate-600 mt-0.5">
+                <span className="text-emerald-400">{wonCount}✓</span>
+                {' / '}
+                <span className="text-rose-400">{lostCount}✗</span>
+                {' / '}
+                <span className="text-slate-500">{legs.length - wonCount - lostCount}⏳</span>
+                {' '}
+                <span className="text-slate-600">({legs.length} typów)</span>
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-8 text-center items-center">
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-widest">Kurs</p>
+            <p className="font-bold">@{c.total_odds?.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-widest">Stawka</p>
+            <p className="font-bold">{c.stake_pln} PLN</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-widest">Wypłata</p>
+            <p className={`font-bold ${isWon ? 'text-emerald-400' : 'text-slate-500'}`}>{c.payout_pln ? `${c.payout_pln} PLN` : '---'}</p>
+          </div>
+          {legs.length > 0 && (
+            <ChevronRight size={16} className={`text-slate-600 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          )}
+        </div>
+      </div>
+
+      {expanded && legs.length > 0 && (
+        <div className="px-6 pb-6 space-y-2 border-t border-white/5 pt-4">
+          {legs.map((leg, i) => {
+            const won = leg.leg_won;
+            return (
+              <div key={i} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${won === true ? 'bg-emerald-500/5 border border-emerald-500/15' : won === false ? 'bg-rose-500/5 border border-rose-500/15' : 'bg-white/[0.02] border border-white/5'}`}>
+                <div className="shrink-0">
+                  {won === true
+                    ? <CheckCircle2 size={14} className="text-emerald-400" />
+                    : won === false
+                      ? <XCircle size={14} className="text-rose-400" />
+                      : <Clock size={14} className="text-amber-400" />}
+                </div>
+                <span className="font-semibold text-slate-200 flex-1 truncate">{leg.home} - {leg.away}</span>
+                <span className="text-slate-400 shrink-0">Typ: <span className="font-bold text-slate-200">{leg.tip}</span></span>
+                {leg.result != null && (
+                  <span className={`font-bold shrink-0 ml-2 ${won === true ? 'text-emerald-400' : won === false ? 'text-rose-400' : 'text-slate-400'}`}>{leg.result}</span>
+                )}
+                <span className="text-xs text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded shrink-0">@{leg.odds}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const HistoryView = ({ apiFetch }) => {
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -746,42 +827,18 @@ const HistoryView = ({ apiFetch }) => {
   if (loading) return <div className="text-center py-20">Ładowanie historii...</div>;
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
     >
       <div className="mb-12">
         <h1 className="text-4xl font-bold mb-2">Pełna Historia</h1>
-        <p className="text-slate-400">Podgląd wszystkich Twoich kuponów.</p>
+        <p className="text-slate-400">Podgląd wszystkich Twoich kuponów. Kliknij kupon by rozwinąć typy.</p>
       </div>
-      <div className="grid grid-cols-1 gap-6">
-        {coupons.length > 0 ? coupons.map((c, i) => (
-          <div key={c.id} className="glass-card p-6 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${['WON','WIN'].includes(c.status) ? 'bg-emerald-500/10 text-emerald-400' : ['LOST','LOSE'].includes(c.status) ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                {['WON','WIN'].includes(c.status) ? <CheckCircle2 /> : ['LOST','LOSE'].includes(c.status) ? <XCircle /> : <Clock />}
-              </div>
-              <div>
-                <p className="font-bold text-lg">Kupon #{c.id} - {c.phase?.toUpperCase()}</p>
-                <p className="text-sm text-slate-500">{new Date(c.created_at).toLocaleString()}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-8 text-center">
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-widest">Kurs</p>
-                <p className="font-bold">@{c.total_odds?.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-widest">Stawka</p>
-                <p className="font-bold">{c.stake_pln} PLN</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-widest">Wypłata</p>
-                <p className={`font-bold ${['WON','WIN'].includes(c.status) ? 'text-emerald-400' : 'text-slate-500'}`}>{c.payout_pln ? `${c.payout_pln} PLN` : '---'}</p>
-              </div>
-            </div>
-          </div>
+      <div className="grid grid-cols-1 gap-4">
+        {coupons.length > 0 ? coupons.map((c) => (
+          <HistoryCouponRow key={c.id} c={c} />
         )) : (
           <div className="text-center p-24 glass-card text-slate-500">Historia jest pusta.</div>
         )}
@@ -903,16 +960,38 @@ const CouponCard = ({ coupon, index }) => (
         <Calendar size={12} /> {new Date(coupon.created_at).toLocaleDateString()}
       </div>
     </div>
-    <div className="p-6 space-y-6">
-      {(coupon.legs || []).map((leg, i) => (
-        <div key={i} className="flex justify-between items-start">
-          <div className="flex-1">
-            <p className="text-sm font-bold text-slate-200">{leg.home} - {leg.away}</p>
-            <p className="text-xs text-slate-500 flex items-center gap-1 mt-1"><Info size={10} /> Typ: <span className="text-slate-300 font-medium">{leg.tip}</span></p>
+    <div className="p-6 space-y-4">
+      {(coupon.legs || []).map((leg, i) => {
+        const won = leg.leg_won;
+        const hasResult = leg.result != null;
+        return (
+          <div key={i} className={`flex justify-between items-start rounded-xl px-3 py-2 ${won === true ? 'bg-emerald-500/5 border border-emerald-500/15' : won === false ? 'bg-rose-500/5 border border-rose-500/15' : 'bg-white/[0.02] border border-white/5'}`}>
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="mt-0.5 shrink-0">
+                {won === true
+                  ? <CheckCircle2 size={16} className="text-emerald-400" />
+                  : won === false
+                    ? <XCircle size={16} className="text-rose-400" />
+                    : <Clock size={16} className="text-amber-400 animate-pulse" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-200 truncate">{leg.home} - {leg.away}</p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="text-xs text-slate-500">Typ:</span>
+                  <span className="text-xs font-semibold text-slate-300">{leg.tip}</span>
+                  {hasResult && (
+                    <>
+                      <span className="text-xs text-slate-600">→</span>
+                      <span className={`text-xs font-bold ${won === true ? 'text-emerald-400' : won === false ? 'text-rose-400' : 'text-slate-400'}`}>{leg.result}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="text-sm font-bold bg-indigo-500/10 text-indigo-300 px-3 py-1 rounded-lg shrink-0 ml-2">@{leg.odds}</div>
           </div>
-          <div className="text-sm font-bold bg-indigo-500/10 text-indigo-300 px-3 py-1 rounded-lg">@{leg.odds}</div>
-        </div>
-      ))}
+        );
+      })}
     </div>
     <div className="px-6 py-5 bg-white/[0.04] flex justify-between items-center mt-auto border-t border-white/5">
       <div className="flex gap-10">
