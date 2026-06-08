@@ -80,7 +80,7 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
     if tip == "BTTS":
         if btts is None: return None
         return 1 if btts else 0
-    if tip in ("BTTS NO", "NO BTTS"):
+    if tip in ("BTTS NO", "NO BTTS", "BTTS NIE", "NIE BTTS"):
         if btts is None: return None
         return 1 if not btts else 0
 

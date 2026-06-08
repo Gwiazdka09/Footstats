@@ -252,21 +252,31 @@ def analyze_matches(req: AnalyzeRequest, user_id: int = Depends(require_auth)):
         def _fair_odds(prob_pct: float) -> float:
             return round(100.0 / prob_pct, 2) if prob_pct > 0 else 0.0
 
-        o1  = odds.get("home") or _fair_odds(ph)
-        ox  = odds.get("draw") or _fair_odds(pr)
-        o2  = odds.get("away") or _fair_odds(pp)
+        o1   = odds.get("home")    or _fair_odds(ph)
+        ox   = odds.get("draw")    or _fair_odds(pr)
+        o2   = odds.get("away")    or _fair_odds(pp)
+        o1x  = _dc_odds(o1, ox)   or _fair_odds(round(ph + pr, 1))
+        ox2  = _dc_odds(ox, o2)   or _fair_odds(round(pr + pp, 1))
+
+        pbtts_no = round(100.0 - pbt, 1)
+        o_btts_y = odds.get("btts")      or _fair_odds(pbt)
+        o_btts_n = odds.get("btts_no")   or _fair_odds(pbtts_no)
+
+        po15 = min(round(po + 15.0, 1), 95.0)
+        o_o15 = odds.get("over_1_5") or _fair_odds(po15)
+        o_o25 = odds.get("over_2_5") or _fair_odds(po)
 
         tips = [
-            {"tip": "1",  "label": "1 – Gosp.", "odds": o1, "prob": ph, "color": "indigo"},
-            {"tip": "X",  "label": "X – Remis", "odds": ox, "prob": pr, "color": "slate"},
-            {"tip": "2",  "label": "2 – Gość",  "odds": o2, "prob": pp, "color": "violet"},
+            {"tip": "1",        "label": "1 – Gosp.",   "odds": o1,      "prob": ph,              "color": "indigo"},
+            {"tip": "1X",       "label": "1X",           "odds": o1x,     "prob": round(ph+pr, 1), "color": "blue"},
+            {"tip": "X",        "label": "X – Remis",   "odds": ox,      "prob": pr,              "color": "slate"},
+            {"tip": "X2",       "label": "X2",           "odds": ox2,     "prob": round(pr+pp, 1), "color": "purple"},
+            {"tip": "2",        "label": "2 – Gość",    "odds": o2,      "prob": pp,              "color": "violet"},
+            {"tip": "BTTS",     "label": "Obie str.",   "odds": o_btts_y,"prob": pbt,             "color": "amber"},
+            {"tip": "BTTS nie", "label": "Nie obie",    "odds": o_btts_n,"prob": pbtts_no,        "color": "orange"},
+            {"tip": "Over 1.5", "label": "Over 1.5",    "odds": o_o15,   "prob": po15,            "color": "teal"},
+            {"tip": "Over 2.5", "label": "Over 2.5",    "odds": o_o25,   "prob": po,              "color": "emerald"},
         ]
-        dc1x = _dc_odds(o1, ox)
-        if dc1x: tips.append({"tip": "1X", "label": "1X", "odds": dc1x, "prob": round(ph + pr, 1), "color": "blue"})
-        dcx2 = _dc_odds(ox, o2)
-        if dcx2: tips.append({"tip": "X2", "label": "X2", "odds": dcx2, "prob": round(pr + pp, 1), "color": "purple"})
-        if odds.get("over_2_5"): tips.append({"tip": "Over 2.5", "label": "Over 2.5", "odds": odds["over_2_5"], "prob": po, "color": "emerald"})
-        if odds.get("btts"): tips.append({"tip": "BTTS", "label": "Obie strzelą", "odds": odds["btts"], "prob": pbt, "color": "amber"})
         results.append({
             "id": m["id"], "home": m["gosp"], "away": m["gosc"],
             "liga": m.get("liga", ""), "data": m.get("data", ""), "godzina": m.get("godzina", ""),
