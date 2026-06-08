@@ -65,9 +65,8 @@
 - [ ] Rozwiązanie: backup pre-edit hook w `.claude/hooks/`
 - **Priorytet:** 🔴 P1
 
-### TD11: __init__.py version desync
-- [ ] `src/footstats/__init__.py` ma `__version__ = "2.7"` — powinno być `"3.4"`
-- **Priorytet:** 🔴 P1 — 1 minuta fix
+### ~~TD11~~ — ✅ DONE
+- `src/footstats/__init__.py` → `__version__ = "3.4"`
 
 ### TD12: subprocess.run bez timeout w daily_agent_scheduler.py
 - [ ] Linia 23 i 67: `subprocess.run(...)` bez `timeout=`
@@ -118,5 +117,5 @@ Phase 1–14: ✅ DONE — szczegóły: `git log`, `docs/archive/`
 
 ## Pomysły na zmiany od betatesterów
 
-- Przycisk od kreatora kuponów "Analizuj wybrane mecze" powinien być dla wygody poruszać się na dole ekranu po prawej stronie na dole.
-- Flagi przy ligach w kreatorze kuponów. 
+- ~~Przycisk od kreatora kuponów "Analizuj wybrane mecze" powinien być dla wygody poruszać się na dole ekranu po prawej stronie na dole.~~ ✅
+- ~~Flagi przy ligach w kreatorze kuponów.~~ ✅
