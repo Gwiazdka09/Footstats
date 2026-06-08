@@ -417,9 +417,9 @@
         <div id="wiz-matches-list" class="space-y-3 hidden"></div>
         <p id="wiz-select-hint" class="text-xs text-slate-500 mt-3 hidden">Kliknij kartę meczu, aby ją zaznaczyć (checkbox po lewej).</p>
         <div id="wiz-analyze-error" class="text-rose-400 text-sm mt-3 hidden"></div>
-        <div class="mt-6 flex justify-end">
+        <div class="mt-6 flex justify-end sticky bottom-4 z-40 pointer-events-none">
           <button id="wiz-btn-analyze" onclick="wizAnalyze()" disabled
-            class="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2">
+            class="pointer-events-auto px-6 py-3 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm rounded-2xl transition-all flex items-center gap-2 shadow-2xl shadow-indigo-500/40">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <span class="wiz-btn-label">Zaznacz mecze, aby analizować (0)</span>
           </button>
@@ -1235,6 +1235,50 @@
       return liga.replace(/[^a-z0-9]/gi, '_');
     }
 
+    const _LIGA_FLAGS = [
+      [/premier league|epl/i,           '🏴󠁧󠁢󠁥󠁮󠁧󠁿'],
+      [/championship|league one|league two|fa cup/i, '🏴󠁧󠁢󠁥󠁮󠁧󠁿'],
+      [/la liga|laliga|primera/i,        '🇪🇸'],
+      [/bundesliga/i,                    '🇩🇪'],
+      [/serie a.*ital|calcio/i,          '🇮🇹'],
+      [/ligue 1|ligue1/i,               '🇫🇷'],
+      [/eredivisie/i,                    '🇳🇱'],
+      [/ekstraklasa|pko bp/i,            '🇵🇱'],
+      [/champions league|ucl/i,          '🏆'],
+      [/europa league|uel/i,             '🏆'],
+      [/nations league/i,               '🌍'],
+      [/brasileirao|serie [ab].*bra|campeonato/i, '🇧🇷'],
+      [/mls/i,                           '🇺🇸'],
+      [/liga mx/i,                       '🇲🇽'],
+      [/primera.*arg|arg.*primera/i,     '🇦🇷'],
+      [/süper lig|super lig.*turk/i,     '🇹🇷'],
+      [/primeira liga|liga.*port/i,      '🇵🇹'],
+      [/pro league.*belg|belg.*pro/i,    '🇧🇪'],
+      [/scottish/i,                      '🏴󠁧󠁢󠁳󠁣󠁴󠁿'],
+      [/russian|premier.*rus/i,          '🇷🇺'],
+      [/botola/i,                        '🇲🇦'],
+      [/saudi|roshn/i,                   '🇸🇦'],
+      [/allsvenskan|swedish/i,           '🇸🇪'],
+      [/eliteserien|norw/i,              '🇳🇴'],
+      [/danish.*super|superliga.*den/i,  '🇩🇰'],
+      [/greek|super.*greece/i,           '🇬🇷'],
+      [/ukrainian|ukr.*premier/i,        '🇺🇦'],
+      [/czech/i,                         '🇨🇿'],
+      [/romanian|liga [12].*rom/i,       '🇷🇴'],
+      [/hungarian|otp bank/i,            '🇭🇺'],
+      [/k.*league|korea/i,               '🇰🇷'],
+      [/j.*league|japan/i,               '🇯🇵'],
+      [/a-league|australia/i,            '🇦🇺'],
+      [/chinese|csl/i,                   '🇨🇳'],
+    ];
+
+    function _ligaFlag(liga) {
+      for (const [re, flag] of _LIGA_FLAGS) {
+        if (re.test(liga)) return flag + ' ';
+      }
+      return '';
+    }
+
     function _renderMatchList() {
       const loading = document.getElementById('wiz-matches-loading');
       const list    = document.getElementById('wiz-matches-list');
@@ -1277,7 +1321,7 @@
                  onclick="event.stopPropagation(); wizToggleLeague(this.dataset.liga)">
               <svg class="hidden w-3 h-3 text-indigo-400" id="lcheck-icon-${lid}" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
-            <span class="text-xs text-indigo-400 font-semibold uppercase tracking-wide flex-1">${liga}</span>
+            <span class="text-xs text-indigo-400 font-semibold uppercase tracking-wide flex-1">${_ligaFlag(liga)}${liga}</span>
             <span class="text-xs text-slate-500">${matches.length} mecz${matches.length === 1 ? '' : matches.length < 5 ? 'e' : 'y'}</span>
             <svg id="lchevron-${lid}" class="w-4 h-4 text-slate-500 transition-transform duration-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
