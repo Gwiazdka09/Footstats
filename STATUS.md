@@ -1,6 +1,6 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-08 (auto-audit)  
+**Last Updated:** 2026-06-09 (auto-audit)  
 **Current Version:** v3.4-stable  
 **Build Status:** ✅ OK — 0 SyntaxError (ast.parse), 0 null bytes  
 **System State:** FUNCTIONAL
@@ -11,9 +11,9 @@
 
 | Metric | Status | Value |
 |--------|--------|-------|
-| **Syntax** | ✅ OK | 0 SyntaxError w 193 .py (121 src + 72 tests) |
-| **Source Files** | ✅ | 121 .py modules w src/footstats/ |
-| **Tests** | ✅ | 70 test files |
+| **Syntax** | ✅ OK | 0 SyntaxError w 194 .py (122 src + 72 tests) |
+| **Source Files** | ✅ | 122 .py modules w src/footstats/ |
+| **Tests** | ✅ | 72 test files |
 | **AI Accuracy** | 🟡 | 26.7% live (15 kuponów Neon) — Faza 16 accuracy fixes |
 | **Automation** | ✅ | daily_agent.py + evening_agent.py OK |
 | **API** | ✅ | FastAPI + dashboard + MCP endpoint OK |
@@ -30,15 +30,16 @@
 
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
-| 1 | **Accuracy 26.7% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku |
-| 2 | **27 uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT + PUSH |
-| 3 | **__init__.py version 2.7** | 🔴 P1 | Desync: config=3.4, pyproject=3.4, __init__=2.7 |
-| 4 | **25x `except Exception`** | 🟡 P2 | Top: backtest_engine(4), backtest(3), analyzer(3) |
-| 5 | **2x subprocess.run bez timeout** | 🟡 P2 | daily_agent_scheduler.py linie 23, 67 |
-| 6 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1345), superbet(1128), cli(1112) |
-| 7 | **5x subprocess.Popen fire-and-forget** | ⚪ P4 | evening_agent, cli, daily_agent, backtest, post_match |
-| 8 | **docs/PROJECT_STATE.md stale (v3.3)** | ⚪ P4 | Referencje do v3.3, nieaktualne |
-| 9 | **.fuse_hidden + __pycache__ do czyszczenia** | ⚪ P4 | 11x __pycache__ w src/, 1x scripts/, 1x .fuse_hidden |
+| 1 | **Accuracy 26.7% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku, czekamy na 50 settled |
+| 2 | **Uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT + PUSH |
+| 3 | **2x subprocess.run bez timeout** | 🟡 P2 | daily_agent_scheduler.py linie 23, 67 |
+| 4 | **25x `except Exception`** | 🟡 P2 | Top: backtest_engine(4), backtest(3), analyzer(3) — wszystkie z noqa justified |
+| 5 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1345), superbet(1128), cli(1112) |
+| 6 | **5x subprocess.Popen fire-and-forget** | ⚪ P4 | evening_agent, cli, daily_agent, backtest, post_match |
+| 7 | **docs/PROJECT_STATE.md stale (v3.3)** | ⚪ P4 | Referencje do v3.3, nieaktualne |
+| 8 | **.fuse_hidden + 13x __pycache__** | ⚪ P4 | Do czyszczenia |
+| 9 | **DAILY_REPORT_*.md brak w .gitignore** | ⚪ P4 | Raporty dzienne nie powinny iść do repo |
+| 10 | **understat_xg.py global Session** | ⚪ P4 | `_SESSION = requests.Session()` — module-level, nigdy nie zamykana |
 
 ---
 
@@ -82,3 +83,11 @@
 | Syntax + null bytes audit (193/193 OK) | ✅ Verified | 06-08 |
 | DB connections (context mgr) | ✅ Verified | 06-08 |
 | Timeout audit (requests.get/post) | ✅ Verified | 06-08 |
+| __init__.py version 2.7→3.4 | ✅ FIXED | 06-08 |
+| Syntax audit (194/194 OK, 122 src + 72 tests) | ✅ Verified | 06-09 |
+| Security audit (no eval/pickle/os.system/hardcoded secrets) | ✅ Verified | 06-09 |
+| No TODO/FIXME/HACK in src/ | ✅ Verified | 06-09 |
+| DB pool (context mgr + putconn) | ✅ Verified | 06-09 |
+| Cache bounds (MAX_ENTRIES=500, TTL, eviction) | ✅ Verified | 06-09 |
+| Circuit breaker (thread-safe, 3 states) | ✅ Verified | 06-09 |
+| Playwright scrapers (context managers for browser+page) | ✅ Verified | 06-09 |

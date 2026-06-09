@@ -33,6 +33,8 @@ _SESSION.headers.update({
     ),
     "Accept-Language": "en-US,en;q=0.9",
 })
+import atexit
+atexit.register(_SESSION.close)
 
 # Mapowanie polskich/angielskich nazw → slug Understat (spacje → podkreślnik)
 _TEAM_SLUGS: dict[str, str] = {

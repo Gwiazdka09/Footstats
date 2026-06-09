@@ -33,6 +33,7 @@ def run_draft_phase(stawka: int = 10, dni: int = 3) -> None:
             "draft",
         ],
         cwd=DATA_DIR.parent,
+        timeout=7200,
     )
     if result.returncode != 0:
         print(f"[ERROR] Draft phase failed with code {result.returncode}")
@@ -77,6 +78,7 @@ def wait_and_run_final(stawka: int = 10, dni: int = 3) -> None:
                     "final",
                 ],
                 cwd=DATA_DIR.parent,
+                timeout=7200,
             )
             if result.returncode == 0:
                 print(f"[{datetime.now()}] FINAL PHASE COMPLETED")

@@ -1,6 +1,6 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-08  
+**Ostatnia aktualizacja:** 2026-06-09  
 **Wersja:** v3.4-stable  
 **Accuracy baseline:** 26.7% (15 live settled, Neon.tech)  
 **Cel na koniec lipca:** M1 = 55% win rate
@@ -65,8 +65,8 @@
 - [ ] Rozwiązanie: backup pre-edit hook w `.claude/hooks/`
 - **Priorytet:** 🔴 P1
 
-### ~~TD11~~ — ✅ DONE
-- `src/footstats/__init__.py` → `__version__ = "3.4"`
+### ~~TD11~~ — ✅ DONE (verified 06-09)
+- `src/footstats/__init__.py` → `__version__ = "3.4"` — potwierdzone: plik zawiera "3.4"
 
 ### TD12: subprocess.run bez timeout w daily_agent_scheduler.py
 - [ ] Linia 23 i 67: `subprocess.run(...)` bez `timeout=`
@@ -74,9 +74,20 @@
 - **Priorytet:** 🟡 P2
 
 ### TD13: Wyczyść __pycache__ i .fuse_hidden
-- [ ] `find . -name __pycache__ -not -path ./.venv/\* -exec rm -rf {} +`
+- [ ] `find . -name __pycache__ -not -path ./.venv/\* -not -path ./.vexp/\* -exec rm -rf {} +`
 - [ ] `rm .fuse_hidden*`
 - [ ] Dodać `DAILY_REPORT_*.md` do .gitignore
+- [ ] Przenieść `DAILY_REPORT_2026-06-*.md` do `docs/archive/daily/`
+- **Priorytet:** ⚪ P4 | **Stan:** 13x __pycache__, 1x .fuse_hidden, 2x DAILY_REPORT
+
+### TD14: docs/PROJECT_STATE.md — aktualizacja v3.3 → v3.4
+- [ ] Zamień "v3.3" na "v3.4" w tytule
+- [ ] Treść jest stale (z 05-18) — rozważ archiwizację
+- **Priorytet:** ⚪ P4
+
+### TD15: understat_xg.py — global requests.Session
+- [ ] `_SESSION = requests.Session()` na poziomie modułu — nigdy nie zamykana
+- [ ] Opcje: lazy init z `atexit.register(_SESSION.close)` albo context manager
 - **Priorytet:** ⚪ P4
 
 ### ~~TD1~~ ~~TD2~~ ~~TD5~~ ~~TD6~~ ~~TD7~~ ~~TD8~~ — ✅ DONE
