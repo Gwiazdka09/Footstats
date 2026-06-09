@@ -54,41 +54,20 @@
 - `daily_agent.py` 1486→1325 LOC: filtry→`core/daily_filters.py`, zapis DB→`core/daily_io.py`
 - `analyzer.py` 1175→959 LOC: helpery→`ai/analyzer_helpers.py`
 
-### TD9: Commit + push (80 uncommitted changes)
-- [ ] `git add -A && git commit -m "v3.4: fix truncation, restore 30 files, gitignore update"`
-- [ ] `git push origin main`
-- **Priorytet:** 🔴 P1 — ryzyko utraty pracy
+### ~~TD9~~ — ✅ DONE (06-09)
+- `git add -A && git commit` — v3.4 na main
 
-### TD10: Zbadać przyczynę powtarzającej się truncacji plików
-- [ ] 06-07: 26 plików truncated + 4 z null bytes (kolejny raz!)
-- [ ] Prawdopodobna przyczyna: Claude Code edycja dużych plików lub dysk/antywirus
-- [ ] Rozwiązanie: backup pre-edit hook w `.claude/hooks/`
-- **Priorytet:** 🔴 P1
+### ~~TD10~~ — ✅ DONE (06-09)
+- `pre-edit-backup.js` hook → backup .py/.json/.md >5KB do `f:/bot/.backups/` przed każdym Edit/Write
+- Zarejestrowany w `.claude/settings.local.json` (projekt-only)
 
 ### ~~TD11~~ — ✅ DONE (verified 06-09)
 - `src/footstats/__init__.py` → `__version__ = "3.4"` — potwierdzone: plik zawiera "3.4"
 
-### TD12: subprocess.run bez timeout w daily_agent_scheduler.py
-- [ ] Linia 23 i 67: `subprocess.run(...)` bez `timeout=`
-- [ ] Dodać `timeout=7200` (2h max na fazę draft/final)
-- **Priorytet:** 🟡 P2
-
-### TD13: Wyczyść __pycache__ i .fuse_hidden
-- [ ] `find . -name __pycache__ -not -path ./.venv/\* -not -path ./.vexp/\* -exec rm -rf {} +`
-- [ ] `rm .fuse_hidden*`
-- [ ] Dodać `DAILY_REPORT_*.md` do .gitignore
-- [ ] Przenieść `DAILY_REPORT_2026-06-*.md` do `docs/archive/daily/`
-- **Priorytet:** ⚪ P4 | **Stan:** 13x __pycache__, 1x .fuse_hidden, 2x DAILY_REPORT
-
-### TD14: docs/PROJECT_STATE.md — aktualizacja v3.3 → v3.4
-- [ ] Zamień "v3.3" na "v3.4" w tytule
-- [ ] Treść jest stale (z 05-18) — rozważ archiwizację
-- **Priorytet:** ⚪ P4
-
-### TD15: understat_xg.py — global requests.Session
-- [ ] `_SESSION = requests.Session()` na poziomie modułu — nigdy nie zamykana
-- [ ] Opcje: lazy init z `atexit.register(_SESSION.close)` albo context manager
-- **Priorytet:** ⚪ P4
+### ~~TD12~~ — ✅ DONE (06-09): `timeout=7200` w draft + final subprocess.run
+### ~~TD13~~ — ✅ DONE (06-09): __pycache__, .gitignore, archiwum daily reports
+### ~~TD14~~ — ✅ DONE (06-09): PROJECT_STATE.md v3.3 → v3.4
+### ~~TD15~~ — ✅ DONE (06-09): `atexit.register(_SESSION.close)` w understat_xg.py
 
 ### ~~TD1~~ ~~TD2~~ ~~TD5~~ ~~TD6~~ ~~TD7~~ ~~TD8~~ — ✅ DONE
 
