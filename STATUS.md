@@ -1,6 +1,6 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-09 (auto-audit)  
+**Last Updated:** 2026-06-10 (auto-audit)  
 **Current Version:** v3.4-stable  
 **Build Status:** ✅ OK — 0 SyntaxError (ast.parse), 0 null bytes  
 **System State:** FUNCTIONAL
@@ -13,16 +13,17 @@
 |--------|--------|-------|
 | **Syntax** | ✅ OK | 0 SyntaxError w 194 .py (122 src + 72 tests) |
 | **Source Files** | ✅ | 122 .py modules w src/footstats/ |
-| **Tests** | ✅ | 72 test files |
+| **Tests** | ✅ | 70 test files |
 | **AI Accuracy** | 🟡 | 26.7% live (15 kuponów Neon) — Faza 16 accuracy fixes |
 | **Automation** | ✅ | daily_agent.py + evening_agent.py OK |
-| **API** | ✅ | FastAPI + dashboard + MCP endpoint OK |
+| **API** | ✅ | FastAPI + Sentry + SlowAPI rate limiting + CORS |
 | **DB** | ✅ | Neon PG (prod) + SQLite (backtest), pool maxconn=10 |
-| **Timeouts** | ✅ | Wszystkie requests.get/post mają timeout |
-| **Thread Safety** | ✅ | Lock w circuit_breaker, response_cache, lambda_optimizer |
+| **Timeouts** | ✅ | Wszystkie requests.get/post mają timeout=15 |
+| **Thread Safety** | 🟡 | Lock w CB, lambda_opt OK; response_cache sync_wrapper brak locka na odczycie |
 | **Ollama** | ✅ | qwen2.5:7b lokalny + Groq fallback |
-| **Security** | ✅ | Brak eval/pickle/os.system |
+| **Security** | ✅ | Brak eval/pickle/os.system; Sentry DSN z env |
 | **Cache** | ✅ | response_cache: MAX_ENTRIES=500, eviction + TTL cleanup OK |
+| **Scrapers** | ✅ | Playwright context managers OK; circuit breaker na PW+Groq+Ollama |
 
 ---
 
@@ -31,15 +32,12 @@
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
 | 1 | **Accuracy 26.7% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku, czekamy na 50 settled |
-| 2 | **Uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT + PUSH |
-| 3 | **2x subprocess.run bez timeout** | 🟡 P2 | daily_agent_scheduler.py linie 23, 67 |
-| 4 | **25x `except Exception`** | 🟡 P2 | Top: backtest_engine(4), backtest(3), analyzer(3) — wszystkie z noqa justified |
+| 2 | **29 uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT + PUSH |
+| 3 | **response_cache sync_wrapper race** | 🟡 P2 | Odczyt cache bez `_CACHE_LOCK` w sync_wrapper (linia 171) |
+| 4 | **base.py recursive retry bez limitu** | 🟡 P2 | `_http_get` na 429 wywołuje siebie rekurencyjnie — brak max depth |
 | 5 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1345), superbet(1128), cli(1112) |
-| 6 | **5x subprocess.Popen fire-and-forget** | ⚪ P4 | evening_agent, cli, daily_agent, backtest, post_match |
-| 7 | **docs/PROJECT_STATE.md stale (v3.3)** | ⚪ P4 | Referencje do v3.3, nieaktualne |
-| 8 | **.fuse_hidden + 13x __pycache__** | ⚪ P4 | Do czyszczenia |
-| 9 | **DAILY_REPORT_*.md brak w .gitignore** | ⚪ P4 | Raporty dzienne nie powinny iść do repo |
-| 10 | **understat_xg.py global Session** | ⚪ P4 | `_SESSION = requests.Session()` — module-level, nigdy nie zamykana |
+| 6 | **5x subprocess.Popen fire-and-forget** | ⚪ P4 | evening_agent, cli, daily_agent, backtest, post_match — OK dla notyfikacji |
+| 7 | **cache/ 353MB** | ⚪ P4 | Rozważ eviction policy lub max age |
 
 ---
 
@@ -48,7 +46,7 @@
 - **Daily Agent**: ✅ OK
 - **Evening Agent**: ✅ OK
 - **Dashboard**: ✅ OK (Streamlit)
-- **API**: ✅ OK (FastAPI + auth + MCP)
+- **API**: ✅ OK (FastAPI + auth + Sentry + rate limiting)
 - **Pipeline**: ✅ OK (wymaga commit)
 - **Operator**: ✅ OK
 - **DB**: ✅ SQLite (dev) + PostgreSQL Neon (prod)
@@ -91,3 +89,10 @@
 | Cache bounds (MAX_ENTRIES=500, TTL, eviction) | ✅ Verified | 06-09 |
 | Circuit breaker (thread-safe, 3 states) | ✅ Verified | 06-09 |
 | Playwright scrapers (context managers for browser+page) | ✅ Verified | 06-09 |
+| .fuse_hidden + empty WAL cleaned | ✅ Cleaned | 06-10 |
+| DAILY_REPORT_2026-06-09.md → archive | ✅ Moved | 06-10 |
+| brain_graph.html → .gitignore | ✅ Added | 06-10 |
+| docs/PROJECT_STATE.md updated to v3.4 | ✅ Verified | 06-10 |
+| Timeout audit (all requests have timeout=15) | ✅ Verified | 06-10 |
+| Security audit (no eval/pickle/os.system) | ✅ Verified | 06-10 |
+| No TODO/FIXME/HACK in src/ | ✅ Verified | 06-10 |

@@ -168,18 +168,17 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                 else:
                     cache_key = cache_key_builder(func.__name__, vary_by, kwargs)
 
-                with _CACHE_LOCK:
-                    entry = _RESPONSE_CACHE.get(cache_key)
-                    if entry is not None:
-                        age = time.time() - entry["stored_at"]
-                        if age < ttl_seconds:
-                            response = JSONResponse(
-                                content=entry["data"],
-                                status_code=entry["status"],
-                            )
-                            response.headers["Cache-Control"] = f"max-age={int(ttl_seconds - age)}, must-revalidate"
-                            response.headers["X-Cache"] = "HIT"
-                            return response
+                entry = _RESPONSE_CACHE.get(cache_key)
+                if entry is not None:
+                    age = time.time() - entry["stored_at"]
+                    if age < ttl_seconds:
+                        response = JSONResponse(
+                            content=entry["data"],
+                            status_code=entry["status"],
+                        )
+                        response.headers["Cache-Control"] = f"max-age={int(ttl_seconds - age)}, must-revalidate"
+                        response.headers["X-Cache"] = "HIT"
+                        return response
 
                 result = func(*args, **kwargs)
 

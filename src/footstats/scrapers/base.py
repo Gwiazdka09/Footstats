@@ -6,7 +6,7 @@ from rich.panel import Panel
 
 # ── HTTP GET (football-data.org) ─────────────────────────────────────
 
-def _http_get(endpoint: str, params: dict = None, headers: dict = None) -> dict | None:
+def _http_get(endpoint: str, params: dict = None, headers: dict = None, _retry: int = 0) -> dict | None:
     url = f"https://api.football-data.org/v4{endpoint}"
     _rate_guard()
     try:
@@ -20,8 +20,11 @@ def _http_get(endpoint: str, params: dict = None, headers: dict = None) -> dict 
                 "FootStats wznowi pobieranie za [bold]62 sekundy[/bold]...",
                 border_style="red", title="Rate Limit Exceeded", padding=(1, 2)
             ))
+            if _retry >= 3:
+                console.print("[red]429 po 3 probach - przerywam.[/red]")
+                return None
             time.sleep(62)
-            return _http_get(endpoint, params, headers)
+            return _http_get(endpoint, params, headers, _retry=_retry + 1)
         elif r.status_code == 403:
             console.print("[red]403 Forbidden - nieprawidlowy klucz API lub plan.[/red]")
             return None
