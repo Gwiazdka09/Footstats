@@ -825,6 +825,8 @@
       high:   { title: 'Wysokie ryzyko', border: 'border-rose-500/20',    text: 'text-rose-400' },
     };
 
+    let _dailyProposals = null;
+
     function renderProposalCard(tier, p) {
       const { title, border, text } = RISK_LABELS[tier];
       const legs = (p.legs || []).map(l => `
@@ -841,6 +843,10 @@
             <span class="text-xs text-slate-500">@${fmt(p.total_odds)}</span>
           </div>
           <div class="space-y-3">${legs}</div>
+          <button onclick="copyProposal('${tier}')"
+            class="w-full mt-5 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold text-sm transition-colors">
+            Skopiuj kupon
+          </button>
         </div>
       `;
     }
@@ -851,12 +857,49 @@
       try {
         const res = await apiFetch('/api/coupons/daily-proposals');
         const proposals = res && res.ok ? await res.json() : null;
+        _dailyProposals = proposals;
         const tiers = ['low', 'medium', 'high'].filter(t => proposals?.[t]?.legs?.length > 0);
         grid.innerHTML = tiers.length === 0
           ? `<div class="md:col-span-3 text-center p-12 glass-card text-slate-500 text-sm">Brak propozycji na dziś.</div>`
           : tiers.map(t => renderProposalCard(t, proposals[t])).join('');
       } catch(_) {
         grid.innerHTML = `<div class="md:col-span-3 text-center p-12 glass-card text-slate-500 text-sm">Brak propozycji na dziś.</div>`;
+      }
+    }
+
+    async function copyProposal(tier) {
+      const p = _dailyProposals?.[tier];
+      if (!p || !p.legs?.length) return;
+
+      const stakeStr = prompt('Za ile PLN chcesz zagrać?', '10');
+      if (stakeStr === null) return;
+      const stake = parseFloat(stakeStr);
+      if (isNaN(stake) || stake < 2.0) {
+        alert('Stawka musi być liczbą >= 2 PLN.');
+        return;
+      }
+
+      const selections = p.legs.map(l => ({
+        match_id: l.match_id,
+        home: l.home,
+        away: l.away,
+        tip: l.tip,
+        odds: l.odds,
+        win_prob: l.prob,
+      }));
+
+      try {
+        const res = await apiFetch('/api/coupon/place', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ selections, total_odds: p.total_odds, stake_pln: stake })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        alert(`Kupon #${data.coupon_id} postawiony za ${fmt(stake)} PLN. Nowy balans: ${fmt(data.new_balance)} PLN.`);
+        reloadDashboard();
+      } catch (e) {
+        alert('Błąd: ' + e.message);
       }
     }
 
