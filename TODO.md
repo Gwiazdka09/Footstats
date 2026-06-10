@@ -70,26 +70,19 @@
 ### ~~TD15~~ — ✅ DONE (06-09): `atexit.register(_SESSION.close)` w understat_xg.py
 ### ~~TD16~~ — ✅ DONE (06-10): .fuse_hidden + empty WAL cleaned, brain_graph.html → .gitignore, DAILY_REPORT → archive
 
-### TD17: response_cache sync_wrapper race condition
-- [ ] `sync_wrapper` (linia 171) czyta `_RESPONSE_CACHE.get()` bez `_CACHE_LOCK` — race z zapisem
-- [ ] Fix: owinąć odczyt w `with _CACHE_LOCK:` (tak jak async_wrapper)
-- **Effort:** 5 min | 🟡 P2
-
-### TD18: base.py recursive retry bez limitu
-- [ ] `_http_get()` na 429 wywołuje samą siebie — brak max depth → stack overflow przy ciągłym 429
-- [ ] Fix: dodać parametr `_retry=0` i `if _retry >= 3: return None`
-- **Effort:** 5 min | 🟡 P2
+### ~~TD17~~ — ✅ DONE (06-09): `sync_wrapper` odczyt owinięty w `with _CACHE_LOCK:`
+### ~~TD18~~ — ✅ DONE (06-09): `_http_get()` 429 retry capped `_retry>=3`
 
 ### TD19: cache/ 353MB — brak eviction policy
 - [ ] Rozważ max age dla plików cache (np. >7 dni → usuwaj)
 - [ ] Lub skrypt `scripts/evict_cache.py` w pipeline
 - **Effort:** 30 min | ⚪ P4
 
-### TD20: Uncommitted changes (29 plików)
-- [ ] `git add -A && git commit -m "v3.4 daily updates" && git push`
-- **Effort:** 2 min | 🔴 P1
+### ~~TD20~~ — ✅ DONE (06-10): wszystko commitowane i pushed na main
 
 ### ~~TD1~~ ~~TD2~~ ~~TD5~~ ~~TD6~~ ~~TD7~~ ~~TD8~~ — ✅ DONE
+
+### ~~TD21~~ — ✅ DONE (06-10): `evening_agent._save_coupon_legs` używał świeżego `utils.db.connect` zamiast `backtest._connect` → CI failed (brak DATABASE_URL). Fix + odkryto że 2 testy integracyjne pisały do prawdziwej prod DB (kupon #1 legs_json nadpisany "Arsenal vs Chelsea", nieodzyskiwalne, status LOST/payout 0 — bez wpływu na bankroll)
 
 ---
 
