@@ -1,9 +1,11 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-10  
-**Wersja:** v3.4-stable  
-**Accuracy baseline:** 26.7% (15 live settled, Neon.tech)  
+**Ostatnia aktualizacja:** 2026-06-10
+**Wersja:** v3.4-stable
+**Accuracy baseline:** 26.7% (15 live settled, Neon.tech)
 **Cel na koniec lipca:** M1 = 55% win rate
+
+> Historia ukończonych zadań: `git log` (commity TD/16.x/15.x mają opisowe nazwy)
 
 ---
 
@@ -20,17 +22,7 @@
 
 ---
 
-## 🔴 FAZA 16: ACCURACY FIXES (przed betą — teraz)
-
-### ~~16.1~~ — ✅ DONE
-- `LIGI_WHITELIST` + `LIGI_BLACKLIST_KEYWORDS` + `LIGA_FILTER_ENABLED=True` w config.py
-- `_pre_filtruj_ligi` wywoływana w KROK 1 daily_agent; fix `ImportError: LIGI_BLACKLIST`
-
-### ~~16.2~~ — ✅ DONE
-- `PROG_DRAFT=50`, `PROG_DRAFT_FALLBACK=40` w `decision_score.py`; fallback aktywny w main()
-
-### ~~16.3~~ — ✅ DONE
-- Kupon #33 (Legia/Ajax-PSV) → VOID w Neon.tech
+## 🔴 FAZA 16: ACCURACY FIXES (przed betą)
 
 ### 16.4: Kalibracja modelu (po 50 settled)
 - [ ] `python -m footstats.core.probability_calibrator`
@@ -47,66 +39,18 @@
 
 ## 🔧 TECH DEBT
 
-### ~~TD3~~ — ✅ DONE
-- superbet.py 4x narrowed; pozostałe pliki z listy były już czyste lub justified noqa
-
-### ~~TD4~~ — ✅ DONE
-- `daily_agent.py` 1486→1325 LOC: filtry→`core/daily_filters.py`, zapis DB→`core/daily_io.py`
-- `analyzer.py` 1175→959 LOC: helpery→`ai/analyzer_helpers.py`
-
-### ~~TD9~~ — ✅ DONE (06-09)
-- `git add -A && git commit` — v3.4 na main
-
-### ~~TD10~~ — ✅ DONE (06-09)
-- `pre-edit-backup.js` hook → backup .py/.json/.md >5KB do `f:/bot/.backups/` przed każdym Edit/Write
-- Zarejestrowany w `.claude/settings.local.json` (projekt-only)
-
-### ~~TD11~~ — ✅ DONE (verified 06-09)
-- `src/footstats/__init__.py` → `__version__ = "3.4"` — potwierdzone: plik zawiera "3.4"
-
-### ~~TD12~~ — ✅ DONE (06-09): `timeout=7200` w draft + final subprocess.run
-### ~~TD13~~ — ✅ DONE (06-09): __pycache__, .gitignore, archiwum daily reports
-### ~~TD14~~ — ✅ DONE (06-09): PROJECT_STATE.md v3.3 → v3.4
-### ~~TD15~~ — ✅ DONE (06-09): `atexit.register(_SESSION.close)` w understat_xg.py
-### ~~TD16~~ — ✅ DONE (06-10): .fuse_hidden + empty WAL cleaned, brain_graph.html → .gitignore, DAILY_REPORT → archive
-
-### ~~TD17~~ — ✅ DONE (06-09): `sync_wrapper` odczyt owinięty w `with _CACHE_LOCK:`
-### ~~TD18~~ — ✅ DONE (06-09): `_http_get()` 429 retry capped `_retry>=3`
-
 ### TD19: cache/ 353MB — brak eviction policy
 - [ ] Rozważ max age dla plików cache (np. >7 dni → usuwaj)
 - [ ] Lub skrypt `scripts/evict_cache.py` w pipeline
 - **Effort:** 30 min | ⚪ P4
 
-### ~~TD20~~ — ✅ DONE (06-10): wszystko commitowane i pushed na main
-
-### ~~TD1~~ ~~TD2~~ ~~TD5~~ ~~TD6~~ ~~TD7~~ ~~TD8~~ — ✅ DONE
-
-### ~~TD21~~ — ✅ DONE (06-10): `evening_agent._save_coupon_legs` używał świeżego `utils.db.connect` zamiast `backtest._connect` → CI failed (brak DATABASE_URL). Fix + odkryto że 2 testy integracyjne pisały do prawdziwej prod DB (kupon #1 legs_json nadpisany "Arsenal vs Chelsea", nieodzyskiwalne, status LOST/payout 0 — bez wpływu na bankroll)
-
 ---
 
 ## ⚪ FAZA 15: NOWE FEATURE'Y
 
-### ~~15.1~~ — ✅ DONE
-- `data/agent_state.json` pause flag; `is_agent_paused`, `set_agent_paused`, `check_and_auto_pause` w bankroll.py
-- daily_agent: check na starcie + auto-pause + Telegram `send_stop_loss_alert`
-- dashboard: PAUSED status, drawdown metric, Resume/Pause buttons
-
-### ~~15.2~~ — ✅ DONE (było wcześniej)
-- `clv_tracker.py` + evening_agent `record_closing_odds` + dashboard CLV section
-
 ### 15.3: Odds comparison — STS/Fortuna/LV BET
 - [ ] Playwright login → porównaj kursy, wybierz najwyższy
 - **Effort:** 1–2 tygodnie | ⏸️ odkładamy
-
-### ~~15.4~~ — ✅ DONE
-- Sidebar filtry liga + typ zakładu (multiselect) — `dashboard.py`
-- accuracy per liga, bankroll chart, CLV — były wcześniej
-
-### ~~15.5~~ — ✅ DONE
-- `telegram_bot.py` — raw HTTP polling, /status /kupon /void /stats /help
-- Uruchomienie: `python -m footstats.telegram_bot`
 
 ### 15.6: Multi-user support
 - [ ] Per-user bankroll, risk profile, Telegram chat_id
@@ -114,14 +58,6 @@
 
 ---
 
-## Fazy ukończone
+## 💡 Pomysły od betatesterów
 
-Phase 1–14: ✅ DONE — szczegóły: `git log`, `docs/archive/`
-
-## Pomysły na zmiany od betatesterów
-
-- ~~Przycisk od kreatora kuponów "Analizuj wybrane mecze" powinien być dla wygody poruszać się na dole ekranu po prawej stronie na dole.~~ ✅
-- ~~Flagi przy ligach w kreatorze kuponów.~~ ✅ (06-10, App.jsx LEAGUE_FLAGS)
-- ~~codzienne proponowane kupony risk low/medium/high~~ ✅ (06-10): `core/risk_proposals.py` + `GET /api/coupons/daily-proposals`, sekcja "Propozycje dnia" w Dashboard
-- ~~zakładka najlepsi typerzy~~ ✅ (06-10): migracja #5 (`coupons.shared` + konto "System"), `PATCH /api/coupon/{id}/share`, `GET /api/leaderboard`, `GET /api/leaderboard/{username}/coupons`, tab "Najlepsi typerzy" w App.jsx
-  - ~~TODO follow-up: "System" konto generuje propozycje dnia~~ ✅ (06-10): `core/system_coupons.py::generate_system_coupons` + hook w `daily_agent.py` (faza draft) — zapisuje 3 kupony risk_low/medium/high jako shared=TRUE, idempotentne per dzień
+(brak otwartych — dodawaj nowe tutaj)
