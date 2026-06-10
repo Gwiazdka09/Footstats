@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     groq_reasoning   TEXT,
     decision_score   INTEGER,
     match_date_first TEXT,
-    user_id          INTEGER DEFAULT 1
+    user_id          INTEGER DEFAULT 1,
+    shared           BOOLEAN NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_coupon_status  ON coupons(status);
 CREATE INDEX IF NOT EXISTS idx_coupon_created ON coupons(created_at);

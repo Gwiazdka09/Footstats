@@ -66,6 +66,7 @@ def save_coupon(
     decision_score: int | None = None,
     match_date_first: str | None = None,
     user_id: int = 1,
+    shared: bool = False,
 ) -> int:
     """Zapisuje nowy kupon (status=DRAFT). Zwraca id."""
     init_coupon_tables()
@@ -76,11 +77,11 @@ def save_coupon(
             """
             INSERT INTO coupons
                 (phase, status, kupon_type, legs_json, total_odds, stake_pln,
-                 groq_reasoning, decision_score, match_date_first, user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+                 groq_reasoning, decision_score, match_date_first, user_id, shared)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
             """,
             (phase, STATUS_DRAFT, kupon_type, legs_json,
-             total_odds, stake_pln, groq_reasoning, decision_score, match_date_first, user_id),
+             total_odds, stake_pln, groq_reasoning, decision_score, match_date_first, user_id, shared),
         ).fetchone()
         return row["id"]
     return _exec(_fn)

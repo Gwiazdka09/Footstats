@@ -131,4 +131,4 @@ Phase 1–14: ✅ DONE — szczegóły: `git log`, `docs/archive/`
 - ~~Flagi przy ligach w kreatorze kuponów.~~ ✅ (06-10, App.jsx LEAGUE_FLAGS)
 - ~~codzienne proponowane kupony risk low/medium/high~~ ✅ (06-10): `core/risk_proposals.py` + `GET /api/coupons/daily-proposals`, sekcja "Propozycje dnia" w Dashboard
 - ~~zakładka najlepsi typerzy~~ ✅ (06-10): migracja #5 (`coupons.shared` + konto "System"), `PATCH /api/coupon/{id}/share`, `GET /api/leaderboard`, `GET /api/leaderboard/{username}/coupons`, tab "Najlepsi typerzy" w App.jsx
-  - TODO follow-up: "System" konto jeszcze nie generuje automatycznie udostępnionych kuponów — wymaga hooka w daily_agent
+  - ~~TODO follow-up: "System" konto generuje propozycje dnia~~ ✅ (06-10): `core/system_coupons.py::generate_system_coupons` + hook w `daily_agent.py` (faza draft) — zapisuje 3 kupony risk_low/medium/high jako shared=TRUE, idempotentne per dzień

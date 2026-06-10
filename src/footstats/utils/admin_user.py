@@ -44,3 +44,29 @@ def resolve_admin_user_id(fallback: int = 1) -> int:
 def clear_admin_user_cache() -> None:
     """Clear cache after migration or in tests."""
     resolve_admin_user_id.cache_clear()
+
+
+@lru_cache(maxsize=1)
+def resolve_system_user_id() -> int | None:
+    """
+    Return user_id for konto 'System' (auto-generowane propozycje dnia).
+    None jeśli konto nie istnieje (np. migracja #5 nie była uruchomiona).
+    """
+    try:
+        from footstats.utils.db import connect
+
+        with connect() as conn:
+            row = conn.execute(
+                "SELECT id FROM users WHERE username = 'System' AND is_active = TRUE",
+            ).fetchone()
+        if row:
+            return int(row["id"])
+        log.warning("Konto 'System' nie znalezione w DB - propozycje dnia nie będą udostępnione")
+    except (OSError, ValueError, RuntimeError) as exc:
+        log.warning("resolve_system_user_id: %s", exc)
+    return None
+
+
+def clear_system_user_cache() -> None:
+    """Clear cache after migration or in tests."""
+    resolve_system_user_id.cache_clear()

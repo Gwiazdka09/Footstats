@@ -1106,6 +1106,23 @@ def main():
     save_predictions_batch(wyniki, batch_id=batch_id)
     log.info(f"Checkpoint saved: {batch_id} ({len(wyniki)} predictions)")
 
+    # Krok 1a: Propozycje dnia konta 'System' (low/medium/high, shared) — raz dziennie (faza draft)
+    if args.faza == "draft" and not args.dry_run:
+        try:
+            from footstats.scrapers.bzzoiro import BzzoiroClient, ENV_BZZOIRO
+            from footstats.core.system_coupons import generate_system_coupons
+
+            klucz_sys = os.getenv(ENV_BZZOIRO, "")
+            if klucz_sys:
+                c_sys = BzzoiroClient(klucz_sys)
+                ok_sys, _ = c_sys.waliduj()
+                if ok_sys:
+                    nowe = generate_system_coupons(c_sys.predykcje_tygodnia())
+                    if nowe:
+                        console.print(f"[green]✓ Konto 'System': {len(nowe)} nowych propozycji dnia (shared)[/green]")
+        except (OSError, RuntimeError, ValueError) as e:
+            console.print(f"[dim]Propozycje dnia 'System': {e}[/dim]")
+
     # Krok 1b: Dociagnij Ekstraklase z API-Football jesli dostepny
     wyniki_ekstra = _pobierz_apifootball_ekstraklasa(args.dni)
     if wyniki_ekstra:
