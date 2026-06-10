@@ -10,7 +10,6 @@
   <link rel="manifest" href="/manifest.json" />
   <title>FootStats — Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
@@ -248,13 +247,10 @@
         </div>
       </section>
 
-      <!-- Chart -->
-      <section class="glass-card p-8 mb-10">
-        <h2 class="text-base font-bold mb-6 flex items-center gap-2 text-slate-300">
-          <svg width="18" height="18" fill="none" stroke="#818cf8" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/></svg>
-          Progresja Bankrolla
-        </h2>
-        <canvas id="bankroll-chart" height="100"></canvas>
+      <!-- Daily proposals -->
+      <section class="mb-10">
+        <h2 class="text-xl font-bold mb-6">Propozycje dnia</h2>
+        <div id="daily-proposals-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
       </section>
 
       <!-- Active coupons -->
@@ -816,53 +812,50 @@
             ? `<div class="text-center p-12 glass-card text-slate-500 text-sm">Historia jest pusta.</div>`
             : history.map((c,i) => renderAccordionRow(c, i)).join('');
         }
+        loadDailyProposals();
       } catch(_) {}
     }
 
-    // ---- Chart ----
-    let chartInstance = null;
-    function renderChart(data) {
-      const ctx = document.getElementById('bankroll-chart').getContext('2d');
-      if (chartInstance) chartInstance.destroy();
-      chartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: data.map(d => d.time ? d.time.slice(5,16) : ''),
-          datasets: [{
-            data: data.map(d => d.balance),
-            borderColor: '#818cf8',
-            borderWidth: 2.5,
-            pointRadius: data.length < 20 ? 4 : 0,
-            pointBackgroundColor: '#818cf8',
-            fill: true,
-            backgroundColor: (ctx) => {
-              const g = ctx.chart.ctx.createLinearGradient(0,0,0,200);
-              g.addColorStop(0, 'rgba(129,140,248,0.3)');
-              g.addColorStop(1, 'rgba(129,140,248,0)');
-              return g;
-            },
-            tension: 0.4
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              backgroundColor: '#1e293b',
-              borderColor: 'rgba(255,255,255,0.08)',
-              borderWidth: 1,
-              titleColor: '#94a3b8',
-              bodyColor: '#fff',
-              callbacks: { label: c => ` ${parseFloat(c.parsed.y).toFixed(2)} PLN` }
-            }
-          },
-          scales: {
-            x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color:'#475569', font:{size:11} } },
-            y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color:'#475569', font:{size:11}, callback: v => v+' PLN' } }
-          }
-        }
-      });
+    // ---- Daily proposals ----
+    const RISK_LABELS = {
+      low:    { title: 'Niskie ryzyko',  border: 'border-emerald-500/20', text: 'text-emerald-400' },
+      medium: { title: 'Średnie ryzyko', border: 'border-amber-500/20',   text: 'text-amber-400' },
+      high:   { title: 'Wysokie ryzyko', border: 'border-rose-500/20',    text: 'text-rose-400' },
+    };
+
+    function renderProposalCard(tier, p) {
+      const { title, border, text } = RISK_LABELS[tier];
+      const legs = (p.legs || []).map(l => `
+        <div class="text-sm">
+          <p class="font-semibold text-slate-200">${esc(l.home)} - ${esc(l.away)}</p>
+          <p class="text-slate-500 text-xs">Typ: <span class="text-slate-300 font-bold">${esc(l.label)}</span> @${fmt(l.odds)}</p>
+        </div>
+      `).join('');
+
+      return `
+        <div class="glass-card p-6 ${border}">
+          <div class="flex justify-between items-center mb-4">
+            <span class="text-xs font-bold uppercase tracking-widest ${text}">${title}</span>
+            <span class="text-xs text-slate-500">@${fmt(p.total_odds)}</span>
+          </div>
+          <div class="space-y-3">${legs}</div>
+        </div>
+      `;
+    }
+
+    async function loadDailyProposals() {
+      const grid = document.getElementById('daily-proposals-grid');
+      if (!grid) return;
+      try {
+        const res = await apiFetch('/api/coupons/daily-proposals');
+        const proposals = res && res.ok ? await res.json() : null;
+        const tiers = ['low', 'medium', 'high'].filter(t => proposals?.[t]?.legs?.length > 0);
+        grid.innerHTML = tiers.length === 0
+          ? `<div class="md:col-span-3 text-center p-12 glass-card text-slate-500 text-sm">Brak propozycji na dziś.</div>`
+          : tiers.map(t => renderProposalCard(t, proposals[t])).join('');
+      } catch(_) {
+        grid.innerHTML = `<div class="md:col-span-3 text-center p-12 glass-card text-slate-500 text-sm">Brak propozycji na dziś.</div>`;
+      }
     }
 
     // ---- Save Bankroll ----
@@ -1094,21 +1087,20 @@
       applyUserDisplay();
       try {
         const safeJson = async (res) => { try { return res && res.ok ? await res.json() : null; } catch(_) { return null; } };
-        const [statusRes, activeRes, historyRes, chartRes, configRes] = await Promise.all([
+        const [statusRes, activeRes, historyRes, configRes] = await Promise.all([
           apiFetch('/api/status').catch(() => null),
           apiFetch('/api/coupons/active').catch(() => null),
           apiFetch('/api/coupons?limit=50').catch(() => null),
-          apiFetch('/api/bankroll/history?limit=60').catch(() => null),
           apiFetch('/api/config').catch(() => null)
         ]);
 
         const status  = await safeJson(statusRes) || {};
         const activeRaw  = await safeJson(activeRes);
         const historyRaw = await safeJson(historyRes);
-        const chartRaw   = await safeJson(chartRes);
         const active  = Array.isArray(activeRaw)  ? activeRaw  : [];
         const history = Array.isArray(historyRaw) ? historyRaw : [];
-        const chart   = Array.isArray(chartRaw)   ? chartRaw   : [];
+
+        loadDailyProposals();
 
         // --- Dashboard ---
         const bankroll = parseFloat(status.bankroll || 0).toFixed(2);
@@ -1122,15 +1114,6 @@
 
         document.getElementById('wins-display').textContent = status.stats?.wins_last_30d ?? 0;
         document.getElementById('active-count-display').textContent = active.length;
-
-        // Chart
-        if (chart.length > 0) {
-          renderChart(chart);
-        } else {
-          // Fallback: synthetic from bankroll_history empty
-          document.getElementById('bankroll-chart').parentElement.innerHTML =
-            '<p class="text-slate-600 text-sm text-center py-8">Brak danych historycznych bankrolla.</p>';
-        }
 
         // Active coupons
         const grid = document.getElementById('active-coupons-grid');
