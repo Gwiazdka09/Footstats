@@ -681,12 +681,12 @@ const DailyProposals = ({ apiFetch, onCopyProposal }) => {
           const { title, border, text } = RISK_LABELS[tier];
           const p = proposals[tier];
           return (
-            <div key={tier} className={`glass-card p-6 ${border}`}>
+            <div key={tier} className={`glass-card p-6 ${border} flex flex-col`}>
               <div className="flex justify-between items-center mb-4">
                 <span className={`text-xs font-bold uppercase tracking-widest ${text}`}>{title}</span>
                 <span className="text-xs text-slate-500">@{p.total_odds?.toFixed(2)}</span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-3 flex-1">
                 {p.legs.map((leg, i) => (
                   <div key={i} className="text-sm">
                     <p className="font-semibold">{getLeagueFlag(leg.liga)} {leg.home} - {leg.away}</p>

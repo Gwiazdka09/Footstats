@@ -837,12 +837,12 @@
       `).join('');
 
       return `
-        <div class="glass-card p-6 ${border}">
+        <div class="glass-card p-6 ${border} flex flex-col">
           <div class="flex justify-between items-center mb-4">
             <span class="text-xs font-bold uppercase tracking-widest ${text}">${title}</span>
             <span class="text-xs text-slate-500">@${fmt(p.total_odds)}</span>
           </div>
-          <div class="space-y-3">${legs}</div>
+          <div class="space-y-3 flex-1">${legs}</div>
           <button onclick="copyProposal('${tier}')"
             class="w-full mt-5 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold text-sm transition-colors">
             Skopiuj kupon
