@@ -880,7 +880,7 @@
       }
 
       const selections = p.legs.map(l => ({
-        match_id: l.match_id,
+        match_id: String(l.match_id),
         home: l.home,
         away: l.away,
         tip: l.tip,

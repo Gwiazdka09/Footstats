@@ -336,7 +336,7 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
   const [selections, setSelections] = useState(() =>
     initialProposal
       ? initialProposal.legs.map(leg => ({
-          match_id: leg.match_id,
+          match_id: String(leg.match_id),
           home: leg.home,
           away: leg.away,
           tip: leg.tip,
