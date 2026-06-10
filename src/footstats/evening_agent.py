@@ -87,7 +87,7 @@ def _find_result(home: str, away: str, fixtures: list[dict]) -> str | None:
 def _save_coupon_legs(coupon_id: int, updated_legs: list[dict]) -> None:
     """Zapisuje zaktualizowane legs_json (z result/leg_won per leg) do DB."""
     import json
-    from footstats.utils.db import connect as _db_connect
+    from footstats.core.backtest import _connect as _db_connect
     try:
         with _db_connect() as conn:
             conn.execute(
