@@ -129,5 +129,6 @@ Phase 1–14: ✅ DONE — szczegóły: `git log`, `docs/archive/`
 
 - ~~Przycisk od kreatora kuponów "Analizuj wybrane mecze" powinien być dla wygody poruszać się na dole ekranu po prawej stronie na dole.~~ ✅
 - ~~Flagi przy ligach w kreatorze kuponów.~~ ✅ (06-10, App.jsx LEAGUE_FLAGS)
-- codziene proponowane kupony risk low/medium/high - otwarte
-- zakładka najlepsi typerzy gdzie będą wyświetlane najlepsi typerzy z naszego serwisu ale te kupony które udostępnią dla innych do podglądu, w tym konto "System" ktróre bedzie naszym kontem systemowym i będzie wyświetlał i zawsze udostępniał kupony dla innych do podglądu.
+- ~~codzienne proponowane kupony risk low/medium/high~~ ✅ (06-10): `core/risk_proposals.py` + `GET /api/coupons/daily-proposals`, sekcja "Propozycje dnia" w Dashboard
+- ~~zakładka najlepsi typerzy~~ ✅ (06-10): migracja #5 (`coupons.shared` + konto "System"), `PATCH /api/coupon/{id}/share`, `GET /api/leaderboard`, `GET /api/leaderboard/{username}/coupons`, tab "Najlepsi typerzy" w App.jsx
+  - TODO follow-up: "System" konto jeszcze nie generuje automatycznie udostępnionych kuponów — wymaga hooka w daily_agent

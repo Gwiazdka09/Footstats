@@ -21,13 +21,6 @@ router = APIRouter(prefix="/api", tags=["coupons"])
 _MATCHES_CACHE: list = []
 
 
-def _to_pct(v, default: float = 33.0) -> float:
-    if v is None:
-        return default
-    f = float(v)
-    return round(f * 100 if 0 < f < 1.0 else f, 1)
-
-
 def _fetch_predictions() -> list:
     try:
         from footstats.scrapers.bzzoiro import BzzoiroClient
@@ -92,6 +85,10 @@ class PlaceCouponRequest(BaseModel):
 class SettleRequest(BaseModel):
     days_back: Optional[int] = 3
     dry_run: Optional[bool] = False
+
+
+class ShareRequest(BaseModel):
+    shared: bool
 
 
 @router.get("/coupons/active")
@@ -227,63 +224,20 @@ def analyze_matches(req: AnalyzeRequest, user_id: int = Depends(require_auth)):
     global _MATCHES_CACHE
     if not _MATCHES_CACHE:
         _MATCHES_CACHE = _fetch_predictions()
+    from footstats.core.match_tips import build_tips
     id_set = {str(i) for i in req.match_ids}
-    results = []
-    for m in _MATCHES_CACHE:
-        if str(m.get("id")) not in id_set:
-            continue
-        ml = m.get("pred_ml") or {}
-        odds = m.get("odds") or {}
-        ph = _to_pct(ml.get("prob_home_win"), 40.0)
-        pr = _to_pct(ml.get("prob_draw"), 25.0)
-        pp = _to_pct(ml.get("prob_away_win"), 35.0)
-        po = _to_pct(ml.get("prob_over_25"), 55.0)
-        pbt = _to_pct(ml.get("prob_btts_yes"), 45.0)
-        s12 = ph + pr + pp or 100.0
-        ph = round(ph / s12 * 100, 1)
-        pr = round(pr / s12 * 100, 1)
-        pp = round(100.0 - ph - pr, 1)
+    return [build_tips(m) for m in _MATCHES_CACHE if str(m.get("id")) in id_set]
 
-        def _dc_odds(a, b):
-            if not a or not b:
-                return None
-            return round(1 / (1 / a + 1 / b), 2)
 
-        def _fair_odds(prob_pct: float) -> float:
-            return round(100.0 / prob_pct, 2) if prob_pct > 0 else 0.0
-
-        o1   = odds.get("home")    or _fair_odds(ph)
-        ox   = odds.get("draw")    or _fair_odds(pr)
-        o2   = odds.get("away")    or _fair_odds(pp)
-        o1x  = _dc_odds(o1, ox)   or _fair_odds(round(ph + pr, 1))
-        ox2  = _dc_odds(ox, o2)   or _fair_odds(round(pr + pp, 1))
-
-        pbtts_no = round(100.0 - pbt, 1)
-        o_btts_y = odds.get("btts")      or _fair_odds(pbt)
-        o_btts_n = odds.get("btts_no")   or _fair_odds(pbtts_no)
-
-        po15 = min(round(po + 15.0, 1), 95.0)
-        o_o15 = odds.get("over_1_5") or _fair_odds(po15)
-        o_o25 = odds.get("over_2_5") or _fair_odds(po)
-
-        tips = [
-            {"tip": "1",        "label": "1 – Gosp.",   "odds": o1,      "prob": ph,              "color": "indigo"},
-            {"tip": "1X",       "label": "1X",           "odds": o1x,     "prob": round(ph+pr, 1), "color": "blue"},
-            {"tip": "X",        "label": "X – Remis",   "odds": ox,      "prob": pr,              "color": "slate"},
-            {"tip": "X2",       "label": "X2",           "odds": ox2,     "prob": round(pr+pp, 1), "color": "purple"},
-            {"tip": "2",        "label": "2 – Gość",    "odds": o2,      "prob": pp,              "color": "violet"},
-            {"tip": "BTTS",     "label": "Obie str.",   "odds": o_btts_y,"prob": pbt,             "color": "amber"},
-            {"tip": "BTTS nie", "label": "Nie obie",    "odds": o_btts_n,"prob": pbtts_no,        "color": "orange"},
-            {"tip": "Over 1.5", "label": "Over 1.5",    "odds": o_o15,   "prob": po15,            "color": "teal"},
-            {"tip": "Over 2.5", "label": "Over 2.5",    "odds": o_o25,   "prob": po,              "color": "emerald"},
-        ]
-        results.append({
-            "id": m["id"], "home": m["gosp"], "away": m["gosc"],
-            "liga": m.get("liga", ""), "data": m.get("data", ""), "godzina": m.get("godzina", ""),
-            "prob_home": ph, "prob_draw": pr, "prob_away": pp,
-            "prob_over": po, "prob_btts": pbt, "tips": tips,
-        })
-    return results
+@router.get("/coupons/daily-proposals")
+@cached_response(ttl_seconds=600, vary_by=["user_id"])
+def get_daily_proposals(user_id: int = Depends(require_auth)):
+    """Codzienne propozycje kuponów wg ryzyka: low/medium/high."""
+    global _MATCHES_CACHE
+    if not _MATCHES_CACHE:
+        _MATCHES_CACHE = _fetch_predictions()
+    from footstats.core.risk_proposals import build_daily_proposals
+    return build_daily_proposals(_MATCHES_CACHE)
 
 
 @router.post("/coupon/kelly")
@@ -361,6 +315,94 @@ def place_coupon(req: PlaceCouponRequest, user_id: int = Depends(require_auth)):
     from footstats.core.response_cache import clear_response_cache
     clear_response_cache()
     return {"ok": True, "coupon_id": coupon_id, "new_balance": new_balance, "stake_pln": req.stake_pln}
+
+
+@router.patch("/coupon/{coupon_id}/share")
+def share_coupon(coupon_id: int, req: ShareRequest, user_id: int = Depends(require_auth)):
+    """Udostępnij/ukryj własny kupon na liście 'Najlepsi typerzy'."""
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT user_id FROM coupons WHERE id = ?", (coupon_id,)
+            ).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Kupon nie istnieje")
+            if int(row["user_id"]) != user_id:
+                raise HTTPException(status_code=403, detail="Brak uprawnień do tego kuponu")
+            conn.execute(
+                "UPDATE coupons SET shared = ? WHERE id = ?", (req.shared, coupon_id)
+            )
+        from footstats.core.response_cache import clear_response_cache
+        clear_response_cache()
+        return {"ok": True, "coupon_id": coupon_id, "shared": req.shared}
+    except psycopg2.Error as e:
+        _log.error("share_coupon error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/leaderboard")
+@cached_response(ttl_seconds=1800)
+def get_leaderboard(min_coupons: int = 3, limit: int = 20):
+    """Ranking najlepszych typerów wg win rate na udostępnionych kuponach."""
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT u.id as user_id, u.username,
+                       COUNT(*) as total,
+                       SUM(CASE WHEN c.status IN ('WON','WIN') THEN 1 ELSE 0 END) as wins
+                FROM coupons c
+                JOIN users u ON u.id = c.user_id
+                WHERE c.shared = TRUE AND c.status IN ('WON','WIN','LOST','LOSE')
+                GROUP BY u.id, u.username
+                HAVING COUNT(*) >= ?
+                ORDER BY (CAST(SUM(CASE WHEN c.status IN ('WON','WIN') THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*)) DESC,
+                         total DESC
+                LIMIT ?
+                """,
+                (min_coupons, limit),
+            ).fetchall()
+        result = []
+        for r in rows:
+            total = r["total"]
+            wins = r["wins"] or 0
+            result.append({
+                "user_id": r["user_id"],
+                "username": r["username"],
+                "total": total,
+                "wins": wins,
+                "win_rate": round(wins / total * 100, 1) if total else 0.0,
+            })
+        return result
+    except psycopg2.Error as e:
+        _log.error("get_leaderboard error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/leaderboard/{username}/coupons")
+@cached_response(ttl_seconds=600, vary_by=["username"])
+def get_user_shared_coupons(username: str, limit: int = 20):
+    """Udostępnione kupony danego typera (publiczny podgląd)."""
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT c.* FROM coupons c
+                JOIN users u ON u.id = c.user_id
+                WHERE u.username = ? AND c.shared = TRUE
+                ORDER BY c.created_at DESC LIMIT ?
+                """,
+                (username, limit),
+            ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["legs"] = json.loads(d.get("legs_json") or "[]")
+            result.append(d)
+        return result
+    except psycopg2.Error as e:
+        _log.error("get_user_shared_coupons error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/coupons/settle")

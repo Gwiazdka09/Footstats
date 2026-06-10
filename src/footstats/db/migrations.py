@@ -69,6 +69,16 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "UPDATE users SET is_admin = TRUE WHERE username = 'admin'",
                 ],
             ),
+            (
+                5,
+                "add_shared_to_coupons_and_system_user",
+                [
+                    "ALTER TABLE coupons ADD COLUMN shared BOOLEAN NOT NULL DEFAULT FALSE",
+                    "CREATE INDEX IF NOT EXISTS idx_coupons_shared ON coupons(shared)",
+                    "INSERT OR IGNORE INTO users (username, password_hash, is_active, is_admin)"
+                    " VALUES ('System', 'system-no-login', TRUE, FALSE)",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -125,6 +135,16 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                 [
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE",
                     "UPDATE users SET is_admin = TRUE WHERE username = 'admin'",
+                ],
+            ),
+            (
+                5,
+                "add_shared_to_coupons_and_system_user",
+                [
+                    "ALTER TABLE coupons ADD COLUMN IF NOT EXISTS shared BOOLEAN NOT NULL DEFAULT FALSE",
+                    "CREATE INDEX IF NOT EXISTS idx_coupons_shared ON coupons(shared)",
+                    "INSERT INTO users (username, password_hash, is_active, is_admin)"
+                    " VALUES ('System', 'system-no-login', TRUE, FALSE) ON CONFLICT (username) DO NOTHING",
                 ],
             ),
         ]

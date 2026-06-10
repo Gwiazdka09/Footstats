@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
-import { 
-  Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, Info, ChevronRight, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target
+import {
+  Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, Info, ChevronRight, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target, Trophy, Share2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -164,12 +164,19 @@ const App = () => {
             collapsed={sidebarCollapsed}
             onClick={() => setView('history')}
           />
-          <NavItem 
-            icon={<Settings size={20} />} 
-            label="Ustawienia" 
-            active={view === 'settings'} 
+          <NavItem
+            icon={<Settings size={20} />}
+            label="Ustawienia"
+            active={view === 'settings'}
             collapsed={sidebarCollapsed}
             onClick={() => setView('settings')}
+          />
+          <NavItem
+            icon={<Trophy size={20} />}
+            label="Najlepsi typerzy"
+            active={view === 'leaderboard'}
+            collapsed={sidebarCollapsed}
+            onClick={() => setView('leaderboard')}
           />
         </nav>
         
@@ -200,6 +207,7 @@ const App = () => {
                 history={history}
                 coupons={coupons}
                 calibration={calibration}
+                apiFetch={apiFetch}
                 onSeeAll={() => setView('history')}
                 onCreateNew={() => setView('wizard')}
               />
@@ -219,11 +227,17 @@ const App = () => {
               />
             )}
             {view === 'settings' && (
-              <SettingsView 
+              <SettingsView
                 key="sett"
-                config={config} 
+                config={config}
                 apiFetch={apiFetch}
                 onSave={() => fetchData()}
+              />
+            )}
+            {view === 'leaderboard' && (
+              <LeaderboardView
+                key="leader"
+                apiFetch={apiFetch}
               />
             )}
           </AnimatePresence>
@@ -628,8 +642,54 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel }) => {
 
 // --- Sub Views ---
 
-const DashboardHome = ({ user, status, history, coupons, calibration, onSeeAll, onCreateNew }) => (
-  <motion.div 
+const RISK_LABELS = {
+  low: { title: 'Niskie ryzyko', border: 'border-emerald-500/20', text: 'text-emerald-400' },
+  medium: { title: 'Średnie ryzyko', border: 'border-amber-500/20', text: 'text-amber-400' },
+  high: { title: 'Wysokie ryzyko', border: 'border-rose-500/20', text: 'text-rose-400' },
+};
+
+const DailyProposals = ({ apiFetch }) => {
+  const [proposals, setProposals] = useState(null);
+
+  useEffect(() => {
+    apiFetch('/coupons/daily-proposals').then(setProposals).catch(() => setProposals(null));
+  }, []);
+
+  if (!proposals) return null;
+  const tiers = ['low', 'medium', 'high'].filter(t => proposals[t]?.legs?.length > 0);
+  if (tiers.length === 0) return null;
+
+  return (
+    <section className="mb-16">
+      <h2 className="text-2xl font-bold mb-10">Propozycje dnia</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {tiers.map(tier => {
+          const { title, border, text } = RISK_LABELS[tier];
+          const p = proposals[tier];
+          return (
+            <div key={tier} className={`glass-card p-6 ${border}`}>
+              <div className="flex justify-between items-center mb-4">
+                <span className={`text-xs font-bold uppercase tracking-widest ${text}`}>{title}</span>
+                <span className="text-xs text-slate-500">@{p.total_odds?.toFixed(2)}</span>
+              </div>
+              <div className="space-y-3">
+                {p.legs.map((leg, i) => (
+                  <div key={i} className="text-sm">
+                    <p className="font-semibold">{getLeagueFlag(leg.liga)} {leg.home} - {leg.away}</p>
+                    <p className="text-slate-500 text-xs">Typ: <span className="text-slate-300 font-bold">{leg.label}</span> @{leg.odds}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
+const DashboardHome = ({ user, status, history, coupons, calibration, apiFetch, onSeeAll, onCreateNew }) => (
+  <motion.div
     initial={{ opacity: 0, x: 20 }}
     animate={{ opacity: 1, x: 0 }}
     exit={{ opacity: 0, x: -20 }}
@@ -740,6 +800,8 @@ const DashboardHome = ({ user, status, history, coupons, calibration, onSeeAll, 
       </div>
     </section>
 
+    <DailyProposals apiFetch={apiFetch} />
+
     <section>
       <div className="flex justify-between items-center mb-10">
         <h2 className="text-2xl font-bold">Aktywne Predykcje</h2>
@@ -758,13 +820,32 @@ const DashboardHome = ({ user, status, history, coupons, calibration, onSeeAll, 
   </motion.div>
 );
 
-const HistoryCouponRow = ({ c }) => {
+const HistoryCouponRow = ({ c, apiFetch }) => {
   const [expanded, setExpanded] = useState(false);
+  const [shared, setShared] = useState(!!c.shared);
+  const [sharing, setSharing] = useState(false);
   const isWon = ['WON', 'WIN'].includes(c.status);
   const isLost = ['LOST', 'LOSE'].includes(c.status);
   const legs = c.legs || [];
   const wonCount = legs.filter(l => l.leg_won === true).length;
   const lostCount = legs.filter(l => l.leg_won === false).length;
+
+  const toggleShare = async (e) => {
+    e.stopPropagation();
+    if (sharing) return;
+    setSharing(true);
+    try {
+      await apiFetch(`/coupon/${c.id}/share`, {
+        method: 'PATCH',
+        body: JSON.stringify({ shared: !shared }),
+      });
+      setShared(s => !s);
+    } catch (err) {
+      console.error('Błąd udostępniania kuponu:', err);
+    } finally {
+      setSharing(false);
+    }
+  };
 
   return (
     <div className="glass-card overflow-hidden">
@@ -805,6 +886,14 @@ const HistoryCouponRow = ({ c }) => {
             <p className="text-xs text-slate-500 uppercase tracking-widest">Wypłata</p>
             <p className={`font-bold ${isWon ? 'text-emerald-400' : 'text-slate-500'}`}>{c.payout_pln ? `${c.payout_pln} PLN` : '---'}</p>
           </div>
+          <button
+            onClick={toggleShare}
+            disabled={sharing}
+            title={shared ? 'Cofnij udostępnienie' : 'Udostępnij na liście Najlepsi typerzy'}
+            className={`p-2 rounded-lg transition-colors ${shared ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500 hover:text-indigo-400 hover:bg-white/5'}`}
+          >
+            <Share2 size={16} />
+          </button>
           {legs.length > 0 && (
             <ChevronRight size={16} className={`text-slate-600 transition-transform ${expanded ? 'rotate-90' : ''}`} />
           )}
@@ -864,7 +953,7 @@ const HistoryView = ({ apiFetch }) => {
       </div>
       <div className="grid grid-cols-1 gap-4">
         {coupons.length > 0 ? coupons.map((c) => (
-          <HistoryCouponRow key={c.id} c={c} />
+          <HistoryCouponRow key={c.id} c={c} apiFetch={apiFetch} />
         )) : (
           <div className="text-center p-24 glass-card text-slate-500">Historia jest pusta.</div>
         )}
@@ -872,6 +961,97 @@ const HistoryView = ({ apiFetch }) => {
     </motion.div>
   );
 }
+
+const LeaderboardView = ({ apiFetch }) => {
+  const [leaders, setLeaders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [sharedCoupons, setSharedCoupons] = useState([]);
+  const [loadingCoupons, setLoadingCoupons] = useState(false);
+
+  useEffect(() => {
+    apiFetch('/leaderboard').then(data => {
+      setLeaders(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const selectUser = async (username) => {
+    setSelected(username);
+    setLoadingCoupons(true);
+    try {
+      const data = await apiFetch(`/leaderboard/${encodeURIComponent(username)}/coupons`);
+      setSharedCoupons(data);
+    } catch {
+      setSharedCoupons([]);
+    } finally {
+      setLoadingCoupons(false);
+    }
+  };
+
+  if (loading) return <div className="text-center py-20">Ładowanie rankingu...</div>;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.98 }}
+    >
+      <div className="mb-12">
+        <h1 className="text-4xl font-bold mb-2 flex items-center gap-3"><Trophy className="text-amber-400" /> Najlepsi typerzy</h1>
+        <p className="text-slate-400">Ranking wg win rate na udostępnionych kuponach. Kliknij typera, by zobaczyć jego kupony.</p>
+      </div>
+
+      {leaders.length === 0 ? (
+        <div className="text-center p-24 glass-card text-slate-500">Brak danych — nikt jeszcze nie udostępnił kuponów.</div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 mb-10">
+          {leaders.map((l, i) => (
+            <div
+              key={l.user_id}
+              onClick={() => selectUser(l.username)}
+              className={`glass-card p-6 flex items-center justify-between gap-6 cursor-pointer transition-colors ${selected === l.username ? 'border-2 border-indigo-500' : ''}`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center font-bold text-indigo-400">
+                  #{i + 1}
+                </div>
+                <p className="font-bold text-lg">{l.username}</p>
+              </div>
+              <div className="flex gap-8 text-center">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-widest">Win rate</p>
+                  <p className="font-bold text-emerald-400">{l.win_rate}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-widest">Kupony</p>
+                  <p className="font-bold">{l.wins}/{l.total}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selected && (
+        <div>
+          <h2 className="text-2xl font-bold mb-6">Kupony: {selected}</h2>
+          {loadingCoupons ? (
+            <div className="text-center py-12 text-slate-500">Ładowanie kuponów...</div>
+          ) : sharedCoupons.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4">
+              {sharedCoupons.map(c => (
+                <HistoryCouponRow key={c.id} c={c} apiFetch={apiFetch} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center p-12 glass-card text-slate-500">Ten typer nie udostępnił żadnych kuponów.</div>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+};
 
 const SettingsView = ({ config, apiFetch, onSave }) => {
   const [form, setForm] = useState(config || {});

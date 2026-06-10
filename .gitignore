@@ -39,6 +39,7 @@ ai_typy_*.json
 footstats_BACKUP.py
 *_backup.py
 *_BACKUP.py
+.backups/
 
 # ── Cache FootStats
 cache/
