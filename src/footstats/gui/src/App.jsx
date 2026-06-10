@@ -43,6 +43,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('dashboard'); // 'dashboard', 'history', 'settings', 'wizard'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [proposalToCopy, setProposalToCopy] = useState(null);
 
   // Authentication logout
   const handleLogout = () => {
@@ -205,15 +206,17 @@ const App = () => {
                 calibration={calibration}
                 apiFetch={apiFetch}
                 onSeeAll={() => setView('history')}
-                onCreateNew={() => setView('wizard')}
+                onCreateNew={() => { setProposalToCopy(null); setView('wizard'); }}
+                onCopyProposal={(p) => { setProposalToCopy(p); setView('wizard'); }}
               />
             )}
             {view === 'wizard' && (
-              <CouponWizard 
+              <CouponWizard
                 key="wiz"
                 apiFetch={apiFetch}
-                onComplete={() => { setView('dashboard'); fetchData(); }}
-                onCancel={() => setView('dashboard')}
+                initialProposal={proposalToCopy}
+                onComplete={() => { setProposalToCopy(null); setView('dashboard'); fetchData(); }}
+                onCancel={() => { setProposalToCopy(null); setView('dashboard'); }}
               />
             )}
             {view === 'history' && (
@@ -325,12 +328,23 @@ const LoginView = ({ setToken, setUser }) => {
 
 // --- Wizard Component ---
 
-const CouponWizard = ({ apiFetch, onComplete, onCancel }) => {
-  const [step, setStep] = useState(1);
+const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
+  const [step, setStep] = useState(initialProposal ? 4 : 1);
   const [matches, setMatches] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [analysis, setAnalysis] = useState([]);
-  const [selections, setSelections] = useState([]);
+  const [selections, setSelections] = useState(() =>
+    initialProposal
+      ? initialProposal.legs.map(leg => ({
+          match_id: leg.match_id,
+          home: leg.home,
+          away: leg.away,
+          tip: leg.tip,
+          odds: leg.odds,
+          win_prob: leg.prob,
+        }))
+      : []
+  );
   const [kelly, setKelly] = useState(null);
   const [stake, setStake] = useState(2.0);
   const [loading, setLoading] = useState(false);
@@ -349,7 +363,11 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel }) => {
   };
 
   useEffect(() => {
-    loadMatches();
+    if (initialProposal) {
+      calculateKelly();
+    } else {
+      loadMatches();
+    }
   }, []);
 
   const toggleMatch = (id) => {
@@ -644,7 +662,7 @@ const RISK_LABELS = {
   high: { title: 'Wysokie ryzyko', border: 'border-rose-500/20', text: 'text-rose-400' },
 };
 
-const DailyProposals = ({ apiFetch }) => {
+const DailyProposals = ({ apiFetch, onCopyProposal }) => {
   const [proposals, setProposals] = useState(null);
 
   useEffect(() => {
@@ -676,6 +694,12 @@ const DailyProposals = ({ apiFetch }) => {
                   </div>
                 ))}
               </div>
+              <button
+                onClick={() => onCopyProposal?.(p)}
+                className="w-full mt-5 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold text-sm transition-colors"
+              >
+                Skopiuj kupon
+              </button>
             </div>
           );
         })}
@@ -684,7 +708,7 @@ const DailyProposals = ({ apiFetch }) => {
   );
 };
 
-const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll, onCreateNew }) => (
+const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll, onCreateNew, onCopyProposal }) => (
   <motion.div
     initial={{ opacity: 0, x: 20 }}
     animate={{ opacity: 1, x: 0 }}
@@ -766,7 +790,7 @@ const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll,
       </section>
     )}
 
-    <DailyProposals apiFetch={apiFetch} />
+    <DailyProposals apiFetch={apiFetch} onCopyProposal={onCopyProposal} />
 
     <section>
       <div className="flex justify-between items-center mb-10">
