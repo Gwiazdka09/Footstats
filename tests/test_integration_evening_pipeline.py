@@ -442,6 +442,7 @@ class TestRunEveningAgentIntegration:
             patch("footstats.evening_agent.process_win") as mock_win,
             patch("footstats.evening_agent.init_coupon_tables"),
             patch("footstats.evening_agent.init_db"),
+            patch("footstats.evening_agent._save_coupon_legs"),
             patch("footstats.evening_agent._send_telegram_summary"),
             patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
         ):
@@ -479,6 +480,7 @@ class TestRunEveningAgentIntegration:
             patch("footstats.evening_agent.process_win") as mock_win,
             patch("footstats.evening_agent.init_coupon_tables"),
             patch("footstats.evening_agent.init_db"),
+            patch("footstats.evening_agent._save_coupon_legs"),
             patch("footstats.evening_agent._send_telegram_summary"),
             patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
         ):
