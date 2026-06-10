@@ -10,7 +10,10 @@ import math
 from footstats.core.match_tips import build_tips
 
 RISK_TIERS: tuple[str, ...] = ("low", "medium", "high")
-MAX_LEGS_PER_TIER = 3
+MAX_LEGS_PER_TIER = 6
+
+# Docelowy łączny kurs kuponu dla każdego poziomu ryzyka.
+TIER_TARGET_ODDS: dict[str, float] = {"low": 5.0, "medium": 20.0, "high": 50.0}
 
 
 def _classify_tip(tip: dict) -> str | None:
@@ -29,8 +32,12 @@ def _classify_tip(tip: dict) -> str | None:
 
 
 def build_daily_proposals(predictions: list[dict], max_legs: int = MAX_LEGS_PER_TIER) -> dict:
-    """Zwraca {risk: {risk, legs, total_odds}} dla low/medium/high."""
-    tiers: dict[str, list[dict]] = {t: [] for t in RISK_TIERS}
+    """Zwraca {risk: {risk, legs, total_odds}} dla low/medium/high.
+
+    Dla każdego poziomu ryzyka dobiera nogi (od najpewniejszej) tak, by łączny
+    kurs zbliżył się do TIER_TARGET_ODDS, nie przekraczając max_legs.
+    """
+    candidates: dict[str, list[dict]] = {t: [] for t in RISK_TIERS}
 
     for m in predictions:
         analyzed = build_tips(m)
@@ -44,9 +51,7 @@ def build_daily_proposals(predictions: list[dict], max_legs: int = MAX_LEGS_PER_
                 best_per_tier[tier] = tip
 
         for tier, tip in best_per_tier.items():
-            if len(tiers[tier]) >= max_legs:
-                continue
-            tiers[tier].append({
+            candidates[tier].append({
                 "match_id": analyzed["id"],
                 "home": analyzed["home"],
                 "away": analyzed["away"],
@@ -61,7 +66,17 @@ def build_daily_proposals(predictions: list[dict], max_legs: int = MAX_LEGS_PER_
 
     result = {}
     for tier in RISK_TIERS:
-        legs = tiers[tier]
-        total_odds = round(math.prod(leg["odds"] for leg in legs), 2) if legs else 0.0
-        result[tier] = {"risk": tier, "legs": legs, "total_odds": total_odds}
+        target = TIER_TARGET_ODDS[tier]
+        legs: list[dict] = []
+        total_odds = 1.0
+        for leg in sorted(candidates[tier], key=lambda c: c["prob"], reverse=True):
+            if len(legs) >= max_legs or total_odds >= target:
+                break
+            legs.append(leg)
+            total_odds *= leg["odds"]
+        result[tier] = {
+            "risk": tier,
+            "legs": legs,
+            "total_odds": round(total_odds, 2) if legs else 0.0,
+        }
     return result
