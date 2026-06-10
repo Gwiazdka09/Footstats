@@ -9,6 +9,32 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
+// Mapowanie ligi -> flaga kraju (emoji) dla kreatora kuponów
+const LEAGUE_FLAGS = {
+  "premier league": "🏴",
+  "eng-premier league": "🏴",
+  "championship": "🏴",
+  "la liga": "🇪🇸",
+  "esp-la liga": "🇪🇸",
+  "bundesliga": "🇩🇪",
+  "ger-bundesliga": "🇩🇪",
+  "ligue 1": "🇫🇷",
+  "fra-ligue 1": "🇫🇷",
+  "serie a": "🇮🇹",
+  "ita-serie a": "🇮🇹",
+  "serie b": "🇮🇹",
+  "pko bp ekstraklasa": "🇵🇱",
+  "ekstraklasa": "🇵🇱",
+  "eredivisie": "🇳🇱",
+  "primeira liga": "🇵🇹",
+  "jupiler pro league": "🇧🇪",
+  "super lig": "🇹🇷",
+  "brasileirao serie a": "🇧🇷",
+  "liga mx": "🇲🇽",
+};
+
+const getLeagueFlag = (liga) => LEAGUE_FLAGS[(liga || "").toLowerCase()] ?? "🌍";
+
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('fs_token'));
   const [user, setUser] = useState(localStorage.getItem('fs_user') || 'Użytkownik');
@@ -430,7 +456,7 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel }) => {
                     className={`glass-card p-6 cursor-pointer border-2 transition-all ${selectedIds.includes(m.id) ? 'border-indigo-500 bg-indigo-500/5' : 'border-transparent'}`}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">{m.liga}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">{getLeagueFlag(m.liga)} {m.liga}</span>
                       <span className="text-[10px] text-slate-500">{m.godzina}</span>
                     </div>
                     <p className="font-bold text-lg">{m.gosp} vs {m.gosc}</p>
@@ -471,7 +497,7 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel }) => {
                   <div className="flex justify-between items-center mb-6">
                     <div>
                       <p className="font-bold text-lg">{m.home} - {m.away}</p>
-                      <p className="text-xs text-slate-500">{m.liga}</p>
+                      <p className="text-xs text-slate-500">{getLeagueFlag(m.liga)} {m.liga}</p>
                     </div>
                     <div className="text-right">
                       <span className="text-xs text-slate-500 block">Sugerowany typ:</span>
