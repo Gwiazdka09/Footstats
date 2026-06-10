@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
-} from 'recharts';
 import {
   Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, Info, ChevronRight, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target, Trophy, Share2
 } from 'lucide-react';
@@ -204,7 +201,6 @@ const App = () => {
                 key="dash"
                 user={user}
                 status={status}
-                history={history}
                 coupons={coupons}
                 calibration={calibration}
                 apiFetch={apiFetch}
@@ -688,7 +684,7 @@ const DailyProposals = ({ apiFetch }) => {
   );
 };
 
-const DashboardHome = ({ user, status, history, coupons, calibration, apiFetch, onSeeAll, onCreateNew }) => (
+const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll, onCreateNew }) => (
   <motion.div
     initial={{ opacity: 0, x: 20 }}
     animate={{ opacity: 1, x: 0 }}
@@ -769,36 +765,6 @@ const DashboardHome = ({ user, status, history, coupons, calibration, apiFetch, 
         </div>
       </section>
     )}
-
-    <section className="glass-card p-10 mb-16">
-      <h2 className="text-xl font-bold mb-10 flex items-center gap-2">
-        <TrendingUp size={24} className="text-indigo-400" /> Progresja Bankrolla
-      </h2>
-      <div className="h-[350px] w-full">
-        {history && history.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={history}>
-              <defs>
-                <linearGradient id="colorBal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#818cf8" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="timestamp" hide />
-              <YAxis hide domain={['auto', 'auto']} />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', color: '#fff', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)' }}
-                labelFormatter={(label) => new Date(label).toLocaleDateString()}
-              />
-              <Area type="monotone" dataKey="new_balance" stroke="#818cf8" strokeWidth={4} fillOpacity={1} fill="url(#colorBal)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex items-center justify-center h-full text-slate-600">Brak danych historycznych</div>
-        )}
-      </div>
-    </section>
 
     <DailyProposals apiFetch={apiFetch} />
 
