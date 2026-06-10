@@ -704,12 +704,14 @@
       const sc = statusClass(c.status);
       const matchDate = c.match_date_first || fmtDate(c.created_at);
       const legRows = (c.legs || []).map(l => {
-        const wynikClass = ['WON','WIN'].includes((c.status||'').toUpperCase())
-          ? 'text-emerald-400' : ['LOSE','LOST'].includes((c.status||'').toUpperCase())
-          ? 'text-rose-400' : 'text-amber-400';
-        const wynik = ['WON','WIN'].includes((c.status||'').toUpperCase()) ? 'WYGRANA'
-                    : ['LOSE','LOST'].includes((c.status||'').toUpperCase()) ? 'PRZEGRANA'
-                    : sc.label;
+        let wynikClass, wynik;
+        if (l.leg_won === true) {
+          wynikClass = 'text-emerald-400'; wynik = 'WYGRANA';
+        } else if (l.leg_won === false) {
+          wynikClass = 'text-rose-400'; wynik = 'PRZEGRANA';
+        } else {
+          wynikClass = 'text-amber-400'; wynik = sc.label;
+        }
         return `
           <tr class="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
             <td class="px-5 py-2.5 pr-4 text-xs text-slate-400 whitespace-nowrap">${matchDate}</td>
