@@ -20,8 +20,8 @@ def _classify_tip(tip: dict) -> str | None:
     """Przypisz typ do koszyka ryzyka na podstawie kursu i prawdopodobieństwa."""
     odds = tip["odds"]
     prob = tip["prob"]
-    if not odds:
-        return None
+    if not odds or odds <= 1.2:
+        return None  # kurs zbyt niski, brak wartości
     if prob >= 60 and odds <= 1.6:
         return "low"
     if 40 <= prob < 60 and 1.6 < odds <= 2.5:
