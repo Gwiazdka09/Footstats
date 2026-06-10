@@ -1222,6 +1222,7 @@
 
     const _LIGA_FLAGS = [
       [/premier league|epl/i,           '🏴󠁧󠁢󠁥󠁮󠁧󠁿'],
+      [/usl/i,                           '🇺🇸'],
       [/championship|league one|league two|fa cup/i, '🏴󠁧󠁢󠁥󠁮󠁧󠁿'],
       [/la liga|laliga|primera/i,        '🇪🇸'],
       [/bundesliga/i,                    '🇩🇪'],
@@ -1258,8 +1259,9 @@
     ];
 
     function _ligaFlag(liga) {
+      const norm = liga.normalize('NFD').replace(/[̀-ͯ]/g, '');
       for (const [re, flag] of _LIGA_FLAGS) {
-        if (re.test(liga)) return flag + ' ';
+        if (re.test(norm)) return flag;
       }
       return '';
     }
@@ -1306,7 +1308,7 @@
                  onclick="event.stopPropagation(); wizToggleLeague(this.dataset.liga)">
               <svg class="hidden w-3 h-3 text-indigo-400" id="lcheck-icon-${lid}" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
-            <span class="text-xs text-indigo-400 font-semibold uppercase tracking-wide flex-1">${_ligaFlag(liga)}${liga}</span>
+            <span class="text-xs text-indigo-400 font-semibold uppercase tracking-wide flex-1">${liga} ${_ligaFlag(liga)}</span>
             <span class="text-xs text-slate-500">${matches.length} mecz${matches.length === 1 ? '' : matches.length < 5 ? 'e' : 'y'}</span>
             <svg id="lchevron-${lid}" class="w-4 h-4 text-slate-500 transition-transform duration-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
