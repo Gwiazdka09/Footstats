@@ -82,7 +82,7 @@ def _znajdz_wynik_fdb(home: str, away: str, matches: list[dict]) -> str | None:
             SequenceMatcher(None, nh, nfh).ratio()
             + SequenceMatcher(None, na, nfa).ratio()
         ) / 2
-        if score >= 0.6 and score > best_score:
+        if score >= 0.70 and score > best_score:
             ft = m.get("score", {}).get("fullTime", {})
             hg, ag = ft.get("home"), ft.get("away")
             if hg is not None and ag is not None:
