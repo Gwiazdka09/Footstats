@@ -209,6 +209,10 @@ def settle_active_coupons(
                 except (OSError, ValueError, RuntimeError):
                     pass
 
+            # _znajdz_wynik (Źródło 1) zwraca (wynik, stats) — wyciągnij sam wynik
+            if isinstance(res, tuple):
+                res = res[0]
+
             correct = oblicz_tip_correct(leg["tip"], res)
             leg_results.append(correct)
 
