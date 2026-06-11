@@ -6,9 +6,9 @@ logger = logging.getLogger(__name__)
 
 
 try:
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
 except ImportError:
-    pass
+    PlaywrightError = RuntimeError
 
 from footstats.scrapers.referee_db import upsert_referee
 
@@ -83,7 +83,7 @@ def fetch_referees_zawodtyper() -> None:
             
             logger.info(f"[ZawodTyper] Zaktualizowano pomyślnie {ref_count} sędziów z {len(tables)} lig.")
             
-    except (requests.RequestException, ValueError, RuntimeError) as e:
+    except (PlaywrightError, ValueError, RuntimeError) as e:
         logger.error(f"[ZawodTyper] Błąd scrape'owania: {e}")
 
 if __name__ == "__main__":
