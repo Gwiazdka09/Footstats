@@ -339,7 +339,7 @@ class TestSettleActiveCoupons:
 
         mock_rag.assert_called_once()
         call_args = mock_rag.call_args
-        assert "PRZEGRANY" in call_args.kwargs.get("reason", call_args.args[2] if len(call_args.args) > 2 else "")
+        assert "PRZEGRANY" in call_args.kwargs.get("reason", call_args.args[3] if len(call_args.args) > 3 else "")
 
 
 # ── Tests: run_evening_agent helpers ─────────────────────────────────────────

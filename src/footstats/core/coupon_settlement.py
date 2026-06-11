@@ -297,7 +297,7 @@ def settle_active_coupons(
                         f"PRZEGRANY kupon ({len(legs)} legów, {len(failed_legs)} chybionych). "
                         + "; ".join(parts)
                     )
-                    _send_to_rag_feedback(coupon_id, updated_legs, lose_reason, verbose=verbose)
+                    _send_to_rag_feedback(coupon_id, updated_legs, mdate, lose_reason, verbose=verbose)
 
                 stats["settled"] += 1
             except (KeyError, TypeError, ValueError, OSError) as e:
@@ -314,36 +314,65 @@ def settle_active_coupons(
     return stats
 
 
-def _send_to_rag_feedback(coupon_id: int, legs: list, reason: str, verbose: bool = True):
+def _send_to_rag_feedback(coupon_id: int, legs: list, mdate: str, reason: str, verbose: bool = True) -> None:
     """
-    Wysyła info o LOSE kuponie do ai_feedback (RAG learning).
+    Wysyła info o przegranych legach kuponu do ai_feedback (RAG learning).
+
+    ai_feedback.match_id ma FK do predictions.id (nie coupons.id), więc dla
+    każdego przegranego lega szukamy odpowiadającej predykcji po dacie i drużynach.
 
     Args:
-        coupon_id: ID kuponu (użyty jako match_id dla feedback)
-        legs: Lista leg'ów kuponu
-        reason: Powód porażki (np. "Leg #1 przegrany")
+        coupon_id: ID kuponu (do logu/kontekstu)
+        legs: Lista leg'ów kuponu (z polami home/away/tip/result/leg_won)
+        mdate: Data meczów kuponu (YYYY-MM-DD)
+        reason: Powód porażki (do logu)
         verbose: Drukuj log
     """
-    try:
-        from footstats.ai.post_match_analyzer import _zapisz_feedback
+    from footstats.ai.post_match_analyzer import _zapisz_feedback
+    from footstats.core.backtest import _connect
 
-        # Stwórz prediction_details z informacją o tipach w kuponie
-        prediction_details = {
-            "coupon_id": coupon_id,
-            "legs_count": len(legs),
-            "tips": [leg.get("tip", "?") for leg in legs],
-        }
+    if verbose:
+        log.info("Kupon #%s: %s", coupon_id, reason)
 
-        _zapisz_feedback(
-            match_id=coupon_id,
-            prediction_details=prediction_details,
-            reason=reason,
-        )
+    for i, leg in enumerate(legs):
+        if leg.get("leg_won") is not False:
+            continue
 
-        if verbose:
-            log.info("Wysłano feedback do RAG dla kuponu #%s: %s", coupon_id, reason)
-    except (ImportError, AttributeError, TypeError, ValueError) as e:
-        log.warning("Błąd wysyłania feedback do RAG: %s", e)
+        home = leg.get("home", "")
+        away = leg.get("away", "")
+
+        try:
+            with _connect() as conn:
+                pred_row = conn.execute(
+                    "SELECT id FROM predictions "
+                    "WHERE match_date=? AND team_home LIKE ? AND team_away LIKE ? LIMIT 1",
+                    (mdate, f"%{home}%", f"%{away}%"),
+                ).fetchone()
+
+            if not pred_row:
+                log.debug("Brak predictions dla %s vs %s (%s) — pomijam RAG feedback", home, away, mdate)
+                continue
+
+            prediction_details = {
+                "coupon_id": coupon_id,
+                "tip": leg.get("tip", "?"),
+                "result": leg.get("result", "?"),
+            }
+            leg_reason = (
+                f"Kupon #{coupon_id}, leg #{i + 1}: {home} vs {away} "
+                f"Tip:{leg.get('tip', '?')} Wynik:{leg.get('result', '?')}"
+            )
+
+            _zapisz_feedback(
+                match_id=pred_row["id"],
+                prediction_details=prediction_details,
+                reason=leg_reason,
+            )
+
+            if verbose:
+                log.info("Wysłano feedback do RAG dla kuponu #%s, leg #%s", coupon_id, i + 1)
+        except (ImportError, AttributeError, TypeError, ValueError, OSError) as e:
+            log.warning("Błąd wysyłania feedback do RAG dla kuponu #%s, leg #%s: %s", coupon_id, i + 1, e)
 
 
 def _generate_lesson(legs: list, results: str | None) -> str:

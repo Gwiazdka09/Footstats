@@ -31,7 +31,7 @@
 
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
-| 1 | **Daily pipeline stał 5 dni (06-06→06-11)** | 🔴 P1 | Scheduled tasks Draft/Final exit=1 — 21 śmieciowych "Test A vs Test B" kuponów (user_id=1, date=2099-12-31) blokowało settlement loop. USUNIĘTE z prod DB — monitorować jutrzejszy run (08:00) |
+| 1 | **Daily pipeline stał 5 dni (06-06→06-11)** | ✅ FIXED | 21 śmieciowych kuponów usunięte + 3 kolejne bugi (LIKE escaping, rag.py row-dict, ai_feedback FK) naprawione — `daily_agent --faza draft` przeszedł end-to-end (exit=0, 06-11 23:30) |
 | 2 | **Accuracy 33% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku, 35/50 settled |
 | 3 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1345), superbet(1128), cli(1112) |
 | 4 | **5x subprocess.Popen fire-and-forget** | ⚪ P4 | evening_agent, cli, daily_agent, backtest, post_match — OK dla notyfikacji |
@@ -57,6 +57,9 @@
 
 | Problem | Status | Data |
 |---------|--------|------|
+| ai_feedback FK violation (coupon_id zamiast predictions.id) w settle_active_coupons | ✅ FIXED — _send_to_rag_feedback per-leg lookup po match_date+druzyny | 06-11 |
+| system_coupons.py — psycopg2 LIKE escaping bug | ✅ FIXED | 06-11 |
+| rag.py — row[0] zamiast row["col"] (RealDictCursor) ×2 | ✅ FIXED | 06-11 |
 | Sędziowie (zawodtyper) — 17 dni stale (05-25) | ✅ Odświeżone ręcznie — 186 sędziów, 06-11 16:04 | 06-11 |
 | xg_lambda.py — martwy kod | ✅ Usunięty (commit f73709dab) | 06-11 |
 | kupon #64 total_odds=2148883.0 | ✅ Verified — 29-leg AKO, iloczyn kursów poprawny | 06-11 |

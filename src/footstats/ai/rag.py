@@ -129,7 +129,7 @@ def pobierz_rag_wzorce(
 
         wyniki: list[str] = []
         for (label, _, tip), row in zip(specs, rows):
-            n, hits = row[0] or 0, int(row[1] or 0)
+            n, hits = row["n"] or 0, int(row["hits"] or 0)
             if n >= min_n:
                 acc = round(hits / n * 100)
                 wyniki.append(f"{label}->{tip}: {hits}/{n}({acc}%)")
@@ -219,11 +219,11 @@ def retrieve_relevant_lessons(query_context: str, k: int = 5, min_score: float =
             ).fetchall()
         for row in rows:
             lessons.append({
-                "id": row[0],
-                "match_id": row[1],
-                "reason_for_failure": row[2],
-                "score": score_map.get(row[0], 0.0),
-                "created_at": row[3],
+                "id": row["id"],
+                "match_id": row["match_id"],
+                "reason_for_failure": row["reason_for_failure"],
+                "score": score_map.get(row["id"], 0.0),
+                "created_at": row["created_at"],
             })
 
         logger.debug(f"[RAG] Retrieved {len(lessons)} lessons (top-{k}, min_score={min_score})")

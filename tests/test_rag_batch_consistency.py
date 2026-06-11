@@ -78,7 +78,9 @@ def test_pobierz_rag_wzorce_returns_string():
         mock_ctx = MagicMock()
         mock_ctx.__enter__ = MagicMock(return_value=mock_ctx)
         mock_ctx.__exit__ = MagicMock(return_value=False)
-        mock_ctx.execute.return_value.fetchall.return_value = [(0, 0), (0, 0)]
+        mock_ctx.execute.return_value.fetchall.return_value = [
+            {"n": 0, "hits": 0}, {"n": 0, "hits": 0}
+        ]
         mock_conn.return_value = mock_ctx
 
         result = pobierz_rag_wzorce(["PATENT", "TWIERDZA"], ai_tip="1")
@@ -93,7 +95,7 @@ def test_pobierz_rag_wzorce_batch_single_db_call():
         mock_ctx.__enter__ = MagicMock(return_value=mock_ctx)
         mock_ctx.__exit__ = MagicMock(return_value=False)
         mock_ctx.execute.return_value.fetchall.return_value = [
-            (5, 4), (3, 2), (8, 6)
+            {"n": 5, "hits": 4}, {"n": 3, "hits": 2}, {"n": 8, "hits": 6}
         ]
         mock_conn.return_value = mock_ctx
 
@@ -113,7 +115,9 @@ def test_pobierz_rag_wzorce_formats_output_correctly():
         mock_ctx.__enter__ = MagicMock(return_value=mock_ctx)
         mock_ctx.__exit__ = MagicMock(return_value=False)
         # combo: 8/10, single PATENT: 6/8
-        mock_ctx.execute.return_value.fetchall.return_value = [(10, 8), (8, 6)]
+        mock_ctx.execute.return_value.fetchall.return_value = [
+            {"n": 10, "hits": 8}, {"n": 8, "hits": 6}
+        ]
         mock_conn.return_value = mock_ctx
 
         result = pobierz_rag_wzorce(["PATENT", "TWIERDZA"], ai_tip="1")
@@ -127,7 +131,9 @@ def test_pobierz_rag_wzorce_skips_below_min_n():
         mock_ctx = MagicMock()
         mock_ctx.__enter__ = MagicMock(return_value=mock_ctx)
         mock_ctx.__exit__ = MagicMock(return_value=False)
-        mock_ctx.execute.return_value.fetchall.return_value = [(2, 2), (1, 1)]
+        mock_ctx.execute.return_value.fetchall.return_value = [
+            {"n": 2, "hits": 2}, {"n": 1, "hits": 1}
+        ]
         mock_conn.return_value = mock_ctx
 
         result = pobierz_rag_wzorce(["PATENT", "TWIERDZA"], ai_tip="1", min_n=3)
@@ -142,7 +148,8 @@ def test_pobierz_rag_wzorce_max_3_results():
         mock_ctx.__enter__ = MagicMock(return_value=mock_ctx)
         mock_ctx.__exit__ = MagicMock(return_value=False)
         mock_ctx.execute.return_value.fetchall.return_value = [
-            (10, 8), (10, 7), (10, 6), (10, 5), (10, 4)
+            {"n": 10, "hits": 8}, {"n": 10, "hits": 7}, {"n": 10, "hits": 6},
+            {"n": 10, "hits": 5}, {"n": 10, "hits": 4}
         ]
         mock_conn.return_value = mock_ctx
 

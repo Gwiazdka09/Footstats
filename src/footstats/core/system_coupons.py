@@ -22,7 +22,7 @@ def _existing_system_tiers(system_uid: int, date_str: str) -> set[str]:
     with _connect() as conn:
         rows = conn.execute(
             "SELECT kupon_type FROM coupons "
-            "WHERE user_id = ? AND match_date_first = ? AND kupon_type LIKE 'risk_%'",
+            "WHERE user_id = ? AND match_date_first = ? AND kupon_type LIKE 'risk_%%'",
             (system_uid, date_str),
         ).fetchall()
     return {r["kupon_type"] for r in rows}
