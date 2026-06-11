@@ -48,9 +48,22 @@
 
 ## ⚪ FAZA 15: NOWE FEATURE'Y
 
-### 15.3: Odds comparison — STS/Fortuna/LV BET
-- [ ] Playwright login → porównaj kursy, wybierz najwyższy
-- **Effort:** 1–2 tygodnie | ⏸️ odkładamy
+### 15.3: Odds comparison — STS 1X2 vs nasze predykcje
+- [x] `scrapers/sts_kursy.py` + 23 testy — pobiera kursy 1X2 ze STS, liczy EV vs nasze p_wygrana/p_remis/p_przegrana (commit cf36f73c9)
+- [ ] Rozszerzyć na Fortuna/LV BET (ten sam wzorzec co sts_kursy.py)
+- **Effort:** 1–2 dni per bukmacher | ⏸️ odkładamy
+
+### 15.7: Strefa Inspiracji — sygnał od top typerów STS
+- [ ] Moduł: `pobierz_typerzy`/`pobierz_kupony_typera` (już w `scrapers/sts.py`, niewpięte) → kupony top typerów na dziś
+- [ ] Matching po drużynach (wzorzec `_match_score`/`znajdz_kurs` z sts_kursy.py) z naszymi predykcjami
+- [ ] Log zgodność/niezgodność jako dodatkowy sygnał (np. do RAG/decision_score)
+- [ ] Testy + wpięcie do daily_agent (krok opcjonalny, nieblokujący)
+- **Effort:** 1 dzień | ⏸️ odkładamy (zatwierdzone, nie zaczęte)
+
+### 15.8: BetBuilder — rekomendacje ze strony głównej STS
+- [ ] Homepage `/` ma karuzelę `bet-builder-recommendation*` — gotowe AI-combo od STS
+- [ ] Sprawdzić czy zawiera value vs nasze predykcje (podobnie jak 15.3)
+- **Effort:** 0.5 dnia | ⏸️ pomysł, niezbadane
 
 ### 15.6: Multi-user support
 - [ ] Per-user bankroll, risk profile, Telegram chat_id
