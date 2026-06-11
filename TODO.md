@@ -39,7 +39,10 @@
 
 ## 🔧 TECH DEBT
 
-(brak otwartych)
+### TD23: settle_active_coupons — brak filtra po dacie/test danych
+- [ ] Dodać `WHERE status='ACTIVE' AND match_date_first <= today` (lub filtr user_id) — zapobiec ponownemu zapchaniu pętli przez dane testowe
+- [ ] Zweryfikować jutrzejszy run FootStats-DailyAgentDraft/Final (08:00/11:00) — czy LastTaskResult=0 po usunięciu 21 śmieciowych kuponów
+- **Effort:** 30 min | 🔴 P1
 
 ---
 
