@@ -1,5 +1,7 @@
 """Shared Playwright helpers for betting site scrapers."""
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -10,12 +12,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Generator, TypeVar
 
-from playwright.sync_api import Browser, BrowserContext, Error as PWError, Page, TimeoutError as PWTimeout, sync_playwright
-
 from footstats.core.circuit_breaker import CircuitBreaker
 from footstats.core.exceptions import FootStatsCircuitOpenError
 
 logger = logging.getLogger(__name__)
+
+try:
+    from playwright.sync_api import Browser, BrowserContext, Error as PWError, Page, TimeoutError as PWTimeout, sync_playwright
+    PLAYWRIGHT_OK = True
+except ImportError:
+    PLAYWRIGHT_OK = False
+    logger.info("[BasePlaywright] UWAGA: playwright niedostepny, zainstaluj: pip install playwright && playwright install chromium")
 
 _T = TypeVar("_T")
 

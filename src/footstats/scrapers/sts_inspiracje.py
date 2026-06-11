@@ -36,11 +36,13 @@ load_dotenv()
 
 try:
     from playwright.sync_api import Error as PWError
+    PLAYWRIGHT_OK = True
 except ImportError:
+    PLAYWRIGHT_OK = False
+    PWError = Exception
     logging.getLogger(__name__).info(
-        "BŁĄD: pip install playwright  następnie  python -m playwright install chromium"
+        "[Inspiracje] UWAGA: playwright niedostepny, zainstaluj: pip install playwright && playwright install chromium"
     )
-    sys.exit(1)
 
 from footstats.core.bet_builder import probability_matrix
 from footstats.scrapers.base_playwright import (
@@ -255,6 +257,10 @@ def _usun_cookiebot(page) -> None:
 
 def pobierz_popularne_kupony(debug: bool = False) -> str:
     """Pobiera surowy tekst sekcji 'Popularne kupony' ze Strefy Inspiracji."""
+    if not PLAYWRIGHT_OK:
+        logger.info("[Inspiracje] Brak playwright - pomijam scraping")
+        return ""
+
     with browser_context(headless=not debug) as browser:
         with page_context(
             browser,
@@ -277,6 +283,10 @@ def pobierz_popularne_kupony(debug: bool = False) -> str:
 
 def pobierz_betbuilder_carousel(debug: bool = False) -> list[str]:
     """Pobiera teksty kafelkow karuzeli 'Popularne Bet Buildery' ze strony glownej STS."""
+    if not PLAYWRIGHT_OK:
+        logger.info("[Inspiracje] Brak playwright - pomijam scraping")
+        return []
+
     wyniki: list[str] = []
 
     with browser_context(headless=not debug) as browser:

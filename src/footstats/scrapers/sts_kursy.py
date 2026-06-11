@@ -31,12 +31,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 try:
     from playwright.sync_api import Error as PWError
+    PLAYWRIGHT_OK = True
 except ImportError:
-    logger = logging.getLogger(__name__)
-    logger.info("BŁĄD: pip install playwright  następnie  python -m playwright install chromium")
-    sys.exit(1)
+    PLAYWRIGHT_OK = False
+    PWError = Exception
+    logger.info("[STS-Kursy] UWAGA: playwright niedostepny, zainstaluj: pip install playwright && playwright install chromium")
 
 from footstats.scrapers.base_playwright import (
     STS_CONFIG as _CFG,
@@ -46,8 +49,6 @@ from footstats.scrapers.base_playwright import (
     zamknij_popup,
 )
 from footstats.utils.normalize import _strip_diacritics
-
-logger = logging.getLogger(__name__)
 
 STS_URL   = "https://www.sts.pl"
 ODDS_URL  = f"{STS_URL}/zaklady-bukmacherskie/pilka-nozna/1"
@@ -239,6 +240,10 @@ def _zbierz_kafelki(page, wyniki: list[dict], seen: set[str]) -> None:
 
 def pobierz_kursy_1x2(debug: bool = False, max_scroll: int = 20) -> list[dict]:
     """Pobiera kursy 1X2 dla nadchodzących meczów piłkarskich ze STS."""
+    if not PLAYWRIGHT_OK:
+        logger.info("[STS-Kursy] Brak playwright - pomijam scraping")
+        return []
+
     wyniki: list[dict] = []
     seen: set[str] = set()
 
