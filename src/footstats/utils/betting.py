@@ -62,6 +62,17 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
     if tip == "12":
         return 1 if match_result in ("1", "2") else 0
 
+    # Gole drużyny: "1 OVER 0.5" = gospodarz strzeli >0.5 (1+) goli, "2 UNDER 1.5" = gość <1.5 itd.
+    team_goals = re.match(r"^(1|2)\s+(OVER|UNDER)\s+(\d+\.\d+|\d+)$", tip)
+    if team_goals:
+        if home_g is None or away_g is None:
+            return None
+        side, direction, val = team_goals.group(1), team_goals.group(2), float(team_goals.group(3))
+        goals = home_g if side == "1" else away_g
+        if direction == "OVER":
+            return 1 if goals > val else 0
+        return 1 if goals < val else 0
+
     # Over/Under
     if "OVER" in tip or "UNDER" in tip:
         if total_goals is None: return None
