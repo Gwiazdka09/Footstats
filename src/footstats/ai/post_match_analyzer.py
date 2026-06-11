@@ -13,6 +13,7 @@ Użycie:
 import json
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -164,11 +165,10 @@ def analizuj_porazki(days_back: int = 14, dry_run: bool = False) -> dict:
             print("[PostMatchAnalyzer] Aktualizacja Visual Brain...")
             import subprocess
             import sys
-            import os
-            # Znajdź ścieżkę do skryptu wizualizacji
-            script_path = os.path.join(os.getcwd(), 'scripts', 'visualize_brain.py')
-            if os.path.exists(script_path):
-                subprocess.Popen([sys.executable, script_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Znajdź ścieżkę do skryptu wizualizacji (niezależnie od cwd)
+            script_path = Path(__file__).resolve().parents[3] / 'scripts' / 'visualize_brain.py'
+            if script_path.exists():
+                subprocess.Popen([sys.executable, str(script_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 print("  [OK] Visual Brain zaktualizowany w tle.")
         except OSError as e:
             print(f"  [ERR] Nie udało się zaktualizować Visual Brain: {e}")

@@ -122,6 +122,7 @@ def pobierz_rag_wzorce(
 
         t0 = _time.monotonic()
         with _connect() as conn:
+            # Security: parts zawierają tylko parametryzowane ? placeholdery, brak user input w SQL
             rows = conn.execute(" UNION ALL ".join(parts), params).fetchall()
         elapsed = _time.monotonic() - t0
         logger.debug("[RAG] Batch %d queries in %.3fs", len(specs), elapsed)

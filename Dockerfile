@@ -30,9 +30,14 @@ COPY data ./data
 # Umieść zbudowany React w miejscu, które FastAPI serwuje
 COPY --from=frontend-builder /build/dist ./src/footstats/gui/dist
 
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers
 RUN playwright install chromium
 
 COPY start_cloud.sh ./
 RUN chmod +x start_cloud.sh
+
+RUN addgroup --system app && adduser --system --ingroup app app \
+    && chown -R app:app /app
+USER app
 
 CMD ["./start_cloud.sh"]
