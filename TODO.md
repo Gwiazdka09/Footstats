@@ -54,16 +54,17 @@
 - **Effort:** 1–2 dni per bukmacher | ⏸️ odkładamy
 
 ### 15.7: Strefa Inspiracji — sygnał od top typerów STS
-- [ ] Moduł: `pobierz_typerzy`/`pobierz_kupony_typera` (już w `scrapers/sts.py`, niewpięte) → kupony top typerów na dziś
-- [ ] Matching po drużynach (wzorzec `_match_score`/`znajdz_kurs` z sts_kursy.py) z naszymi predykcjami
-- [ ] Log zgodność/niezgodność jako dodatkowy sygnał (np. do RAG/decision_score)
-- [ ] Testy + wpięcie do daily_agent (krok opcjonalny, nieblokujący)
-- **Effort:** 1 dzień | ⏸️ odkładamy (zatwierdzone, nie zaczęte)
+- [x] Moduł `scrapers/sts_inspiracje.py`: `parse_popular_tickets` (Strefa Inspiracji "Popularne kupony") + `normalize_market_tip`
+- [x] Matching po drużynach (`znajdz_kurs`/`_match_score` z sts_kursy.py) → `dopasuj_do_predykcji`
+- [x] Wycena kombo modelem Poisson (`_joint_probability` + `oblicz_tip_correct`) → `ocen_sygnal` (VALUE/NO_VALUE/BRAK_MODELU)
+- [x] Testy: `tests/test_sts_inspiracje.py` (18/18 PASS)
+- [ ] Wpięcie do daily_agent (krok opcjonalny, nieblokujący)
+- **Effort:** 1 dzień | 🟡 w trakcie (parsing+model gotowe, wpięcie do daily_agent zostało)
 
 ### 15.8: BetBuilder — rekomendacje ze strony głównej STS
-- [ ] Homepage `/` ma karuzelę `bet-builder-recommendation*` — gotowe AI-combo od STS
-- [ ] Sprawdzić czy zawiera value vs nasze predykcje (podobnie jak 15.3)
-- **Effort:** 0.5 dnia | ⏸️ pomysł, niezbadane
+- [x] Homepage `/` karuzela `.bet-builder-recommendation` — parser `parse_betbuilder_carousel` w `scrapers/sts_inspiracje.py`
+- [x] Value vs nasze predykcje — wspólna logika `ocen_sygnal`/`dopasuj_do_predykcji` (jak 15.3)
+- **Effort:** 0.5 dnia | ✅ gotowe (parsing+wycena), wymaga commitu
 
 ### 15.6: Multi-user support
 - [ ] Per-user bankroll, risk profile, Telegram chat_id
