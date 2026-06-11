@@ -91,6 +91,79 @@ def _znajdz_wynik_fdb(home: str, away: str, matches: list[dict]) -> str | None:
     return best_result
 
 
+def _find_leg_result(
+    home: str,
+    away: str,
+    mdate: str,
+    fixtures_cache: dict[str, list],
+    fdb_cache: dict[str, list],
+    api_key: str,
+    fdb_key: str,
+) -> str | None:
+    """
+    Szuka wyniku meczu home-away dla mdate, a jeśli brak — dla mdate+1.
+
+    Terminarz bywa przesuwany o 1 dzień po stronie API już po utworzeniu
+    kuponu (match_date_first ustalony wcześniej), co bez tego fallbacku
+    skutkuje fuzzy-matchem do innego meczu tego dnia (fałszywy wynik) albo
+    wieczną PARTIAL (None na zawsze, bo szukamy zawsze tej samej, błędnej daty).
+    """
+    from footstats.core.backtest import _connect
+    from footstats.scrapers.flashscore_results import get_match_result
+    from footstats.scrapers.results_updater import _znajdz_wynik
+
+    candidate_dates = [mdate]
+    try:
+        next_day = (datetime.fromisoformat(mdate) + timedelta(days=1)).date().isoformat()
+        candidate_dates.append(next_day)
+    except ValueError:
+        pass
+
+    for d in candidate_dates:
+        if d not in fixtures_cache:
+            fixtures_cache[d] = _get_fixtures_api(api_key, d) if api_key else []
+
+        pending_mock = {"team_home": home, "team_away": away}
+        res = _znajdz_wynik(pending_mock, fixtures_cache[d])
+
+        if not res:
+            norm_home = normalize_team_name(home)
+            norm_away = normalize_team_name(away)
+            if norm_home != home.lower() or norm_away != away.lower():
+                norm_mock = {"team_home": norm_home, "team_away": norm_away}
+                res = _znajdz_wynik(norm_mock, fixtures_cache[d])
+
+        if not res:
+            if d not in fdb_cache:
+                fdb_cache[d] = _get_matches_fdb(fdb_key, d)
+            res = _znajdz_wynik_fdb(home, away, fdb_cache[d])
+
+        if not res:
+            res = get_match_result(home, away, d, cache_enabled=True)
+
+        if res:
+            if isinstance(res, tuple):
+                res = res[0]
+            if d != mdate:
+                log.info("Mecz %s vs %s: wynik znaleziony na %s (przesuniety terminarz, kupon mial %s)", home, away, d, mdate)
+            return res
+
+    # Źródło 4: tabela predictions w DB (sprawdź obie daty)
+    for d in candidate_dates:
+        try:
+            with _connect() as pred_conn:
+                pred_row = pred_conn.execute(
+                    "SELECT actual_result FROM predictions WHERE match_date=? AND (team_home LIKE ? OR team_away LIKE ?) LIMIT 1",
+                    (d, f"%{home}%", f"%{away}%"),
+                ).fetchone()
+            if pred_row and pred_row["actual_result"]:
+                return pred_row["actual_result"]
+        except (OSError, ValueError, RuntimeError):
+            pass
+
+    return None
+
+
 def settle_active_coupons(
     days_back: int = 3,
     dry_run: bool = False,
@@ -108,8 +181,7 @@ def settle_active_coupons(
         {"settled": N, "partial": M, "errors": K}
     """
     from footstats.core.backtest import _connect, init_db
-    from footstats.scrapers.results_updater import _get_api_key, _znajdz_wynik
-    from footstats.scrapers.flashscore_results import get_match_result
+    from footstats.scrapers.results_updater import _get_api_key
 
     init_db()
 
@@ -172,46 +244,8 @@ def settle_active_coupons(
                     home, away = mecz.split(" - ", 1)
                 home, away = home.strip(), away.strip()
 
-            # Źródło 1: API-Football (cache per data)
-            if mdate not in fixtures_cache:
-                fixtures_cache[mdate] = _get_fixtures_api(api_key, mdate) if api_key else []
-
-            pending_mock = {"team_home": home, "team_away": away}
-            res = _znajdz_wynik(pending_mock, fixtures_cache[mdate])
-
-            if not res:
-                norm_home = normalize_team_name(home)
-                norm_away = normalize_team_name(away)
-                if norm_home != home.lower() or norm_away != away.lower():
-                    norm_mock = {"team_home": norm_home, "team_away": norm_away}
-                    res = _znajdz_wynik(norm_mock, fixtures_cache[mdate])
-
-            # Źródło 2: football-data.org (pełna historia)
-            if not res:
-                if mdate not in fdb_cache:
-                    fdb_cache[mdate] = _get_matches_fdb(fdb_key, mdate)
-                res = _znajdz_wynik_fdb(home, away, fdb_cache[mdate])
-
-            # Źródło 3: FlashScore mobi (~7 dni)
-            if not res:
-                res = get_match_result(home, away, mdate, cache_enabled=True)
-
-            # Źródło 4: tabela predictions w DB
-            if not res:
-                try:
-                    with _connect() as pred_conn:
-                        pred_row = pred_conn.execute(
-                            "SELECT actual_result FROM predictions WHERE match_date=? AND (team_home LIKE ? OR team_away LIKE ?) LIMIT 1",
-                            (mdate, f"%{home}%", f"%{away}%")
-                        ).fetchone()
-                    if pred_row and pred_row["actual_result"]:
-                        res = pred_row["actual_result"]
-                except (OSError, ValueError, RuntimeError):
-                    pass
-
-            # _znajdz_wynik (Źródło 1) zwraca (wynik, stats) — wyciągnij sam wynik
-            if isinstance(res, tuple):
-                res = res[0]
+            # 4 źródła wyników, kolejno mdate i mdate+1 (przesuniety terminarz)
+            res = _find_leg_result(home, away, mdate, fixtures_cache, fdb_cache, api_key, fdb_key)
 
             correct = oblicz_tip_correct(leg["tip"], res)
             leg_results.append(correct)
