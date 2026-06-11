@@ -1,8 +1,8 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-10
+**Ostatnia aktualizacja:** 2026-06-11
 **Wersja:** v3.4-stable
-**Accuracy baseline:** 26.7% (15 live settled, Neon.tech)
+**Accuracy baseline:** 33% (12/35 live settled, Neon.tech)
 **Cel na koniec lipca:** M1 = 55% win rate
 
 > Historia ukończonych zadań: `git log` (commity TD/16.x/15.x mają opisowe nazwy)
@@ -39,10 +39,9 @@
 
 ## 🔧 TECH DEBT
 
-### TD19: cache/ 353MB — brak eviction policy
-- [ ] Rozważ max age dla plików cache (np. >7 dni → usuwaj)
-- [ ] Lub skrypt `scripts/evict_cache.py` w pipeline
-- **Effort:** 30 min | ⚪ P4
+### TD22: kupon #64 — total_odds=2148883.0 (anomalia)
+- [ ] Sprawdzić źródło kalkulacji kursu w `risk_proposals.py`/`coupons.py` — wynik LOST, brak wpływu na wypłatę, ale wartość ewidentnie błędna
+- **Effort:** 30 min | 🟡 P3
 
 ---
 
