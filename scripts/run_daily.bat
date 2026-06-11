@@ -36,3 +36,8 @@ if %errorlevel% neq 0 (
 )
 
 echo [%date% %time%] Daily agent cycle completed >> F:\bot\data\logs\daily_agent.log
+
+REM KROK 2: Pelny syntax check src/footstats + eviction starego cache
+echo [%date% %time%] === Full syntax check + cache eviction === >> F:\bot\data\logs\daily_agent.log
+python scripts/check_syntax.py >> F:\bot\data\logs\daily_agent.log 2>&1
+python scripts/evict_cache.py --days 7 >> F:\bot\data\logs\daily_agent.log 2>&1
