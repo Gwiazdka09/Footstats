@@ -1,9 +1,9 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-10 (auto-audit)  
+**Last Updated:** 2026-06-11 (auto-audit)  
 **Current Version:** v3.4-stable  
-**Build Status:** ✅ OK — 0 SyntaxError (ast.parse), 0 null bytes  
-**System State:** FUNCTIONAL
+**Build Status:** 🔴 5x FILE TRUNCATION DETECTED & RESTORED — now 0 SyntaxError  
+**System State:** FUNCTIONAL (po naprawie)
 
 ---
 
@@ -19,7 +19,7 @@
 | **API** | ✅ | FastAPI + Sentry + SlowAPI rate limiting + CORS |
 | **DB** | ✅ | Neon PG (prod) + SQLite (backtest), pool maxconn=10 |
 | **Timeouts** | ✅ | Wszystkie requests.get/post mają timeout=15 |
-| **Thread Safety** | 🟡 | Lock w CB, lambda_opt OK; response_cache sync_wrapper brak locka na odczycie |
+| **Thread Safety** | ✅ | Lock w CB, lambda_opt, response_cache sync_wrapper — wszystko OK |
 | **Ollama** | ✅ | qwen2.5:7b lokalny + Groq fallback |
 | **Security** | ✅ | Brak eval/pickle/os.system; Sentry DSN z env |
 | **Cache** | ✅ | response_cache: MAX_ENTRIES=500, eviction + TTL cleanup OK |
@@ -32,11 +32,12 @@
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
 | 1 | **Accuracy 26.7% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku, czekamy na 50 settled |
-| 2 | **29 uncommitted changes** | 🔴 P1 | Ryzyko utraty pracy — PILNY COMMIT + PUSH |
-| 3 | **response_cache sync_wrapper race** | 🟡 P2 | Odczyt cache bez `_CACHE_LOCK` w sync_wrapper (linia 171) |
-| 4 | **base.py recursive retry bez limitu** | 🟡 P2 | `_http_get` na 429 wywołuje siebie rekurencyjnie — brak max depth |
+| 2 | **45 uncommitted changes + .git/index.lock** | 🔴 P1 | Ryzyko utraty pracy — PILNY: usuń index.lock, commit + push |
+| 3 | **5x file truncation (06-11)** | 🔴 P1 | response_cache, base, coupons, daily_agent, evening_agent — RESTORED z git HEAD |
+| 4 | **cache/ 363MB (1102 pliki >7d)** | 🟡 P3 | Brak eviction policy dla plików dyskowych |
 | 5 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1345), superbet(1128), cli(1112) |
 | 6 | **5x subprocess.Popen fire-and-forget** | ⚪ P4 | evening_agent, cli, daily_agent, backtest, post_match — OK dla notyfikacji |
+| 7 | **orphan files** | ⚪ P4 | .fuse_hidden000002b400000001, data/footstats.db-wal, .vexp/*.db-wal/shm |
 | 7 | **cache/ 353MB** | ⚪ P4 | Rozważ eviction policy lub max age |
 
 ---
@@ -59,6 +60,9 @@
 
 | Problem | Status | Data |
 |---------|--------|------|
+| 5x file truncation (response_cache, base, coupons, daily_agent, evening_agent) | ✅ RESTORED | 06-11 |
+| response_cache sync_wrapper race — verified: lock present (l.171) | ✅ OK | 06-11 |
+| base.py _http_get 429 retry — verified: _retry>=3 limit present (l.23) | ✅ OK | 06-11 |
 | 26x file truncation + 4x null bytes | ✅ FIXED | 06-07 |
 | .gitignore: footstats.log + validation_errors.csv | ✅ FIXED | 06-07 |
 | 12x file truncation/null bytes | ✅ FIXED | 05-28 |
