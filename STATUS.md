@@ -32,10 +32,9 @@
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
 | 1 | **Accuracy 33% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku, 35/50 settled |
-| 2 | **kupon #64 total_odds=2148883.0** | 🟡 P3 | Anomalia w kalkulacji kursu — sprawdzić źródło (LOST, brak wpływu na wypłatę) |
-| 3 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1345), superbet(1128), cli(1112) |
-| 4 | **5x subprocess.Popen fire-and-forget** | ⚪ P4 | evening_agent, cli, daily_agent, backtest, post_match — OK dla notyfikacji |
-| 5 | **orphan files** | ⚪ P4 | .fuse_hidden000002b400000001, data/footstats.db-wal, .vexp/*.db-wal/shm |
+| 2 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1345), superbet(1128), cli(1112) |
+| 3 | **5x subprocess.Popen fire-and-forget** | ⚪ P4 | evening_agent, cli, daily_agent, backtest, post_match — OK dla notyfikacji |
+| 4 | **orphan files** | ⚪ P4 | .fuse_hidden000002b400000001, data/footstats.db-wal, .vexp/*.db-wal/shm |
 
 ---
 
@@ -57,6 +56,7 @@
 
 | Problem | Status | Data |
 |---------|--------|------|
+| kupon #64 total_odds=2148883.0 | ✅ Verified — 29-leg AKO, iloczyn kursów poprawny | 06-11 |
 | cache/ eviction policy (TD19 — scripts/evict_cache.py w run_daily.bat) | ✅ FIXED | 06-11 |
 | 45 uncommitted changes + .git/index.lock | ✅ Committed+pushed | 06-11 |
 | 5x file truncation (response_cache, base, coupons, daily_agent, evening_agent) | ✅ RESTORED | 06-11 |

@@ -39,9 +39,7 @@
 
 ## 🔧 TECH DEBT
 
-### TD22: kupon #64 — total_odds=2148883.0 (anomalia)
-- [ ] Sprawdzić źródło kalkulacji kursu w `risk_proposals.py`/`coupons.py` — wynik LOST, brak wpływu na wypłatę, ale wartość ewidentnie błędna
-- **Effort:** 30 min | 🟡 P3
+(brak otwartych)
 
 ---
 
