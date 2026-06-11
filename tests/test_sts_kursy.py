@@ -128,6 +128,27 @@ def test_znajdz_kurs_below_threshold_returns_none():
     assert znajdz_kurs("Liverpool", "Chelsea", oferta) is None
 
 
+# ── _match_score: aliasy nazw reprezentacji EN<->PL ──────────────────────────
+
+def test_match_score_country_alias_south_korea_czechia():
+    mecz = {"team1": "Korea Południowa", "team2": "Czechy"}
+    assert _match_score(mecz, "South Korea", "Czechia") >= 2
+
+
+def test_match_score_country_alias_abbreviation_rpa():
+    mecz = {"team1": "Czechy", "team2": "RPA"}
+    assert _match_score(mecz, "Czechia", "South Africa") >= 2
+
+
+def test_znajdz_kurs_matches_english_country_names():
+    oferta = [
+        {"team1": "Korea Południowa", "team2": "Czechy", "k1": 2.85, "kx": 3.20, "k2": 2.95},
+    ]
+    wynik = znajdz_kurs("South Korea", "Czechia", oferta)
+    assert wynik is not None
+    assert wynik["team1"] == "Korea Południowa"
+
+
 # ── oblicz_value ─────────────────────────────────────────────────────────────
 
 def test_oblicz_value_finds_value_bet():

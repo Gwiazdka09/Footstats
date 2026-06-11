@@ -45,6 +45,7 @@ from footstats.scrapers.base_playwright import (
     page_context,
     zamknij_popup,
 )
+from footstats.utils.normalize import _strip_diacritics
 
 logger = logging.getLogger(__name__)
 
@@ -113,13 +114,60 @@ def _parsuj_mecz(header_txt: str, details_txt: str, outcome_txts: list[str]) -> 
     }
 
 
+# Aliasy nazw reprezentacji narodowych: EN (Bzzoiro/predykcje) -> PL (STS).
+# Znormalizowane przez _strip_diacritics + lower (bez polskich znaków).
+_COUNTRY_ALIASES: dict[str, str] = {
+    "south korea": "korea poludniowa",
+    "north korea": "korea polnocna",
+    "czechia": "czechy",
+    "czech republic": "czechy",
+    "ivory coast": "wybrzeze kosci sloniowej",
+    "cote divoire": "wybrzeze kosci sloniowej",
+    "cape verde": "republika zielonego przyladka",
+    "south africa": "rpa",
+    "saudi arabia": "arabia saudyjska",
+    "north macedonia": "macedonia polnocna",
+    "new zealand": "nowa zelandia",
+    "netherlands": "holandia",
+    "germany": "niemcy",
+    "spain": "hiszpania",
+    "wales": "walia",
+    "england": "anglia",
+    "scotland": "szkocja",
+    "sweden": "szwecja",
+    "switzerland": "szwajcaria",
+    "morocco": "maroko",
+    "bosnia and herzegovina": "bosnia i hercegowina",
+    "denmark": "dania",
+    "japan": "japonia",
+    "portugal": "portugalia",
+    "france": "francja",
+    "belgium": "belgia",
+    "croatia": "chorwacja",
+    "egypt": "egipt",
+    "canada": "kanada",
+    "mexico": "meksyk",
+    "qatar": "katar",
+    "tunisia": "tunezja",
+    "brazil": "brazylia",
+}
+
+
 def _match_score(mecz: dict, gosp: str, gosc: str) -> int:
-    """Liczy podobieństwo nazw drużyn (nasze gosp/gosc vs team1/team2 ze STS)."""
+    """
+    Liczy podobieństwo nazw drużyn (nasze gosp/gosc vs team1/team2 ze STS).
+    Stosuje _COUNTRY_ALIASES, żeby np. "South Korea"/"Czechia" (predykcje, EN)
+    dopasować do "Korea Południowa"/"Czechy" (STS, PL).
+    """
     score = 0
     for nasze, ich in ((gosp, mecz.get("team1", "")), (gosc, mecz.get("team2", ""))):
-        n = str(nasze).lower()
-        i = str(ich).lower()
-        for slowo in n.replace("-", " ").split():
+        n = _strip_diacritics(str(nasze)).lower()
+        i = _strip_diacritics(str(ich)).lower()
+        n = _COUNTRY_ALIASES.get(n, n)
+        if n == i:
+            score += 2
+            continue
+        for slowo in n.split():
             if len(slowo) > 3 and slowo in i:
                 score += 1
     return score
