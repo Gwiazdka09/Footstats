@@ -190,7 +190,8 @@ def _fixture_to_result(fixture: dict, api_key: str = None) -> tuple[str, str, st
 
 
 def _fetch_match_stats(api_key: str, fixture_id: int) -> dict:
-    """Pobiera statystyki (xG, strzały) dla konkretnego meczu."""
+    """Pobiera statystyki (strzały, rożne, kartki, possession) + timeline zdarzeń dla meczu."""
+    res: dict = {}
     try:
         r = requests.get(
             f"{API_BASE}/fixtures/statistics",
@@ -199,18 +200,42 @@ def _fetch_match_stats(api_key: str, fixture_id: int) -> dict:
             timeout=15,
         )
         r.raise_for_status()
-        data = r.json().get("response", [])
-        
-        res = {}
-        for team_stat in data:
+        for team_stat in r.json().get("response", []):
             t_name = team_stat.get("team", {}).get("name", "?")
             s_list = team_stat.get("statistics", [])
-            t_stats = {s["type"]: s["value"] for s in s_list}
-            res[t_name] = t_stats
-        return res
-    except (KeyError, TypeError, ValueError) as e:
+            res[t_name] = {s["type"]: s["value"] for s in s_list}
+    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
         log.debug("Match stats error (id=%s): %s", fixture_id, e)
-        return {}
+
+    events = _fetch_match_events(api_key, fixture_id)
+    if events:
+        res["_events"] = events
+    return res
+
+
+def _fetch_match_events(api_key: str, fixture_id: int) -> list[dict]:
+    """Pobiera oś czasu zdarzeń (gole, kartki, zmiany) z minutami dla meczu."""
+    try:
+        r = requests.get(
+            f"{API_BASE}/fixtures/events",
+            headers={"x-apisports-key": api_key},
+            params={"fixture": fixture_id},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return [
+            {
+                "minute": e.get("time", {}).get("elapsed"),
+                "team":   e.get("team", {}).get("name", "?"),
+                "type":   e.get("type", "?"),
+                "detail": e.get("detail", "?"),
+                "player": e.get("player", {}).get("name", "?"),
+            }
+            for e in r.json().get("response", [])
+        ]
+    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+        log.debug("Match events error (id=%s): %s", fixture_id, e)
+        return []
 
 
 def _znajdz_wynik(
