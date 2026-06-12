@@ -55,13 +55,15 @@ def fetch_referees_zawodtyper() -> None:
                 
                 trs = tbl.find_all("tr")
                 # Pomijamy th (trs[0])
+                # Kolumny: L.P | Sędzia | M | F | K | Ż.K. | CZ.K.
+                #          0      1      2   3   4    5      6
                 for tr in trs[1:]:
                     tds = tr.find_all(["td", "th"])
-                    if len(tds) >= 6:
+                    if len(tds) >= 7:
                         name = tds[1].text.strip()
                         matches_str = tds[2].text.strip()
-                        yellows_str = tds[4].text.strip()
-                        reds_str = tds[5].text.strip()
+                        yellows_str = tds[5].text.strip()
+                        reds_str = tds[6].text.strip()
                         
                         try:
                             m = int(matches_str)
