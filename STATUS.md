@@ -57,6 +57,9 @@
 
 | Problem | Status | Data |
 |---------|--------|------|
+| zawodtyper_referees.py — off-by-one kolumn (avg_yellow/avg_red z K/Z.K. zamiast Z.K./CZ.K.) | ✅ FIXED | 06-12 |
+| FAZA 16.3 draw bias — p_remis>50% dla niskich lambd (FINAL_REMIS_BOOST overshoot) | ✅ FIXED — sufit 40% w poisson.py | 06-12 |
+| LICENSE — MIT → All Rights Reserved (portfolio/CV) | ✅ ZMIENIONE | 06-12 |
 | settle_active_coupons — testowe kupony (match_date 2099) sprawdzane co run (TD23) | ✅ FIXED — `WHERE match_date_first <= today` | 06-12 |
 | coupon_settlement — stale FlashScore cache + zła kolejność źródeł wyniku | ✅ FIXED | 06-12 |
 | results_updater — fixtures po dacie (Źródło 0, wszystkie ligi) + timeline zdarzeń (gole/kartki) w match_stats | ✅ DODANE | 06-12 |

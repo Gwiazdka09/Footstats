@@ -1,7 +1,7 @@
 # ⚽ FootStats v3.4 — Autonomous AI Soccer Prediction Engine
 
 [![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Portfolio](https://img.shields.io/badge/License-All%20Rights%20Reserved-yellow.svg)](LICENSE)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green.svg)](https://fastapi.tiangolo.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32-ff4b4b.svg)](https://streamlit.io/)
 [![Playwright](https://img.shields.io/badge/Playwright-1.40-45ba4b.svg)](https://playwright.dev/)
@@ -200,4 +200,5 @@ pytest tests/test_version_consistency.py  # pyproject.toml == config.VERSION
 
 ## Licencja
 
-MIT License
+All Rights Reserved — kod udostępniony do przeglądu portfolio/CV, bez prawa kopiowania,
+redystrybucji ani użycia w innych projektach. Szczegóły: [LICENSE](LICENSE).

@@ -24,12 +24,15 @@
 
 ## 🔴 FAZA 16: ACCURACY FIXES (przed betą)
 
-### 16.3: Draw bias — model faworyzuje remisy (NOWE)
-- [ ] Zbadaj dlaczego kupony 06-05 i 06-11 to prawie wyłącznie remisy @1.92
-- [ ] Sprawdź czy Bzzoiro/Poisson ensemble daje zbyt wysoki p_remis dla egzotycznych lig
-- [ ] Dodaj dywersyfikację tipów w quick_picks — max 2 remisy na kupon
-- [ ] A/B: porównaj trafność remisów vs 1/2 w ostatnich 35 settled
-- **Effort:** 1–2 dni | 🔴 P1
+### 16.3: Draw bias — model faworyzuje remisy
+- [x] Zbadaj dlaczego predictions 06-05/06-06/06-12 to masowo "X" @1.92 (fair_odds(p_remis≈52%))
+- [x] Root cause: dla niskich lambd (slabe/egzotyczne druzyny) czysty Poisson daje
+      p_remis ~45-50%, a FINAL_REMIS_BOOST (×1.25, config.py) po renormalizacji
+      przepycha to >50% — "X" staje sie najwyzszym prob i dominuje liste typow
+- [x] Fix: sufit p_remis=40% w poisson.py (core/poisson.py) — nadwyzka
+      przenoszona proporcjonalnie na 1/2. 65/65 testow poisson OK
+- [ ] A/B: porównaj trafność remisów vs 1/2 w ostatnich 35 settled (warunek: 50 settled)
+- **Effort:** done (cap) | A/B po 16.4 | 🔴 P1
 
 ### 16.4: Kalibracja modelu (po 50 settled)
 - [ ] `python -m footstats.core.probability_calibrator`
@@ -51,11 +54,25 @@
 - [ ] Per-user bankroll, risk profile, Telegram chat_id
 - **Effort:** 3–5 dni | ⏸️ po M1
 
-## Licencjia
-- Sprawdzić licencjie na git aby nikt nie mógł ukraść kodu ale żeby mógł wpisać go do cv
-- sprawdzić polskie prawo czy nie jesteśmy blisko złamania czegoś
+## Licencja
+- [x] LICENSE zmienione MIT → All Rights Reserved + klauzula portfolio/CV (06-12)
+- [ ] Polskie prawo: scraping kursow (STS/Bzzoiro/Superbet) do analizy wlasnej —
+      to gray-area ToS (ryzyko bana konta, nie przestepstwo). Bot NIE organizuje
+      zakladow (Ustawa o grach hazardowych dot. organizatorow), tylko analizuje —
+      niskie ryzyko. Przed jakimkolwiek publicznym/komercyjnym udostepnieniem:
+      konsultacja z prawnikiem (ToS bukmacherow + ochrona baz danych).
 ---
 
 ## 💡 Pomysły od betatesterów
 
-(brak otwartych — dodawaj nowe tutaj)
+### Rozszerzenie oferty zakładów (rożne/kartki) — wzorem STS Bet Builder
+- STS Bet Builder ma rynki: Rzuty rożne (handicap/total/per-druzyna), Kartki
+  (total/per-druzyna/dokladna liczba), Rzut karny, Czerwona kartka, Spalone, Faule
+- `sts_inspiracje.normalize_market_tip` aktualnie zwraca None dla "rożne, kartki,
+  polowy, zawodnicy" — niezamodelowane, ale dane dostepne:
+  - zawodtyper.pl: 14 stron per-kategoria (rożne, kartki, ...) — śr./mecz per druzyna
+  - zawodtyper_referees.py (po fixie 06-12): avg_yellow/avg_red per sędzia poprawne
+- Pomysł: `fetch_team_corners`/`fetch_team_cards` (zawodtyper) + prosty model
+  Poissona dla rożnych/kartek (śr. team + śr. sędzia) → nowe tipy "Over X.5 rożnych",
+  "Over X.5 kartek" jako kolejny market w build_tips
+- **Effort:** 2-3 dni | po M1 (nowy market = nowa kalibracja)

@@ -228,6 +228,20 @@ def predict_match(
 
     suma = pw + pr + pp or 1.0
     pw /= suma; pr /= suma; pp /= suma
+
+    # ── Sufit p_remis (FAZA 16.3) ─────────────────────────────────────
+    # Dla niskich lambd (slabe/egzotyczne druzyny) czysty Poisson + FINAL_REMIS_BOOST
+    # daje p_remis >50%, co przewyzsza realne stopy remisow nawet w najbardziej
+    # zachowawczych ligach (~35-40%). Nadwyzke przenosimy proporcjonalnie na 1/2,
+    # zeby "X" nie dominowal listy kandydatow dla slabych meczow miedzynarodowych.
+    _PR_CAP = 0.40
+    if pr > _PR_CAP:
+        nadwyzka = pr - _PR_CAP
+        pr = _PR_CAP
+        reszta = pw + pp or 1.0
+        pw += nadwyzka * (pw / reszta)
+        pp += nadwyzka * (pp / reszta)
+
     over25 = min(over25_raw / suma, 1.0)
     top5 = [(f"{r}:{c}", round(v * 100, 1)) for r, c, v in top5_data]
 
