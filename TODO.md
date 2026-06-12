@@ -1,6 +1,6 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-11
+**Ostatnia aktualizacja:** 2026-06-12
 **Wersja:** v3.4-stable
 **Accuracy baseline:** 33% (12/35 live settled, Neon.tech)
 **Cel na koniec lipca:** M1 = 55% win rate
@@ -24,6 +24,13 @@
 
 ## 🔴 FAZA 16: ACCURACY FIXES (przed betą)
 
+### 16.3: Draw bias — model faworyzuje remisy (NOWE)
+- [ ] Zbadaj dlaczego kupony 06-05 i 06-11 to prawie wyłącznie remisy @1.92
+- [ ] Sprawdź czy Bzzoiro/Poisson ensemble daje zbyt wysoki p_remis dla egzotycznych lig
+- [ ] Dodaj dywersyfikację tipów w quick_picks — max 2 remisy na kupon
+- [ ] A/B: porównaj trafność remisów vs 1/2 w ostatnich 35 settled
+- **Effort:** 1–2 dni | 🔴 P1
+
 ### 16.4: Kalibracja modelu (po 50 settled)
 - [ ] `python -m footstats.core.probability_calibrator`
 - [ ] A/B test wag: 50/50 → 60/40 → 70/30 Poisson/Bzzoiro
@@ -34,37 +41,11 @@
 - [ ] Daily agent działa automatycznie (Task Scheduler 08:00 + 11:00 + 23:00)
 - [ ] Monitorować logi: `logs/kupon_YYYY-MM-DD.txt`
 - [ ] Cel: 50 settled kuponów z filtrowanymi ligami
+- [x] match_stats (statystyki + timeline zdarzeń gole/kartki z API-Football) zapisywane do `predictions` — dane do analizy gotowe (06-12)
 
 ---
 
-## 🔧 TECH DEBT
-
-### TD23: settle_active_coupons — brak filtra po dacie/test danych
-- [ ] Dodać `WHERE status='ACTIVE' AND match_date_first <= today` (lub filtr user_id) — zapobiec ponownemu zapchaniu pętli przez dane testowe
-- [ ] Zweryfikować jutrzejszy run FootStats-DailyAgentDraft/Final (08:00/11:00) — czy LastTaskResult=0 po usunięciu 21 śmieciowych kuponów
-- **Effort:** 30 min | 🔴 P1
-
----
-
-## ⚪ FAZA 15: NOWE FEATURE'Y
-
-### 15.3: Odds comparison — STS 1X2 vs nasze predykcje
-- [x] `scrapers/sts_kursy.py` + 23 testy — pobiera kursy 1X2 ze STS, liczy EV vs nasze p_wygrana/p_remis/p_przegrana (commit cf36f73c9)
-- [ ] Rozszerzyć na Fortuna/LV BET (ten sam wzorzec co sts_kursy.py)
-- **Effort:** 1–2 dni per bukmacher | ⏸️ odkładamy
-
-### 15.7: Strefa Inspiracji — sygnał od top typerów STS
-- [x] Moduł `scrapers/sts_inspiracje.py`: `parse_popular_tickets` (Strefa Inspiracji "Popularne kupony") + `normalize_market_tip`
-- [x] Matching po drużynach (`znajdz_kurs`/`_match_score` z sts_kursy.py) → `dopasuj_do_predykcji`
-- [x] Wycena kombo modelem Poisson (`_joint_probability` + `oblicz_tip_correct`) → `ocen_sygnal` (VALUE/NO_VALUE/BRAK_MODELU)
-- [x] Testy: `tests/test_sts_inspiracje.py` (18/18 PASS)
-- [ ] Wpięcie do daily_agent (krok opcjonalny, nieblokujący)
-- **Effort:** 1 dzień | 🟡 w trakcie (parsing+model gotowe, wpięcie do daily_agent zostało)
-
-### 15.8: BetBuilder — rekomendacje ze strony głównej STS
-- [x] Homepage `/` karuzela `.bet-builder-recommendation` — parser `parse_betbuilder_carousel` w `scrapers/sts_inspiracje.py`
-- [x] Value vs nasze predykcje — wspólna logika `ocen_sygnal`/`dopasuj_do_predykcji` (jak 15.3)
-- **Effort:** 0.5 dnia | ✅ gotowe (parsing+wycena), wymaga commitu
+## ⏸️ NA PÓŹNIEJ
 
 ### 15.6: Multi-user support
 - [ ] Per-user bankroll, risk profile, Telegram chat_id

@@ -288,6 +288,78 @@ def _wzbogac_o_betbuilder(wyniki: list, pobierz_superbet: bool = False) -> None:
         ]
         console.print(f"[dim]  BB Superbet {klucz}: {len(combos)} kombinacji ({len(zakres)} w 5-25x)[/dim]")
 
+
+def _wzbogac_o_inspiracje(wyniki: list, debug: bool = False) -> None:
+    """
+    Krok opcjonalny (FAZA 15.7): pobiera "Popularne kupony" ze Strefy Inspiracji
+    STS + karuzelę BetBuilder ze strony głównej, dopasowuje do kandydatów po
+    nazwach drużyn i ocenia sygnał (VALUE/NO_VALUE) wzgledem modelu Poisson.
+    Zapisuje wynik w w["inspiracje_signal"] dla kontekstu Groq.
+
+    Niepowodzenie (brak playwright, timeout, błąd sieci) nie przerywa pipeline'u.
+    """
+    try:
+        from footstats.scrapers.sts_inspiracje import (
+            PLAYWRIGHT_OK,
+            dopasuj_do_predykcji,
+            parse_betbuilder_carousel,
+            parse_popular_tickets,
+            pobierz_betbuilder_carousel,
+            pobierz_popularne_kupony,
+        )
+        from footstats.core.bet_builder import estimate_lambdas_from_probs
+    except ImportError as e:
+        console.print(f"[dim]Strefa Inspiracji: {e}[/dim]")
+        return
+
+    if not PLAYWRIGHT_OK:
+        console.print("[dim]Strefa Inspiracji: playwright niedostepny, pomijam[/dim]")
+        return
+
+    console.print("[dim]Strefa Inspiracji: pobieranie sygnalow top typerow...[/dim]")
+    try:
+        tickets = parse_popular_tickets(pobierz_popularne_kupony(debug=debug))
+        tickets += parse_betbuilder_carousel(pobierz_betbuilder_carousel(debug=debug))
+    except (OSError, RuntimeError) as e:
+        console.print(f"[dim]Strefa Inspiracji: blad scrapingu - {e}[/dim]")
+        return
+
+    if not tickets:
+        console.print("[dim]Strefa Inspiracji: brak kuponow do dopasowania[/dim]")
+        return
+
+    predykcje = []
+    for w in wyniki:
+        pw, pp, o25 = w.get("pw", 0) / 100.0, w.get("pp", 0) / 100.0, w.get("o25", 0) / 100.0
+        if pw <= 0 and pp <= 0:
+            continue
+        lh, la = estimate_lambdas_from_probs(pw, pp, o25)
+        predykcje.append({
+            "gosp": w.get("gospodarz", ""), "gosc": w.get("goscie", ""),
+            "expected_home_goals": lh, "expected_away_goals": la,
+        })
+
+    sygnaly = dopasuj_do_predykcji(tickets, predykcje)
+    if not sygnaly:
+        console.print(f"[dim]Strefa Inspiracji: {len(tickets)} kuponow typerow, 0 dopasowan[/dim]")
+        return
+
+    by_team = {(_norm(s["gosp"]), _norm(s["gosc"])): s for s in sygnaly}
+    for w in wyniki:
+        s = by_team.get((_norm(w.get("gospodarz", "")), _norm(w.get("goscie", ""))))
+        if s:
+            w["inspiracje_signal"] = s
+
+    n_value = sum(1 for s in sygnaly if s["signal"] == "VALUE")
+    console.print(f"[green]Strefa Inspiracji: {len(sygnaly)} dopasowan, {n_value} VALUE[/green]")
+    for s in sygnaly:
+        ticket = s["ticket"]
+        console.print(
+            f"[dim]  {s['gosp']} vs {s['gosc']}: typy={ticket['typy']} "
+            f"kurs={ticket['total_odds']} -> {s['signal']}[/dim]"
+        )
+
+
 # ── Krok 3: Groq AI ───────────────────────────────────────────────────────────
 
 def _analizuj_groq(
@@ -979,7 +1051,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run",     action="store_true",
                    help="Tryb podgladu: nie zapisuje do DB, TXT, nie wysyla Telegram/Windows")
     p.add_argument("--bb",          action="store_true",
-                   help="Pobierz realne kursy BetBuilder z Superbet API (wolno, ~3min)")
+                   help="Pobierz realne kursy BetBuilder z Superbet API + sygnaly Strefy Inspiracji (wolno, ~3-5min)")
     return p
 
 
@@ -1222,6 +1294,8 @@ def main():
         _sep("KROK 2 — Forma SofaScore")
         _wzbogac_forme_top(wyniki, top_n=12)
         _wzbogac_o_betbuilder(wyniki, pobierz_superbet=args.bb)
+        if args.bb:
+            _wzbogac_o_inspiracje(wyniki)
         _apply_injury_corrections(wyniki)
 
     _sep("KROK 3 — Groq AI")

@@ -5,7 +5,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green.svg)](https://fastapi.tiangolo.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32-ff4b4b.svg)](https://streamlit.io/)
 [![Playwright](https://img.shields.io/badge/Playwright-1.40-45ba4b.svg)](https://playwright.dev/)
-[![Tests](https://img.shields.io/badge/tests-150%2B-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-900%2B-brightgreen.svg)](tests/)
 
 **FootStats** to autonomiczny system typowania piłkarskiego łączący statystykę Bayesowską (Poisson), ML (CatBoost/Bzzoiro), analizę xG oraz LLM (Groq/Llama 3.1). Działa w pełni bezobsługowo: scraping → analiza → generowanie kuponu → rozliczenie → nauka na błędach.
 
@@ -23,7 +23,7 @@ Projekt demonstruje zaawansowane techniki inżynierii oprogramowania:
 | **Bayesian Statistics** | Walk-forward kalibracja modelu, ensemble Poisson+ML, CLV tracking |
 | **Advanced Scraping** | Playwright (Superbet, FlashScore, STS), requests (Understat, Bzzoiro, API-Football) |
 | **Full-Stack** | FastAPI REST + Streamlit dashboard + SQLite + Cloud Run deployment |
-| **Quality** | 150+ testów pytest, regression gate na broad-except, version consistency CI |
+| **Quality** | 900+ testów pytest, regression gate na broad-except, version consistency CI |
 
 ---
 
@@ -117,7 +117,7 @@ src/footstats/
 ├── evening_agent.py       # rozliczanie kuponów @ 23:00
 ├── daily_agent_scheduler.py
 └── operator_agent.py      # smoke + pipeline + review orchestrator
-tests/             # 150+ testów pytest
+tests/             # 900+ testów pytest
 scripts/           # preflight, backup_db, visualize_brain, run_operator.bat
 data/              # footstats_backtest.db, model_calibration.json
 cache/             # api_football/, understat_xg/, flashscore/, kursy/
@@ -177,7 +177,7 @@ Logi: `data/logs/operator_agent.log` | Raporty: `data/operator_reports/`
 ## 🧪 Testy
 
 ```bash
-pytest tests/ -v                          # 150+ testów
+pytest tests/ -v                          # 900+ testów
 pytest tests/test_poisson.py -v           # Bayesian Poisson + edge cases
 pytest tests/test_clv_tracker.py -v       # CLV tracking
 pytest tests/test_broad_except_audit.py   # regression gate: brak nowych broad except

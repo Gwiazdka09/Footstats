@@ -1,6 +1,6 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-11 (auto-audit)  
+**Last Updated:** 2026-06-12 (auto-audit)  
 **Current Version:** v3.4-stable  
 **Build Status:** ✅ STABLE — 0 SyntaxError, git clean  
 **System State:** FUNCTIONAL
@@ -11,19 +11,20 @@
 
 | Metric | Status | Value |
 |--------|--------|-------|
-| **Syntax** | ✅ OK | 0 SyntaxError w 194 .py (122 src + 72 tests) |
-| **Source Files** | ✅ | 122 .py modules w src/footstats/ |
-| **Tests** | ✅ | 70 test files |
+| **Syntax** | ✅ OK | 0 SyntaxError w 126 .py src + 73 test files |
+| **Source Files** | ✅ | 126 .py modules w src/footstats/ |
+| **Tests** | ✅ | 73 test files, 813 test functions |
 | **AI Accuracy** | 🟡 | 33% live (12/35 settled, Neon) — Faza 16 accuracy fixes |
 | **Automation** | ✅ | daily_agent.py + evening_agent.py OK |
-| **API** | ✅ | FastAPI + Sentry + SlowAPI rate limiting + CORS |
-| **DB** | ✅ | Neon PG (prod) + SQLite (backtest), pool maxconn=10 |
-| **Timeouts** | ✅ | Wszystkie requests.get/post mają timeout=15 |
-| **Thread Safety** | ✅ | Lock w CB, lambda_opt, response_cache sync_wrapper — wszystko OK |
+| **API** | ✅ | FastAPI + Sentry + SlowAPI rate limiting + CORS + TimeoutMiddleware |
+| **DB** | ✅ | Neon PG (prod) + SQLite (backtest), pool maxconn=10, context managers OK |
+| **Timeouts** | ✅ | Wszystkie requests.get/post mają timeout (verified) |
+| **Thread Safety** | ✅ | Lock w CB, lambda_opt, response_cache — RLock |
 | **Ollama** | ✅ | qwen2.5:7b lokalny + Groq fallback |
 | **Security** | ✅ | Brak eval/pickle/os.system; Sentry DSN z env |
 | **Cache** | ✅ | response_cache: MAX_ENTRIES=500, eviction + TTL cleanup OK |
 | **Scrapers** | ✅ | Playwright context managers OK; circuit breaker na PW+Groq+Ollama |
+| **Version Sync** | ✅ | __init__.py=3.4, pyproject.toml=3.4 |
 
 ---
 
@@ -31,21 +32,20 @@
 
 | # | Problem | Priorytet | Szczegóły |
 |---|---------|-----------|-----------|
-| 1 | **Daily pipeline stał 5 dni (06-06→06-11)** | ✅ FIXED | 21 śmieciowych kuponów usunięte + 3 kolejne bugi (LIKE escaping, rag.py row-dict, ai_feedback FK) naprawione — `daily_agent --faza draft` przeszedł end-to-end (exit=0, 06-11 23:30) |
-| 2 | **Accuracy 33% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku, 35/50 settled |
-| 3 | **Large files (>1000 LOC)** | 🟡 P3 | daily_agent(1345), superbet(1128), cli(1112) |
-| 4 | **5x subprocess.Popen fire-and-forget** | ⚪ P4 | evening_agent, cli, daily_agent, backtest, post_match — OK dla notyfikacji |
-| 5 | **orphan files** | ⚪ P4 | .fuse_hidden000002b400000001, data/footstats.db-wal, .vexp/*.db-wal/shm |
+| 1 | **Accuracy 33% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku, 35/50 settled |
+| 2 | **Draw bias w kuponach** | 🔴 P1 | Kupony 06-11: 4x single-leg draw @1.92 z identycznym reasoning — model faworyzuje remisy |
+| 3 | **Large files (>1000 LOC)** | ⚪ P4 | daily_agent(~1430), superbet(1128), cli(1112) |
+| 4 | **orphan files** | ⚪ P4 | .fuse_hidden*, data/footstats.db-wal (0 bytes) |
 
 ---
 
 ## DEPLOYMENT STATUS
 
-- **Daily Agent**: ✅ OK
+- **Daily Agent**: ✅ OK (ostatni kupon: 2026-06-11 23:23)
 - **Evening Agent**: ✅ OK
 - **Dashboard**: ✅ OK (Streamlit)
-- **API**: ✅ OK (FastAPI + auth + Sentry + rate limiting)
-- **Pipeline**: ✅ OK (wymaga commit)
+- **API**: ✅ OK (FastAPI + auth + Sentry + rate limiting + timeout 10s)
+- **Pipeline**: ✅ OK (run_daily.bat z backup+syntax+eviction)
 - **Operator**: ✅ OK
 - **DB**: ✅ SQLite (dev) + PostgreSQL Neon (prod)
 - **Ollama**: ✅ qwen2.5:7b lokalny
@@ -57,51 +57,21 @@
 
 | Problem | Status | Data |
 |---------|--------|------|
-| ai_feedback FK violation (coupon_id zamiast predictions.id) w settle_active_coupons | ✅ FIXED — _send_to_rag_feedback per-leg lookup po match_date+druzyny | 06-11 |
+| settle_active_coupons — testowe kupony (match_date 2099) sprawdzane co run (TD23) | ✅ FIXED — `WHERE match_date_first <= today` | 06-12 |
+| coupon_settlement — stale FlashScore cache + zła kolejność źródeł wyniku | ✅ FIXED | 06-12 |
+| results_updater — fixtures po dacie (Źródło 0, wszystkie ligi) + timeline zdarzeń (gole/kartki) w match_stats | ✅ DODANE | 06-12 |
+| cache/ eviction — 1150 plików >7d usunięte (TD25) | ✅ FIXED — 7.6MB zwolnione | 06-12 |
+| Strefa Inspiracji (15.7) + BetBuilder homepage (15.8) — wpięte do daily_agent (`--bb`) | ✅ DODANE | 06-12 |
+| 27 uncommitted changes | ✅ Committed+pushed (TD24) | 06-12 |
+| Daily pipeline stał 5 dni (06-06→06-11) | ✅ FIXED — 21 śmieciowych kuponów usunięte + 3 bugi | 06-11 |
+| ai_feedback FK violation | ✅ FIXED — per-leg lookup po match_date+drużyny | 06-11 |
 | system_coupons.py — psycopg2 LIKE escaping bug | ✅ FIXED | 06-11 |
-| rag.py — row[0] zamiast row["col"] (RealDictCursor) ×2 | ✅ FIXED | 06-11 |
-| Sędziowie (zawodtyper) — 17 dni stale (05-25) | ✅ Odświeżone ręcznie — 186 sędziów, 06-11 16:04 | 06-11 |
-| xg_lambda.py — martwy kod | ✅ Usunięty (commit f73709dab) | 06-11 |
-| kupon #64 total_odds=2148883.0 | ✅ Verified — 29-leg AKO, iloczyn kursów poprawny | 06-11 |
-| cache/ eviction policy (TD19 — scripts/evict_cache.py w run_daily.bat) | ✅ FIXED | 06-11 |
-| 45 uncommitted changes + .git/index.lock | ✅ Committed+pushed | 06-11 |
+| rag.py — row[0] zamiast row["col"] (RealDictCursor) | ✅ FIXED | 06-11 |
+| xg_lambda.py — martwy kod | ✅ Usunięty | 06-11 |
 | 5x file truncation (response_cache, base, coupons, daily_agent, evening_agent) | ✅ RESTORED | 06-11 |
-| response_cache sync_wrapper race — verified: lock present (l.171) | ✅ OK | 06-11 |
-| base.py _http_get 429 retry — verified: _retry>=3 limit present (l.23) | ✅ OK | 06-11 |
+| cache/ eviction policy (evict_cache.py w run_daily.bat) | ✅ FIXED | 06-11 |
+| 45 uncommitted changes + .git/index.lock | ✅ Committed+pushed | 06-11 |
 | 26x file truncation + 4x null bytes | ✅ FIXED | 06-07 |
-| .gitignore: footstats.log + validation_errors.csv | ✅ FIXED | 06-07 |
-| 12x file truncation/null bytes | ✅ FIXED | 05-28 |
-| 16x requests bez timeout | ✅ FIXED | 05-26 |
-| 3x sqlite3 bez context manager | ✅ FIXED | 05-26 |
-| Thread safety (response_cache, lambda_optimizer) | ✅ FIXED | 05-26 |
-| Phase 9: DB consolidation + login fix | ✅ DONE | 05-27 |
-| pyproject.toml version sync (3.0→3.4) | ✅ FIXED | 05-27 |
-| sts.py broad except (3x) | ✅ FIXED | 05-27 |
-| Cloud Run env vars | ✅ DONE | 05-28 |
-| asyncio.get_event_loop() deprecated | ✅ FIXED | 05-29 |
-| 7x file truncation (05-31) | ✅ FIXED | 05-31 |
-| 4x file truncation (06-01) | ✅ FIXED | 06-01 |
-| 160→78→67→25 broad except | ✅ Reduced | 06-07 |
-| tests/scratch + data/.fuse_hidden | ✅ Cleaned | 06-03 |
-| Timeout audit (all requests covered) | ✅ Verified | 06-06 |
-| DB connections (all use context manager) | ✅ Verified | 06-06 |
-| Cache eviction (MAX_ENTRIES + TTL) | ✅ Verified | 06-06 |
-| smoke_api.py testpass → env var | ✅ FIXED | 06-08 |
-| Syntax + null bytes audit (193/193 OK) | ✅ Verified | 06-08 |
-| DB connections (context mgr) | ✅ Verified | 06-08 |
-| Timeout audit (requests.get/post) | ✅ Verified | 06-08 |
-| __init__.py version 2.7→3.4 | ✅ FIXED | 06-08 |
-| Syntax audit (194/194 OK, 122 src + 72 tests) | ✅ Verified | 06-09 |
-| Security audit (no eval/pickle/os.system/hardcoded secrets) | ✅ Verified | 06-09 |
-| No TODO/FIXME/HACK in src/ | ✅ Verified | 06-09 |
-| DB pool (context mgr + putconn) | ✅ Verified | 06-09 |
-| Cache bounds (MAX_ENTRIES=500, TTL, eviction) | ✅ Verified | 06-09 |
-| Circuit breaker (thread-safe, 3 states) | ✅ Verified | 06-09 |
-| Playwright scrapers (context managers for browser+page) | ✅ Verified | 06-09 |
-| .fuse_hidden + empty WAL cleaned | ✅ Cleaned | 06-10 |
-| DAILY_REPORT_2026-06-09.md → archive | ✅ Moved | 06-10 |
-| brain_graph.html → .gitignore | ✅ Added | 06-10 |
-| docs/PROJECT_STATE.md updated to v3.4 | ✅ Verified | 06-10 |
-| Timeout audit (all requests have timeout=15) | ✅ Verified | 06-10 |
+| 160→25 broad except | ✅ Reduced | 06-07 |
+| Timeout audit (all requests covered) | ✅ Verified | 06-10 |
 | Security audit (no eval/pickle/os.system) | ✅ Verified | 06-10 |
-| No TODO/FIXME/HACK in src/ | ✅ Verified | 06-10 |
