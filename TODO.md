@@ -51,6 +51,9 @@
 - [ ] Per-user bankroll, risk profile, Telegram chat_id
 - **Effort:** 3–5 dni | ⏸️ po M1
 
+## Licencjia
+- Sprawdzić licencjie na git aby nikt nie mógł ukraść kodu ale żeby mógł wpisać go do cv
+- sprawdzić polskie prawo czy nie jesteśmy blisko złamania czegoś
 ---
 
 ## 💡 Pomysły od betatesterów
