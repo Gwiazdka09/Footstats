@@ -142,6 +142,27 @@ def _fetch_fixtures(api_key: str, league_id: int, date_str: str) -> list[dict]:
         return []
 
 
+def _fetch_fixtures_by_date(api_key: str, date_str: str) -> list[dict]:
+    """Pobiera fixtures z API-Football dla całej daty, bez filtra ligi.
+
+    Łapie mecze z lig poza _LIGI_IDS (np. eliminacje MŚ), dla których
+    _liga_ids_dla_nazwy zwraca [] i wynik trafiałby tylko do FlashScore
+    (bez statystyk: rożne, kartki).
+    """
+    try:
+        r = requests.get(
+            f"{API_BASE}/fixtures",
+            headers={"x-apisports-key": api_key},
+            params={"date": date_str},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return r.json().get("response", [])
+    except (requests.RequestException, ValueError, KeyError) as e:
+        log.warning("API-Football fixtures-by-date error (date=%s): %s", date_str, e)
+        return []
+
+
 def _fixture_to_result(fixture: dict, api_key: str = None) -> tuple[str, str, str, dict] | None:
     """
     Zwraca (home_name, away_name, wynik, stats) np. ("PSG", "Lyon", "2-1", {"xG": ...}).
@@ -269,10 +290,24 @@ def update_pending(
         match_date = p["match_date"][:10]
         league_str = p.get("league", "")
 
-        # Fuzzy-dopasowanie nazwy ligi do listy API-Football
-        league_ids_to_try = _liga_ids_dla_nazwy(league_str)
-
         wynik_found = None
+        stats_found: dict = {}
+
+        # Źródło 0: fixtures API-Football dla całej daty (wszystkie ligi) — łapie
+        # mecze z lig poza _LIGI_IDS (np. eliminacje MŚ) razem ze statystykami
+        # (rożne, kartki), czego FlashScore fallback nie dostarcza.
+        date_cache_key = ("__ALL__", match_date)
+        if date_cache_key not in fixtures_cache and req_count < 75:
+            fixtures_cache[date_cache_key] = _fetch_fixtures_by_date(api_key, match_date)
+            req_count += 1
+            time.sleep(0.5)
+
+        wynik_data = _znajdz_wynik(p, fixtures_cache.get(date_cache_key, []), api_key)
+        if wynik_data:
+            wynik_found, stats_found = wynik_data
+
+        # Fuzzy-dopasowanie nazwy ligi do listy API-Football
+        league_ids_to_try = [] if wynik_found else _liga_ids_dla_nazwy(league_str)
 
         for league_id in league_ids_to_try:
             cache_key = (match_date, league_id)
