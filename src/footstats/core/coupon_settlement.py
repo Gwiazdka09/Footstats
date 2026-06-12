@@ -138,9 +138,18 @@ def _find_leg_result(
                 fdb_cache[d] = _get_matches_fdb(fdb_key, d)
             res = _znajdz_wynik_fdb(home, away, fdb_cache[d])
 
-        if not res:
-            res = get_match_result(home, away, d, cache_enabled=True)
+        if res:
+            if isinstance(res, tuple):
+                res = res[0]
+            if d != mdate:
+                log.info("Mecz %s vs %s: wynik znaleziony na %s (przesuniety terminarz, kupon mial %s)", home, away, d, mdate)
+            return res
 
+    # Źródło 3: FlashScore – ostatni fallback PO sprawdzeniu obu dat w API-Football/fdb,
+    # bo cache FlashScore bywa zapisany pod błędną datą (przesuniety terminarz) i ma
+    # niższy priorytet niż "twarde" wyniki z API-Football/football-data.org.
+    for d in candidate_dates:
+        res = get_match_result(home, away, d, cache_enabled=True)
         if res:
             if isinstance(res, tuple):
                 res = res[0]
