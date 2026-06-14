@@ -10,6 +10,7 @@ import os
 import sys
 import time
 import subprocess
+from contextlib import suppress
 from pathlib import Path
 from datetime import datetime
 
@@ -98,10 +99,8 @@ def wait_and_run_final(stawka: int = 10, dni: int = 3) -> None:
             if result.returncode == 0:
                 print(f"[{datetime.now()}] FINAL PHASE COMPLETED")
                 # Cleanup
-                try:
+                with suppress(FileNotFoundError):
                     next_final_file.unlink()
-                except FileNotFoundError:
-                    pass
             else:
                 print(f"[ERROR] Final phase failed with code {result.returncode}")
             break
