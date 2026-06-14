@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, Info, ChevronRight, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target, Trophy, Share2, ShieldCheck, Users, Trash2, UserPlus
+  Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, Info, ChevronRight, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target, Trophy, Share2, ShieldCheck, Users, Trash2, UserPlus, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -54,8 +54,18 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('dashboard'); // 'dashboard', 'history', 'settings', 'wizard'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [proposalToCopy, setProposalToCopy] = useState(null);
   const isAdmin = !!(token && decodeJwtPayload(token)?.adm);
+
+  const navItems = [
+    { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+    { key: 'wizard', label: 'Stwórz Kupon', icon: <PlusCircle size={20} /> },
+    { key: 'history', label: 'Historia', icon: <History size={20} /> },
+    { key: 'settings', label: 'Ustawienia', icon: <Settings size={20} /> },
+    { key: 'leaderboard', label: 'Najlepsi typerzy', icon: <Trophy size={20} /> },
+    ...(isAdmin ? [{ key: 'admin', label: 'Panel', icon: <ShieldCheck size={20} /> }] : []),
+  ];
 
   // Authentication logout
   const handleLogout = () => {
@@ -153,50 +163,16 @@ const App = () => {
         </div>
         
         <nav className="space-y-4 mb-12 flex-1">
-          <NavItem 
-            icon={<LayoutDashboard size={20} />} 
-            label="Dashboard" 
-            active={view === 'dashboard'} 
-            collapsed={sidebarCollapsed}
-            onClick={() => setView('dashboard')}
-          />
-          <NavItem 
-            icon={<PlusCircle size={20} />} 
-            label="Stwórz Kupon" 
-            active={view === 'wizard'} 
-            collapsed={sidebarCollapsed}
-            onClick={() => setView('wizard')}
-          />
-          <NavItem 
-            icon={<History size={20} />} 
-            label="Historia" 
-            active={view === 'history'} 
-            collapsed={sidebarCollapsed}
-            onClick={() => setView('history')}
-          />
-          <NavItem
-            icon={<Settings size={20} />}
-            label="Ustawienia"
-            active={view === 'settings'}
-            collapsed={sidebarCollapsed}
-            onClick={() => setView('settings')}
-          />
-          <NavItem
-            icon={<Trophy size={20} />}
-            label="Najlepsi typerzy"
-            active={view === 'leaderboard'}
-            collapsed={sidebarCollapsed}
-            onClick={() => setView('leaderboard')}
-          />
-          {isAdmin && (
+          {navItems.map(item => (
             <NavItem
-              icon={<ShieldCheck size={20} />}
-              label="Panel"
-              active={view === 'admin'}
+              key={item.key}
+              icon={item.icon}
+              label={item.label}
+              active={view === item.key}
               collapsed={sidebarCollapsed}
-              onClick={() => setView('admin')}
+              onClick={() => setView(item.key)}
             />
-          )}
+          ))}
         </nav>
         
         {/* User Info & Logout */}
@@ -214,8 +190,53 @@ const App = () => {
         )}
       </aside>
 
+      {/* Mobile fullscreen nav overlay */}
+      {mobileNavOpen && (
+        <div className="mobile-nav-overlay">
+          <div className="mobile-nav-header">
+            <div className="brand text-2xl font-bold bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">
+              FootStats
+            </div>
+            <button onClick={() => setMobileNavOpen(false)} className="p-2 hover:bg-white/5 rounded-lg text-slate-400">
+              <X size={24} />
+            </button>
+          </div>
+          <nav>
+            {navItems.map(item => (
+              <NavItem
+                key={item.key}
+                icon={item.icon}
+                label={item.label}
+                active={view === item.key}
+                collapsed={false}
+                onClick={() => { setView(item.key); setMobileNavOpen(false); }}
+              />
+            ))}
+          </nav>
+          <div className="mt-auto p-4 bg-white/5 rounded-xl border border-white/5">
+            <p className="text-xs text-slate-500 uppercase tracking-tighter">Właściciel</p>
+            <p className="font-bold text-slate-300 mb-2">{user}</p>
+            <button
+              onClick={() => { setMobileNavOpen(false); handleLogout(); }}
+              className="flex items-center gap-2 text-xs text-slate-500 hover:text-rose-400 transition-colors w-full pt-2 border-t border-white/5"
+            >
+              <LogOut size={14} /> Wyloguj się
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
-      <main className={`flex-1 main-content p-4 lg:p-12 ${sidebarCollapsed ? 'lg:ml-24' : 'lg:ml-72'}`}>
+      <div className="flex flex-col flex-1">
+        <div className="mobile-topbar">
+          <div className="brand text-xl font-bold bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">
+            FootStats
+          </div>
+          <button onClick={() => setMobileNavOpen(true)}>
+            <Menu size={22} />
+          </button>
+        </div>
+        <main className={`flex-1 main-content p-4 lg:p-12 ${sidebarCollapsed ? 'lg:ml-24' : 'lg:ml-72'}`}>
         <div className="container">
           <AnimatePresence mode="wait">
             {view === 'dashboard' && (
@@ -269,7 +290,8 @@ const App = () => {
             )}
           </AnimatePresence>
         </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 };

@@ -76,5 +76,5 @@
 - [x] nowa zakładka "Panel" (tylko dla adm): "Sprawdź wyniki meczów" (POST /coupons/settle) + "Zarządzaj użytkownikami" (GET/POST/DELETE /admin/users)
 ### Zmiana nazwy konta — nieaktualne
 - [x] system już używa `username` (nie email) do logowania/wyświetlania — brak akcji
-### Błąd w przeglondarce na telefonie 
-- użytkownicy zgłaszają żę nie widzą panelu bocznego na telefonie i nie mają do niego dostępu , trzeba zrobić 3 kreski które po kliknięciu rozwijają się w panel z opcjiami na cały ekran telefonu oraz po powrotnym kliknięciu zayka panel 
+### Błąd w przeglondarce na telefonie — ✅ DONE (06-14)
+- [x] mobile topbar (logo + ☰) + fullscreen drawer nav (X zamyka), sidebar desktop ukryty <1024px
