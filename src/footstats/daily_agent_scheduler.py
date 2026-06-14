@@ -39,6 +39,21 @@ def run_draft_phase(stawka: int = 10, dni: int = 3) -> None:
         print(f"[ERROR] Draft phase failed with code {result.returncode}")
         return
     print(f"[{datetime.now()}] DRAFT PHASE COMPLETED")
+    run_cache_eviction()
+
+
+def run_cache_eviction(max_days: int = 7) -> None:
+    """Usuń pliki cache/ starsze niż max_days (m.in. cache/form/)."""
+    print(f"[{datetime.now()}] CACHE EVICTION STARTING...")
+    result = subprocess.run(
+        [sys.executable, "scripts/evict_cache.py", "--days", str(max_days)],
+        cwd=DATA_DIR.parent,
+        timeout=300,
+    )
+    if result.returncode != 0:
+        print(f"[ERROR] Cache eviction failed with code {result.returncode}")
+        return
+    print(f"[{datetime.now()}] CACHE EVICTION COMPLETED")
 
 
 def wait_and_run_final(stawka: int = 10, dni: int = 3) -> None:

@@ -24,16 +24,26 @@ from footstats.ai.client import zapytaj_ai
 from footstats.scrapers.kursy import szukaj_kursy_meczu, scrape_betexplorer, pokaz_dostepne_ligi
 from footstats.data.context_scraper import get_match_context
 
-# ── Langfuse Initialization ────────────────────────────────────────────────
-try:
-    langfuse = Langfuse(
-        public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-        secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-        host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
-    )
-except Exception as e:  # noqa: broad-except
-    print(f"DEBUG: Langfuse init error: {e}")
-    langfuse = None
+# ── Langfuse Initialization (lazy — unika kosztu/błędów przy każdym imporcie) ──
+_langfuse: Langfuse | None = None
+_langfuse_init_done = False
+
+
+def _get_langfuse() -> Langfuse | None:
+    """Zwraca singleton Langfuse, inicjalizowany przy pierwszym użyciu."""
+    global _langfuse, _langfuse_init_done
+    if not _langfuse_init_done:
+        _langfuse_init_done = True
+        try:
+            _langfuse = Langfuse(
+                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+                host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+            )
+        except Exception as e:  # noqa: broad-except
+            logger.warning("Langfuse init error: %s", e)
+            _langfuse = None
+    return _langfuse
 
 
 from footstats.ai.prompts import (
@@ -322,9 +332,10 @@ def analizuj_mecz_ai(
     print(f"\n[AI] Analizuję: {gospodarz} vs {goscie}...")
     
     surowa_odpowiedz = None
-    if langfuse:
-        with langfuse.start_as_current_observation(name=f"Analiza: {gospodarz} vs {goscie}", as_type="span"):
-            with langfuse.start_as_current_observation(name="Groq Inference", as_type="generation", model="llama-3.1-8b-instant", input=prompt) as gen:
+    lf = _get_langfuse()
+    if lf:
+        with lf.start_as_current_observation(name=f"Analiza: {gospodarz} vs {goscie}", as_type="span"):
+            with lf.start_as_current_observation(name="Groq Inference", as_type="generation", model="llama-3.1-8b-instant", input=prompt) as gen:
                 surowa_odpowiedz = zapytaj_ai(prompt, max_tokens=500)
                 gen.update(output=surowa_odpowiedz)
     else:
