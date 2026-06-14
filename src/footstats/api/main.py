@@ -330,6 +330,10 @@ if _dist.exists():
     @app.get("/app")
     def serve_app():
         return FileResponse(str(_dist / "index.html"), media_type="text/html")
+
+    @app.get("/preview")
+    def serve_preview():
+        return FileResponse(str(_dist / "index.html"), media_type="text/html")
 else:
     @app.get("/")
     def root():

@@ -1,4 +1,14 @@
 # Dockerfile.api — FastAPI server image (no Playwright)
+
+# --- Stage 1: build React GUI (gui/dist) ---
+FROM node:20-slim AS gui-build
+WORKDIR /gui
+COPY src/footstats/gui/package.json src/footstats/gui/package-lock.json ./
+RUN npm ci --legacy-peer-deps
+COPY src/footstats/gui ./
+RUN npm run build
+
+# --- Stage 2: FastAPI runtime ---
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -11,6 +21,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 COPY pyproject.toml ./
 COPY src ./src
+COPY --from=gui-build /gui/dist ./src/footstats/gui/dist
 
 RUN uv pip install --system ".[api]" && mkdir -p /app/data
 
