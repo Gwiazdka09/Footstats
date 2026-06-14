@@ -46,16 +46,6 @@
 
 ## 🔴 KRYTYCZNE (wykryte 06-14)
 
-### TD-33: Commit + push pending changes
-- [x] Usuń `.git/index.lock` (0 bytes, stale) (06-14)
-- [x] Commit + push (06-14)
-- **Effort:** done | 🔴 P1
-
-### TD-34: Form cache eviction (69MB, 274 pliki)
-- [x] Scheduler (`daily_agent_scheduler.py`) teraz wywołuje `evict_cache.py --days 7` po draft phase (06-14)
-- [x] Jednorazowo: 138 plików usunięte, 69MB→34MB cache/form (06-14)
-- **Effort:** done | 🟡 P2
-
 ### TD-37: Kupony permanentnie zablokowane w ACTIVE (settle_active_coupons)
 - [ ] `coupon_settlement.py:234` — `leg_date < cutoff` (days_back=3) → SKIP bez escalation
 - [ ] Kupony #67 (06-09), #76, #80 (06-10) — legi z friendly/niskich lig nigdy nie dostają
@@ -75,22 +65,10 @@
 
 ## 🟡 TECHNICZNE
 
-### TD-30: File truncation — diagnoza przyczyny
-- [x] `.git/hooks/pre-commit` już sprawdza `py_compile` + null bytes na każdym `.py` w commit (weryfikacja 06-14)
-- **Effort:** done | 🟡 P2
-
 ### TD-31: Testy core modules (24 moduły bez testów)
 - [ ] Priorytetowe: coupon_settlement, bankroll, kelly, value_bet, quick_picks
 - [ ] Minimum: smoke test importu + 2-3 unit testy per moduł
 - **Effort:** 4-6h | 🟡 P3
-
-### TD-35: Langfuse lazy init
-- [x] `analyzer.py` — przeniesiono Langfuse() do `_get_langfuse()` (lazy singleton) (06-14)
-- **Effort:** done | ⚪ P4
-
-### TD-36: Czyszczenie artefaktów
-- [x] Usunięto `%SystemDrive%/`, `.fuse_hidden000002b400000001`, `validation_errors.csv` (06-14)
-- **Effort:** done | ⚪ P4
 
 ---
 
@@ -119,4 +97,3 @@
 ### Zmiana nazwy konta
 - zmiana nazwy konta na `username` (zamiast `email`)
 - **Effort:** 1-2 dni | na teraz
-### 
