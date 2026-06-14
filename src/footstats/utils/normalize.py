@@ -87,6 +87,28 @@ _DEFAULT_MAPPINGS: dict[str, str] = {
     "rasenball leipzig":   "leipzig",
     "wisla plock":         "wisla plock",
     "ks lechia gdansk":    "lechia gdansk",
+    # Warianty nazw reprezentacji (World Cup 2026) - FIFA vs popularne nazwy z roznych API
+    "south korea":         "korea",
+    "korea republic":      "korea",
+    "korea dpr":           "north korea",
+    "north korea":         "north korea",
+    "czechia":             "czechia",
+    "czech republic":      "czechia",
+    "usa":                 "usa",
+    "united states":       "usa",
+    "united states of america": "usa",
+    "ivory coast":         "ivory coast",
+    "cote divoire":        "ivory coast",
+    "iran":                "iran",
+    "ir iran":             "iran",
+    "islamic republic of iran": "iran",
+    "cape verde":          "cabo verde",
+    "cabo verde":          "cabo verde",
+    "macedonia":           "north macedonia",
+    "north macedonia":     "north macedonia",
+    "dr congo":            "dr congo",
+    "congo dr":            "dr congo",
+    "democratic republic of congo": "dr congo",
 }
 
 
