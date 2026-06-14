@@ -27,6 +27,10 @@ log = logging.getLogger(__name__)
 from footstats.utils.betting import oblicz_tip_correct
 from footstats.utils.normalize import normalize_team_name
 
+# Kupony ACTIVE bez wyniku po tylu dniach (legi z nieobsługiwanych lig/friendly)
+# oznaczamy VOID, żeby nie blokowały na zawsze i nie liczyły się do accuracy/M1.
+VOID_AFTER_DAYS = 10
+
 
 def _get_fixtures_api(api_key: str, date_str: str) -> list[dict]:
     """Pobiera fixtures z API-Football dla całej daty (bez filtrowania po lidze)."""
@@ -208,7 +212,7 @@ def settle_active_coupons(
     if not rows:
         if verbose:
             print("[CouponSettlement] Brak ACTIVE kuponów do rozliczenia.")
-        return {"settled": 0, "partial": 0, "errors": 0}
+        return {"settled": 0, "partial": 0, "errors": 0, "voided": 0}
 
     if verbose:
         print(f"[CouponSettlement] ACTIVE kuponów do sprawdzenia: {len(rows)}")
@@ -216,7 +220,7 @@ def settle_active_coupons(
     import os
     api_key = _get_api_key()
     fdb_key = os.getenv("FOOTBALL_API_KEY", "").strip()
-    stats = {"settled": 0, "partial": 0, "errors": 0}
+    stats = {"settled": 0, "partial": 0, "errors": 0, "voided": 0}
     fixtures_cache: dict[str, list] = {}
     fdb_cache: dict[str, list] = {}
 
@@ -232,6 +236,17 @@ def settle_active_coupons(
         try:
             leg_date = datetime.fromisoformat(match_date).date()
             if leg_date < cutoff:
+                if (today - leg_date).days >= VOID_AFTER_DAYS:
+                    if not dry_run:
+                        with _connect() as conn:
+                            conn.execute(
+                                "UPDATE coupons SET status='VOID' WHERE id=?",
+                                (coupon_id,),
+                            )
+                    stats["voided"] += 1
+                    if verbose:
+                        print(f"  [VOID] Kupon #{coupon_id} — brak wyniku po {VOID_AFTER_DAYS}d, oznaczony VOID")
+                    continue
                 if verbose:
                     print(f"  [SKIP] Kupon #{coupon_id} — data {match_date} za stara (>{days_back}d)")
                 continue

@@ -34,23 +34,31 @@ class BzzoiroClient:
         self._valid: bool | None = None
 
     def waliduj(self) -> tuple[bool, str]:
-        """Sprawdza poprawnosc klucza."""
-        try:
-            r = requests.get(f"{self.BASE}/leagues/",
-                             headers=self.headers, timeout=15)
-            if r.status_code == 200:
-                self._valid = True
-                n = len(r.json().get("results", []))
-                return True, f"OK – {n} lig dostepnych"
-            elif r.status_code == 401:
-                self._valid = False
-                return False, "Nieprawidlowy klucz Bzzoiro (401)"
-            else:
-                self._valid = False
-                return False, f"HTTP {r.status_code}"
-        except (requests.RequestException, ConnectionError) as e:
-            self._valid = False
-            return False, str(e)
+        """Sprawdza poprawnosc klucza. Retry z backoffem na timeout/blad sieci."""
+        last_err = ""
+        for attempt in range(3):
+            try:
+                r = requests.get(f"{self.BASE}/leagues/",
+                                 headers=self.headers, timeout=15)
+                if r.status_code == 200:
+                    self._valid = True
+                    n = len(r.json().get("results", []))
+                    return True, f"OK – {n} lig dostepnych"
+                elif r.status_code == 401:
+                    self._valid = False
+                    return False, "Nieprawidlowy klucz Bzzoiro (401)"
+                else:
+                    last_err = f"HTTP {r.status_code}"
+            except (requests.RequestException, ConnectionError) as e:
+                last_err = str(e)
+
+            if attempt < 2:
+                delay = 2 ** attempt
+                logger.warning(f"Bzzoiro waliduj() blad ({last_err}), retry {attempt+1}/3 za {delay}s")
+                time.sleep(delay)
+
+        self._valid = False
+        return False, last_err
 
     def _get(self, path: str, params: dict = None) -> dict | None:
         cache_key = f"bz:{path}:{params}"

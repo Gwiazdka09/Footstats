@@ -46,20 +46,12 @@
 
 ## 🔴 KRYTYCZNE (wykryte 06-14)
 
-### TD-37: Kupony permanentnie zablokowane w ACTIVE (settle_active_coupons)
-- [ ] `coupon_settlement.py:234` — `leg_date < cutoff` (days_back=3) → SKIP bez escalation
-- [ ] Kupony #67 (06-09), #76, #80 (06-10) — legi z friendly/niskich lig nigdy nie dostają
-      wyniku z API-Football/FlashScore (nieobsługiwane ligi) → ACTIVE na zawsze, nie liczą
-      się do "50 settled" (M1)
-- [ ] Fix: po >N dni (np. 10) bez wyniku → status `VOID` (wyklucz z accuracy/M1, nie ACTIVE)
-- **Effort:** ~1h (status enum + frontend handling) | 🔴 P1
-
-### TD-38: Pipeline 06-13/06-14 nie tworzy finalnych kuponów
-- [ ] Coupons #113-115 (06-13) status=DRAFT, nigdy promowane do final/ACTIVE
-- [ ] Brak ACTIVE kuponów z 06-13 i 06-14 w Neon
-- [ ] Task Scheduler: `FootStats-DailyAgent` + `FootStats-DailyAgentDraft` (08:00 06-14)
-      LastTaskResult=1 (error) — sprawdzić stderr/przyczynę
-- **Effort:** debug — TBD | 🔴 P1
+### TD-39: Kupony #113-115 (06-13) zablokowane w DRAFT — promocja do final/ACTIVE
+- [ ] Coupons #113-115 (06-13) status=DRAFT, nigdy promowane do final/ACTIVE (pre-fix root
+      cause TD-38 = Bzzoiro `waliduj()` timeout → exit=1, naprawione 06-14, ale historyczne
+      kupony #113-115 wciąż wisą w DRAFT)
+- [ ] Zdecydować: rozliczyć ręcznie / promować do ACTIVE / oznaczyć VOID
+- **Effort:** ~30min | 🔴 P2
 
 ---
 

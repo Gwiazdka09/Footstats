@@ -61,6 +61,9 @@
 
 | Problem | Status | Data |
 |---------|--------|------|
+| daily_agent — kupony z halucynowanymi kursami Groq (np. 52.58/EV+799% identyczne na 5 meczach) gdy Bzzoiro nie ma kursu dla danego typu — leg teraz USUWANY jeśli kurs niezweryfikowany (TD-38) | ✅ FIXED | 06-14 |
+| bzzoiro.py — `waliduj()` bez retry, 1x timeout=15s → pipeline exit=1, brak kuponów na dzień (TD-38 root cause) — dodano retry z backoff (3x) | ✅ FIXED | 06-14 |
+| coupon_settlement — kupony ACTIVE ze starymi legami (friendly/niskie ligi bez wyniku z API) wisiały na zawsze, blokowały "50 settled" (TD-37) — po 10d bez wyniku → status VOID | ✅ FIXED | 06-14 |
 | 5x file truncation (daily_agent, poisson, coupon_settlement, results_updater, zawodtyper_referees) | ✅ RESTORED z git | 06-13 |
 | orphan files (.fuse_hidden, db-wal 0B) + stary cache/logi | ✅ WYCZYSZCZONE | 06-13 |
 | zawodtyper_referees.py — off-by-one kolumn (avg_yellow/avg_red z K/Z.K. zamiast Z.K./CZ.K.) | ✅ FIXED | 06-12 |
