@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, ChevronRight, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target, Trophy, Share2, ShieldCheck, Users, Trash2, UserPlus, X
+  Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, ChevronRight, ChevronDown, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target, Trophy, Share2, ShieldCheck, Users, Trash2, UserPlus, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -421,8 +421,36 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
   }, []);
 
   const toggleMatch = (id) => {
-    setSelectedIds(prev => 
+    setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const groupedMatches = useMemo(() => {
+    const groups = {};
+    for (const m of matches) {
+      const liga = m.liga || 'Inne';
+      if (!groups[liga]) groups[liga] = [];
+      groups[liga].push(m);
+    }
+    return Object.entries(groups);
+  }, [matches]);
+
+  const [collapsedLeagues, setCollapsedLeagues] = useState([]);
+
+  const toggleLeagueSection = (liga) => {
+    setCollapsedLeagues(prev =>
+      prev.includes(liga) ? prev.filter(l => l !== liga) : [...prev, liga]
+    );
+  };
+
+  const toggleLeague = (liga, leagueMatches) => {
+    const ids = leagueMatches.map(m => m.id);
+    const allSelected = ids.every(id => selectedIds.includes(id));
+    setSelectedIds(prev =>
+      allSelected
+        ? prev.filter(id => !ids.includes(id))
+        : [...new Set([...prev, ...ids])]
     );
   };
 
@@ -526,20 +554,46 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
             {loading ? (
               <div className="text-center py-20 text-slate-500">Pobieranie oferty...</div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {matches.map(m => (
-                  <div 
-                    key={m.id} 
-                    onClick={() => toggleMatch(m.id)}
-                    className={`glass-card p-6 cursor-pointer border-2 transition-all ${selectedIds.includes(m.id) ? 'border-indigo-500 bg-indigo-500/5' : 'border-transparent'}`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">{getLeagueFlag(m.liga)} {m.liga}</span>
-                      <span className="text-[10px] text-slate-500">{m.godzina}</span>
+              <div className="space-y-3">
+                {groupedMatches.map(([liga, leagueMatches]) => {
+                  const collapsed = collapsedLeagues.includes(liga);
+                  const allSelected = leagueMatches.every(m => selectedIds.includes(m.id));
+                  return (
+                    <div key={liga}>
+                      <div
+                        onClick={() => toggleLeagueSection(liga)}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-all cursor-pointer select-none"
+                      >
+                        <div
+                          onClick={(e) => { e.stopPropagation(); toggleLeague(liga, leagueMatches); }}
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${allSelected ? 'border-indigo-500 bg-indigo-500/20' : 'border-white/20'}`}
+                        >
+                          {allSelected && <CheckCircle2 size={14} className="text-indigo-400" />}
+                        </div>
+                        <span className="text-xs text-indigo-400 font-semibold uppercase tracking-wide flex-1">{getLeagueFlag(liga)} {liga}</span>
+                        <span className="text-xs text-slate-500">{leagueMatches.length} mecz{leagueMatches.length === 1 ? '' : leagueMatches.length < 5 ? 'e' : 'y'}</span>
+                        <ChevronDown size={16} className={`text-slate-500 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+                      </div>
+                      {!collapsed && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 pl-2">
+                          {leagueMatches.map(m => (
+                            <div
+                              key={m.id}
+                              onClick={() => toggleMatch(m.id)}
+                              className={`glass-card p-6 cursor-pointer border-2 transition-all ${selectedIds.includes(m.id) ? 'border-indigo-500 bg-indigo-500/5' : 'border-transparent'}`}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">{getLeagueFlag(m.liga)} {m.liga}</span>
+                                <span className="text-[10px] text-slate-500">{m.godzina}</span>
+                              </div>
+                              <p className="font-bold text-lg">{m.gosp} vs {m.gosc}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <p className="font-bold text-lg">{m.gosp} vs {m.gosc}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <div className="flex justify-end pt-8">
@@ -1139,7 +1193,7 @@ const SettingsView = ({ config, status, apiFetch, onSave }) => {
         <h1 className="text-4xl font-bold mb-2">Ustawienia Bota</h1>
         <p className="text-slate-400">Konfiguracja parametrów bota dla Twojego konta.</p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
         <div className="glass-card p-8">
           <h3 className="text-lg font-bold mb-6 flex items-center gap-2"><Settings size={18} /> Algorytm & Ryzyko</h3>
           <div className="space-y-6">
