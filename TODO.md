@@ -56,14 +56,28 @@
 - [x] Jednorazowo: 138 plików usunięte, 69MB→34MB cache/form (06-14)
 - **Effort:** done | 🟡 P2
 
+### TD-37: Kupony permanentnie zablokowane w ACTIVE (settle_active_coupons)
+- [ ] `coupon_settlement.py:234` — `leg_date < cutoff` (days_back=3) → SKIP bez escalation
+- [ ] Kupony #67 (06-09), #76, #80 (06-10) — legi z friendly/niskich lig nigdy nie dostają
+      wyniku z API-Football/FlashScore (nieobsługiwane ligi) → ACTIVE na zawsze, nie liczą
+      się do "50 settled" (M1)
+- [ ] Fix: po >N dni (np. 10) bez wyniku → status `VOID` (wyklucz z accuracy/M1, nie ACTIVE)
+- **Effort:** ~1h (status enum + frontend handling) | 🔴 P1
+
+### TD-38: Pipeline 06-13/06-14 nie tworzy finalnych kuponów
+- [ ] Coupons #113-115 (06-13) status=DRAFT, nigdy promowane do final/ACTIVE
+- [ ] Brak ACTIVE kuponów z 06-13 i 06-14 w Neon
+- [ ] Task Scheduler: `FootStats-DailyAgent` + `FootStats-DailyAgentDraft` (08:00 06-14)
+      LastTaskResult=1 (error) — sprawdzić stderr/przyczynę
+- **Effort:** debug — TBD | 🔴 P1
+
 ---
 
 ## 🟡 TECHNICZNE
 
 ### TD-30: File truncation — diagnoza przyczyny
-- [ ] Powtarzający się problem (5x 06-13, 5x 06-11, 26x 06-07)
-- [ ] Rozwiązanie: pre-commit hook sprawdzający `py_compile`
-- **Effort:** 1h | 🟡 P2
+- [x] `.git/hooks/pre-commit` już sprawdza `py_compile` + null bytes na każdym `.py` w commit (weryfikacja 06-14)
+- **Effort:** done | 🟡 P2
 
 ### TD-31: Testy core modules (24 moduły bez testów)
 - [ ] Priorytetowe: coupon_settlement, bankroll, kelly, value_bet, quick_picks
@@ -99,3 +113,10 @@
 - zawodtyper.pl: dane per-kategoria, zawodtyper_referees: avg_yellow/avg_red per sędzia
 - Pomysł: `fetch_team_corners`/`fetch_team_cards` + Poisson → nowe tipy
 - **Effort:** 2-3 dni | po M1
+### Przycisk dla admina
+- przycisk dla admina aby mógł kliknąć i wywołać sprawdzanie meczów praz api oraz scraper 
+- **Effort:** 1-2 dni | na teraz 
+### Zmiana nazwy konta
+- zmiana nazwy konta na `username` (zamiast `email`)
+- **Effort:** 1-2 dni | na teraz
+### 
