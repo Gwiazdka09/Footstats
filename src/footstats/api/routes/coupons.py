@@ -415,7 +415,11 @@ def settle_coupons(req: SettleRequest, user_id: int = Depends(require_auth)):
             "settled": stats.get("settled", 0),
             "partial": stats.get("partial", 0),
             "errors": stats.get("errors", 0),
-            "message": f"Rozliczono {stats.get('settled',0)}, częściowych {stats.get('partial',0)}, błędów {stats.get('errors',0)}",
+            "voided": stats.get("voided", 0),
+            "message": (
+                f"Rozliczono {stats.get('settled',0)}, częściowych {stats.get('partial',0)}, "
+                f"VOID {stats.get('voided',0)}, błędów {stats.get('errors',0)}"
+            ),
         }
     except (ValueError, KeyError, AttributeError, TypeError) as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -6,6 +6,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
+// Dekoduje payload JWT (bez weryfikacji podpisu — tylko do odczytu claimów typu "adm")
+const decodeJwtPayload = (token) => {
+  try {
+    const payload = token.split('.')[1];
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(base64));
+  } catch {
+    return null;
+  }
+};
+
 // Mapowanie ligi -> flaga kraju (emoji) dla kreatora kuponów
 const LEAGUE_FLAGS = {
   "premier league": "🏴",
@@ -44,6 +55,7 @@ const App = () => {
   const [view, setView] = useState('dashboard'); // 'dashboard', 'history', 'settings', 'wizard'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [proposalToCopy, setProposalToCopy] = useState(null);
+  const isAdmin = !!(token && decodeJwtPayload(token)?.adm);
 
   // Authentication logout
   const handleLogout = () => {
@@ -231,6 +243,7 @@ const App = () => {
                 config={config}
                 apiFetch={apiFetch}
                 onSave={() => fetchData()}
+                isAdmin={isAdmin}
               />
             )}
             {view === 'leaderboard' && (
@@ -1043,10 +1056,12 @@ const LeaderboardView = ({ apiFetch }) => {
   );
 };
 
-const SettingsView = ({ config, apiFetch, onSave }) => {
+const SettingsView = ({ config, apiFetch, onSave, isAdmin }) => {
   const [form, setForm] = useState(config || {});
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const [settling, setSettling] = useState(false);
+  const [settleMsg, setSettleMsg] = useState('');
 
   const handleSave = async () => {
     setLoading(true);
@@ -1061,6 +1076,23 @@ const SettingsView = ({ config, apiFetch, onSave }) => {
       setMsg('Błąd: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSettle = async () => {
+    setSettling(true);
+    setSettleMsg('');
+    try {
+      const res = await apiFetch('/coupons/settle', {
+        method: 'POST',
+        body: JSON.stringify({ days_back: 10, dry_run: false })
+      });
+      setSettleMsg(res.message || 'Sprawdzanie zakończone.');
+      onSave();
+    } catch (err) {
+      setSettleMsg('Błąd: ' + err.message);
+    } finally {
+      setSettling(false);
     }
   };
 
@@ -1107,6 +1139,20 @@ const SettingsView = ({ config, apiFetch, onSave }) => {
           <Info size={48} className="text-indigo-400 mb-6" />
           <p className="text-slate-400">Te ustawienia wpływają na sposób, w jaki bot wybiera mecze i sugeruje stawki Kelly'ego na Twoim koncie.</p>
         </div>
+        {isAdmin && (
+          <div className="glass-card p-8 md:col-span-2">
+            <h3 className="text-lg font-bold mb-2 flex items-center gap-2"><Settings size={18} /> Panel administratora</h3>
+            <p className="text-slate-400 text-sm mb-6">Ręczne sprawdzenie wyników meczów i rozliczenie aktywnych kuponów (API-Football / FlashScore).</p>
+            <button
+              onClick={handleSettle}
+              disabled={settling}
+              className="btn-primary px-6 py-3 rounded-xl font-bold disabled:opacity-50"
+            >
+              {settling ? "Sprawdzanie..." : "Sprawdź wyniki meczów"}
+            </button>
+            {settleMsg && <p className="text-sm mt-4 text-indigo-400">{settleMsg}</p>}
+          </div>
+        )}
       </div>
     </motion.div>
   );

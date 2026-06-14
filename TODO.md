@@ -46,10 +46,10 @@
 
 ## 🟡 TECHNICZNE
 
-### TD-31: Testy core modules (24 moduły bez testów)
-- [ ] Priorytetowe: coupon_settlement, bankroll, kelly, value_bet, quick_picks
-- [ ] Minimum: smoke test importu + 2-3 unit testy per moduł
-- **Effort:** 4-6h | 🟡 P3
+### TD-31: Testy core modules — ✅ DONE (06-14)
+- [x] Priorytetowe: coupon_settlement, bankroll, kelly, value_bet, quick_picks
+- [x] bankroll: nowy `tests/test_bankroll.py` (8 testów, sqlite fixture)
+- [x] coupon_settlement/kelly/value_bet/quick_picks: już pokryte (60 testów)
 
 ---
 
@@ -72,9 +72,7 @@
 - zawodtyper.pl: dane per-kategoria, zawodtyper_referees: avg_yellow/avg_red per sędzia
 - Pomysł: `fetch_team_corners`/`fetch_team_cards` + Poisson → nowe tipy
 - **Effort:** 2-3 dni | po M1
-### Przycisk dla admina
-- przycisk dla admina aby mógł kliknąć i wywołać sprawdzanie meczów praz api oraz scraper 
-- **Effort:** 1-2 dni | na teraz 
-### Zmiana nazwy konta
-- zmiana nazwy konta na `username` (zamiast `email`)
-- **Effort:** 1-2 dni | na teraz
+### Przycisk dla admina — ✅ DONE (06-14)
+- [x] przycisk "Sprawdź wyniki meczów" w Settings (widoczny tylko dla adm) → POST /coupons/settle
+### Zmiana nazwy konta — nieaktualne
+- [x] system już używa `username` (nie email) do logowania/wyświetlania — brak akcji

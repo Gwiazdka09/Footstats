@@ -36,7 +36,7 @@
 | 1 | **Accuracy 33% live** | 🔴 P1 | Poniżej M1 target (55%) — Faza 16 w toku, 35/50 settled |
 | 2 | **31 uncommitted changes** | 🔴 P1 | `git status` → 31 modified files niescommitowanych + .git/index.lock (0B) |
 | 3 | **cache/form/ = 69MB (274 pliki)** | 🟡 P2 | 70 plików >7 dni — brak automatycznej eviction form cache |
-| 4 | **24 core modules bez testów** | 🟡 P3 | bankroll, bet_builder, classifier, confidence, coupon_settlement, daily_filters, daily_io, form, fortress, h2h, importance, lambda_optimizer, quick_picks, value_bet, weekly_picks + inne |
+| 4 | **20 core modules bez testów** | 🟡 P4 | TD-31 priorytetowe (bankroll/coupon_settlement/kelly/value_bet/quick_picks) DONE; reszta: bet_builder, classifier, confidence, daily_filters, daily_io, form, fortress, h2h, importance, lambda_optimizer, weekly_picks + inne |
 | 5 | **%SystemDrive% — garbage dir** | ⚪ P4 | Folder `%SystemDrive%/ProgramData/Microsoft/Windows/Caches/` (3 pliki) — artefakt Windows FUSE mount |
 | 6 | **.fuse_hidden000002b400000001** | ⚪ P4 | Orphan FUSE plik w katalogu głównym |
 | 7 | **Langfuse unconditional init** | ⚪ P4 | `analyzer.py:29` — Langfuse() inicjalizowane przy każdym imporcie, nawet bez kluczy API |
@@ -61,6 +61,9 @@
 
 | Problem | Status | Data |
 |---------|--------|------|
+| TD-31 — bankroll.py bez testów (24 core modules bez testów) — dodano tests/test_bankroll.py (8 testów, sqlite fixture); coupon_settlement/kelly/value_bet/quick_picks już pokryte (60 testów) | ✅ FIXED | 06-14 |
+| Panel administratora — przycisk "Sprawdź wyniki meczów" (POST /coupons/settle) w Settings, widoczny tylko dla admina (JWT `adm` claim) | ✅ DODANE | 06-14 |
+| Przypadkowy zapis śmieciowych wierszy (id 118-129) do prod Neon coupons (bug w tests/test_bankroll.py — niezałatany import `_connect`) — wiersze usunięte, test naprawiony (`br._connect()`) | ✅ FIXED | 06-14 |
 | daily_agent — kupony z halucynowanymi kursami Groq (np. 52.58/EV+799% identyczne na 5 meczach) gdy Bzzoiro nie ma kursu dla danego typu — leg teraz USUWANY jeśli kurs niezweryfikowany (TD-38) | ✅ FIXED | 06-14 |
 | bzzoiro.py — `waliduj()` bez retry, 1x timeout=15s → pipeline exit=1, brak kuponów na dzień (TD-38 root cause) — dodano retry z backoff (3x) | ✅ FIXED | 06-14 |
 | coupon_settlement — kupony ACTIVE ze starymi legami (friendly/niskie ligi bez wyniku z API) wisiały na zawsze, blokowały "50 settled" (TD-37) — po 10d bez wyniku → status VOID | ✅ FIXED | 06-14 |
