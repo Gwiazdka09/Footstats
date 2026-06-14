@@ -181,12 +181,14 @@ h1, h2, h3, .brand {
 .tracking-tighter { letter-spacing: -0.05em; }
 .tracking-widest { letter-spacing: 0.1em; }
 
+.rounded { border-radius: 0.25rem; }
 .rounded-xl { border-radius: 0.75rem; }
 .rounded-2xl { border-radius: 1rem; }
 
 .border-2 { border-width: 2px; }
 .border-transparent { border-color: transparent; }
 .border-white\/10 { border-color: rgba(255, 255, 255, 0.1); }
+.border-white\/20 { border-color: rgba(255, 255, 255, 0.2); }
 .border-indigo-500\/30 { border-color: rgba(129, 140, 248, 0.3); }
 
 .bg-white\/5 { background-color: rgba(255, 255, 255, 0.05); }

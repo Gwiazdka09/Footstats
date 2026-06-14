@@ -823,17 +823,15 @@ const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll,
         <h1 className="text-4xl font-bold mb-2">Witaj, {user}</h1>
         <p className="text-slate-400">Twoje imperium bukmacherskie jest online.</p>
       </div>
-      <div className="flex gap-4">
-        <div className="glass-card px-10 py-6 flex items-center gap-5 border-indigo-500/20 bg-indigo-500/5">
-          <div className="p-4 bg-indigo-500/20 rounded-2xl">
-            <Wallet className="text-indigo-400" size={28} />
-          </div>
-          <div>
-            <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Dostępny Balans</p>
-            <p className="text-3xl font-bold text-white leading-none">
-              {status?.bankroll?.toFixed(2)} <span className="text-lg font-normal text-indigo-300">PLN</span>
-            </p>
-          </div>
+      <div className="glass-card px-8 py-5 flex items-center gap-5 border-indigo-500/20 bg-indigo-500/5">
+        <div className="p-4 bg-indigo-500/20 rounded-2xl flex items-center justify-center">
+          <Wallet className="text-indigo-400" size={28} />
+        </div>
+        <div>
+          <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Dostępny Balans</p>
+          <p className="text-3xl font-bold text-white leading-none">
+            {status?.bankroll?.toFixed(2)} <span className="text-lg font-normal text-indigo-300">PLN</span>
+          </p>
         </div>
       </div>
     </header>
