@@ -73,6 +73,8 @@
 - Pomysł: `fetch_team_corners`/`fetch_team_cards` + Poisson → nowe tipy
 - **Effort:** 2-3 dni | po M1
 ### Przycisk dla admina — ✅ DONE (06-14)
-- [x] przycisk "Sprawdź wyniki meczów" w Settings (widoczny tylko dla adm) → POST /coupons/settle
+- [x] nowa zakładka "Panel" (tylko dla adm): "Sprawdź wyniki meczów" (POST /coupons/settle) + "Zarządzaj użytkownikami" (GET/POST/DELETE /admin/users)
 ### Zmiana nazwy konta — nieaktualne
 - [x] system już używa `username` (nie email) do logowania/wyświetlania — brak akcji
+### Błąd w przeglondarce na telefonie 
+- użytkownicy zgłaszają żę nie widzą panelu bocznego na telefonie i nie mają do niego dostępu , trzeba zrobić 3 kreski które po kliknięciu rozwijają się w panel z opcjiami na cały ekran telefonu oraz po powrotnym kliknięciu zayka panel 
