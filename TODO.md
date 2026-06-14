@@ -44,17 +44,6 @@
 
 ---
 
-## 🔴 KRYTYCZNE (wykryte 06-14)
-
-### TD-39: Kupony #113-115 (06-13) zablokowane w DRAFT — promocja do final/ACTIVE
-- [ ] Coupons #113-115 (06-13) status=DRAFT, nigdy promowane do final/ACTIVE (pre-fix root
-      cause TD-38 = Bzzoiro `waliduj()` timeout → exit=1, naprawione 06-14, ale historyczne
-      kupony #113-115 wciąż wisą w DRAFT)
-- [ ] Zdecydować: rozliczyć ręcznie / promować do ACTIVE / oznaczyć VOID
-- **Effort:** ~30min | 🔴 P2
-
----
-
 ## 🟡 TECHNICZNE
 
 ### TD-31: Testy core modules (24 moduły bez testów)
