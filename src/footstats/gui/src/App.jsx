@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, Info, ChevronRight, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target, Trophy, Share2, ShieldCheck, Users, Trash2, UserPlus, X
+  Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, ChevronRight, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target, Trophy, Share2, ShieldCheck, Users, Trash2, UserPlus, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -158,7 +158,7 @@ const App = () => {
             </div>
           )}
           <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="p-2 hover:bg-white/5 rounded-lg text-slate-400">
-            <Menu size={20} />
+            {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
           </button>
         </div>
         
@@ -182,7 +182,7 @@ const App = () => {
             <p className="font-bold text-slate-300 mb-2">{user}</p>
             <button 
               onClick={handleLogout}
-              className="flex items-center gap-2 text-xs text-slate-500 hover:text-rose-400 transition-colors w-full pt-2 border-t border-white/5"
+              className="flex items-center gap-2 text-xs font-semibold text-rose-400 hover:text-rose-300 transition-colors w-full pt-2 border-t border-white/5"
             >
               <LogOut size={14} /> Wyloguj się
             </button>
@@ -218,7 +218,7 @@ const App = () => {
             <p className="font-bold text-slate-300 mb-2">{user}</p>
             <button
               onClick={() => { setMobileNavOpen(false); handleLogout(); }}
-              className="flex items-center gap-2 text-xs text-slate-500 hover:text-rose-400 transition-colors w-full pt-2 border-t border-white/5"
+              className="flex items-center gap-2 text-xs font-semibold text-rose-400 hover:text-rose-300 transition-colors w-full pt-2 border-t border-white/5"
             >
               <LogOut size={14} /> Wyloguj się
             </button>
@@ -248,7 +248,6 @@ const App = () => {
                 calibration={calibration}
                 apiFetch={apiFetch}
                 onSeeAll={() => setView('history')}
-                onCreateNew={() => { setProposalToCopy(null); setView('wizard'); }}
                 onCopyProposal={(p) => { setProposalToCopy(p); setView('wizard'); }}
               />
             )}
@@ -271,6 +270,7 @@ const App = () => {
               <SettingsView
                 key="sett"
                 config={config}
+                status={status}
                 apiFetch={apiFetch}
                 onSave={() => fetchData()}
               />
@@ -736,11 +736,11 @@ const DailyProposals = ({ apiFetch, onCopyProposal }) => {
                 <span className={`text-xs font-bold uppercase tracking-widest ${text}`}>{title}</span>
                 <span className="text-xs text-slate-500">@{p.total_odds?.toFixed(2)}</span>
               </div>
-              <div className="space-y-3 flex-1">
+              <div className="space-y-4 flex-1">
                 {p.legs.map((leg, i) => (
-                  <div key={i} className="text-sm">
+                  <div key={i} className="text-base">
                     <p className="font-semibold">{getLeagueFlag(leg.liga)} {leg.home} - {leg.away}</p>
-                    <p className="text-slate-500 text-xs">Typ: <span className="text-slate-300 font-bold">{leg.label}</span> @{leg.odds}</p>
+                    <p className="text-slate-500 text-sm">Typ: <span className="text-slate-300 font-bold">{leg.label}</span> @{leg.odds}</p>
                   </div>
                 ))}
               </div>
@@ -758,7 +758,7 @@ const DailyProposals = ({ apiFetch, onCopyProposal }) => {
   );
 };
 
-const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll, onCreateNew, onCopyProposal }) => (
+const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll, onCopyProposal }) => (
   <motion.div
     initial={{ opacity: 0, x: 20 }}
     animate={{ opacity: 1, x: 0 }}
@@ -770,12 +770,6 @@ const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll,
         <p className="text-slate-400">Twoje imperium bukmacherskie jest online.</p>
       </div>
       <div className="flex gap-4">
-        <button 
-          onClick={onCreateNew}
-          className="btn-primary flex items-center gap-2 px-6 py-4"
-        >
-          <PlusCircle size={20} /> Stwórz Kupon
-        </button>
         <div className="glass-card px-10 py-6 flex items-center gap-5 border-indigo-500/20 bg-indigo-500/5">
           <div className="p-4 bg-indigo-500/20 rounded-2xl">
             <Wallet className="text-indigo-400" size={28} />
@@ -817,7 +811,7 @@ const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll,
       />
     </section>
 
-    {calibration && (
+    {calibration && calibration.n_matches > 0 && (
       <section className="glass-card p-6 mb-8 flex flex-wrap gap-6 items-center">
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-400 uppercase tracking-widest font-bold">Model Poisson</span>
@@ -1093,10 +1087,14 @@ const LeaderboardView = ({ apiFetch }) => {
   );
 };
 
-const SettingsView = ({ config, apiFetch, onSave }) => {
+const SettingsView = ({ config, status, apiFetch, onSave }) => {
   const [form, setForm] = useState(config || {});
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [bankroll, setBankroll] = useState(status?.bankroll ?? '');
+  const [bankrollMsg, setBankrollMsg] = useState('');
+  const [bankrollLoading, setBankrollLoading] = useState(false);
 
   const handleSave = async () => {
     setLoading(true);
@@ -1111,6 +1109,23 @@ const SettingsView = ({ config, apiFetch, onSave }) => {
       setMsg('Błąd: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveBankroll = async () => {
+    setBankrollLoading(true);
+    setBankrollMsg('');
+    try {
+      await apiFetch('/bankroll', {
+        method: 'POST',
+        body: JSON.stringify({ balance: parseFloat(bankroll) })
+      });
+      setBankrollMsg('Bankroll zapisany pomyślnie!');
+      onSave();
+    } catch (err) {
+      setBankrollMsg('Błąd: ' + err.message);
+    } finally {
+      setBankrollLoading(false);
     }
   };
 
@@ -1153,9 +1168,24 @@ const SettingsView = ({ config, apiFetch, onSave }) => {
             {msg && <p className="text-sm text-center text-indigo-400">{msg}</p>}
           </div>
         </div>
-        <div className="glass-card p-8 text-center flex flex-col items-center justify-center">
-          <Info size={48} className="text-indigo-400 mb-6" />
-          <p className="text-slate-400">Te ustawienia wpływają na sposób, w jaki bot wybiera mecze i sugeruje stawki Kelly'ego na Twoim koncie.</p>
+        <div className="glass-card p-8">
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2"><Wallet size={18} /> Edycja Bankrolla</h3>
+          <div className="space-y-6">
+            <ConfigInput
+              label="Saldo (PLN)"
+              value={bankroll}
+              onChange={v => setBankroll(v)}
+            />
+            <button
+              onClick={handleSaveBankroll}
+              disabled={bankrollLoading}
+              className="btn-primary w-full mt-4"
+            >
+              {bankrollLoading ? "Zapisywanie..." : "Zapisz bankroll"}
+            </button>
+            {bankrollMsg && <p className="text-sm text-center text-indigo-400">{bankrollMsg}</p>}
+            <p className="text-slate-500 text-xs">Ręczna korekta salda — użyj po wpłacie/wypłacie z konta bukmacherskiego.</p>
+          </div>
         </div>
       </div>
     </motion.div>
