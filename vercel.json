@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd src/footstats/gui && npm install --legacy-peer-deps && npm run build",
+  "outputDirectory": "src/footstats/gui/dist",
+  "installCommand": "echo skip",
+  "framework": null
+}
