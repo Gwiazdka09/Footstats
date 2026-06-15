@@ -1355,7 +1355,8 @@ const SettingsView = ({ config, status, apiFetch, onSave, user, onAccountUpdate 
         <h1 className="text-4xl font-bold mb-2">Ustawienia Bota</h1>
         <p className="text-slate-400">Konfiguracja parametrów bota dla Twojego konta.</p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+       <div className="space-y-8">
         <div className="glass-card p-8">
           <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white"><Settings size={18} /> Algorytm & Ryzyko</h3>
           <div className="space-y-6">
@@ -1418,7 +1419,8 @@ const SettingsView = ({ config, status, apiFetch, onSave, user, onAccountUpdate 
             </p>
           </div>
         </div>
-        <div className="glass-card p-8 md:col-span-2">
+       </div>
+        <div className="glass-card p-8 h-full">
           <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white"><TrendingUp size={18} /> Dane konta</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
             <div className="bg-white/5 rounded-xl p-4 text-center">
