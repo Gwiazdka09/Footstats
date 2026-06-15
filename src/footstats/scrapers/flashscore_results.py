@@ -128,9 +128,10 @@ def _parse_mobi_html(html: str, home: str, away: str) -> str | None:
         # Przykład: <span>19:00</span>Vasteras SK - Hacken <a href="..." class="fin">3:3</a>
         m = re.search(r"</span>(.*?)\s*<a[^>]*>(.*?)</a>", line)
         if m:
-            teams_raw = m.group(1)
+            # Usuń tagi HTML (np. <img class="rcard-1"> przy kartkach/czerwonych kartkach)
+            teams_raw = re.sub(r"<[^>]+>", "", m.group(1))
             score = m.group(2).strip()
-            
+
             if " - " in teams_raw:
                 t_home_raw, t_away_raw = teams_raw.split(" - ", 1)
                 

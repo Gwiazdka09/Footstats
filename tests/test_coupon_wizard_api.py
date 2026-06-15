@@ -99,3 +99,10 @@ def test_wizard_place_or_bankroll_guard():
         },
     )
     assert r.status_code in (200, 400)
+
+    # Cleanup: nie zaśmiecaj prod DB testowym kuponem
+    if r.status_code == 200:
+        from footstats.utils.db import connect
+        coupon_id = r.json()["coupon_id"]
+        with connect() as conn:
+            conn.execute("DELETE FROM coupons WHERE id = ?", (coupon_id,))
