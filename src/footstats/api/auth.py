@@ -200,3 +200,57 @@ def change_password(req: ChangePasswordRequest, user_id: int = Depends(require_a
     with connect() as conn:
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
     return {"ok": True, "message": "Hasło zmienione"}
+
+
+class MeResponse(BaseModel):
+    id: int
+    username: str
+    email: Optional[str] = None
+    is_admin: bool
+
+
+@router.get("/auth/me", response_model=MeResponse)
+def get_me(user_id: int = Depends(require_auth)) -> MeResponse:
+    from footstats.utils.db import connect
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT id, username, email, is_admin FROM users WHERE id = ? AND is_active = TRUE",
+            (user_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
+    return MeResponse(**dict(row))
+
+
+class ChangeUsernameRequest(BaseModel):
+    current_password: str
+    new_username: str
+
+    @field_validator("new_username")
+    @classmethod
+    def new_username_valid(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError("Login musi mieć min. 3 znaki")
+        return v
+
+
+@router.post("/auth/change-username", response_model=TokenResponse)
+def change_username(req: ChangeUsernameRequest, user_id: int = Depends(require_auth)) -> TokenResponse:
+    import psycopg2
+    from footstats.utils.db import connect
+
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT password_hash, is_admin FROM users WHERE id = ? AND is_active = TRUE", (user_id,)
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
+    if not bcrypt.checkpw(req.current_password.encode(), row["password_hash"].encode()):
+        raise HTTPException(status_code=401, detail="Nieprawidłowe aktualne hasło")
+    try:
+        with connect() as conn:
+            conn.execute("UPDATE users SET username = ? WHERE id = ?", (req.new_username, user_id))
+    except psycopg2.errors.UniqueViolation:
+        raise HTTPException(status_code=409, detail=f"Login '{req.new_username}' jest już zajęty")
+    return TokenResponse(access_token=_make_token(req.new_username, user_id, bool(row["is_admin"])))

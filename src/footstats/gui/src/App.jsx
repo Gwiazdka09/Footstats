@@ -98,6 +98,14 @@ const App = () => {
     setUser('Użytkownik');
   };
 
+  // Po zmianie nazwy użytkownika — nowy token (zawiera nowy login) + odśwież lokalny stan
+  const handleAccountUpdate = ({ access_token, username }) => {
+    localStorage.setItem('fs_token', access_token);
+    localStorage.setItem('fs_user', username);
+    setToken(access_token);
+    setUser(username);
+  };
+
   // Generic fetcher with auth
   const apiFetch = async (endpoint, options = {}) => {
     const headers = {
@@ -295,6 +303,7 @@ const App = () => {
                 config={config}
                 status={status}
                 user={user}
+                onAccountUpdate={handleAccountUpdate}
                 apiFetch={apiFetch}
                 onSave={() => fetchData()}
               />
@@ -1240,7 +1249,7 @@ const LeaderboardView = ({ apiFetch }) => {
   );
 };
 
-const SettingsView = ({ config, status, apiFetch, onSave, user }) => {
+const SettingsView = ({ config, status, apiFetch, onSave, user, onAccountUpdate }) => {
   const [form, setForm] = useState(config || {});
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1248,6 +1257,60 @@ const SettingsView = ({ config, status, apiFetch, onSave, user }) => {
   const [bankroll, setBankroll] = useState(status?.bankroll ?? '');
   const [bankrollMsg, setBankrollMsg] = useState('');
   const [bankrollLoading, setBankrollLoading] = useState(false);
+
+  const [me, setMe] = useState(null);
+
+  useEffect(() => {
+    apiFetch('/auth/me').then(setMe).catch(() => {});
+  }, []);
+
+  const [newUsername, setNewUsername] = useState('');
+  const [usernamePassword, setUsernamePassword] = useState('');
+  const [usernameMsg, setUsernameMsg] = useState('');
+  const [usernameLoading, setUsernameLoading] = useState(false);
+
+  const handleChangeUsername = async () => {
+    setUsernameLoading(true);
+    setUsernameMsg('');
+    try {
+      const data = await apiFetch('/auth/change-username', {
+        method: 'POST',
+        body: JSON.stringify({ current_password: usernamePassword, new_username: newUsername })
+      });
+      onAccountUpdate({ access_token: data.access_token, username: newUsername });
+      setMe(m => ({ ...m, username: newUsername }));
+      setNewUsername('');
+      setUsernamePassword('');
+      setUsernameMsg('Nazwa użytkownika zmieniona!');
+    } catch (err) {
+      setUsernameMsg('Błąd: ' + err.message);
+    } finally {
+      setUsernameLoading(false);
+    }
+  };
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordMsg, setPasswordMsg] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  const handleChangePassword = async () => {
+    setPasswordLoading(true);
+    setPasswordMsg('');
+    try {
+      await apiFetch('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setPasswordMsg('Hasło zmienione!');
+    } catch (err) {
+      setPasswordMsg('Błąd: ' + err.message);
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     setLoading(true);
@@ -1327,11 +1390,12 @@ const SettingsView = ({ config, status, apiFetch, onSave, user }) => {
         <div className="glass-card p-8">
           <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">
             <Wallet size={18} /> Edycja Bankrolla
-            <Info
-              size={14}
-              className="text-slate-500 cursor-help"
+            <span
               title="Bankroll to Twój budżet używany WYŁĄCZNIE do liczenia rekomendowanych stawek (Kelly) w kreatorze kuponów. FootStats nie przyjmuje zakładów i nie obsługuje prawdziwych pieniędzy — to wartość pomocnicza do analizy."
-            />
+              className="inline-flex text-slate-500 cursor-help"
+            >
+              <Info size={14} />
+            </span>
           </h3>
           <div className="space-y-6">
             <ConfigInput
@@ -1356,7 +1420,7 @@ const SettingsView = ({ config, status, apiFetch, onSave, user }) => {
         </div>
         <div className="glass-card p-8 md:col-span-2">
           <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white"><TrendingUp size={18} /> Dane konta</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
             <div className="bg-white/5 rounded-xl p-4 text-center">
               <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Balans</p>
               <p className="text-lg font-bold text-white">{status?.bankroll?.toFixed(2)} <span className="text-xs font-normal text-slate-500">PLN</span></p>
@@ -1371,11 +1435,68 @@ const SettingsView = ({ config, status, apiFetch, onSave, user }) => {
               <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Wygrane (30 dni)</p>
               <p className="text-lg font-bold text-indigo-300">{status?.stats?.wins_last_30d || 0}</p>
             </div>
-            <div className="bg-white/5 rounded-xl p-4 text-center">
-              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Konto</p>
-              <p className="text-lg font-bold text-white flex items-center justify-center gap-1.5">
-                <User size={15} className="text-indigo-300" /> {user || '—'}
-              </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div className="bg-white/5 rounded-xl p-4">
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1.5"><User size={13} /> Login</p>
+              <p className="text-base font-bold text-white">{me?.username || user || '—'}</p>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4">
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">E-mail</p>
+              <p className="text-base font-bold text-white">{me?.email || '—'}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h4 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-4">Zmiana nazwy użytkownika</h4>
+              <div className="space-y-4">
+                <ConfigInput
+                  label="Nowy login"
+                  value={newUsername}
+                  onChange={setNewUsername}
+                />
+                <ConfigInput
+                  label="Aktualne hasło"
+                  type="password"
+                  value={usernamePassword}
+                  onChange={setUsernamePassword}
+                />
+                <button
+                  onClick={handleChangeUsername}
+                  disabled={usernameLoading || !newUsername || !usernamePassword}
+                  className="btn-primary w-full"
+                >
+                  {usernameLoading ? "Zapisywanie..." : "Zmień nazwę użytkownika"}
+                </button>
+                {usernameMsg && <p className="text-sm text-center text-indigo-400">{usernameMsg}</p>}
+              </div>
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-4">Zmiana hasła</h4>
+              <div className="space-y-4">
+                <ConfigInput
+                  label="Aktualne hasło"
+                  type="password"
+                  value={currentPassword}
+                  onChange={setCurrentPassword}
+                />
+                <ConfigInput
+                  label="Nowe hasło (min. 8 znaków)"
+                  type="password"
+                  value={newPassword}
+                  onChange={setNewPassword}
+                />
+                <button
+                  onClick={handleChangePassword}
+                  disabled={passwordLoading || !currentPassword || newPassword.length < 8}
+                  className="btn-primary w-full"
+                >
+                  {passwordLoading ? "Zapisywanie..." : "Zmień hasło"}
+                </button>
+                {passwordMsg && <p className="text-sm text-center text-indigo-400">{passwordMsg}</p>}
+              </div>
             </div>
           </div>
         </div>
@@ -1659,17 +1780,21 @@ const CouponCard = ({ coupon, index }) => (
   </motion.div>
 );
 
-const ConfigInput = ({ label, value, onChange, tooltip }) => (
+const ConfigInput = ({ label, value, onChange, tooltip, type = "text" }) => (
   <div>
     <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase mb-2">
       {label}
-      {tooltip && <Info size={13} className="text-slate-500 cursor-help" title={tooltip} />}
+      {tooltip && (
+        <span title={tooltip} className="inline-flex text-slate-500 cursor-help">
+          <Info size={13} />
+        </span>
+      )}
     </label>
     <input
-      type="text"
+      type={type}
       value={value || ''}
       onChange={e => onChange(e.target.value)}
-      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors"
+      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
     />
   </div>
 );
