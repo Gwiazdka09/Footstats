@@ -23,3 +23,16 @@ Lang: PL. Context: Soccer predictions (Poisson + RAG + LLM).
 - Backend: FastAPI, Playwright (Scraping), Groq SDK (Llama 3.1 8B).
 - Frontend: Streamlit, vis-network (Brain Graph).
 - Logic: Poisson, Kelly Criterion, RAG Feedback Loop.
+
+## Design System (GUI - React/Tailwind v4)
+Tokens in `src/footstats/gui/src/index.css` `:root` — reuse these, don't invent new colors.
+- Colors: bg `--bg-deep` #0f172a / `--bg-darker` #020617. Accent: indigo `--accent-primary` #818cf8 + pink `--accent-secondary` #f472b6 — ONE accent pairing, no extra colors for emphasis.
+- Text: `--text-main` #f8fafc (no pure white), `--text-muted` #94a3b8 for secondary/labels. No pure black/white text anywhere.
+- Glass cards: `.glass-card` (blur+border+shadow, radius 16px) — primary container pattern. Prefer whitespace over hard borders/dividers.
+- Buttons: `.btn-primary` (gradient accent) for primary actions; `.btn-see-all` style (subtle bg, muted text) for secondary.
+- Type scale: keep limited — `h1/h2/h3`/`.brand` use Outfit font, body Inter. Differentiate hierarchy via font-weight/color (text-main vs text-muted), not extra sizes.
+- Icons (lucide-react): standardize on 16px (inline/labels) or 20px (nav/headers) — avoid one-off 13/14/15/18px sizes.
+- Spacing/radius: glass-card radius 16px, btn radius 8px — reuse, don't add new radii.
+
+### Workflow rule
+After ANY GUI layout/style change: verify visually via Playwright MCP screenshot (relevant view, desktop + mobile if layout-affecting) before reporting done.

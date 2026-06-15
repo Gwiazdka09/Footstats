@@ -277,6 +277,7 @@ const App = () => {
                 status={status}
                 coupons={coupons}
                 calibration={calibration}
+                isAdmin={isAdmin}
                 apiFetch={apiFetch}
                 onSeeAll={() => setView('history')}
                 onCopyProposal={(p) => { setProposalToCopy(p); setView('wizard'); }}
@@ -876,16 +877,16 @@ const DailyProposals = ({ apiFetch, onCopyProposal }) => {
           const { title, border, text } = RISK_LABELS[tier];
           const p = proposals[tier];
           return (
-            <div key={tier} className={`glass-card p-6 ${border} flex flex-col`}>
-              <div className="flex justify-between items-center mb-4">
+            <div key={tier} className={`glass-card p-7 ${border} flex flex-col`}>
+              <div className="flex justify-between items-center mb-5">
                 <span className={`text-xs font-bold uppercase tracking-widest ${text}`}>{title}</span>
                 <span className="text-xs text-slate-500">@{p.total_odds?.toFixed(2)}</span>
               </div>
-              <div className="space-y-4 flex-1">
+              <div className="space-y-3 flex-1">
                 {p.legs.map((leg, i) => (
-                  <div key={i} className="text-base">
+                  <div key={i} className="text-base rounded-xl px-4 py-3 bg-white/[0.02] border border-white/5">
                     <p className="font-semibold">{getLeagueFlag(leg.liga)} {leg.home} - {leg.away}</p>
-                    <p className="text-slate-500 text-sm">Typ: <span className="text-slate-300 font-bold">{leg.label}</span> @{leg.odds}</p>
+                    <p className="text-slate-500 text-sm mt-1">Typ: <span className="text-slate-300 font-bold">{leg.label}</span> @{leg.odds}</p>
                   </div>
                 ))}
               </div>
@@ -903,7 +904,7 @@ const DailyProposals = ({ apiFetch, onCopyProposal }) => {
   );
 };
 
-const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll, onCopyProposal }) => (
+const DashboardHome = ({ user, status, coupons, calibration, isAdmin, apiFetch, onSeeAll, onCopyProposal }) => (
   <motion.div
     initial={{ opacity: 0, x: 20 }}
     animate={{ opacity: 1, x: 0 }}
@@ -920,8 +921,8 @@ const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll,
         </div>
         <div>
           <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Dostępny Balans</p>
-          <p className="text-3xl font-bold text-white leading-none">
-            {status?.bankroll?.toFixed(2)} <span className="text-lg font-normal text-indigo-300">PLN</span>
+          <p className="text-3xl font-bold leading-none">
+            <span className="stat-gradient">{status?.bankroll?.toFixed(2)}</span> <span className="text-lg font-normal text-indigo-300">PLN</span>
           </p>
         </div>
       </div>
@@ -954,7 +955,7 @@ const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll,
       />
     </section>
 
-    {calibration && calibration.n_matches > 0 && (
+    {isAdmin && calibration && calibration.n_matches > 0 && (
       <section className="glass-card p-6 mb-8">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-5">
           <div className="flex items-center gap-3">
@@ -1729,12 +1730,12 @@ const CouponCard = ({ coupon, index }) => (
         <Calendar size={12} /> {new Date(coupon.created_at).toLocaleDateString()}
       </div>
     </div>
-    <div className="p-6 space-y-4">
+    <div className="p-6 space-y-3">
       {(coupon.legs || []).map((leg, i) => {
         const won = leg.leg_won;
         const hasResult = leg.result != null;
         return (
-          <div key={i} className={`flex justify-between items-start rounded-xl px-3 py-2 ${won === true ? 'bg-emerald-500/5 border border-emerald-500/15' : won === false ? 'bg-rose-500/5 border border-rose-500/15' : 'bg-white/[0.02] border border-white/5'}`}>
+          <div key={i} className={`flex justify-between items-start rounded-xl px-4 py-3 ${won === true ? 'bg-emerald-500/5 border border-emerald-500/15' : won === false ? 'bg-rose-500/5 border border-rose-500/15' : 'bg-white/[0.02] border border-white/5'}`}>
             <div className="flex items-start gap-3 flex-1 min-w-0">
               <div className="mt-0.5 shrink-0">
                 {won === true
@@ -1744,20 +1745,20 @@ const CouponCard = ({ coupon, index }) => (
                     : <Clock size={16} className="text-amber-400 animate-pulse" />}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-bold text-slate-200 truncate">{leg.home} - {leg.away}</p>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <span className="text-xs text-slate-500">Typ:</span>
-                  <span className="text-xs font-semibold text-slate-300">{leg.tip}</span>
+                <p className="text-base font-bold text-slate-200 truncate">{leg.home} - {leg.away}</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="text-sm text-slate-500">Typ:</span>
+                  <span className="text-sm font-semibold text-slate-300">{leg.tip}</span>
                   {hasResult && (
                     <>
-                      <span className="text-xs text-slate-600">→</span>
-                      <span className={`text-xs font-bold ${won === true ? 'text-emerald-400' : won === false ? 'text-rose-400' : 'text-slate-400'}`}>{leg.result}</span>
+                      <span className="text-sm text-slate-600">→</span>
+                      <span className={`text-sm font-bold ${won === true ? 'text-emerald-400' : won === false ? 'text-rose-400' : 'text-slate-400'}`}>{leg.result}</span>
                     </>
                   )}
                 </div>
               </div>
             </div>
-            <div className="text-sm font-bold bg-indigo-500/10 text-indigo-300 px-3 py-1 rounded-lg shrink-0 ml-2">@{leg.odds}</div>
+            <div className="text-sm font-bold bg-indigo-500/10 text-indigo-300 px-3 py-1.5 rounded-lg shrink-0 ml-2">@{leg.odds}</div>
           </div>
         );
       })}
@@ -1765,11 +1766,11 @@ const CouponCard = ({ coupon, index }) => (
     <div className="px-6 py-5 bg-white/[0.04] flex justify-between items-center mt-auto border-t border-white/5">
       <div className="flex gap-10">
         <div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Kurs</p>
+          <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Kurs</p>
           <p className="text-2xl font-bold text-white tracking-tighter">{coupon.total_odds?.toFixed(2)}</p>
         </div>
         <div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Stawka</p>
+          <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Stawka</p>
           <p className="text-2xl font-bold text-indigo-400 tracking-tighter">{coupon.stake_pln} <span className="text-xs">PLN</span></p>
         </div>
       </div>

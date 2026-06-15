@@ -48,6 +48,7 @@ cache/
 
 # ── Playwright
 playwright-report/
+.playwright-mcp/
 test-results/
 sts_debug_*.png
 sts_error.png
