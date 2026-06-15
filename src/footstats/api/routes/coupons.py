@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import footstats.config as cfg
 import psycopg2
@@ -59,11 +59,11 @@ def _mock_predictions() -> list:
 
 
 class AnalyzeRequest(BaseModel):
-    match_ids: List[str]
+    match_ids: List[Union[int, str]]
 
 
 class SelectionItem(BaseModel):
-    match_id: str
+    match_id: Union[int, str]
     home: str
     away: str
     tip: str
