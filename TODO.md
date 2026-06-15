@@ -97,7 +97,7 @@
 - [x] Neon Postgres — auto-backupy po stronie Neon
 - [ ] Transactional email (potwierdzenie rejestracji, reset hasła, faktura/payment) — brak SMTP/Resend/SendGrid w kodzie
 - [x] Self-service usunięcie konta (RODO) — `DELETE /api/auth/me` anonimizuje username/email/hasło, deaktywuje (06-15)
-- [ ] Cookie consent banner (RODO) — brak
+- [x] Cookie consent banner (RODO) — CookieConsent.jsx, bottom glass-card, localStorage fs_cookie_consent (06-16)
 - [ ] Uptime monitoring (np. UptimeRobot free) — brak
 - [x] Rate limiting — global 60/min (SlowAPI, main.py:102,228), obejmuje /api/auth/* (06-15)
 - [ ] SEO basics: meta tags, sitemap.xml, robots.txt
