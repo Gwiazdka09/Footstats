@@ -26,6 +26,8 @@ button {
   cursor: pointer;
 }
 
+.cursor-pointer { cursor: pointer; }
+
 body {
   font-family: 'Inter', sans-serif;
   background-color: var(--bg-deep);
@@ -110,6 +112,7 @@ h1, h2, h3, .brand {
 .gap-6 { gap: 1.5rem; }
 .grid { display: grid; }
 .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .p-4 { padding: 1rem; }
@@ -132,6 +135,7 @@ h1, h2, h3, .brand {
 
 .w-full { width: 100%; }
 .w-64 { width: 16rem; }
+.min-w-28 { min-width: 7rem; }
 .h-screen { height: 100vh; }
 
 .text-white { color: white; }
@@ -162,6 +166,8 @@ h1, h2, h3, .brand {
 .py-6 { padding-top: 1.5rem; padding-bottom: 1.5rem; }
 .py-10 { padding-top: 2.5rem; padding-bottom: 2.5rem; }
 .py-20 { padding-top: 5rem; padding-bottom: 5rem; }
+.pt-32 { padding-top: 8rem; }
+.text-base { font-size: 1rem; }
 
 .mb-10 { margin-bottom: 2.5rem; }
 .mb-12 { margin-bottom: 3rem; }
@@ -190,6 +196,7 @@ h1, h2, h3, .brand {
 .border-white\/10 { border-color: rgba(255, 255, 255, 0.1); }
 .border-white\/20 { border-color: rgba(255, 255, 255, 0.2); }
 .border-indigo-500\/30 { border-color: rgba(129, 140, 248, 0.3); }
+.border-indigo-400 { border-color: #818cf8; }
 
 .bg-white\/5 { background-color: rgba(255, 255, 255, 0.05); }
 .bg-indigo-500 { background-color: #6366f1; }
@@ -312,6 +319,29 @@ h1, h2, h3, .brand {
   transition: padding-left 0.3s ease;
 }
 
+.wizard-action-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 250;
+  display: flex;
+  justify-content: center;
+  width: calc(100% - 2.5rem);
+  max-width: 28rem;
+}
+
+.wizard-action-bar .btn-primary {
+  width: 100%;
+  justify-content: center;
+}
+
+@media (min-width: 1024px) {
+  .wizard-action-bar {
+    left: calc(50% + 9rem);
+  }
+}
+
 .btn-see-all {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -337,4 +367,5 @@ h1, h2, h3, .brand {
   .md\:items-center { align-items: center; }
   .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }

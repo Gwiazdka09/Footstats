@@ -38,10 +38,33 @@ const LEAGUE_FLAGS = {
   "jupiler pro league": "🇧🇪",
   "super lig": "🇹🇷",
   "brasileirao serie a": "🇧🇷",
+  "bra-brasileirao serie a": "🇧🇷",
+  "brasileirao serie b": "🇧🇷",
+  "bra-brasileirao serie b": "🇧🇷",
   "liga mx": "🇲🇽",
+  "world cup 2026": "🏆",
+  "world cup": "🏆",
 };
 
 const getLeagueFlag = (liga) => LEAGUE_FLAGS[(liga || "").toLowerCase()] ?? "🌍";
+
+const TIP_CATEGORIES = [
+  { label: "Wynik meczu (1X2)", match: (t) => ["1", "1X", "X", "X2", "2"].includes(t.tip) },
+  { label: "Obie strzelają", match: (t) => t.tip.startsWith("BTTS") },
+  { label: "Liczba goli", match: (t) => /^(Over|Under)/.test(t.tip) },
+];
+
+const groupTips = (tips) => {
+  const used = new Set();
+  const groups = TIP_CATEGORIES.map((cat) => {
+    const items = tips.filter((t) => cat.match(t));
+    items.forEach((t) => used.add(t));
+    return { label: cat.label, items };
+  }).filter((g) => g.items.length > 0);
+  const rest = tips.filter((t) => !used.has(t));
+  if (rest.length > 0) groups.push({ label: "Inne", items: rest });
+  return groups;
+};
 
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('fs_token'));
@@ -271,6 +294,7 @@ const App = () => {
                 key="sett"
                 config={config}
                 status={status}
+                calibration={calibration}
                 apiFetch={apiFetch}
                 onSave={() => fetchData()}
               />
@@ -536,7 +560,7 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
       <div className="flex items-center gap-2 mb-12">
         {[1, 2, 3, 4, 5].map((s) => (
           <React.Fragment key={s}>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${step === s ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 scale-110' : step > s ? 'bg-emerald-500 text-white' : 'bg-white/5 text-slate-500'}`}>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${step === s ? 'bg-white/5 border-2 border-indigo-400 text-indigo-300 scale-110' : step > s ? 'bg-emerald-500 text-white' : 'bg-white/5 text-slate-500'}`}>
               {step > s ? <CheckCircle2 size={18} /> : s}
             </div>
             {s < 5 && <div className={`flex-1 h-1 rounded-full ${step > s ? 'bg-emerald-500' : 'bg-white/5'}`} />}
@@ -562,7 +586,7 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
                     <div key={liga}>
                       <div
                         onClick={() => toggleLeagueSection(liga)}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-all cursor-pointer select-none"
+                        className="flex items-center gap-4 px-4 py-3 rounded-lg hover:bg-white/5 transition-all cursor-pointer select-none"
                       >
                         <div
                           onClick={(e) => { e.stopPropagation(); toggleLeague(liga, leagueMatches); }}
@@ -570,7 +594,7 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
                         >
                           {allSelected && <CheckCircle2 size={14} className="text-indigo-400" />}
                         </div>
-                        <span className="text-xs text-indigo-400 font-semibold uppercase tracking-wide flex-1">{getLeagueFlag(liga)} {liga}</span>
+                        <span className="text-base text-indigo-400 font-semibold uppercase tracking-wide flex-1">{getLeagueFlag(liga)} {liga}</span>
                         <span className="text-xs text-slate-500">{leagueMatches.length} mecz{leagueMatches.length === 1 ? '' : leagueMatches.length < 5 ? 'e' : 'y'}</span>
                         <ChevronDown size={16} className={`text-slate-500 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
                       </div>
@@ -583,8 +607,10 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
                               className={`glass-card p-6 cursor-pointer border-2 transition-all ${selectedIds.includes(m.id) ? 'border-indigo-500 bg-indigo-500/5' : 'border-transparent'}`}
                             >
                               <div className="flex justify-between items-start mb-2">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">{getLeagueFlag(m.liga)} {m.liga}</span>
-                                <span className="text-[10px] text-slate-500">{m.godzina}</span>
+                                <span className="text-xs font-bold uppercase tracking-widest text-indigo-400">{getLeagueFlag(m.liga)} {m.liga}</span>
+                                <span className="text-xs text-slate-500">
+                                  {m.data && new Date(m.data).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })} {m.godzina}
+                                </span>
                               </div>
                               <p className="font-bold text-lg">{m.gosp} vs {m.gosc}</p>
                             </div>
@@ -596,15 +622,17 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
                 })}
               </div>
             )}
-            <div className="flex justify-end pt-8">
-              <button 
+            <div className="wizard-action-bar">
+              <button
                 onClick={handleAnalyze}
                 disabled={selectedIds.length === 0 || loading}
-                className="btn-primary px-8 py-4 flex items-center gap-2 disabled:opacity-50"
+                className="btn-primary px-8 py-4 flex items-center gap-2 shadow-lg disabled:opacity-50"
               >
                 Analizuj wybrane ({selectedIds.length}) <ChevronRight size={18} />
               </button>
             </div>
+            {/* Spacer so content doesn't sit under the fixed action bar */}
+            <div className="pt-32" />
           </motion.div>
         )}
 
@@ -636,24 +664,31 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
                       <span className="font-bold text-indigo-400">{m.tips[0]?.tip} (@{m.tips[0]?.odds})</span>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-3">
-                    {m.tips.map((t, idx) => {
-                      const isSelected = selections.find(s => s.match_id === m.id && s.tip === t.tip);
-                      return (
-                        <button 
-                          key={idx}
-                          onClick={() => selectTip(m.id, t.tip, t.odds, t.prob, m.home, m.away)}
-                          className={`flex-1 min-w-[120px] p-4 rounded-xl border transition-all text-center ${isSelected ? 'bg-indigo-500 border-indigo-400 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
-                        >
-                          <span className="block font-bold">{t.tip}</span>
-                          <span className="text-sm opacity-80">@{t.odds}</span>
-                          <div className="mt-2 h-1 bg-black/20 rounded-full overflow-hidden">
-                            <div className="h-full bg-white/40" style={{ width: `${t.prob}%` }} />
-                          </div>
-                          <span className="text-[10px] mt-1 block">{t.prob}%</span>
-                        </button>
-                      );
-                    })}
+                  <div className="space-y-4">
+                    {groupTips(m.tips).map((group) => (
+                      <div key={group.label}>
+                        <span className="text-xs font-bold uppercase tracking-widest text-slate-500 block mb-2">{group.label}</span>
+                        <div className="flex flex-wrap gap-3">
+                          {group.items.map((t, idx) => {
+                            const isSelected = selections.find(s => s.match_id === m.id && s.tip === t.tip);
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => selectTip(m.id, t.tip, t.odds, t.prob, m.home, m.away)}
+                                className={`min-w-28 flex-1 p-4 rounded-xl border transition-all text-center ${isSelected ? 'bg-indigo-500 border-indigo-400 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
+                              >
+                                <span className="block font-bold">{t.tip}</span>
+                                <span className="text-sm opacity-80">@{t.odds}</span>
+                                <div className="mt-2 h-1 bg-black/20 rounded-full overflow-hidden">
+                                  <div className="h-full bg-white/40" style={{ width: `${t.prob}%` }} />
+                                </div>
+                                <span className="text-xs mt-1 block">{t.prob}%</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -864,23 +899,39 @@ const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll,
     </section>
 
     {calibration && calibration.n_matches > 0 && (
-      <section className="glass-card p-6 mb-8 flex flex-wrap gap-6 items-center">
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-400 uppercase tracking-widest font-bold">Model Poisson</span>
-          <span className="text-xs text-slate-500">|</span>
-          <span className="text-xs text-slate-300">
+      <section className="glass-card p-6 mb-8">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-5">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-500/10 rounded-xl">
+              <Target className="text-indigo-400" size={18} />
+            </div>
+            <span className="text-sm font-bold text-white">Model Poisson</span>
+          </div>
+          <span className="text-xs text-slate-500">
             Ostatnia kalibracja:{' '}
             <span className="text-indigo-300 font-semibold">
               {calibration.updated_at ? new Date(calibration.updated_at).toLocaleDateString('pl-PL') : '—'}
             </span>
           </span>
         </div>
-        <div className="flex gap-6 text-xs text-slate-400">
-          <span>Próbka: <span className="text-white font-semibold">{calibration.n_matches} meczów</span></span>
-          <span>λ dom: <span className="text-emerald-400 font-semibold">{calibration.factor_home?.toFixed(4)}</span></span>
-          <span>λ goście: <span className="text-pink-400 font-semibold">{calibration.factor_away?.toFixed(4)}</span></span>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Próbka</p>
+            <p className="text-lg font-bold text-white">{calibration.n_matches} <span className="text-xs font-normal text-slate-500">meczów</span></p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">λ dom</p>
+            <p className="text-lg font-bold text-emerald-400">{calibration.factor_home?.toFixed(4)}</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">λ goście</p>
+            <p className="text-lg font-bold text-pink-400">{calibration.factor_away?.toFixed(4)}</p>
+          </div>
           {calibration.acc_1x2_pct != null && (
-            <span>Dokładność 1X2: <span className="text-indigo-300 font-semibold">{calibration.acc_1x2_pct}%</span></span>
+            <div className="bg-white/5 rounded-xl p-4 text-center">
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Dokładność 1X2</p>
+              <p className="text-lg font-bold text-indigo-300">{calibration.acc_1x2_pct}%</p>
+            </div>
           )}
         </div>
       </section>
@@ -1089,7 +1140,10 @@ const LeaderboardView = ({ apiFetch }) => {
       </div>
 
       {leaders.length === 0 ? (
-        <div className="text-center p-24 glass-card text-slate-500">Brak danych — nikt jeszcze nie udostępnił kuponów.</div>
+        <div className="glass-card text-center py-20 px-12 text-slate-500 flex flex-col items-center gap-4">
+          <Trophy size={40} className="text-slate-600" />
+          <p>Brak danych — nikt jeszcze nie udostępnił kuponów.</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 mb-10">
           {leaders.map((l, i) => (
@@ -1139,7 +1193,7 @@ const LeaderboardView = ({ apiFetch }) => {
   );
 };
 
-const SettingsView = ({ config, status, apiFetch, onSave }) => {
+const SettingsView = ({ config, status, calibration, apiFetch, onSave }) => {
   const [form, setForm] = useState(config || {});
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1198,7 +1252,7 @@ const SettingsView = ({ config, status, apiFetch, onSave }) => {
             <ConfigInput 
               label="Próg Pewniaczka (%)" 
               value={form.pewniaczek_prog} 
-              onChange={v => setForm({...form, pewniaczka_prog: parseFloat(v)})}
+              onChange={v => setForm({...form, pewniaczek_prog: parseFloat(v)})}
             />
             <ConfigInput 
               label="Próg Kandydatów (%)" 
@@ -1237,6 +1291,31 @@ const SettingsView = ({ config, status, apiFetch, onSave }) => {
             </button>
             {bankrollMsg && <p className="text-sm text-center text-indigo-400">{bankrollMsg}</p>}
             <p className="text-slate-500 text-xs">Ręczna korekta salda — użyj po wpłacie/wypłacie z konta bukmacherskiego.</p>
+          </div>
+        </div>
+        <div className="glass-card p-8 md:col-span-2">
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2"><TrendingUp size={18} /> Status konta</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white/5 rounded-xl p-4 text-center">
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Balans</p>
+              <p className="text-lg font-bold text-white">{status?.bankroll?.toFixed(2)} <span className="text-xs font-normal text-slate-500">PLN</span></p>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4 text-center">
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">ROI</p>
+              <p className={`text-lg font-bold ${status?.stats?.roi_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {status?.stats?.roi_pct >= 0 ? '+' : ''}{status?.stats?.roi_pct}%
+              </p>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4 text-center">
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Wygrane (30 dni)</p>
+              <p className="text-lg font-bold text-indigo-300">{status?.stats?.wins_last_30d || 0}</p>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4 text-center">
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Kalibracja modelu</p>
+              <p className="text-lg font-bold text-white">
+                {calibration?.updated_at ? new Date(calibration.updated_at).toLocaleDateString('pl-PL') : '—'}
+              </p>
+            </div>
           </div>
         </div>
       </div>
