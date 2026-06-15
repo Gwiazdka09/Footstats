@@ -26,7 +26,11 @@ def _get_pool() -> "psycopg2.pool.ThreadedConnectionPool":
                 pass
         if not url:
             raise RuntimeError("DATABASE_URL env var not set — add Neon.tech connection string to Cloud Run")
-        _pool = _pg_pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=url)
+        # Keepalives zapobiegają zrywaniu idle connections przez Neon/firewall
+        _pool = _pg_pool.ThreadedConnectionPool(
+            minconn=1, maxconn=10, dsn=url,
+            keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
+        )
     return _pool
 
 
@@ -34,7 +38,16 @@ class _Conn:
     """sqlite3-compatible psycopg2 connection wrapper."""
 
     def __init__(self) -> None:
-        self._raw = _get_pool().getconn()
+        pool = _get_pool()
+        raw = pool.getconn()
+        if raw.closed:
+            # Martwa conn z puli (Neon idle timeout) — wymień na świeżą
+            try:
+                pool.putconn(raw, close=True)
+            except Exception:
+                pass
+            raw = pool.getconn()
+        self._raw = raw
 
     @staticmethod
     def _fix(sql: str) -> str:
