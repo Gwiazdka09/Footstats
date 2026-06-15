@@ -4,6 +4,7 @@ __pycache__/
 *.pyd
 *.pyo
 .Python
+.coverage
 
 # ── Środowiska wirtualne
 .venv/
