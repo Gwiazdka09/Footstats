@@ -26,11 +26,15 @@ load_dotenv()
 
 _sentry_dsn = os.environ.get("SENTRY_DSN", "")
 if _sentry_dsn and _sentry_dsn.startswith("https://"):
-    sentry_sdk.init(
-        dsn=_sentry_dsn,
-        traces_sample_rate=0.1,
-        environment=os.environ.get("ENV", "production"),
-    )
+    try:
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            traces_sample_rate=0.1,
+            environment=os.environ.get("ENV", "production"),
+        )
+    except Exception:
+        # np. lokalnie na Windows: integracja RQ wywala sie na multiprocessing fork context
+        logging.getLogger(__name__).warning("Sentry init nieudane — kontynuuje bez monitoringu", exc_info=True)
 
 
 class _JsonFormatter(logging.Formatter):
