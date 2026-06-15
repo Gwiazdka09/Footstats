@@ -53,17 +53,23 @@ class _RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# Endpointy wywołujące zewnętrzne API wynikowe (API-Football/FlashScore) - potrzebują więcej czasu
+_LONG_RUNNING_PATHS = {"/api/coupons/settle", "/api/cron/settle"}
+_LONG_RUNNING_TIMEOUT = 120.0
+
+
 class _TimeoutMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, timeout: float = 10.0) -> None:
         super().__init__(app)
         self.timeout = timeout
 
     async def dispatch(self, request: Request, call_next):
+        timeout = _LONG_RUNNING_TIMEOUT if request.url.path in _LONG_RUNNING_PATHS else self.timeout
         try:
-            return await asyncio.wait_for(call_next(request), timeout=self.timeout)
+            return await asyncio.wait_for(call_next(request), timeout=timeout)
         except asyncio.TimeoutError:
             return JSONResponse(
-                {"detail": "Request timeout", "timeout_s": self.timeout},
+                {"detail": "Request timeout", "timeout_s": timeout},
                 status_code=504,
             )
 
