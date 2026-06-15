@@ -80,6 +80,9 @@ docs/superpowers/plans/
 # ── Kopie zapasowe
 # (objęte przez *_backup.py i *_BACKUP.py wyżej)
 
+# ── Lokalna mapa integracji (zawiera nazwy wewn. zasobów GCP/Neon)
+INTEGRATIONS.md
+
 # ── System
 .DS_Store
 Thumbs.db

@@ -37,9 +37,9 @@
 - **Effort:** 2–3h | Warunek: min. 50 settled live kuponów
 
 ### 16.5: Zbieranie danych (pasywne — 3 tygodnie)
-- [ ] Daily agent działa automatycznie (Task Scheduler 08:00 + 11:00 + 23:00)
+- [x] Daily agent działa automatycznie (Task Scheduler 08:00 + 11:00 + 23:00) — zweryfikowano 06-15, LastResult=0 na wszystkich 4 zadaniach
 - [ ] Monitorować logi: `logs/kupon_YYYY-MM-DD.txt`
-- [ ] Cel: 50 settled kuponów z filtrowanymi ligami
+- [ ] Cel: 50 settled kuponów z filtrowanymi ligami (06-15: 49/50 — WON 15 + LOST 34)
 - [x] match_stats (timeline zdarzeń) zapisywane do `predictions` (06-12)
 
 ---
@@ -77,10 +77,11 @@
 - [x] `/polityka-prywatnosci` (RODO) — strona stworzona (06-15), wymaga uzupełnienia [nazwa firmy/NIP/e-mail]
 - [x] Dashboard: "Twoje imperium bukmacherskie" → "Twój asystent analityczny do kuponów" (06-15)
 - [ ] Disclaimer w footerze GUI: "FootStats nie jest bukmacherem, nie przyjmuje zakładów, prognozy nie gwarantują wyników, hazard 18+"
-- [ ] Rejestracja JDG (jeśli jeszcze nie) — wymóg Stripe/MoR
+- [ ] Rejestracja JDG (CEIDG, darmowe, 1 dzień) — przed pierwszym płatnym userem. Limit działalności nierejestrowanej 2026: 10 813,50 zł/kw., ale subskrypcje = regularna działalność → JDG obowiązkowa od razu (06-15)
 
 ### Płatności / subskrypcje
 - [x] Decyzja: Lemon Squeezy/Paddle (MoR) — wyższe fee, ale VAT/KSeF za nas (06-15)
+- [x] Research 06-15: LS żyje (Stripe kupił 2024, nie zamknął), 5%+$0.50 (LS +1.5% intl). MoR rozlicza VAT/faktury → KSeF problem odpada
 - [ ] Cennik widoczny przed checkout + jasne warunki auto-renewal
 - [ ] Webhooks: subscription.updated/cancelled/payment_failed
 - [ ] Email: potwierdzenie, faktura, retry nieudanej płatności, ostrzeżenie przed odnowieniem
@@ -89,6 +90,24 @@
 ### KSeF (od 1 kwietnia 2026 — wszyscy przedsiębiorcy)
 - [ ] Faktury Stripe NIE spełniają wymogów KSeF → integrator (Stripto) lub MoR
 - **Effort:** konsultacja z księgowym | po wyborze modelu płatności
+
+### Must-have przed launchem — gap-check 06-15 (research: supastarter SaaS checklist 2026)
+- [x] Error monitoring — Sentry już w main.py
+- [x] Auth (login/register/JWT) — gotowe
+- [x] Neon Postgres — auto-backupy po stronie Neon
+- [ ] Transactional email (potwierdzenie rejestracji, reset hasła, faktura/payment) — brak SMTP/Resend/SendGrid w kodzie
+- [ ] Self-service usunięcie konta + danych (RODO "prawo do bycia zapomnianym") — tylko admin DELETE /admin/users
+- [ ] Cookie consent banner (RODO) — brak
+- [ ] Uptime monitoring (np. UptimeRobot free) — brak
+- [ ] Rate limiting na /api/auth/* (brute-force login)
+- [ ] SEO basics: meta tags, sitemap.xml, robots.txt
+- **Effort:** email+cookie banner 0.5d, account deletion 0.5d, rate limit 0.5h, uptime monitor 15min | przed beta
+
+### Hosting / Deploy
+- [x] Backend już na GCP Cloud Run (CD auto-deploy na push main) + Neon Postgres + GCS backup — patrz `INTEGRATIONS.md` (06-15)
+- [ ] Frontend (React/Vite GUI): niewdrożony, tylko lokalnie — Vercel/Netlify free tier
+- [ ] Domena + HTTPS dla frontu (Vercel daje darmowy cert)
+- **Effort:** frontend deploy 0.5 dnia | po ustaleniu cennika
 
 ---
 
