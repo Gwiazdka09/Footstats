@@ -202,6 +202,40 @@ def change_password(req: ChangePasswordRequest, user_id: int = Depends(require_a
     return {"ok": True, "message": "Hasło zmienione"}
 
 
+class DeleteAccountRequest(BaseModel):
+    password: str
+
+
+@router.delete("/auth/me", status_code=status.HTTP_200_OK)
+def delete_account(req: DeleteAccountRequest, user_id: int = Depends(require_auth)):
+    """Samodzielne usuniecie konta (RODO — prawo do bycia zapomnianym).
+
+    Anonimizuje dane osobowe (username, email, haslo) i deaktywuje konto.
+    Historyczne kupony/predykcje zostaja zachowane (rozliczenia, statystyki)
+    z odwolaniem do zanonimizowanego usera.
+    """
+    from footstats.utils.db import connect
+
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT password_hash, is_admin FROM users WHERE id = ? AND is_active = TRUE", (user_id,)
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
+    if row["is_admin"]:
+        raise HTTPException(status_code=400, detail="Konto administratora nie można usunąć tą metodą")
+    if not bcrypt.checkpw(req.password.encode(), row["password_hash"].encode()):
+        raise HTTPException(status_code=401, detail="Nieprawidłowe hasło")
+
+    anon_hash = bcrypt.hashpw(os.urandom(32), bcrypt.gensalt()).decode()
+    with connect() as conn:
+        conn.execute(
+            "UPDATE users SET username = ?, email = NULL, password_hash = ?, is_active = FALSE WHERE id = ?",
+            (f"deleted_user_{user_id}", anon_hash, user_id),
+        )
+    return {"ok": True, "message": "Konto usunięte"}
+
+
 class MeResponse(BaseModel):
     id: int
     username: str

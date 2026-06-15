@@ -96,10 +96,10 @@
 - [x] Auth (login/register/JWT) — gotowe
 - [x] Neon Postgres — auto-backupy po stronie Neon
 - [ ] Transactional email (potwierdzenie rejestracji, reset hasła, faktura/payment) — brak SMTP/Resend/SendGrid w kodzie
-- [ ] Self-service usunięcie konta + danych (RODO "prawo do bycia zapomnianym") — tylko admin DELETE /admin/users
+- [x] Self-service usunięcie konta (RODO) — `DELETE /api/auth/me` anonimizuje username/email/hasło, deaktywuje (06-15)
 - [ ] Cookie consent banner (RODO) — brak
 - [ ] Uptime monitoring (np. UptimeRobot free) — brak
-- [ ] Rate limiting na /api/auth/* (brute-force login)
+- [x] Rate limiting — global 60/min (SlowAPI, main.py:102,228), obejmuje /api/auth/* (06-15)
 - [ ] SEO basics: meta tags, sitemap.xml, robots.txt
 - **Effort:** email+cookie banner 0.5d, account deletion 0.5d, rate limit 0.5h, uptime monitor 15min | przed beta
 

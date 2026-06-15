@@ -140,6 +140,54 @@ def test_create_user_password_too_short(client, admin_token):
     assert resp.status_code == 422
 
 
+def test_delete_account_requires_auth(client):
+    resp = client.request("DELETE", "/api/auth/me", json={"password": "x"})
+    assert resp.status_code == 401
+
+
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
+def test_delete_account_admin_blocked(client, admin_token):
+    resp = client.request(
+        "DELETE", "/api/auth/me",
+        json={"password": "testpass"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
+def test_delete_account_flow(client):
+    import uuid
+    from footstats.utils.db import connect
+
+    uname = f"deltest_{uuid.uuid4().hex[:8]}"
+    email = f"{uname}@example.com"
+
+    resp = client.post(
+        "/api/auth/register",
+        json={"username": uname, "email": email, "password": "securepass123"},
+    )
+    assert resp.status_code == 201
+    token = resp.json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+
+    # wrong password -> 401
+    resp_bad = client.request("DELETE", "/api/auth/me", json={"password": "wrong"}, headers=auth)
+    assert resp_bad.status_code == 401
+
+    # correct password -> anonymized
+    resp_ok = client.request("DELETE", "/api/auth/me", json={"password": "securepass123"}, headers=auth)
+    assert resp_ok.status_code == 200
+
+    # login with old credentials no longer works
+    resp_login = client.post("/api/auth/login", json={"username": uname, "password": "securepass123"})
+    assert resp_login.status_code == 401
+
+    with connect() as conn:
+        row = conn.execute("SELECT username, email, is_active FROM users WHERE username = ?", (uname,)).fetchone()
+    assert row is None  # username zanonimizowany na deleted_user_{id}
+
+
 @pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
 def test_create_and_deactivate_user(client, admin_token):
     import uuid
