@@ -65,6 +65,33 @@
 
 ---
 
+## 💰 MONETYZACJA / LAUNCH (przed publicznym beta)
+
+### Logowanie / rejestracja
+- [x] `POST /api/auth/register` — nowe konto (login+email+hasło min.8), auto-login + init bankrolla (06-15)
+- [x] Login akceptuje login LUB e-mail
+- [x] GUI: LoginView z przełączaniem Logowanie/Rejestracja
+
+### Prawne dokumenty
+- [ ] `/regulamin` (ToS) — warunki subskrypcji, zwroty, anulacja
+- [x] `/polityka-prywatnosci` (RODO) — strona stworzona (06-15), wymaga uzupełnienia [nazwa firmy/NIP/e-mail]
+- [x] Dashboard: "Twoje imperium bukmacherskie" → "Twój asystent analityczny do kuponów" (06-15)
+- [ ] Disclaimer w footerze GUI: "FootStats nie jest bukmacherem, nie przyjmuje zakładów, prognozy nie gwarantują wyników, hazard 18+"
+- [ ] Rejestracja JDG (jeśli jeszcze nie) — wymóg Stripe/MoR
+
+### Płatności / subskrypcje
+- [x] Decyzja: Lemon Squeezy/Paddle (MoR) — wyższe fee, ale VAT/KSeF za nas (06-15)
+- [ ] Cennik widoczny przed checkout + jasne warunki auto-renewal
+- [ ] Webhooks: subscription.updated/cancelled/payment_failed
+- [ ] Email: potwierdzenie, faktura, retry nieudanej płatności, ostrzeżenie przed odnowieniem
+- [ ] Upgrade/downgrade planu + proration
+
+### KSeF (od 1 kwietnia 2026 — wszyscy przedsiębiorcy)
+- [ ] Faktury Stripe NIE spełniają wymogów KSeF → integrator (Stripto) lub MoR
+- **Effort:** konsultacja z księgowym | po wyborze modelu płatności
+
+---
+
 ## 💡 Pomysły od betatesterów
 
 ### Rozszerzenie oferty zakładów (rożne/kartki)

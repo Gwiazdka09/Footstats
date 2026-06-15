@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, ChevronRight, ChevronDown, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target, Trophy, Share2, ShieldCheck, Users, Trash2, UserPlus, X
+  Wallet, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, ChevronRight, ChevronDown, LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, Send, Sparkles, Target, Trophy, Share2, ShieldCheck, Users, Trash2, UserPlus, X, Info, User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -294,7 +294,7 @@ const App = () => {
                 key="sett"
                 config={config}
                 status={status}
-                calibration={calibration}
+                user={user}
                 apiFetch={apiFetch}
                 onSave={() => fetchData()}
               />
@@ -323,22 +323,38 @@ const App = () => {
 // --- Authentication View ---
 
 const LoginView = ({ setToken, setUser }) => {
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e) => {
+  const extractError = async (response, fallback) => {
+    try {
+      const data = await response.json();
+      if (typeof data.detail === 'string') return data.detail;
+      if (Array.isArray(data.detail)) return data.detail.map(d => d.msg).join(', ');
+    } catch {
+      // brak JSON w odpowiedzi — użyj domyślnego komunikatu
+    }
+    return fallback;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    const isRegister = mode === 'register';
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
+      const response = await fetch(`${API_BASE}/auth/${isRegister ? 'register' : 'login'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify(isRegister ? { username, email, password } : { username, password })
       });
-      if (!response.ok) throw new Error("Błędne dane logowania");
+      if (!response.ok) {
+        throw new Error(await extractError(response, isRegister ? "Nie udało się utworzyć konta" : "Błędne dane logowania"));
+      }
       const data = await response.json();
       setUser(username);
       setToken(data.access_token);
@@ -351,7 +367,7 @@ const LoginView = ({ setToken, setUser }) => {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-[#020617]">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         className="glass-card p-10 w-full max-w-md border-indigo-500/30"
@@ -360,41 +376,72 @@ const LoginView = ({ setToken, setUser }) => {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent mb-2">
             FootStats
           </h1>
-          <p className="text-slate-400">Witaj ponownie. Zaloguj się do systemu.</p>
+          <p className="text-slate-400">
+            {mode === 'login' ? 'Witaj ponownie. Zaloguj się do systemu.' : 'Stwórz konto, by zacząć korzystać z FootStats.'}
+          </p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Użytkownik</label>
-            <input 
-              type="text" 
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+              {mode === 'login' ? 'Login lub e-mail' : 'Login'}
+            </label>
+            <input
+              type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors"
-              placeholder="Twój login"
+              placeholder={mode === 'login' ? 'Login lub e-mail' : 'Twój login'}
               required
             />
           </div>
+          {mode === 'register' && (
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">E-mail</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors"
+                placeholder="twoj@email.pl"
+                required
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Hasło</label>
-            <input 
-              type="password" 
+            <input
+              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors"
-              placeholder="••••••••"
+              placeholder={mode === 'register' ? 'min. 8 znaków' : '••••••••'}
+              minLength={mode === 'register' ? 8 : undefined}
               required
             />
           </div>
           {error && <p className="text-rose-400 text-sm">{error}</p>}
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
             className="w-full py-4 bg-indigo-500 hover:bg-indigo-600 rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
           >
-            {loading ? "Logowanie..." : "Zaloguj się"}
+            {loading
+              ? (mode === 'login' ? 'Logowanie...' : 'Tworzenie konta...')
+              : (mode === 'login' ? 'Zaloguj się' : 'Zarejestruj się')}
           </button>
         </form>
+
+        <p className="text-center text-sm text-slate-400 mt-6">
+          {mode === 'login' ? 'Nie masz konta?' : 'Masz już konto?'}{' '}
+          <button
+            type="button"
+            onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
+            className="text-indigo-400 hover:text-indigo-300 font-bold"
+          >
+            {mode === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}
+          </button>
+        </p>
       </motion.div>
     </div>
   );
@@ -856,7 +903,7 @@ const DashboardHome = ({ user, status, coupons, calibration, apiFetch, onSeeAll,
     <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 gap-4">
       <div>
         <h1 className="text-4xl font-bold mb-2">Witaj, {user}</h1>
-        <p className="text-slate-400">Twoje imperium bukmacherskie jest online.</p>
+        <p className="text-slate-400">Twój asystent analityczny do kuponów jest online.</p>
       </div>
       <div className="glass-card px-8 py-5 flex items-center gap-5 border-indigo-500/20 bg-indigo-500/5">
         <div className="p-4 bg-indigo-500/20 rounded-2xl flex items-center justify-center">
@@ -1193,7 +1240,7 @@ const LeaderboardView = ({ apiFetch }) => {
   );
 };
 
-const SettingsView = ({ config, status, calibration, apiFetch, onSave }) => {
+const SettingsView = ({ config, status, apiFetch, onSave, user }) => {
   const [form, setForm] = useState(config || {});
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1247,24 +1294,27 @@ const SettingsView = ({ config, status, calibration, apiFetch, onSave }) => {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
         <div className="glass-card p-8">
-          <h3 className="text-lg font-bold mb-6 flex items-center gap-2"><Settings size={18} /> Algorytm & Ryzyko</h3>
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white"><Settings size={18} /> Algorytm & Ryzyko</h3>
           <div className="space-y-6">
-            <ConfigInput 
-              label="Próg Pewniaczka (%)" 
-              value={form.pewniaczek_prog} 
+            <ConfigInput
+              label="Próg Pewniaczka (%)"
+              value={form.pewniaczek_prog}
               onChange={v => setForm({...form, pewniaczek_prog: parseFloat(v)})}
+              tooltip="Mecze z pewnością AI powyżej tego progu są oznaczane jako 'Pewniaki' — najwyższa kategoria zaufania w typach."
             />
-            <ConfigInput 
-              label="Próg Kandydatów (%)" 
-              value={form.kandydat_prog} 
+            <ConfigInput
+              label="Próg Kandydatów (%)"
+              value={form.kandydat_prog}
               onChange={v => setForm({...form, kandydat_prog: parseFloat(v)})}
+              tooltip="Minimalna pewność AI, by mecz pojawił się jako kandydat do analizy w kreatorze kuponów."
             />
-            <ConfigInput 
-              label="Fractional Kelly (f/x)" 
-              value={form.kelly_fraction} 
+            <ConfigInput
+              label="Fractional Kelly (f/x)"
+              value={form.kelly_fraction}
               onChange={v => setForm({...form, kelly_fraction: parseInt(v)})}
+              tooltip="Część kryterium Kelly'ego do liczenia rekomendowanej stawki (np. 4 = 1/4 Kelly'ego). Niższa wartość = mniejsze rekomendowane stawki."
             />
-            <button 
+            <button
               onClick={handleSave}
               disabled={loading}
               className="btn-primary w-full mt-4"
@@ -1275,12 +1325,20 @@ const SettingsView = ({ config, status, calibration, apiFetch, onSave }) => {
           </div>
         </div>
         <div className="glass-card p-8">
-          <h3 className="text-lg font-bold mb-6 flex items-center gap-2"><Wallet size={18} /> Edycja Bankrolla</h3>
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">
+            <Wallet size={18} /> Edycja Bankrolla
+            <Info
+              size={14}
+              className="text-slate-500 cursor-help"
+              title="Bankroll to Twój budżet używany WYŁĄCZNIE do liczenia rekomendowanych stawek (Kelly) w kreatorze kuponów. FootStats nie przyjmuje zakładów i nie obsługuje prawdziwych pieniędzy — to wartość pomocnicza do analizy."
+            />
+          </h3>
           <div className="space-y-6">
             <ConfigInput
               label="Saldo (PLN)"
               value={bankroll}
               onChange={v => setBankroll(v)}
+              tooltip="Wpisz aktualny budżet, jakim dysponujesz u swojego bukmachera — na tej podstawie liczone są rekomendowane stawki."
             />
             <button
               onClick={handleSaveBankroll}
@@ -1290,11 +1348,14 @@ const SettingsView = ({ config, status, calibration, apiFetch, onSave }) => {
               {bankrollLoading ? "Zapisywanie..." : "Zapisz bankroll"}
             </button>
             {bankrollMsg && <p className="text-sm text-center text-indigo-400">{bankrollMsg}</p>}
-            <p className="text-slate-500 text-xs">Ręczna korekta salda — użyj po wpłacie/wypłacie z konta bukmacherskiego.</p>
+            <p className="text-slate-400 text-xs">
+              Służy tylko do obliczania rekomendowanych stawek — FootStats nie przyjmuje zakładów na swojej stronie.
+              Zaktualizuj po wpłacie/wypłacie z konta u bukmachera.
+            </p>
           </div>
         </div>
         <div className="glass-card p-8 md:col-span-2">
-          <h3 className="text-lg font-bold mb-6 flex items-center gap-2"><TrendingUp size={18} /> Status konta</h3>
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white"><TrendingUp size={18} /> Dane konta</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white/5 rounded-xl p-4 text-center">
               <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Balans</p>
@@ -1311,9 +1372,9 @@ const SettingsView = ({ config, status, calibration, apiFetch, onSave }) => {
               <p className="text-lg font-bold text-indigo-300">{status?.stats?.wins_last_30d || 0}</p>
             </div>
             <div className="bg-white/5 rounded-xl p-4 text-center">
-              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Kalibracja modelu</p>
-              <p className="text-lg font-bold text-white">
-                {calibration?.updated_at ? new Date(calibration.updated_at).toLocaleDateString('pl-PL') : '—'}
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Konto</p>
+              <p className="text-lg font-bold text-white flex items-center justify-center gap-1.5">
+                <User size={15} className="text-indigo-300" /> {user || '—'}
               </p>
             </div>
           </div>
@@ -1598,12 +1659,15 @@ const CouponCard = ({ coupon, index }) => (
   </motion.div>
 );
 
-const ConfigInput = ({ label, value, onChange }) => (
+const ConfigInput = ({ label, value, onChange, tooltip }) => (
   <div>
-    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{label}</label>
-    <input 
-      type="text" 
-      value={value || ''} 
+    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase mb-2">
+      {label}
+      {tooltip && <Info size={13} className="text-slate-500 cursor-help" title={tooltip} />}
+    </label>
+    <input
+      type="text"
+      value={value || ''}
       onChange={e => onChange(e.target.value)}
       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors"
     />

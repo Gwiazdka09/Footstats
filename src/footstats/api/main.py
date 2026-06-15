@@ -352,6 +352,12 @@ else:
                             headers={"Cache-Control": "no-store"})
 
 
+@app.get("/polityka-prywatnosci", tags=["legal"])
+def privacy_policy():
+    html_path = Path(__file__).parent / "polityka_prywatnosci.html"
+    return FileResponse(html_path, media_type="text/html", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/manifest.json", tags=["pwa"])
 def pwa_manifest():
     from fastapi.responses import JSONResponse
