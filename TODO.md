@@ -94,22 +94,21 @@
 > Cel: w kreatorze kuponów dodać tryb BetBuilder — user buduje combo z 1 meczu,
 > z regułami korelacji blokującymi sprzeczne/trywialne kombinacje.
 
-### 18.1: Silnik reguł korelacji (backend, czysta logika + testy)
-- [ ] Reguły SPRZECZNE (blokada obu): 1 vs X vs 2 (tylko jeden wynik 1X2)
-- [ ] Reguły TRYWIALNE/IMPLIKOWANE (blokuj słabszy gdy mocniejszy wybrany):
-  - "1" lub "2" ⇒ co najmniej 1 gol ⇒ blokuj `Over 0.5` (i `Gospodarz/Gość strzeli 0.5+` po stronie zwycięzcy)
-  - `Over 2.5` ⇒ `Over 1.5` ⇒ `Over 0.5` (blokuj słabsze Over gdy mocniejsze wybrane)
-  - `Under 2.5` koliduje z `Over 2.5`/`Over 3.5`; BTTS koliduje z `Under 1.5`
-- [ ] Reguły DOZWOLONE (realne combo): `1 + Over 1.5`, `1 + BTTS`, `1 + Over 2.5`, `X + Under 3.5`
-- [ ] Funkcja `dozwolone_dodatki(wybrane: list) -> set` zwraca legalne kolejne typy
-- **Plik:** `core/betbuilder_rules.py` + `tests/test_betbuilder_rules.py`
+### 18.1: ✅ Silnik reguł korelacji (b788bd4ee)
+- [x] SPRZECZNE (1 vs X vs 2), TRYWIALNE (1 ⇒ Over 0.5), DOZWOLONE (1 + Over 1.5)
+- [x] Podejście zbiorów wyników (h,a) na siatce 0..7 — bez ręcznych tabel
+- [x] `core/betbuilder_rules.py` + 20 testów `tests/test_betbuilder_rules.py`
 
-### 18.2: GUI — tryb BetBuilder w CouponWizard
-- [ ] Przełącznik "Pojedyncze typy" / "BetBuilder (1 mecz)"
-- [ ] Wybór meczu → lista rynków z `bet_builder_markets` (Poisson szanse)
-- [ ] Zaznaczanie typów: wyszarzaj/blokuj sprzeczne i trywialne (reguły 18.1) live
-- [ ] Pokaż łączną szansę combo (iloczyn skorelowany — uproszczony) + ostrzeżenie value
-- **Zależność:** 18.1 musi być pierwsze
+### 18.2: ✅ GUI BetBuilder w CouponWizard (347dcec60 + 335d3ac42)
+- [x] Endpoint `POST /api/betbuilder/markets` (single source of truth reguł)
+- [x] `BetBuilderPanel` w kroku 3 per mecz: chipy rynków z szansą Poissona
+- [x] Sprzeczne/trywialne wyszarzone + przekreślone z tooltipem powodu (live)
+- [x] Combo szansa skorelowana + kurs; addCombo dodaje 1 nogę "BB: 1 + Over 1.5"
+- [x] Zweryfikowane Playwright: "1" blokuje X/2 (sprzeczne) + Over 0.5 (trywialne) ✓
+
+### 18.3: ⏳ Do rozważenia (opcjonalne)
+- [ ] Bzzoiro odds dla compound (teraz kurs = fair 1/szansa, nie rynkowy)
+- [ ] Zapis BB combo do settlement (jak rozliczać "1 & Over 1.5")
 
 ---
 
