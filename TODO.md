@@ -34,9 +34,10 @@
 - [x] Zapisano `data/model_calibration.json` + `data/calibration.json`
 - **Wynik: accuracy 34.3%, sufit kalibracji ~34% — bottleneck to model, nie wagi**
 
-### 16.5: Zbieranie danych (pasywne) — trwa
-- [ ] Monitorować logi: `logs/kupon_YYYY-MM-DD.txt`
-- [x] Cel 50 settled — przekroczony: **67 settled (WON 22 + LOST 45)** — 06-16
+### 16.5: Zbieranie danych ✅ DONE (06-16)
+- [x] Cel 50 settled — przekroczony: **67 settled (WON 22 + LOST 45)**
+- [x] Task Scheduler działa autonomicznie (08:00 + 11:00 + 23:00)
+- Logi bieżące: `logs/kupon_YYYY-MM-DD.txt`
 
 ---
 
