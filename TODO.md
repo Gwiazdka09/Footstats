@@ -80,6 +80,37 @@
 - [ ] Per-user bankroll, risk profile, Telegram chat_id
 - **Effort:** 3–5 dni | ⏸️ po M1
 
+### Obserwacja: bet_builder compound tips nie przechodzą weryfikacji
+- bet_builder DZIAŁA (Poisson macierz, podpięty `daily_agent.py:1358`, karmi prompt Groq).
+- ALE złożone typy (`1 & Over 1.5`, `Handicap -1`) nie mają klucza w `_TYP_DO_ODDS_KEY`
+  → `_weryfikuj_noge` je usuwa (brak kursu Bzzoiro). Efektywnie tylko kontekst dla AI.
+- Opcje: (a) dodać klucze odds dla compound + źródło kursów, albo (b) świadomie
+  zostawić jako hint Groq. Decyzja przy implementacji kreatora BetBuilder (niżej).
+
+---
+
+## 🎰 FAZA 18: KREATOR BETBUILDER (manualny, z zabezpieczeniami)
+
+> Cel: w kreatorze kuponów dodać tryb BetBuilder — user buduje combo z 1 meczu,
+> z regułami korelacji blokującymi sprzeczne/trywialne kombinacje.
+
+### 18.1: Silnik reguł korelacji (backend, czysta logika + testy)
+- [ ] Reguły SPRZECZNE (blokada obu): 1 vs X vs 2 (tylko jeden wynik 1X2)
+- [ ] Reguły TRYWIALNE/IMPLIKOWANE (blokuj słabszy gdy mocniejszy wybrany):
+  - "1" lub "2" ⇒ co najmniej 1 gol ⇒ blokuj `Over 0.5` (i `Gospodarz/Gość strzeli 0.5+` po stronie zwycięzcy)
+  - `Over 2.5` ⇒ `Over 1.5` ⇒ `Over 0.5` (blokuj słabsze Over gdy mocniejsze wybrane)
+  - `Under 2.5` koliduje z `Over 2.5`/`Over 3.5`; BTTS koliduje z `Under 1.5`
+- [ ] Reguły DOZWOLONE (realne combo): `1 + Over 1.5`, `1 + BTTS`, `1 + Over 2.5`, `X + Under 3.5`
+- [ ] Funkcja `dozwolone_dodatki(wybrane: list) -> set` zwraca legalne kolejne typy
+- **Plik:** `core/betbuilder_rules.py` + `tests/test_betbuilder_rules.py`
+
+### 18.2: GUI — tryb BetBuilder w CouponWizard
+- [ ] Przełącznik "Pojedyncze typy" / "BetBuilder (1 mecz)"
+- [ ] Wybór meczu → lista rynków z `bet_builder_markets` (Poisson szanse)
+- [ ] Zaznaczanie typów: wyszarzaj/blokuj sprzeczne i trywialne (reguły 18.1) live
+- [ ] Pokaż łączną szansę combo (iloczyn skorelowany — uproszczony) + ostrzeżenie value
+- **Zależność:** 18.1 musi być pierwsze
+
 ---
 
 ## 💰 MONETYZACJA / LAUNCH
