@@ -84,6 +84,7 @@ def _pobierz_kandydatow(dni: int = 2) -> tuple[list, dict]:
             "gospodarz": g,
             "goscie":    a,
             "liga":      w.get("liga", ""),
+            "pred":      w.get("pred") or {},
         }
 
     return wyniki, indeks
@@ -397,6 +398,41 @@ _TYP_DO_ODDS_KEY = {
 }
 
 
+# FAZA 17.2: twardy filtr longshotów
+_MAX_KURS_LONGSHOT = 4.0      # kurs > 4.0 ⇒ implied prob < 25% = longshot
+_MIN_PROB_MODELU = 40.0       # p_modelu < 40% ⇒ odrzuć (model nie wspiera typu)
+
+
+def _prob_modelu_dla_typu(typ: str, pred: dict) -> float | None:
+    """Prawdopodobieństwo modelu (%) dla danego typu tipa. None jeśli brak danych."""
+    if not pred:
+        return None
+    t = typ.strip().lower()
+    if t in ("1", "1x"):
+        return pred.get("p_wygrana")
+    if t == "x":
+        return pred.get("p_remis")
+    if t in ("2", "x2"):
+        return pred.get("p_przegrana")
+    if t.startswith("over"):
+        return pred.get("over25")
+    if t.startswith("under"):
+        return pred.get("under25")
+    if t == "btts":
+        return pred.get("btts")
+    return None
+
+
+def _powod_odrzucenia_longshot(typ: str, kurs: float | None, pred: dict) -> str | None:
+    """Zwraca powód odrzucenia nogi (longshot) lub None jeśli noga OK."""
+    if kurs is not None and kurs > _MAX_KURS_LONGSHOT:
+        return f"kurs {kurs:.2f} > {_MAX_KURS_LONGSHOT} (longshot)"
+    p_mod = _prob_modelu_dla_typu(typ, pred)
+    if p_mod is not None and p_mod < _MIN_PROB_MODELU:
+        return f"p_modelu {p_mod:.0f}% < {_MIN_PROB_MODELU:.0f}%"
+    return None
+
+
 def _znajdz_mecz(mecz_str: str, indeks: dict) -> dict | None:
     """
     Próbuje dopasować string 'Drużyna A vs Drużyna B' do indeksu Bzzoiro.
@@ -469,6 +505,12 @@ def _weryfikuj_kupony(dane: dict, indeks: dict) -> dict:
                         z["_zrodlo"] = "betexplorer"
             except (ImportError, AttributeError, TypeError):
                 pass
+
+            # FAZA 17.2: twardy filtr longshotów (na finalnym kursie + pred Poissona)
+            powod = _powod_odrzucenia_longshot(typ_raw, z.get("kurs"), wpis.get("pred") or {})
+            if powod:
+                usuniete.append(f"{mecz_str} [{typ_raw}] — {powod}")
+                continue
 
             zweryfikowane.append(z)
 
