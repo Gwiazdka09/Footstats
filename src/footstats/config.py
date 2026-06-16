@@ -118,6 +118,11 @@ LIGI_BLACKLIST_KEYWORDS: tuple[str, ...] = (
 # Jeśli True, daily_agent odrzuca mecze bez danych Poissona
 LIGA_FILTER_ENABLED: bool = True
 
+# FAZA 17.4: jeśli True, przepuszczane są TYLKO ligi z LIGI_WHITELIST
+# (wcześniej whitelist była no-op — każda liga przechodziła). Wyłącz przez
+# LIGA_WHITELIST_ENFORCE=0 w .env jeśli wolumen kandydatów spada za nisko.
+LIGA_WHITELIST_ENFORCE: bool = os.getenv("LIGA_WHITELIST_ENFORCE", "1") == "1"
+
 # Klucze .env – nazwy zmiennych srodowiskowych
 ENV_FOOTBALL   = "FOOTBALL_API_KEY"   # football-data.org
 ENV_APISPORTS  = "APISPORTS_KEY"      # api-sports.io (API-Football)

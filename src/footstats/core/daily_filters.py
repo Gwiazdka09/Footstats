@@ -53,17 +53,37 @@ def _pre_filtruj_value_bet(kandydaci: list[dict]) -> list[dict]:
     return filter_value_bets(kandydaci)
 
 
+def _norm_liga(nazwa: str) -> str:
+    """Normalizuje nazwę ligi: bez akcentów, bez prefiksu kraju (ENG-/ESP-), lowercase."""
+    import unicodedata
+    s = unicodedata.normalize("NFKD", nazwa).encode("ascii", "ignore").decode().lower().strip()
+    # Usuń prefiks kraju typu "eng-", "esp-", "bra-"
+    if len(s) > 4 and s[3] == "-":
+        s = s[4:].strip()
+    return s
+
+
 def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
-    """Odrzuca kandydatów z lig bez danych Poissona (towarzyskie, Afryka, Azja, CONCACAF)."""
-    from footstats.config import LIGI_WHITELIST, LIGI_BLACKLIST_KEYWORDS
+    """
+    Odrzuca kandydatów z lig bez danych Poissona.
+    FAZA 17.4: gdy LIGA_WHITELIST_ENFORCE=True — przepuszcza TYLKO ligi z whitelist
+    (porównanie znormalizowane: akcenty, prefiks kraju, wielkość liter).
+    Blacklista (friendly/CONCACAF/Afryka) odrzuca zawsze.
+    """
+    from footstats.config import LIGI_WHITELIST, LIGI_BLACKLIST_KEYWORDS, LIGA_WHITELIST_ENFORCE
+    whitelist_norm = {_norm_liga(l) for l in LIGI_WHITELIST}
     wynik = []
+    odrzucone_liga = 0
     for k in kandydaci:
         liga = (k.get("liga") or "").strip()
         liga_lower = liga.lower()
         if any(kw.lower() in liga_lower for kw in LIGI_BLACKLIST_KEYWORDS):
             continue
-        if liga in LIGI_WHITELIST:
-            wynik.append(k)
+        # Kandydaci bez nazwy ligi (np. API-Football) — zawsze zachowywani.
+        if liga and LIGA_WHITELIST_ENFORCE and _norm_liga(liga) not in whitelist_norm:
+            odrzucone_liga += 1
             continue
         wynik.append(k)
+    if odrzucone_liga:
+        logger.info("Whitelist lig: odrzucono %d kandydatów spoza whitelist", odrzucone_liga)
     return wynik
