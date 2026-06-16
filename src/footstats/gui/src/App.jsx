@@ -1054,7 +1054,7 @@ const DashboardHome = ({ user, status, coupons, calibration, isAdmin, apiFetch, 
         </div>
         <div>
           <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Dostępny Balans</p>
-          <p className="text-3xl font-bold leading-none">
+          <p className="text-3xl font-bold leading-none metric-num">
             <span className="stat-gradient">{status?.bankroll?.toFixed(2)}</span> <span className="text-lg font-normal text-indigo-300">PLN</span>
           </p>
         </div>
@@ -1909,7 +1909,7 @@ const StatCard = ({ title, value, subtitle, icon, color, delay }) => (
       <div className={`p-3 bg-${color}-500/10 rounded-xl`}>{icon}</div>
     </div>
     <h3 className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-2">{title}</h3>
-    <div className="text-4xl font-bold mb-2 tracking-tight">{value}</div>
+    <div className="metric-num text-4xl font-bold mb-2">{value}</div>
     <p className="text-slate-400 text-xs">{subtitle}</p>
   </motion.div>
 );
@@ -1967,7 +1967,7 @@ const CouponCard = ({ coupon, index }) => (
       <div className="flex gap-10">
         <div>
           <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Kurs</p>
-          <p className="text-2xl font-bold text-white tracking-tighter">{coupon.total_odds?.toFixed(2)}</p>
+          <p className="metric-num text-2xl font-bold text-white">{coupon.total_odds?.toFixed(2)}</p>
         </div>
         <div>
           <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Stawka</p>

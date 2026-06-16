@@ -74,6 +74,13 @@ h1, h2, h3, .brand {
   color: transparent;
 }
 
+/* Duze liczby metryk - font brandowy Outfit + ciasniejszy tracking dla premium look */
+.metric-num {
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
 .btn-primary {
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   border: none;
