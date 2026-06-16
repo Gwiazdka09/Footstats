@@ -18,21 +18,24 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 LOG_DIR = DATA_DIR / "logs"
 
 
-def run_draft_phase(stawka: int = 10, dni: int = 3) -> None:
-    """Uruchom draft phase."""
+def run_draft_phase(stawka: int = 10, dni: int = 3, system_paper: bool = False) -> None:
+    """Uruchom draft phase. system_paper: dołóż single-leg kupony System (FAZA 19)."""
     print(f"[{datetime.now()}] DRAFT PHASE STARTING...")
+    cmd = [
+        sys.executable,
+        "-m",
+        "footstats.daily_agent",
+        "--stawka",
+        str(stawka),
+        "--dni",
+        str(dni),
+        "--faza",
+        "draft",
+    ]
+    if system_paper:
+        cmd.append("--system-paper")
     result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "footstats.daily_agent",
-            "--stawka",
-            str(stawka),
-            "--dni",
-            str(dni),
-            "--faza",
-            "draft",
-        ],
+        cmd,
         cwd=DATA_DIR.parent,
         timeout=7200,
     )
@@ -121,11 +124,15 @@ if __name__ == "__main__":
         default="draft-wait-final",
         help="Mode: draft only, or draft then wait for final",
     )
+    parser.add_argument(
+        "--system-paper", action="store_true",
+        help="Dołóż single-leg kupony System (paper-trading, FAZA 19) w fazie draft",
+    )
 
     args = parser.parse_args()
 
     if args.mode in ["draft-only", "draft-wait-final"]:
-        run_draft_phase(args.stawka, args.dni)
+        run_draft_phase(args.stawka, args.dni, system_paper=args.system_paper)
 
     if args.mode in ["draft-wait-final", "final-only"]:
         wait_and_run_final(args.stawka, args.dni)

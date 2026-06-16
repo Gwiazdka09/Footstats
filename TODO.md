@@ -100,7 +100,8 @@
 - [x] Flaga `--system-paper` w daily_agent (krok 2b), flat stake 2 PLN, konto System (id=408)
 - [x] Kupony NIE shared → poza leaderboardem; auto-settle przez coupon_settlement
 - [x] 7 testów `tests/test_system_paper.py`
-- [ ] **Aktywacja:** dodać `--system-paper` do `run_daily.bat` (gdy gotowy do zbierania)
+- [x] **Aktywacja:** wpięte w `daily_agent_scheduler` (faza draft) + `run_daily.bat`
+  (flaga `--system-paper` forwarduje przez scheduler) — autonomiczne od następnego runu Task Scheduler
 
 ---
 

@@ -29,7 +29,7 @@ REM   3. Waits until scheduled time
 REM   4. Runs --faza final
 REM   5. Cleans up next_final.txt
 
-python -m footstats.daily_agent_scheduler --stawka 10 --dni 3 --mode draft-wait-final >> F:\bot\data\logs\daily_agent.log 2>&1
+python -m footstats.daily_agent_scheduler --stawka 10 --dni 3 --mode draft-wait-final --system-paper >> F:\bot\data\logs\daily_agent.log 2>&1
 if %errorlevel% neq 0 (
     echo [%date% %time%] BLAD: daily_agent_scheduler zakonczyl sie z bledem >> F:\bot\data\logs\daily_agent.log
     exit /b 1
