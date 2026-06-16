@@ -108,12 +108,12 @@
 - [ ] Potwierdzenie rejestracji, reset hasła, faktura
 
 ### Hosting
-- [ ] ALLOWED_ORIGINS Cloud Run: sprawdź czy `bot-opal-nu.vercel.app` jest dodane ✓ (zrobione 06-16)
+- [x] ALLOWED_ORIGINS Cloud Run: `bot-opal-nu.vercel.app` dodane (06-16)
 - [ ] Custom domain (opcjonalne)
 
 ### SEO
-- [ ] Meta tags w index.html
-- [ ] sitemap.xml, robots.txt
+- [x] Meta tags w index.html (06-16)
+- [x] sitemap.xml, robots.txt (06-16)
 
 ### Inne
 - [ ] Rozszerzenie zakładów: rożne, kartki (po M1)
@@ -122,7 +122,13 @@
 
 ## 📋 Następne kroki (priorytet)
 
-1. **Jutro:** Sprawdź logi — czy 50. kupon settled (brakuje 1)
-2. **Po 50 settled:** Uruchom 16.4 kalibrację
-3. **Równolegle:** Email transakcyjny (Resend — wymaga klucza od użytkownika)
-4. **Przed betą:** JDG rejestracja
+1. **Pasywne (17.7):** Pipeline zbiera świeże kupony z naprawioną pewnością.
+   Po ~20 nowych settled → A/B czy kalibracja monotoniczna.
+2. **Wymaga Ciebie:** Email transakcyjny — załóż konto Resend.com, podaj `RESEND_API_KEY` + FROM.
+3. **Przed pierwszym płatnym userem:** JDG (CEIDG, 1 dzień) + konsultacja prawnik.
+4. **Płatności:** Lemon Squeezy/Paddle — integracja po JDG.
+
+### Co zrobione bez ingerencji (06-16)
+- [x] 17.7 re-fit `calibration.json` na zdeduplikowanych danych
+- [x] SEO basics (meta, sitemap, robots)
+- [x] Test regresyjny whitelist lig

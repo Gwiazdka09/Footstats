@@ -72,6 +72,29 @@ def test_ligi_keyword_case_insensitive():
     assert result == []
 
 
+# ── FAZA 17.4: egzekwowanie whitelist ────────────────────────────────────
+
+def test_ligi_spoza_whitelist_odrzucone():
+    # Botola/Veikkausliiga nie są w whitelist → odrzuć (gdy enforce=True).
+    kandydaci = [
+        {"liga": "Botola Pro", "gospodarz": "Wydad"},
+        {"liga": "Veikkausliiga", "gospodarz": "HJK"},
+    ]
+    result = _pre_filtruj_ligi(kandydaci)
+    assert result == []
+
+
+def test_ligi_whitelist_normalizacja_akcentow_i_prefiksu():
+    # "Brasileirão Serie A" (akcent) i "ENG-Premier League" (prefiks) muszą przejść.
+    kandydaci = [
+        {"liga": "Brasileirão Serie A", "gospodarz": "Flamengo"},
+        {"liga": "ENG-Premier League", "gospodarz": "Arsenal"},
+        {"liga": "ESP-La Liga", "gospodarz": "Real"},
+    ]
+    result = _pre_filtruj_ligi(kandydaci)
+    assert len(result) == 3
+
+
 # ── _pre_filtruj_kursy ────────────────────────────────────────────────────
 
 def test_kursy_valid_range_kept():
