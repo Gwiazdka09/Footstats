@@ -134,8 +134,8 @@ class TestEnsembleProbs:
         assert result["win"] == pytest.approx(0.55)
 
     def test_weighted_average(self):
-        result = ensemble_probs({"win": 0.40}, {"win": 0.60})
-        # default weights: poisson=0.45, bzzoiro=0.55
+        # Jawne wagi — test niezależny od produkcyjnego default (zmienił się 45/55 → 70/30)
+        result = ensemble_probs({"win": 0.40}, {"win": 0.60}, wagi={"poisson": 0.45, "bzzoiro": 0.55})
         expected = (0.40 * 0.45 + 0.60 * 0.55) / 1.0
         assert result["win"] == pytest.approx(expected, abs=1e-4)
 
