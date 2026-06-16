@@ -9,6 +9,44 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+# Mapowanie typ tipa → klucz prawdopodobieństwa w pred Poissona (wartości w %).
+_TYP_DO_PROB_KEY: dict[str, str] = {
+    "1": "p_wygrana", "1x": "p_wygrana",
+    "x": "p_remis",
+    "2": "p_przegrana", "x2": "p_przegrana",
+    "btts": "btts",
+}
+
+
+def pewnosc_z_modelu(typ: str, pred: dict, fallback_pct: float | None = None) -> int:
+    """
+    FAZA 17.1/17.6: jedyne źródło pewności zapisywanej do predictions.
+    Pewność = prawdopodobieństwo modelu (%) dla danego typu, NIE z EV.
+    Deterministyczne dla (typ, pred) — ten sam mecz+tip daje tę samą pewność
+    niezależnie od kupon_type (eliminuje niestabilność z 17.6).
+    Fallback: LLM pewnosc_pct; ostatecznie 50.
+    """
+    p_mod = prob_modelu(typ, pred)
+    if p_mod is not None:
+        return int(round(max(1, min(99, p_mod))))
+    return int(fallback_pct or 50)
+
+
+def prob_modelu(typ: str, pred: dict) -> float | None:
+    """Prawdopodobieństwo modelu (%) dla typu tipa. None jeśli brak danych."""
+    if not pred:
+        return None
+    t = typ.strip().lower()
+    key = _TYP_DO_PROB_KEY.get(t)
+    if key:
+        return pred.get(key)
+    if t.startswith("over"):
+        return pred.get("over25")
+    if t.startswith("under"):
+        return pred.get("under25")
+    return None
+
+
 def _wzbogac_forme(wyniki: list, top_n: int = 12) -> None:
     """
     Etap 4: Próbuje wzbogacić TOP N meczów o formę z SofaScore (Playwright).
@@ -141,26 +179,6 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
     _TYP_NORM = {"Over": "Over 2.5", "Under": "Under 2.5",
                  "OVER": "Over 2.5", "UNDER": "Under 2.5"}
 
-    # FAZA 17.1: pewność = prawdopodobieństwo modelu dla danego typu (NIE z EV).
-    # Mapuje typ tipa → klucz w pred Poissona (wartości w %).
-    def _prob_modelu(typ: str, pred: dict) -> float | None:
-        if not pred:
-            return None
-        t_low = typ.strip().lower()
-        if t_low in ("1", "1x"):
-            return pred.get("p_wygrana")
-        if t_low == "x":
-            return pred.get("p_remis")
-        if t_low in ("2", "x2"):
-            return pred.get("p_przegrana")
-        if t_low.startswith("over"):
-            return pred.get("over25")
-        if t_low.startswith("under"):
-            return pred.get("under25")
-        if t_low == "btts":
-            return pred.get("btts")
-        return None
-
     def _zapisz(typy: list, kupon_type: str) -> None:
         for t in typy:
             mecz_str = t.get("mecz", "")
@@ -169,12 +187,8 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
             home = w.get("gospodarz") or (czesci[0].strip() if czesci else mecz_str)
             away = w.get("goscie") or (czesci[1].strip() if len(czesci) > 1 else "")
             tip = _TYP_NORM.get(t.get("typ", ""), t.get("typ", ""))
-            # Pewność z prawdopodobieństwa modelu; fallback: LLM pewnosc_pct; ostatecznie 50.
-            p_mod = _prob_modelu(t.get("typ", ""), w.get("pred") or {})
-            if p_mod is not None:
-                conf = int(round(max(1, min(99, p_mod))))
-            else:
-                conf = int(t.get("pewnosc_pct") or 50)
+            # FAZA 17.1/17.6: pewność z prob modelu (deterministyczna per mecz+tip).
+            conf = pewnosc_z_modelu(t.get("typ", ""), w.get("pred") or {}, t.get("pewnosc_pct"))
             try:
                 from footstats.ai.rag import wyciagnij_faktory
                 faktory = wyciagnij_faktory(w.get("pred") or {})
