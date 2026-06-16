@@ -48,6 +48,15 @@ const LEAGUE_FLAGS = {
 
 const getLeagueFlag = (liga) => LEAGUE_FLAGS[(liga || "").toLowerCase()] ?? "🌍";
 
+// Polska odmiana rzeczownika "typ" (1 typ / 2-4 typy / 5+ typów)
+const odmianaTypy = (n) => {
+  if (n === 1) return "1 typ";
+  const ostatnia = n % 10;
+  const dwieOstatnie = n % 100;
+  if (ostatnia >= 2 && ostatnia <= 4 && !(dwieOstatnie >= 12 && dwieOstatnie <= 14)) return `${n} typy`;
+  return `${n} typów`;
+};
+
 const TIP_CATEGORIES = [
   { label: "Wynik meczu (1X2)", match: (t) => ["1", "1X", "X", "X2", "2"].includes(t.tip) },
   { label: "Obie strzelają", match: (t) => t.tip.startsWith("BTTS") },
@@ -304,7 +313,9 @@ const App = () => {
                 config={config}
                 status={status}
                 user={user}
+                isAdmin={isAdmin}
                 onAccountUpdate={handleAccountUpdate}
+                onLogout={handleLogout}
                 apiFetch={apiFetch}
                 onSave={() => fetchData()}
               />
@@ -1184,7 +1195,7 @@ const HistoryCouponRow = ({ c, apiFetch }) => {
                 {' / '}
                 <span className="text-slate-500">{legs.length - wonCount - lostCount}⏳</span>
                 {' '}
-                <span className="text-slate-600">({legs.length} typów)</span>
+                <span className="text-slate-600">({odmianaTypy(legs.length)})</span>
               </p>
             )}
           </div>
@@ -1372,7 +1383,7 @@ const LeaderboardView = ({ apiFetch }) => {
   );
 };
 
-const SettingsView = ({ config, status, apiFetch, onSave, user, onAccountUpdate }) => {
+const SettingsView = ({ config, status, apiFetch, onSave, user, isAdmin, onAccountUpdate, onLogout }) => {
   const [form, setForm] = useState(config || {});
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1432,6 +1443,28 @@ const SettingsView = ({ config, status, apiFetch, onSave, user, onAccountUpdate 
       setPasswordMsg('Błąd: ' + err.message);
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  // RODO: samodzielne usunięcie konta (DELETE /api/auth/me)
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteMsg, setDeleteMsg] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    setDeleteMsg('');
+    try {
+      await apiFetch('/auth/me', {
+        method: 'DELETE',
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      onLogout();
+    } catch (err) {
+      setDeleteMsg('Błąd: ' + err.message);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -1624,6 +1657,51 @@ const SettingsView = ({ config, status, apiFetch, onSave, user, onAccountUpdate 
               </div>
             </div>
           </div>
+
+          {!isAdmin && (
+            <div className="mt-8 pt-8 border-t border-rose-500/20">
+              <h4 className="text-sm font-bold text-rose-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                <Trash2 size={16} /> Strefa niebezpieczna
+              </h4>
+              <p className="text-xs text-[var(--text-muted)] mb-4">
+                Usunięcie konta jest nieodwracalne — Twoje dane (login, e-mail) zostaną zanonimizowane,
+                a konto dezaktywowane (RODO, prawo do bycia zapomnianym).
+              </p>
+              {!deleteOpen ? (
+                <button
+                  onClick={() => setDeleteOpen(true)}
+                  className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition-colors"
+                >
+                  Usuń moje konto
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <ConfigInput
+                    label="Potwierdź hasłem"
+                    type="password"
+                    value={deletePassword}
+                    onChange={setDeletePassword}
+                  />
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deleteLoading || !deletePassword}
+                      className="px-4 py-2.5 rounded-lg text-sm font-bold bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50"
+                    >
+                      {deleteLoading ? "Usuwanie..." : "Potwierdzam — usuń konto"}
+                    </button>
+                    <button
+                      onClick={() => { setDeleteOpen(false); setDeletePassword(''); setDeleteMsg(''); }}
+                      className="px-4 py-2.5 rounded-lg text-sm font-semibold text-slate-400 hover:text-white transition-colors"
+                    >
+                      Anuluj
+                    </button>
+                  </div>
+                  {deleteMsg && <p className="text-sm text-rose-400">{deleteMsg}</p>}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
