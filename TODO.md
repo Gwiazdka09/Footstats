@@ -70,10 +70,11 @@
 
 ### Testy modułów core (TD-31)
 - [x] classifier, confidence, h2h, fortress — `tests/test_core_pure_modules.py` (16 testów, 06-16)
+- [x] bet_builder, lambda_optimizer.injury_correction, importance — `tests/test_core_pure_modules2.py` (27 testów, 06-16)
 - [x] daily_filters — `tests/test_daily_agent_prefilter.py` (whitelist, 06-16)
-- [ ] Pozostałe: bet_builder, daily_io, form, importance, lambda_optimizer, weekly_picks
-  (wymagają fixture DataFrame/DB — większy nakład)
-- **Effort:** 2–3 dni | ⏸️ po M1
+- [ ] Pozostałe: daily_io (DB), form (scraper Rich), weekly_picks (651 linii, integracja)
+  — wymagają mockowania DB/Playwright, większy nakład
+- **Effort:** 1–2 dni | ⏸️ po M1
 
 ### 15.6: Multi-user support
 - [ ] Per-user bankroll, risk profile, Telegram chat_id
