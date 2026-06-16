@@ -18,7 +18,7 @@ const CookieConsent = () => {
         <p className="text-sm text-[var(--text-muted)] flex-1">
           Używamy niezbędnych plików cookie / local storage (np. token sesji), aby aplikacja działała.
           Szczegóły w{' '}
-          <a href="/polityka-prywatnosci" target="_blank" rel="noreferrer" className="text-[var(--accent-primary)] hover:underline">
+          <a href="https://footstats-api-949240532526.europe-west1.run.app/polityka-prywatnosci" target="_blank" rel="noreferrer" className="text-[var(--accent-primary)] hover:underline">
             polityce prywatności
           </a>.
         </p>
