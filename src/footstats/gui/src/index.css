@@ -55,13 +55,20 @@ h1, h2, h3, .brand {
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   box-shadow: var(--glass-shadow);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, background 0.3s ease;
 }
 
+/* Karty statyczne (statystyki, Model Poisson, balans, ustawienia): tylko subtelne
+   rozjasnienie obramowania przy hover - bez "skoku", mniej nerwowo. */
 .glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Karty klikalne jako calosc (cursor-pointer): pelny lift + akcentowy glow. */
+.glass-card.cursor-pointer:hover {
   transform: translateY(-4px);
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.15);
   box-shadow: var(--glass-shadow), 0 0 24px 0 rgba(129, 140, 248, 0.15), 0 0 24px 0 rgba(244, 114, 182, 0.1);
 }
 
