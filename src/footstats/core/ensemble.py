@@ -1,4 +1,4 @@
-_DEFAULT_WEIGHTS = {"poisson": 0.45, "bzzoiro": 0.55}
+_DEFAULT_WEIGHTS = {"poisson": 0.70, "bzzoiro": 0.30}  # A/B 16.4: 70/30 minimalizuje log-loss (0.961 vs 1.027 przy 45/55)
 
 
 def get_weights_for_league(liga: str | None = None) -> dict:

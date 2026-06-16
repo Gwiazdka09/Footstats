@@ -15,7 +15,7 @@ _log = logging.getLogger(__name__)
 _WEIGHTS_PATH = Path(__file__).parents[3] / "data" / "ensemble_weights.json"
 
 # Default if no per-league data
-_DEFAULT_WEIGHTS = {"poisson": 0.45, "bzzoiro": 0.55}
+_DEFAULT_WEIGHTS = {"poisson": 0.70, "bzzoiro": 0.30}
 # Minimum settled predictions per league to trust the optimized weights
 _MIN_SAMPLES = 15
 
