@@ -23,9 +23,12 @@
 
 ## 🔴 PRIORYTET — walidacja modelu (17.7)
 
-- [ ] Monitorować świeże kupony: czy kalibracja monotoniczna (wyższa pewność → wyższa trafność)
+- [x] Narzędzie monitoringu: `python scripts/calibration_monitor.py` (Neon, read-only) —
+  monotoniczność kalibracji + per-tip + ROI System paper-trading
+- [ ] Uruchamiać monitor co kilka dni — czy kalibracja przestaje być odwrócona na świeżych danych
 - [ ] A/B accuracy po ~20 nowych settled z naprawionego pipeline
 - **Zbieranie:** System paper-trading działa autonomicznie (Task Scheduler 08:00). ~1-2 tyg.
+- **Obecnie:** stare 41 settled wciąż odwrócone (sprzed Fazy 17) — to oczekiwane
 
 ---
 
