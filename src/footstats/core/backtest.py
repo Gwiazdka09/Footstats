@@ -111,6 +111,19 @@ def save_prediction(
     factors_json = json.dumps(factors or [], ensure_ascii=False)
 
     with _connect() as conn:
+        # FAZA 17.5: dedup — ten sam mecz+tip nie może być zapisany wielokrotnie
+        # (wcześniej top3 + kupon_a/c tworzyły 2-5 duplikatów psujących statystyki).
+        istnieje = conn.execute(
+            """
+            SELECT id FROM predictions
+            WHERE team_home = ? AND team_away = ? AND match_date = ? AND ai_tip = ?
+            LIMIT 1
+            """,
+            (team_home, team_away, match_date, ai_tip),
+        ).fetchone()
+        if istnieje:
+            return istnieje["id"]
+
         row = conn.execute(
             """
             INSERT INTO predictions
