@@ -455,15 +455,70 @@ def _znajdz_mecz(mecz_str: str, indeks: dict) -> dict | None:
     return None
 
 
+def _weryfikuj_noge(z: dict, indeks: dict, usuniete: list[str]) -> dict | None:
+    """
+    Weryfikuje pojedynczą nogę (top3 row lub zdarzenie kuponu):
+    - mecz musi istnieć w Bzzoiro i mieć realny kurs dla typu (inaczej usuń)
+    - podmienia kurs na rzeczywisty Bzzoiro/BetExplorer (anty-halucynacja Groq)
+    - twardy filtr longshotów (17.2)
+    Zwraca zmodyfikowaną nogę lub None jeśli odrzucona (dopisuje powód do `usuniete`).
+    """
+    mecz_str = z.get("mecz", "")
+    typ_raw  = z.get("typ", "").strip()
+    wpis     = _znajdz_mecz(mecz_str, indeks)
+
+    if wpis is None:
+        usuniete.append(f"{mecz_str} [{typ_raw}] — brak w Bzzoiro")
+        return None
+
+    odds_key    = _TYP_DO_ODDS_KEY.get(typ_raw.lower())
+    rzeczywisty = (wpis["odds"] or {}).get(odds_key) if odds_key else None
+    if not rzeczywisty:
+        usuniete.append(f"{mecz_str} [{typ_raw}] — brak realnego kursu w Bzzoiro (kurs Groq niezweryfikowany)")
+        return None
+
+    z["kurs"]      = float(rzeczywisty)
+    z["mecz"]      = f"{wpis['gospodarz']} vs {wpis['goscie']}"
+    z["_verified"] = True
+
+    # 11.6: Arbitraż — porównaj z BetExplorer cache (bez Playwright)
+    try:
+        from footstats.scrapers.kursy import najlepszy_kurs_z_cache
+        be = najlepszy_kurs_z_cache(wpis["gospodarz"], wpis["goscie"])
+        if be:
+            _be_map = {"odds_1": be.get("k1"), "odds_x": be.get("kX"), "odds_2": be.get("k2")}
+            be_kurs = _be_map.get(odds_key)
+            if be_kurs and be_kurs > z["kurs"]:
+                z["kurs"]   = float(be_kurs)
+                z["_zrodlo"] = "betexplorer"
+    except (ImportError, AttributeError, TypeError):
+        pass
+
+    # FAZA 17.2: twardy filtr longshotów (na finalnym kursie + pred Poissona)
+    powod = _powod_odrzucenia_longshot(typ_raw, z.get("kurs"), wpis.get("pred") or {})
+    if powod:
+        usuniete.append(f"{mecz_str} [{typ_raw}] — {powod}")
+        return None
+
+    return z
+
+
 def _weryfikuj_kupony(dane: dict, indeks: dict) -> dict:
     """
-    Sprawdza każdą nogę w kupon_a..d:
-    - Jeśli mecz istnieje w Bzzoiro i ma realny kurs dla danego typu: podmienia kurs na rzeczywisty
-    - Jeśli mecz NIE istnieje LUB Bzzoiro nie ma kursu dla tego typu: usuwa nogę
-      (kurs/pewność/EV z Groq są niezweryfikowane = halucynacja) i loguje ostrzeżenie
+    Weryfikuje top3 + każdą nogę w kupon_a..d przez Bzzoiro (anty-halucynacja Groq):
+    - podmienia kurs na rzeczywisty lub usuwa nogę bez realnego kursu
+    - twardy filtr longshotów (17.2)
     Zwraca zmodyfikowany słownik dane.
     """
     usuniete: list[str] = []
+
+    # FAZA 17.3: top3 też weryfikowane (wcześniej halucynacje wchodziły do predictions)
+    top3 = dane.get("top3", [])
+    if top3:
+        zweryfikowane_top3 = [
+            z for z in (_weryfikuj_noge(row, indeks, usuniete) for row in top3) if z is not None
+        ]
+        dane["top3"] = zweryfikowane_top3
 
     for kupon_key in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
         kupon = dane.get(kupon_key, {})
@@ -471,48 +526,9 @@ def _weryfikuj_kupony(dane: dict, indeks: dict) -> dict:
         if not zdarzenia:
             continue
 
-        zweryfikowane = []
-        for z in zdarzenia:
-            mecz_str = z.get("mecz", "")
-            typ_raw  = z.get("typ", "").strip()
-            wpis     = _znajdz_mecz(mecz_str, indeks)
-
-            if wpis is None:
-                usuniete.append(f"{mecz_str} [{typ_raw}] — brak w Bzzoiro")
-                continue
-
-            # Podmień kurs na rzeczywisty z Bzzoiro — bez tego kurs/pewność/EV
-            # Groq są niezweryfikowane i mogą być halucynacją (np. zawyżony EV)
-            odds_key    = _TYP_DO_ODDS_KEY.get(typ_raw.lower())
-            rzeczywisty = (wpis["odds"] or {}).get(odds_key) if odds_key else None
-            if not rzeczywisty:
-                usuniete.append(f"{mecz_str} [{typ_raw}] — brak realnego kursu w Bzzoiro (kurs Groq niezweryfikowany)")
-                continue
-
-            z["kurs"]      = float(rzeczywisty)
-            z["mecz"]      = f"{wpis['gospodarz']} vs {wpis['goscie']}"
-            z["_verified"] = True
-
-            # 11.6: Arbitraż — porównaj z BetExplorer cache (bez Playwright)
-            try:
-                from footstats.scrapers.kursy import najlepszy_kurs_z_cache
-                be = najlepszy_kurs_z_cache(wpis["gospodarz"], wpis["goscie"])
-                if be:
-                    _be_map = {"odds_1": be.get("k1"), "odds_x": be.get("kX"), "odds_2": be.get("k2")}
-                    be_kurs = _be_map.get(odds_key)
-                    if be_kurs and be_kurs > z["kurs"]:
-                        z["kurs"]   = float(be_kurs)
-                        z["_zrodlo"] = "betexplorer"
-            except (ImportError, AttributeError, TypeError):
-                pass
-
-            # FAZA 17.2: twardy filtr longshotów (na finalnym kursie + pred Poissona)
-            powod = _powod_odrzucenia_longshot(typ_raw, z.get("kurs"), wpis.get("pred") or {})
-            if powod:
-                usuniete.append(f"{mecz_str} [{typ_raw}] — {powod}")
-                continue
-
-            zweryfikowane.append(z)
+        zweryfikowane = [
+            z for z in (_weryfikuj_noge(z, indeks, usuniete) for z in zdarzenia) if z is not None
+        ]
 
         # Przenumeruj
         for i, z in enumerate(zweryfikowane, 1):
