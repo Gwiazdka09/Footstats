@@ -1539,6 +1539,30 @@ const SettingsView = ({ config, status, apiFetch, onSave, user, isAdmin, onAccou
     }
   };
 
+  // FAZA 15.6: per-user Telegram chat_id
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [telegramMsg, setTelegramMsg] = useState('');
+  const [telegramLoading, setTelegramLoading] = useState(false);
+
+  useEffect(() => { if (me?.telegram_chat_id) setTelegramChatId(me.telegram_chat_id); }, [me]);
+
+  const handleSaveTelegram = async () => {
+    setTelegramLoading(true);
+    setTelegramMsg('');
+    try {
+      await apiFetch('/auth/telegram', {
+        method: 'POST',
+        body: JSON.stringify({ chat_id: telegramChatId }),
+      });
+      setMe(m => ({ ...m, telegram_chat_id: telegramChatId || null }));
+      setTelegramMsg(telegramChatId ? 'Telegram chat ID zapisany!' : 'Telegram odłączony.');
+    } catch (err) {
+      setTelegramMsg('Błąd: ' + err.message);
+    } finally {
+      setTelegramLoading(false);
+    }
+  };
+
   // RODO: samodzielne usunięcie konta (DELETE /api/auth/me)
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
@@ -1748,6 +1772,28 @@ const SettingsView = ({ config, status, apiFetch, onSave, user, isAdmin, onAccou
                 </button>
                 {passwordMsg && <p className="text-sm text-center text-indigo-400">{passwordMsg}</p>}
               </div>
+            </div>
+          </div>
+
+          <div className="mt-8 pt-8 border-t border-white/5">
+            <h4 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-2">Powiadomienia Telegram</h4>
+            <p className="text-xs text-[var(--text-muted)] mb-4">
+              Podaj swój chat ID (od @userinfobot), aby otrzymywać powiadomienia o kuponach na Telegram.
+            </p>
+            <div className="space-y-3 max-w-md">
+              <ConfigInput
+                label="Telegram chat ID"
+                value={telegramChatId}
+                onChange={setTelegramChatId}
+              />
+              <button
+                onClick={handleSaveTelegram}
+                disabled={telegramLoading}
+                className="btn-primary"
+              >
+                {telegramLoading ? "Zapisywanie..." : "Zapisz Telegram"}
+              </button>
+              {telegramMsg && <p className="text-sm text-indigo-400">{telegramMsg}</p>}
             </div>
           </div>
 

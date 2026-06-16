@@ -187,3 +187,58 @@ class TestTelegramWithoutCredentials:
 
         result = send_message("test")
         assert result is False, "send_message() should return False without credentials"
+
+
+class TestPerUserTelegram:
+    """FAZA 15.6 — powiadomienia per-user (telegram_chat_id z DB)."""
+
+    @pytest.mark.unit
+    def test_send_uzywa_jawnego_chat_id(self, monkeypatch):
+        """_send z chat_id override wysyła do podanego czatu, nie globalnego."""
+        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "GLOBAL")
+        from footstats.utils import telegram_notify as tn
+        captured = {}
+
+        class _Resp:
+            ok = True
+
+        def _fake_post(url, json, timeout):
+            captured["chat_id"] = json["chat_id"]
+            return _Resp()
+
+        monkeypatch.setattr(tn.requests, "post", _fake_post)
+        assert tn._send("hej", chat_id="USER123") is True
+        assert captured["chat_id"] == "USER123"
+
+    @pytest.mark.unit
+    def test_send_fallback_na_globalny(self, monkeypatch):
+        """Bez chat_id override → globalny env."""
+        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "GLOBAL")
+        from footstats.utils import telegram_notify as tn
+        captured = {}
+
+        class _Resp:
+            ok = True
+
+        monkeypatch.setattr(tn.requests, "post",
+                            lambda url, json, timeout: captured.update(chat_id=json["chat_id"]) or _Resp())
+        tn._send("hej")
+        assert captured["chat_id"] == "GLOBAL"
+
+    @pytest.mark.unit
+    def test_send_to_user_brak_chat_id_false(self, monkeypatch):
+        """User bez telegram_chat_id → False (nie wysyła)."""
+        from footstats.utils import telegram_notify as tn
+
+        class _Conn:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def execute(self, *a): return self
+            def fetchone(self): return {"telegram_chat_id": None}
+
+        monkeypatch.setattr(tn, "_send", lambda *a, **k: True)  # gdyby wysłał = błąd
+        import footstats.utils.db as dbmod
+        monkeypatch.setattr(dbmod, "connect", lambda: _Conn())
+        assert tn.send_message_to_user(99, "hej") is False

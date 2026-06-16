@@ -60,8 +60,11 @@
 - [ ] daily_io — czysta integracja DB (glue nad coupon_tracker/bankroll już testowanymi);
   niska wartość vs nakład (fixture sqlite). Opcjonalne.
 
-### 15.6: Multi-user support
-- [ ] Per-user bankroll, risk profile, Telegram chat_id — **Effort:** 3–5 dni
+### 15.6: Multi-user support — ✅ DONE (06-17)
+- [x] Per-user bankroll (bankroll_state.user_id, funkcje biorą user_id) — było wcześniej
+- [x] Per-user risk profile (bot_settings per user_id) — było wcześniej
+- [x] Per-user Telegram chat_id: migracja 6, `send_message_to_user`, endpoint
+  `POST /auth/telegram`, pole w Ustawieniach. Globalny flow nietknięty (additive).
 
 ---
 

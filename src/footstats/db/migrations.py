@@ -79,6 +79,13 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     " VALUES ('System', 'system-no-login', TRUE, FALSE)",
                 ],
             ),
+            (
+                6,
+                "add_telegram_chat_id_to_users",
+                [
+                    "ALTER TABLE users ADD COLUMN telegram_chat_id TEXT",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -145,6 +152,13 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "CREATE INDEX IF NOT EXISTS idx_coupons_shared ON coupons(shared)",
                     "INSERT INTO users (username, password_hash, is_active, is_admin)"
                     " VALUES ('System', 'system-no-login', TRUE, FALSE) ON CONFLICT (username) DO NOTHING",
+                ],
+            ),
+            (
+                6,
+                "add_telegram_chat_id_to_users",
+                [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT",
                 ],
             ),
         ]

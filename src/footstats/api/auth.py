@@ -241,6 +241,7 @@ class MeResponse(BaseModel):
     username: str
     email: Optional[str] = None
     is_admin: bool
+    telegram_chat_id: Optional[str] = None
 
 
 @router.get("/auth/me", response_model=MeResponse)
@@ -248,12 +249,30 @@ def get_me(user_id: int = Depends(require_auth)) -> MeResponse:
     from footstats.utils.db import connect
     with connect() as conn:
         row = conn.execute(
-            "SELECT id, username, email, is_admin FROM users WHERE id = ? AND is_active = TRUE",
+            "SELECT id, username, email, is_admin, telegram_chat_id"
+            " FROM users WHERE id = ? AND is_active = TRUE",
             (user_id,),
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
     return MeResponse(**dict(row))
+
+
+class TelegramRequest(BaseModel):
+    chat_id: str = ""
+
+
+@router.post("/auth/telegram", status_code=status.HTTP_200_OK)
+def set_telegram_chat_id(req: TelegramRequest, user_id: int = Depends(require_auth)):
+    """FAZA 15.6: ustaw/wyczyść telegram_chat_id użytkownika (powiadomienia per-user)."""
+    from footstats.utils.db import connect
+    chat_id = req.chat_id.strip() or None
+    with connect() as conn:
+        conn.execute(
+            "UPDATE users SET telegram_chat_id = ? WHERE id = ?",
+            (chat_id, user_id),
+        )
+    return {"ok": True, "telegram_chat_id": chat_id}
 
 
 class ChangeUsernameRequest(BaseModel):

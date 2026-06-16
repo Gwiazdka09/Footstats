@@ -87,16 +87,21 @@ def telegram_dostepny() -> bool:
     return bool(token and chat_id)
 
 
-def _send(text: str, parse_mode: str = "HTML") -> bool:
-    """Wysyła wiadomość na Telegram. Zwraca True jeśli sukces."""
-    token, chat_id = _get_credentials()
-    if not token or not chat_id:
+def _send(text: str, parse_mode: str = "HTML", chat_id: str | None = None) -> bool:
+    """
+    Wysyła wiadomość na Telegram. Zwraca True jeśli sukces.
+    chat_id: opcjonalny — gdy podany, wysyła do tego czatu (per-user, 15.6);
+    inaczej globalny TELEGRAM_CHAT_ID z env (bot autonomiczny → admin).
+    """
+    token, env_chat = _get_credentials()
+    target = (chat_id or env_chat or "").strip()
+    if not token or not target:
         return False
     try:
         r = requests.post(
             TELEGRAM_API.format(token=token, method="sendMessage"),
             json={
-                "chat_id":    chat_id,
+                "chat_id":    target,
                 "text":       text,
                 "parse_mode": parse_mode,
                 "disable_web_page_preview": True,
@@ -106,6 +111,25 @@ def _send(text: str, parse_mode: str = "HTML") -> bool:
         return r.ok
     except requests.RequestException:
         return False
+
+
+def send_message_to_user(user_id: int, text: str) -> bool:
+    """
+    FAZA 15.6: wyślij wiadomość do konkretnego użytkownika (jego telegram_chat_id).
+    Zwraca False gdy user nie ma ustawionego chat_id. Nie rusza globalnego flow.
+    """
+    try:
+        from footstats.utils.db import connect
+        with connect() as conn:
+            row = conn.execute(
+                "SELECT telegram_chat_id FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+        chat_id = row["telegram_chat_id"] if row else None
+    except Exception:  # noqa: broad-except — powiadomienie nie może wywalić pipeline
+        return False
+    if not chat_id:
+        return False
+    return _send(text, chat_id=str(chat_id))
 
 
 def _format_zdarzenia(zdarzenia: list[dict]) -> str:
