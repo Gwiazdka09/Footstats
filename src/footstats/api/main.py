@@ -249,7 +249,7 @@ app.include_router(settings_router)
 app.include_router(coupons_router)
 
 
-@app.get("/health", tags=["ops"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["ops"])
 def health() -> dict:
     from footstats import __version__
     from datetime import datetime, timedelta
