@@ -95,4 +95,23 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
         if btts is None: return None
         return 1 if not btts else 0
 
+    # Handicap europejski: "1 (-1.5)" / "2 (+1.5)" — wygrana po doliczeniu handicapu,
+    # remis po korekcie = przegrana (wariant europejski, bez zwrotu).
+    hcp = re.match(r"^(1|2)\s*\(\s*([+-]?\d+(?:\.\d+)?)\s*\)$", tip)
+    if hcp:
+        if home_g is None or away_g is None:
+            return None
+        side, line = hcp.group(1), float(hcp.group(2))
+        if side == "1":
+            return 1 if (home_g + line) > away_g else 0
+        return 1 if (away_g + line) > home_g else 0
+
+    # Parzysta / nieparzysta liczba goli (0 = parzysta)
+    if tip in ("PARZYSTE", "EVEN"):
+        if total_goals is None: return None
+        return 1 if total_goals % 2 == 0 else 0
+    if tip in ("NIEPARZYSTE", "ODD"):
+        if total_goals is None: return None
+        return 1 if total_goals % 2 == 1 else 0
+
     return None

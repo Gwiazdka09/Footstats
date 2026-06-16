@@ -106,6 +106,33 @@
 
 ---
 
+## 📊 FAZA 20: PEŁNY KATALOG RYNKÓW (jak STS) — DONE (06-16)
+
+> Bogaty katalog rynków bramkowych w kreatorze, liczony z macierzy Poissona.
+> Wszystko rozliczalne (z wyniku). Tylko rodzina bramkowa — gracze/kartki/rożne
+> wykluczone (brak danych do rozliczenia, byłyby fake).
+
+### 20.1: ✅ Rozliczanie nowych rynków
+- [x] `oblicz_tip_correct`: handicap europejski `1 (-1.5)`/`2 (+1.5)` + parzyste/nieparzyste
+- [x] 11 nowych testów `tests/test_betting_utils.py` (41 total)
+
+### 20.2: ✅ Silnik katalogu + endpoint
+- [x] `core/markets.py` — `build_market_catalog` (34 rynki / 8 grup z macierzy Poissona)
+- [x] Kurs: Bzzoiro gdy jest, fair (1/prob) gdy brak — oznaczone źródło
+- [x] **Każdy tip rozliczalny** (test round-trip) + `POST /api/markets/catalog`
+- [x] 7 testów `tests/test_markets.py`
+
+### 20.3: ✅ GUI — MarketsPanel w kreatorze (krok 3)
+- [x] Toggle "📊 Wszystkie rynki" obok BetBuilder, grupy collapsible jak STS
+- [x] Chipy: rynek + @kurs + szansa%, ~ = fair, klik → wybór tipu (single)
+- [x] Zweryfikowane Playwright: 8 grup, wybór handicap → kupon + Kelly OK
+
+### 20.4: ⏳ Możliwe rozszerzenia (opcjonalne)
+- [ ] Dokładny wynik / multigoal (rozliczalne, ale dużo opcji)
+- [ ] Kartki/rożne — wymaga feedu zdarzeń (API-Football statistics) + settlement
+
+---
+
 ## 🎰 FAZA 18: KREATOR BETBUILDER (manualny, z zabezpieczeniami)
 
 > Cel: w kreatorze kuponów dodać tryb BetBuilder — user buduje combo z 1 meczu,

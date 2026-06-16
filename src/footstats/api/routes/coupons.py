@@ -82,6 +82,13 @@ class BetBuilderRequest(BaseModel):
     selected: List[str] = []
 
 
+class MarketsRequest(BaseModel):
+    prob_home_win: float
+    prob_away_win: float
+    prob_over_25: float
+    odds: dict = {}
+
+
 class PlaceCouponRequest(BaseModel):
     selections: List[SelectionItem]
     total_odds: float | None = None
@@ -264,6 +271,25 @@ def betbuilder_markets(req: BetBuilderRequest, user_id: int = Depends(require_au
     wynik = oblicz_rynki(mat, req.selected)
     wynik["lambdas"] = {"home": lh, "away": la}
     return wynik
+
+
+@router.post("/markets/catalog")
+def markets_catalog(req: MarketsRequest, user_id: int = Depends(require_auth)):
+    """
+    FAZA 20: pełny katalog rynków bramkowych dla meczu (pogrupowany jak STS).
+    Z prob 1X2/Over estymuje lambdy Poissona → liczy ~34 rynki rozliczalne.
+    Kurs: Bzzoiro gdy w `odds`, inaczej fair (1/prob).
+    """
+    from footstats.core.bet_builder import estimate_lambdas_from_probs
+    from footstats.core.markets import build_market_catalog
+
+    lh, la = estimate_lambdas_from_probs(
+        req.prob_home_win, req.prob_away_win, req.prob_over_25
+    )
+    return {
+        "lambdas": {"home": lh, "away": la},
+        "grupy": build_market_catalog(lh, la, bzz_odds=req.odds),
+    }
 
 
 @router.post("/coupon/kelly")

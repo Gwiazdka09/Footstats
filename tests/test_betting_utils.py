@@ -106,3 +106,38 @@ class TestObliczTipCorrect:
 
     def test_case_insensitive_tip(self):
         assert oblicz_tip_correct("over 2.5", "2-1") == 1
+
+    # ── Handicap europejski (FAZA 20) ─────────────────────────────────────────
+
+    def test_handicap_home_minus15_hit(self):
+        assert oblicz_tip_correct("1 (-1.5)", "3-1") == 1   # margin 2
+
+    def test_handicap_home_minus15_miss(self):
+        assert oblicz_tip_correct("1 (-1.5)", "2-1") == 0   # margin 1
+
+    def test_handicap_away_plus15_hit(self):
+        assert oblicz_tip_correct("2 (+1.5)", "2-1") == 1   # przegrał o 1, +1.5 ratuje
+
+    def test_handicap_away_plus15_miss(self):
+        assert oblicz_tip_correct("2 (+1.5)", "3-1") == 0
+
+    def test_handicap_home_minus05_equiv_win(self):
+        assert oblicz_tip_correct("1 (-0.5)", "1-0") == 1
+        assert oblicz_tip_correct("1 (-0.5)", "1-1") == 0
+
+    def test_handicap_brak_wyniku_none(self):
+        assert oblicz_tip_correct("1 (-1.5)", "1") is None  # brak bramek
+
+    # ── Parzyste / nieparzyste (FAZA 20) ──────────────────────────────────────
+
+    def test_parzyste_hit(self):
+        assert oblicz_tip_correct("PARZYSTE", "1-1") == 1   # 2 gole
+
+    def test_parzyste_zero_to_parzyste(self):
+        assert oblicz_tip_correct("PARZYSTE", "0-0") == 1   # 0 = parzyste
+
+    def test_nieparzyste_hit(self):
+        assert oblicz_tip_correct("NIEPARZYSTE", "2-1") == 1  # 3 gole
+
+    def test_parzyste_miss(self):
+        assert oblicz_tip_correct("PARZYSTE", "2-1") == 0
