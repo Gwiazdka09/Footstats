@@ -22,10 +22,11 @@
 
 ---
 
-## 🔴 FAZA 16: ACCURACY FIXES
+## ✅ FAZA 16: ACCURACY FIXES — DONE (06-16)
 
-### 16.3: Draw bias
-- [ ] A/B: porównaj trafność remisów vs 1/2 (warunek: 50 settled)
+### 16.3: Draw bias ✅ DONE (06-16)
+- [x] A/B: X=38.7% (31 typy) vs 2=21.7% (23 typy) vs 1=25% (4 typy)
+- **Wynik: remisy trafiane powyżej średniej — draw bias fix działa. Away win (typ 2) najsłabszy.**
 
 ### 16.4: Kalibracja modelu ✅ DONE (06-16)
 - [x] `python -m footstats.core.probability_calibrator` — 67 próbek
