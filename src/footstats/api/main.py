@@ -362,6 +362,12 @@ def privacy_policy():
     return FileResponse(html_path, media_type="text/html", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/regulamin", tags=["legal"])
+def terms_of_service():
+    html_path = Path(__file__).parent / "regulamin.html"
+    return FileResponse(html_path, media_type="text/html", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/manifest.json", tags=["pwa"])
 def pwa_manifest():
     from fastapi.responses import JSONResponse

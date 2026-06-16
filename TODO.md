@@ -1,11 +1,11 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-14
+**Ostatnia aktualizacja:** 2026-06-16
 **Wersja:** v3.4-stable
-**Accuracy baseline:** 33% (12/35 live settled, Neon.tech)
-**Cel na koniec lipca:** M1 = 55% win rate
+**Accuracy baseline:** 33% live (Neon.tech, 49/50 settled)
+**Cel:** M1 = 55% win rate (min. 50 settled + kalibracja)
 
-> Historia ukończonych zadań: `git log` (commity TD/16.x/15.x mają opisowe nazwy)
+> Historia ukończonych zadań: `git log`
 
 ---
 
@@ -13,119 +13,76 @@
 
 | Milestone | Cel | Status | Warunek |
 |-----------|-----|--------|---------|
-| **M0** | 42% baseline | ✅ Done | 33 kupony SQLite lokalny |
-| **M0b** | 26.7% live baseline | ✅ Done | 15 kuponów Neon.tech |
+| **M0** | 42% baseline | ✅ Done | 33 kupony SQLite |
+| **M0b** | 26.7% live baseline | ✅ Done | 15 kuponów Neon |
 | **M1** | 55% win rate | 🔴 W toku | min. 50 settled + kalibracja |
-| **M2** | 60% win rate | ⏸️ | Po M1 — tuning wag ensemble |
-| **M3** | 65% selected | ⏸️ | Po M2 — stop-loss + filtrowanie lig |
-| **BETA** | Testerzy | ⏸️ | Po M1 — stabilna accuracy |
+| **M2** | 60% win rate | ⏸️ | Po M1 |
+| **M3** | 65% selected | ⏸️ | Po M2 |
+| **BETA** | Testerzy | ⏸️ | Po M1 |
 
 ---
 
-## 🔴 FAZA 16: ACCURACY FIXES (przed betą)
+## 🔴 FAZA 16: ACCURACY FIXES
 
-### 16.3: Draw bias — model faworyzuje remisy
-- [x] Root cause: FINAL_REMIS_BOOST overshoot dla niskich lambd
-- [x] Fix: sufit p_remis=40% w poisson.py
-- [ ] A/B: porównaj trafność remisów vs 1/2 w ostatnich 35 settled (warunek: 50 settled)
-- **Effort:** A/B po 16.4 | 🔴 P1
+### 16.3: Draw bias
+- [ ] A/B: porównaj trafność remisów vs 1/2 (warunek: 50 settled)
 
 ### 16.4: Kalibracja modelu (po 50 settled)
 - [ ] `python -m footstats.core.probability_calibrator`
 - [ ] A/B test wag: 50/50 → 60/40 → 70/30 Poisson/Bzzoiro
 - [ ] Zapisać `data/model_calibration.json`
-- **Effort:** 2–3h | Warunek: min. 50 settled live kuponów
+- **Warunek: min. 50 settled live kuponów (06-16: 49/50)**
 
-### 16.5: Zbieranie danych (pasywne — 3 tygodnie)
-- [x] Daily agent działa automatycznie (Task Scheduler 08:00 + 11:00 + 23:00) — zweryfikowano 06-15, LastResult=0 na wszystkich 4 zadaniach
+### 16.5: Zbieranie danych (pasywne)
 - [ ] Monitorować logi: `logs/kupon_YYYY-MM-DD.txt`
-- [ ] Cel: 50 settled kuponów z filtrowanymi ligami (06-15: 49/50 — WON 15 + LOST 34)
-- [x] match_stats (timeline zdarzeń) zapisywane do `predictions` (06-12)
+- [ ] Cel: 50 settled — WON 15 + LOST 34, brakuje 1
 
 ---
 
 ## 🟡 TECHNICZNE
 
-### TD-31: Testy core modules — ✅ DONE (06-14)
-- [x] Priorytetowe: coupon_settlement, bankroll, kelly, value_bet, quick_picks
-- [x] bankroll: nowy `tests/test_bankroll.py` (8 testów, sqlite fixture)
-- [x] coupon_settlement/kelly/value_bet/quick_picks: już pokryte (60 testów)
-
----
-
-## ⏸️ NA PÓŹNIEJ
+### Testy (TD-31 częściowo done)
+- [ ] Brak testów: bet_builder, classifier, confidence, daily_filters, daily_io, form, fortress, h2h, importance, lambda_optimizer, weekly_picks
+- **Effort:** 3–5 dni | ⏸️ po M1
 
 ### 15.6: Multi-user support
 - [ ] Per-user bankroll, risk profile, Telegram chat_id
 - **Effort:** 3–5 dni | ⏸️ po M1
 
-## Licencja
-- [x] LICENSE zmienione MIT → All Rights Reserved + klauzula portfolio/CV (06-12)
-- [ ] Konsultacja z prawnikiem przed komercyjnym udostępnieniem (ToS bukmacherów + ochrona baz danych)
-
 ---
 
-## 💰 MONETYZACJA / LAUNCH (przed publicznym beta)
+## 💰 MONETYZACJA / LAUNCH
 
-### Logowanie / rejestracja
-- [x] `POST /api/auth/register` — nowe konto (login+email+hasło min.8), auto-login + init bankrolla (06-15)
-- [x] Login akceptuje login LUB e-mail
-- [x] GUI: LoginView z przełączaniem Logowanie/Rejestracja
+### Prawne
+- [ ] Konsultacja z prawnikiem przed komercyjnym udostępnieniem (ToS bukmacherów)
+- [ ] Rejestracja JDG (CEIDG, 1 dzień, darmowe) — przed pierwszym płatnym userem
 
-### Prawne dokumenty
-- [ ] `/regulamin` (ToS) — warunki subskrypcji, zwroty, anulacja
-- [x] `/polityka-prywatnosci` (RODO) — strona stworzona (06-15), wymaga uzupełnienia [nazwa firmy/NIP/e-mail]
-- [x] Dashboard: "Twoje imperium bukmacherskie" → "Twój asystent analityczny do kuponów" (06-15)
-- [ ] Disclaimer w footerze GUI: "FootStats nie jest bukmacherem, nie przyjmuje zakładów, prognozy nie gwarantują wyników, hazard 18+"
-- [ ] Rejestracja JDG (CEIDG, darmowe, 1 dzień) — przed pierwszym płatnym userem. Limit działalności nierejestrowanej 2026: 10 813,50 zł/kw., ale subskrypcje = regularna działalność → JDG obowiązkowa od razu (06-15)
-
-### Płatności / subskrypcje
-- [x] Decyzja: Lemon Squeezy/Paddle (MoR) — wyższe fee, ale VAT/KSeF za nas (06-15)
-- [x] Research 06-15: LS żyje (Stripe kupił 2024, nie zamknął), 5%+$0.50 (LS +1.5% intl). MoR rozlicza VAT/faktury → KSeF problem odpada
-- [ ] Cennik widoczny przed checkout + jasne warunki auto-renewal
+### Płatności (Lemon Squeezy / Paddle — zdecydowane)
+- [ ] Cennik widoczny przed checkout + warunki auto-renewal
 - [ ] Webhooks: subscription.updated/cancelled/payment_failed
-- [ ] Email: potwierdzenie, faktura, retry nieudanej płatności, ostrzeżenie przed odnowieniem
-- [ ] Upgrade/downgrade planu + proration
+- [ ] Email: potwierdzenie, faktura, retry, ostrzeżenie przed odnowieniem
+- [ ] Upgrade/downgrade + proration
 
-### KSeF (od 1 kwietnia 2026 — wszyscy przedsiębiorcy)
-- [ ] Faktury Stripe NIE spełniają wymogów KSeF → integrator (Stripto) lub MoR
-- **Effort:** konsultacja z księgowym | po wyborze modelu płatności
+### Email transakcyjny
+- [ ] Resend.com — potrzebny `RESEND_API_KEY` + FROM adres (użytkownik musi założyć konto)
+- [ ] Potwierdzenie rejestracji, reset hasła, faktura
 
-### Must-have przed launchem — gap-check 06-15 (research: supastarter SaaS checklist 2026)
-- [x] Error monitoring — Sentry już w main.py
-- [x] Auth (login/register/JWT) — gotowe
-- [x] Neon Postgres — auto-backupy po stronie Neon
-- [ ] Transactional email (potwierdzenie rejestracji, reset hasła, faktura/payment) — brak SMTP/Resend/SendGrid w kodzie
-- [x] Self-service usunięcie konta (RODO) — `DELETE /api/auth/me` anonimizuje username/email/hasło, deaktywuje (06-15)
-- [x] Cookie consent banner (RODO) — CookieConsent.jsx, bottom glass-card, localStorage fs_cookie_consent (06-16)
-- [ ] Uptime monitoring (np. UptimeRobot free) — brak
-- [x] Rate limiting — global 60/min (SlowAPI, main.py:102,228), obejmuje /api/auth/* (06-15)
-- [ ] SEO basics: meta tags, sitemap.xml, robots.txt
-- **Effort:** email+cookie banner 0.5d, account deletion 0.5d, rate limit 0.5h, uptime monitor 15min | przed beta
+### Hosting
+- [ ] ALLOWED_ORIGINS Cloud Run: sprawdź czy `bot-opal-nu.vercel.app` jest dodane ✓ (zrobione 06-16)
+- [ ] Custom domain (opcjonalne)
 
-### Hosting / Deploy
-- [x] Backend już na GCP Cloud Run (CD auto-deploy na push main) + Neon Postgres + GCS backup — patrz `INTEGRATIONS.md` (06-15)
-- [x] Frontend (React/Vite GUI): wdrożony na Vercel — bot-opal-nu.vercel.app (06-16)
-- [ ] Domena custom (opcjonalne) — Vercel daje darmowy cert na *.vercel.app
-- [ ] ALLOWED_ORIGINS w Cloud Run: dodaj bot-opal-nu.vercel.app (blokuje API calls z prod frontu!)
-- **Effort:** frontend deploy 0.5 dnia | po ustaleniu cennika
+### SEO
+- [ ] Meta tags w index.html
+- [ ] sitemap.xml, robots.txt
+
+### Inne
+- [ ] Rozszerzenie zakładów: rożne, kartki (po M1)
 
 ---
 
-## 💡 Pomysły od betatesterów
+## 📋 Następne kroki (priorytet)
 
-### Rozszerzenie oferty zakładów (rożne/kartki)
-- STS Bet Builder: rożne, kartki, rzut karny, czerwona kartka
-- zawodtyper.pl: dane per-kategoria, zawodtyper_referees: avg_yellow/avg_red per sędzia
-- Pomysł: `fetch_team_corners`/`fetch_team_cards` + Poisson → nowe tipy
-- **Effort:** 2-3 dni | po M1
-### Przycisk dla admina — ✅ DONE (06-14)
-- [x] nowa zakładka "Panel" (tylko dla adm): "Sprawdź wyniki meczów" (POST /coupons/settle) + "Zarządzaj użytkownikami" (GET/POST/DELETE /admin/users)
-### Zmiana nazwy konta — nieaktualne
-- [x] system już używa `username` (nie email) do logowania/wyświetlania — brak akcji
-### Błąd w przeglondarce na telefonie — ✅ DONE (06-14)
-- [x] mobile topbar (logo + ☰) + fullscreen drawer nav (X zamyka), sidebar desktop ukryty <1024px
-### P1! — ✅ DONE (06-15, false positives, zweryfikowane)
-- [x] "API key" w .vexp/manifest.json → to SHA256 hashe plików (vexp index), nie sekrety
-- [x] "Command injection" w 8 subprocess.run/Popen → wszystkie list-form args, brak shell=True, cap.cmd z hardcoded CAPABILITIES
-- [x] "SQL injection" rag.py:215-218 → f-string buduje tylko placeholdery `?,?,?`, wartości idą parametryzowane
+1. **Jutro:** Sprawdź logi — czy 50. kupon settled (brakuje 1)
+2. **Po 50 settled:** Uruchom 16.4 kalibrację
+3. **Równolegle:** Email transakcyjny (Resend — wymaga klucza od użytkownika)
+4. **Przed betą:** JDG rejestracja

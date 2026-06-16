@@ -5,40 +5,44 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#6366f1" />
   <title>FootStats — Polityka Prywatności</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-    * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
-    body { background: #0f172a; color: #e2e8f0; }
-    .glass-card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 1.25rem;
-    }
-    h2 { color: #818cf8; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.6; }
+    .wrap { max-width: 48rem; margin: 0 auto; padding: 4rem 1.5rem; }
+    .back { font-size: 0.875rem; color: #94a3b8; text-decoration: none; }
+    .back:hover { color: #f8fafc; }
+    h1 { font-size: 1.875rem; font-weight: 700; margin: 1rem 0 0.5rem; }
+    .subtitle { font-size: 0.875rem; color: #94a3b8; margin-bottom: 2.5rem; }
+    .glass-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 1.25rem; padding: 2rem; }
+    section + section { margin-top: 2rem; }
+    h2 { font-size: 1.125rem; font-weight: 600; color: #818cf8; margin-bottom: 0.75rem; }
+    p { color: #cbd5e1; margin-bottom: 0.5rem; }
+    ul, ol { color: #cbd5e1; padding-left: 1.5rem; }
+    li { margin-bottom: 0.35rem; }
     a { color: #818cf8; }
+    .footer { font-size: 0.75rem; color: #475569; text-align: center; margin-top: 2.5rem; }
   </style>
 </head>
 <body>
-  <div class="max-w-3xl mx-auto px-6 py-16">
-    <a href="/" class="text-sm text-slate-400 hover:text-white">&larr; Powrót do FootStats</a>
-    <h1 class="text-3xl font-bold mt-4 mb-2">Polityka Prywatności</h1>
-    <p class="text-slate-400 text-sm mb-10">Ostatnia aktualizacja: 15.06.2026</p>
+  <div class="wrap">
+    <a href="/" class="back">&larr; Powrót do FootStats</a>
+    <h1>Polityka Prywatności</h1>
+    <p class="subtitle">Ostatnia aktualizacja: 15.06.2026</p>
 
-    <div class="glass-card p-8 space-y-8 text-slate-300 leading-relaxed">
+    <div class="glass-card">
 
       <section>
-        <h2 class="text-xl font-bold mb-2">1. Administrator danych</h2>
+        <h2>1. Administrator danych</h2>
         <p>
           Administratorem danych osobowych przetwarzanych w ramach serwisu FootStats jest
           <strong>[Imię i nazwisko / nazwa firmy], NIP: [NIP], e-mail kontaktowy: [adres e-mail]</strong>.
-          Kontakt w sprawach związanych z przetwarzaniem danych: <a href="mailto:kontakt@footstats.pl">kontakt@footstats.pl</a>.
+          Kontakt w sprawach związanych z przetwarzaniem danych: <a href="mailto:jakubgwiazdowski12@gmail.com">jakubgwiazdowski12@gmail.com</a>.
         </p>
       </section>
 
       <section>
-        <h2 class="text-xl font-bold mb-2">2. Jakie dane zbieramy</h2>
-        <ul class="list-disc pl-6 space-y-1">
+        <h2>2. Jakie dane zbieramy</h2>
+        <ul>
           <li><strong>Dane konta:</strong> nazwa użytkownika, adres e-mail, hasło (przechowywane w formie zahaszowanej).</li>
           <li><strong>Dane subskrypcji / płatności:</strong> status planu, historia transakcji — obsługiwane przez zewnętrznego operatora płatności (Lemon Squeezy / Paddle), który jako Merchant of Record samodzielnie przetwarza dane karty płatniczej. FootStats nie przechowuje numerów kart.</li>
           <li><strong>Dane techniczne:</strong> adres IP, typ urządzenia/przeglądarki, logi błędów (Sentry) — w celu diagnostyki i bezpieczeństwa.</li>
@@ -47,8 +51,8 @@
       </section>
 
       <section>
-        <h2 class="text-xl font-bold mb-2">3. Cele i podstawy prawne przetwarzania</h2>
-        <ul class="list-disc pl-6 space-y-1">
+        <h2>3. Cele i podstawy prawne przetwarzania</h2>
+        <ul>
           <li>Świadczenie usługi (konto, subskrypcja, generowanie analiz) — art. 6 ust. 1 lit. b RODO (umowa).</li>
           <li>Rozliczenia i obowiązki podatkowe (faktury) — art. 6 ust. 1 lit. c RODO (obowiązek prawny).</li>
           <li>Bezpieczeństwo i diagnostyka błędów (logi, Sentry) — art. 6 ust. 1 lit. f RODO (prawnie uzasadniony interes).</li>
@@ -57,18 +61,18 @@
       </section>
 
       <section>
-        <h2 class="text-xl font-bold mb-2">4. Odbiorcy danych (podprocesorzy)</h2>
-        <ul class="list-disc pl-6 space-y-1">
+        <h2>4. Odbiorcy danych (podprocesorzy)</h2>
+        <ul>
           <li><strong>Neon.tech</strong> — hosting bazy danych (PostgreSQL).</li>
           <li><strong>Google Cloud Platform (Cloud Run, region europe-west1)</strong> — hosting aplikacji.</li>
           <li><strong>Sentry</strong> — monitoring błędów aplikacji.</li>
           <li><strong>Lemon Squeezy / Paddle</strong> — obsługa płatności i subskrypcji jako Merchant of Record.</li>
         </ul>
-        <p class="mt-2">Dane mogą być przetwarzane na serwerach znajdujących się w Europejskim Obszarze Gospodarczym (EOG).</p>
+        <p>Dane mogą być przetwarzane na serwerach znajdujących się w Europejskim Obszarze Gospodarczym (EOG).</p>
       </section>
 
       <section>
-        <h2 class="text-xl font-bold mb-2">5. Okres przechowywania danych</h2>
+        <h2>5. Okres przechowywania danych</h2>
         <p>
           Dane konta przechowujemy przez czas trwania subskrypcji oraz do 30 dni po jej zakończeniu —
           po tym czasie konto i powiązane dane są usuwane, z wyjątkiem danych, których przechowywanie
@@ -77,24 +81,24 @@
       </section>
 
       <section>
-        <h2 class="text-xl font-bold mb-2">6. Twoje prawa (RODO)</h2>
-        <p class="mb-2">Masz prawo do:</p>
-        <ul class="list-disc pl-6 space-y-1">
+        <h2>6. Twoje prawa (RODO)</h2>
+        <p>Masz prawo do:</p>
+        <ul>
           <li>dostępu do swoich danych i otrzymania ich kopii,</li>
           <li>sprostowania (poprawienia) danych,</li>
-          <li>usunięcia danych ("prawo do bycia zapomnianym"),</li>
+          <li>usunięcia danych ("prawo do bycia zapomnianym") — dostępne przez ustawienia konta,</li>
           <li>ograniczenia przetwarzania,</li>
           <li>przenoszenia danych,</li>
           <li>wniesienia sprzeciwu wobec przetwarzania,</li>
           <li>wniesienia skargi do Prezesa Urzędu Ochrony Danych Osobowych (UODO).</li>
         </ul>
-        <p class="mt-2">
-          Aby zrealizować swoje prawa, napisz na adres: <a href="mailto:kontakt@footstats.pl">kontakt@footstats.pl</a>.
+        <p>
+          Aby zrealizować swoje prawa, napisz na adres: <a href="mailto:jakubgwiazdowski12@gmail.com">jakubgwiazdowski12@gmail.com</a>.
         </p>
       </section>
 
       <section>
-        <h2 class="text-xl font-bold mb-2">7. Cookies i przechowywanie lokalne</h2>
+        <h2>7. Cookies i przechowywanie lokalne</h2>
         <p>
           Serwis wykorzystuje token sesyjny (JWT) przechowywany w pamięci przeglądarki, niezbędny do
           zalogowania i korzystania z konta. Nie używamy plików cookie do celów marketingowych ani
@@ -103,7 +107,7 @@
       </section>
 
       <section>
-        <h2 class="text-xl font-bold mb-2">8. Zmiany polityki prywatności</h2>
+        <h2>8. Zmiany polityki prywatności</h2>
         <p>
           Zastrzegamy sobie prawo do aktualizacji niniejszej polityki. O istotnych zmianach poinformujemy
           użytkowników e-mailem lub komunikatem w panelu, z odpowiednim wyprzedzeniem.
@@ -111,6 +115,7 @@
       </section>
 
     </div>
+    <p class="footer">FootStats nie jest bukmacherem. Prognozy nie gwarantują wyników. Hazard 18+.</p>
   </div>
 </body>
 </html>
