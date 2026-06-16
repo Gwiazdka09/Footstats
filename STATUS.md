@@ -10,16 +10,18 @@
 
 | Metric | Status | Value |
 |--------|--------|-------|
-| **Accuracy** | 🟡 | 33% live (49 settled, Neon) — Faza 16 w toku |
-| **Settled** | 🟡 | 49/50 — brakuje 1 do kalibracji M1 |
+| **Accuracy** | 🟡 | 31.7% live (41 unikalnych settled, Neon) — Faza 17 fixy wdrożone |
+| **Model fixes** | ✅ | Faza 17 (pewność z prob, longshot filtr, whitelist, dedup) DONE |
+| **Data collection** | ✅ | System paper-trading (single-leg) autonomiczne od 06-16 |
 | **Syntax** | ✅ | 0 SyntaxError |
-| **Tests** | ✅ | 73 test files, ~813 test functions |
-| **Automation** | ✅ | Task Scheduler: 4 zadania, LastResult=0 (06-15) |
+| **Tests** | ✅ | ~990 testów pass (dodano core/betbuilder/system_paper) |
+| **Automation** | ✅ | Task Scheduler: draft 08:00 + final + evening 23:00 |
 | **API** | ✅ | FastAPI + Sentry + SlowAPI + CORS + Timeout |
 | **DB** | ✅ | Neon PG (prod), keepalives, pool maxconn=10 |
 | **Security** | ✅ | Rate limit 60/min, SQL parametryzowane, brak sekretów |
-| **Auth** | ✅ | JWT, login/register/delete account |
-| **RODO** | ✅ | Cookie consent, polityka prywatności, DELETE /api/auth/me |
+| **Auth** | ✅ | JWT, login/register/delete account (UI w Ustawieniach) |
+| **RODO** | ✅ | Cookie consent, polityka, regulamin, self-delete UI |
+| **SEO** | ✅ | meta/OG/Twitter, sitemap.xml, robots.txt |
 
 ---
 
@@ -29,10 +31,10 @@
 |-----------|--------|----------|
 | **Frontend** | ✅ Vercel | bot-opal-nu.vercel.app |
 | **Backend API** | ✅ Cloud Run | footstats-api-949240532526.europe-west1.run.app |
-| **DB** | ✅ Neon.tech | europe-west-4 |
+| **DB** | ✅ Neon.tech | europe-west |
 | **Monitoring** | ✅ Sentry | aktywne w Cloud Run |
 | **Uptime** | ✅ UptimeRobot | monitor 803305270, /health HEAD+GET |
-| **Daily Agent** | ✅ | Task Scheduler 08:00 + 11:00 |
+| **Daily Agent** | ✅ | Task Scheduler 08:00 (draft+final) + System paper-trading |
 | **Evening Agent** | ✅ | Task Scheduler 23:00 |
 
 ---
@@ -41,12 +43,23 @@
 
 | # | Problem | Priorytet |
 |---|---------|-----------|
-| 1 | Accuracy 33% live — czekamy na 50. settled kupon | 🔴 P1 |
-| 2 | Email transakcyjny (Resend) — brak konfiguracji | 🟡 P2 |
+| 1 | Accuracy 31.7% — czeka na świeże settled z naprawionego pipeline (Faza 17.7 A/B) | 🔴 P1 |
+| 2 | Email transakcyjny (Resend) — wymaga klucza od użytkownika | 🟡 P2 |
 | 3 | JDG rejestracja — przed pierwszym płatnym userem | 🟡 P2 |
 | 4 | Płatności (Lemon Squeezy) — nie zintegrowane | 🟡 P2 |
-| 5 | SEO — brak meta tags, sitemap, robots.txt | 🟡 P3 |
-| 6 | 20 modułów core bez testów | ⚪ P4 |
+| 5 | 3 moduły core bez testów (daily_io/form/weekly_picks) | ⚪ P4 |
+
+---
+
+## FUNKCJE (recent)
+
+| Funkcja | Faza | Data |
+|---------|------|------|
+| System paper-trading single-leg (autonomiczne) | 19 | 06-16 |
+| Kreator BetBuilder + reguły korelacji | 18 | 06-16 |
+| Root-cause accuracy: 6 fixów modelu | 17 | 06-16 |
+| Usuwanie konta (RODO) UI + SEO + GUI polish | — | 06-16 |
+| Kalibracja + A/B wag 70/30 | 16.4 | 06-16 |
 
 ---
 
@@ -54,14 +67,11 @@
 
 | Problem | Data |
 |---------|------|
-| SPA routing Vercel (rewrite rule) | 06-16 |
-| Frontend deploy: bot-opal-nu.vercel.app | 06-16 |
-| Cookie consent banner (RODO) | 06-16 |
-| Self-service usunięcie konta DELETE /api/auth/me | 06-15 |
-| UptimeRobot HEAD fix (/health) | 06-15 |
-| Sentry DSN w Cloud Run | 06-15 |
-| Neon idle timeout (keepalives) | 06-15 |
-| Polityka prywatności (/polityka-prywatnosci) | 06-15 |
+| Layout: footer ściskał content (flex-row) | 06-16 |
+| Pewność z EV → z prob modelu (kalibracja odwrócona) | 06-16 |
+| 47 duplikatów predykcji usuniętych z prod Neon | 06-16 |
+| Whitelist lig no-op → egzekwowana | 06-16 |
+| SPA routing Vercel + frontend deploy | 06-16 |
+| Cookie consent + polityka + regulamin (RODO) | 06-15/16 |
+| Sentry DSN + Neon idle timeout + UptimeRobot | 06-15 |
 | Draw bias fix (p_remis sufit 40%) | 06-12 |
-| TD-31 testy bankroll/coupon/kelly | 06-14 |
-| Kupony z halucynowanymi kursami Groq (TD-38) | 06-14 |

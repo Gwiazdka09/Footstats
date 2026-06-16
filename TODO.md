@@ -40,10 +40,11 @@
   tego samego meczu. Test regresyjny `tests/test_pewnosc_z_modelu.py` (7 testów).
 
 ### 17.7: ⏳ A/B + re-fit po fixach (DO ZROBIENIA)
-- [ ] Re-fit `calibration.json` na zdeduplikowanych 41 settled
+- [x] Re-fit `calibration.json` na zdeduplikowanych 41 settled (krzywa monotoniczna 28.6→35%)
 - [ ] Monitorować świeże kupony: czy kalibracja monotoniczna (wyższa pewność → wyższa trafność)
 - [ ] A/B accuracy po zebraniu ~20 nowych settled z poprawionym pipeline
-- **Warunek:** ~2-3 tygodnie zbierania danych z naprawionym pipeline
+- **Zbieranie przyspieszone:** FAZA 19 (System paper-trading) tworzy single-leg kupony
+  codziennie → szybszy zbiór czystych per-tip wyników. Warunek: ~1-2 tygodnie.
 
 ---
 
@@ -157,10 +158,20 @@
 
 ---
 
+## 🎨 GUI / UX — DONE (06-16)
+- [x] Fix layoutu (footer był dzieckiem flex-row → ściskał content)
+- [x] Usuwanie konta (RODO) w Ustawieniach — DELETE /api/auth/me (ukryte dla admina)
+- [x] Polska odmiana "typ" (1 typ / 2 typy / 5 typów)
+- [x] Liczby metryk w foncie brandowym Outfit (`.metric-num`)
+- [x] Hover lift tylko dla klikalnych kart (statyczne bez "skoku")
+- [x] BetBuilder w kreatorze (FAZA 18)
+
+---
+
 ## 📋 Następne kroki (priorytet)
 
-1. **Pasywne (17.7):** Pipeline zbiera świeże kupony z naprawioną pewnością.
-   Po ~20 nowych settled → A/B czy kalibracja monotoniczna.
+1. **Pasywne (17.7):** System paper-trading działa autonomicznie (Task Scheduler 08:00) —
+   zbiera single-leg kupony codziennie. Po ~20 settled → A/B czy kalibracja monotoniczna.
 2. **Wymaga Ciebie:** Email transakcyjny — załóż konto Resend.com, podaj `RESEND_API_KEY` + FROM.
 3. **Przed pierwszym płatnym userem:** JDG (CEIDG, 1 dzień) + konsultacja prawnik.
 4. **Płatności:** Lemon Squeezy/Paddle — integracja po JDG.
