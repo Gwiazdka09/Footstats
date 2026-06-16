@@ -75,6 +75,13 @@ class KellyRequest(BaseModel):
     selections: List[SelectionItem]
 
 
+class BetBuilderRequest(BaseModel):
+    prob_home_win: float
+    prob_away_win: float
+    prob_over_25: float
+    selected: List[str] = []
+
+
 class PlaceCouponRequest(BaseModel):
     selections: List[SelectionItem]
     total_odds: float | None = None
@@ -238,6 +245,25 @@ def get_daily_proposals(user_id: int = Depends(require_auth)):
         _MATCHES_CACHE = _fetch_predictions()
     from footstats.core.risk_proposals import build_daily_proposals
     return build_daily_proposals(_MATCHES_CACHE)
+
+
+@router.post("/betbuilder/markets")
+def betbuilder_markets(req: BetBuilderRequest, user_id: int = Depends(require_auth)):
+    """
+    FAZA 18.2: stan kreatora BetBuilder dla 1 meczu.
+    Z prawdopodobieństw 1X2/Over estymuje lambdy Poissona, buduje macierz wyników
+    i zwraca rynki z szansą + regułami korelacji (allowed/powod) dla `selected`.
+    """
+    from footstats.core.bet_builder import estimate_lambdas_from_probs, probability_matrix
+    from footstats.core.betbuilder_rules import oblicz_rynki
+
+    lh, la = estimate_lambdas_from_probs(
+        req.prob_home_win, req.prob_away_win, req.prob_over_25
+    )
+    mat = probability_matrix(lh, la)
+    wynik = oblicz_rynki(mat, req.selected)
+    wynik["lambdas"] = {"home": lh, "away": la}
+    return wynik
 
 
 @router.post("/coupon/kelly")

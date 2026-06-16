@@ -126,3 +126,27 @@ def szansa_combo(wybrane: list[str], macierz) -> float:
         if h < n and a < len(macierz[h]):
             total += float(macierz[h][a])
     return total
+
+
+def oblicz_rynki(macierz, wybrane: list[str]) -> dict:
+    """
+    Agreguje stan kreatora BetBuilder dla danej macierzy Poissona:
+    - lista rynków z szansą standalone (%), flagą allowed i powodem blokady
+    - skorelowana szansa obecnego combo (%)
+    Single source of truth dla GUI — frontend nie powiela reguł korelacji.
+    """
+    rynki = []
+    for r in WSZYSTKIE_RYNKI:
+        prob = szansa_combo([r], macierz)
+        rynki.append({
+            "rynek":   r,
+            "szansa":  round(prob * 100, 1),
+            "wybrany": r in wybrane,
+            "allowed": czy_dozwolony(r, wybrane),
+            "powod":   powod_blokady(r, wybrane),
+        })
+    return {
+        "rynki":       rynki,
+        "combo_szansa": round(szansa_combo(wybrane, macierz) * 100, 1),
+        "wybrane":     list(wybrane),
+    }
