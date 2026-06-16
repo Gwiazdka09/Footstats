@@ -56,7 +56,9 @@
 ## 🟡 TECHNICZNE (po M1)
 
 ### Testy modułów core (TD-31) — pozostałe
-- [ ] daily_io (DB), form (scraper Rich), weekly_picks (651 linii) — wymagają mocków DB/Playwright
+- [x] form + weekly_picks._typy_pewne — `tests/test_form_weekly.py` (11 testów, 06-17)
+- [ ] daily_io — czysta integracja DB (glue nad coupon_tracker/bankroll już testowanymi);
+  niska wartość vs nakład (fixture sqlite). Opcjonalne.
 
 ### 15.6: Multi-user support
 - [ ] Per-user bankroll, risk profile, Telegram chat_id — **Effort:** 3–5 dni
