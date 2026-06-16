@@ -141,6 +141,26 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
     _TYP_NORM = {"Over": "Over 2.5", "Under": "Under 2.5",
                  "OVER": "Over 2.5", "UNDER": "Under 2.5"}
 
+    # FAZA 17.1: pewność = prawdopodobieństwo modelu dla danego typu (NIE z EV).
+    # Mapuje typ tipa → klucz w pred Poissona (wartości w %).
+    def _prob_modelu(typ: str, pred: dict) -> float | None:
+        if not pred:
+            return None
+        t_low = typ.strip().lower()
+        if t_low in ("1", "1x"):
+            return pred.get("p_wygrana")
+        if t_low == "x":
+            return pred.get("p_remis")
+        if t_low in ("2", "x2"):
+            return pred.get("p_przegrana")
+        if t_low.startswith("over"):
+            return pred.get("over25")
+        if t_low.startswith("under"):
+            return pred.get("under25")
+        if t_low == "btts":
+            return pred.get("btts")
+        return None
+
     def _zapisz(typy: list, kupon_type: str) -> None:
         for t in typy:
             mecz_str = t.get("mecz", "")
@@ -148,9 +168,13 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
             czesci = mecz_str.split(" vs ", 1)
             home = w.get("gospodarz") or (czesci[0].strip() if czesci else mecz_str)
             away = w.get("goscie") or (czesci[1].strip() if len(czesci) > 1 else "")
-            ev = t.get("ev_netto")
-            conf = min(95, max(50, int(60 + float(ev) * 2))) if ev is not None else 65
             tip = _TYP_NORM.get(t.get("typ", ""), t.get("typ", ""))
+            # Pewność z prawdopodobieństwa modelu; fallback: LLM pewnosc_pct; ostatecznie 50.
+            p_mod = _prob_modelu(t.get("typ", ""), w.get("pred") or {})
+            if p_mod is not None:
+                conf = int(round(max(1, min(99, p_mod))))
+            else:
+                conf = int(t.get("pewnosc_pct") or 50)
             try:
                 from footstats.ai.rag import wyciagnij_faktory
                 faktory = wyciagnij_faktory(w.get("pred") or {})
