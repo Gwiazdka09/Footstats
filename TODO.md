@@ -105,8 +105,9 @@
 
 ### Hosting / Deploy
 - [x] Backend już na GCP Cloud Run (CD auto-deploy na push main) + Neon Postgres + GCS backup — patrz `INTEGRATIONS.md` (06-15)
-- [ ] Frontend (React/Vite GUI): niewdrożony, tylko lokalnie — Vercel/Netlify free tier
-- [ ] Domena + HTTPS dla frontu (Vercel daje darmowy cert)
+- [x] Frontend (React/Vite GUI): wdrożony na Vercel — bot-opal-nu.vercel.app (06-16)
+- [ ] Domena custom (opcjonalne) — Vercel daje darmowy cert na *.vercel.app
+- [ ] ALLOWED_ORIGINS w Cloud Run: dodaj bot-opal-nu.vercel.app (blokuje API calls z prod frontu!)
 - **Effort:** frontend deploy 0.5 dnia | po ustaleniu cennika
 
 ---
