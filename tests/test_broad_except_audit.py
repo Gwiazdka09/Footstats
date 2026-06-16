@@ -22,7 +22,7 @@ BASELINE: dict[str, int] = {
     "ai/rag.py": 2,
     "ai/rag_embeddings.py": 3,
     "ai/trainer.py": 3,
-    "api/main.py": 2,  # startup DB init + health endpoint (must never return 5xx)
+    "api/main.py": 3,  # startup DB init + health endpoint (5xx-proof) + Sentry init guard
     "api/routes/bankroll.py": 1,
     "api/routes/coupons.py": 3,
     "api/routes/status.py": 2,
@@ -77,6 +77,7 @@ BASELINE: dict[str, int] = {
     "scrapers/zawodtyper_referees.py": 1,
     "utils/admin_user.py": 1,
     "utils/cache.py": 6,
+    "utils/db.py": 1,  # best-effort cleanup martwej conn z puli (Neon idle timeout)
     "utils/logging.py": 2,
     "utils/telegram_notify.py": 1,
     "weekly_report.py": 4,

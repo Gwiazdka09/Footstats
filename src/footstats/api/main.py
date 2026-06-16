@@ -32,7 +32,7 @@ if _sentry_dsn and _sentry_dsn.startswith("https://"):
             traces_sample_rate=0.1,
             environment=os.environ.get("ENV", "production"),
         )
-    except Exception:
+    except Exception:  # noqa: broad-except — Sentry nie może blokować startu (RQ fork crash na Windows)
         # np. lokalnie na Windows: integracja RQ wywala sie na multiprocessing fork context
         logging.getLogger(__name__).warning("Sentry init nieudane — kontynuuje bez monitoringu", exc_info=True)
 

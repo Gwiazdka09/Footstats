@@ -44,7 +44,7 @@ class _Conn:
             # Martwa conn z puli (Neon idle timeout) — wymień na świeżą
             try:
                 pool.putconn(raw, close=True)
-            except Exception:
+            except Exception:  # noqa: broad-except — best-effort cleanup martwej conn
                 pass
             raw = pool.getconn()
         self._raw = raw
