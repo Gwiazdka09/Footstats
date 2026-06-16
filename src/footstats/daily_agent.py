@@ -1112,6 +1112,8 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Data YYYY-MM-DD (domyslnie: dzis) — etykieta logów i update_pending")
     p.add_argument("--dry-run",     action="store_true",
                    help="Tryb podgladu: nie zapisuje do DB, TXT, nie wysyla Telegram/Windows")
+    p.add_argument("--system-paper", action="store_true",
+                   help="Twórz single-leg kupony na koncie System (paper-trading, per-tip ROI)")
     p.add_argument("--bb",          action="store_true",
                    help="Pobierz realne kursy BetBuilder z Superbet API + sygnaly Strefy Inspiracji (wolno, ~3-5min)")
     return p
@@ -1359,6 +1361,16 @@ def main():
         if args.bb:
             _wzbogac_o_inspiracje(wyniki)
         _apply_injury_corrections(wyniki)
+
+    # FAZA 19: paper-trading bota — single-leg kupony System (per-tip ROI/win rate)
+    if getattr(args, "system_paper", False) and not args.dry_run:
+        _sep("KROK 2b — System paper-trading (single-leg)")
+        try:
+            from footstats.core.system_paper import build_single_leg_coupons
+            n = build_single_leg_coupons(wyniki)
+            console.print(f"[cyan]System: utworzono {n} single-leg kuponów na koncie System[/cyan]")
+        except (OSError, ValueError, KeyError, RuntimeError) as e:
+            console.print(f"[yellow]System paper-trading pominięty: {e}[/yellow]")
 
     _sep("KROK 3 — Groq AI")
     dane = _analizuj_groq(wyniki, cel_wygrana_a=args.cel_a, cel_wygrana_b=args.cel_b, stawka=args.stawka)

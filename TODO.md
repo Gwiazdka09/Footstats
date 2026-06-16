@@ -89,6 +89,21 @@
 
 ---
 
+## 🤖 FAZA 19: SYSTEM PAPER-TRADING (single-leg) — DONE (06-16)
+
+> Bot tworzy 1 single-leg kupon/mecz na koncie System → czysty per-tip win rate/ROI
+> (multi-leg AKO topił sygnał). Cel: szybka walidacja modelu po Fazie 17 na realnych danych.
+
+### 19.1: ✅ Moduł + wiring
+- [x] `core/system_paper.py` — `najlepszy_typ` (max p_modelu po filtrach Fazy 17),
+  `build_single_leg_coupons` (whitelist lig + longshot + idempotencja per mecz/data)
+- [x] Flaga `--system-paper` w daily_agent (krok 2b), flat stake 2 PLN, konto System (id=408)
+- [x] Kupony NIE shared → poza leaderboardem; auto-settle przez coupon_settlement
+- [x] 7 testów `tests/test_system_paper.py`
+- [ ] **Aktywacja:** dodać `--system-paper` do `run_daily.bat` (gdy gotowy do zbierania)
+
+---
+
 ## 🎰 FAZA 18: KREATOR BETBUILDER (manualny, z zabezpieczeniami)
 
 > Cel: w kreatorze kuponów dodać tryb BetBuilder — user buduje combo z 1 meczu,
