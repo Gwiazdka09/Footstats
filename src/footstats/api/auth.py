@@ -258,13 +258,30 @@ def get_me(user_id: int = Depends(require_auth)) -> MeResponse:
     return MeResponse(**dict(row))
 
 
+_TELEGRAM_ID_RE = re.compile(r"^-?\d{1,20}$")
+
+
 class TelegramRequest(BaseModel):
     chat_id: str = ""
+
+    @field_validator("chat_id")
+    @classmethod
+    def chat_id_valid(cls, v: str) -> str:
+        v = (v or "").strip()
+        # Pusty = odłączenie powiadomień. Inaczej musi być numerycznym Telegram ID.
+        if v and not _TELEGRAM_ID_RE.match(v):
+            raise ValueError("chat_id musi być numerycznym Telegram ID (od @userinfobot)")
+        return v
 
 
 @router.post("/auth/telegram", status_code=status.HTTP_200_OK)
 def set_telegram_chat_id(req: TelegramRequest, user_id: int = Depends(require_auth)):
-    """FAZA 15.6: ustaw/wyczyść telegram_chat_id użytkownika (powiadomienia per-user)."""
+    """
+    FAZA 15.6: ustaw/wyczyść telegram_chat_id użytkownika (powiadomienia per-user).
+    UWAGA: brak weryfikacji własności czatu — user deklaruje swój chat_id. Format
+    walidowany (numeryczny). Pełna weryfikacja (nonce /start przez webhook bota)
+    do dodania gdy pojawią się realni użytkownicy — patrz TODO 15.7.
+    """
     from footstats.utils.db import connect
     chat_id = req.chat_id.strip() or None
     with connect() as conn:

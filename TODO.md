@@ -65,6 +65,7 @@
 - [x] Per-user risk profile (bot_settings per user_id) — było wcześniej
 - [x] Per-user Telegram chat_id: migracja 6, `send_message_to_user`, endpoint
   `POST /auth/telegram`, pole w Ustawieniach. Globalny flow nietknięty (additive).
+- [ ] 15.7: weryfikacja własności czatu (nonce /start przez webhook bota) — przed realnymi userami (security MEDIUM)
 
 ---
 
