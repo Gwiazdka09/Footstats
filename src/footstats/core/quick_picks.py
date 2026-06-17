@@ -170,6 +170,13 @@ def szybkie_pewniaczki_2dni(
         pw  = round(calibrate_confidence(pw_raw)  * 100.0, 1)
         pr  = round(calibrate_confidence(pr_raw)  * 100.0, 1)
         pp  = round(calibrate_confidence(pp_raw)  * 100.0, 1)
+        # A3 (06-17): kalibracja per-wynik łamie sumę 1X2 (≠100%) — renormalizuj
+        # do prawidłowego rozkładu (1/X/2 to zdarzenia rozłączne i wyczerpujące).
+        _s1x2 = pw + pr + pp
+        if _s1x2 > 0:
+            pw  = round(pw / _s1x2 * 100.0, 1)
+            pr  = round(pr / _s1x2 * 100.0, 1)
+            pp  = round(pp / _s1x2 * 100.0, 1)
         bt  = round(calibrate_confidence(bt_raw)  * 100.0, 1)
         o25 = round(calibrate_confidence(o25_raw) * 100.0, 1)
         u25 = round(100.0 - o25, 1)
