@@ -133,22 +133,55 @@ def _odswiez_kursy_live(indeks: dict, dni: int = 3) -> dict:
 # ── Krok 1b: Injury Lambda Correction ──────────────────────────────────────
 
 def _apply_injury_corrections(wyniki: list) -> None:
-    """Koryguje lambdy na podstawie kontuzji kluczowych graczy."""
+    """
+    Koryguje λ i PRAWDOPODOBIEŃSTWA kandydata za kontuzje (dwustronnie):
+      brak napastnika/pomocnika → mniej strzela DANA drużyna (OWN λ ↓)
+      brak obrońcy/bramkarza    → więcej strzela RYWAL (λ rywala ↑)
+    Przelicza pw/pr/pp/bt/o25 z macierzy Poissona dla skorygowanych λ — żeby
+    kontuzje realnie wpływały na typy (1X2/O-U/BTTS), nie tylko bet_builder.
+    """
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    from footstats.core.bet_builder import estimate_lambdas_from_probs, probability_matrix
+
     for w in wyniki:
         try:
-            injuries_home = w.get("injuries_home", [])
-            injuries_away = w.get("injuries_away", [])
+            inj_h = w.get("injuries_home") or []
+            inj_a = w.get("injuries_away") or []
+            if not inj_h and not inj_a:
+                continue
 
-            if "bet_builder_markets" in w:
-                lh = w.get("lambda_h")
-                la = w.get("lambda_a")
-                if lh and la:
-                    lh_adj = injury_correction(lh, injuries_home, is_home=True)
-                    la_adj = injury_correction(la, injuries_away, is_home=False)
-                    w["lambda_h"] = lh_adj
-                    w["lambda_a"] = la_adj
-                    log.debug(f"{w.get('gospodarz')} vs {w.get('goscie')}: lambda_h {lh:.2f}→{lh_adj:.2f}, lambda_a {la:.2f}→{la_adj:.2f}")
-        except (AttributeError, TypeError, KeyError) as e:
+            h_atak, h_leak = injury_lambda_factors(inj_h)
+            a_atak, a_leak = injury_lambda_factors(inj_a)
+            if (h_atak, h_leak, a_atak, a_leak) == (1.0, 1.0, 1.0, 1.0):
+                continue
+
+            # λ wyjściowe: z lambda_h/a (bet_builder) lub estymowane z pw/pp/o25
+            lh = w.get("lambda_h")
+            la = w.get("lambda_a")
+            if not lh or not la:
+                lh, la = estimate_lambdas_from_probs(
+                    (w.get("pw") or 0) / 100.0, (w.get("pp") or 0) / 100.0, (w.get("o25") or 0) / 100.0
+                )
+            # gospodarz strzela: własny atak ↓ + dziura w obronie gościa ↑
+            lh_adj = round(lh * h_atak * a_leak, 4)
+            la_adj = round(la * a_atak * h_leak, 4)
+            w["lambda_h"], w["lambda_a"] = lh_adj, la_adj
+
+            # Przelicz prawdopodobieństwa z macierzy (procenty, jak w kandydacie)
+            mat = probability_matrix(lh_adj, la_adj)
+            n = len(mat)
+            pw = sum(mat[h][a] for h in range(n) for a in range(len(mat[h])) if h > a)
+            pr = sum(mat[h][a] for h in range(n) for a in range(len(mat[h])) if h == a)
+            pp = sum(mat[h][a] for h in range(n) for a in range(len(mat[h])) if a > h)
+            o25 = sum(mat[h][a] for h in range(n) for a in range(len(mat[h])) if h + a > 2.5)
+            bt = sum(mat[h][a] for h in range(1, n) for a in range(1, len(mat[h])))
+            w["pw"], w["pr"], w["pp"] = round(pw * 100, 1), round(pr * 100, 1), round(pp * 100, 1)
+            w["o25"], w["bt"] = round(o25 * 100, 1), round(bt * 100, 1)
+            log.debug(
+                "%s vs %s: kontuzje λ %.2f→%.2f / %.2f→%.2f",
+                w.get("gospodarz"), w.get("goscie"), lh, lh_adj, la, la_adj,
+            )
+        except (AttributeError, TypeError, KeyError, ValueError) as e:
             log.debug(f"Injury correction error: {e}")
 
 
@@ -184,6 +217,9 @@ def _wzbogac_forme_top(wyniki: list, top_n: int = 6) -> None:
                 w["sofa_forma_g"] = f"{''.join(fh['form'])}({fh.get('goals_scored',0)}:{fh.get('goals_conceded',0)})"
             if fa.get("form"):
                 w["sofa_forma_a"] = f"{''.join(fa['form'])}({fa.get('goals_scored',0)}:{fa.get('goals_conceded',0)})"
+            # Pełne dane kontuzji (z pozycją) do korekty λ — nie tylko nazwy do wyświetlenia
+            w["injuries_home"] = fh.get("injuries", []) or []
+            w["injuries_away"] = fa.get("injuries", []) or []
             inj_g = [i.get("name", "?") for i in fh.get("injuries", [])[:3]]
             inj_a = [i.get("name", "?") for i in fa.get("injuries", [])[:3]]
             if inj_g:

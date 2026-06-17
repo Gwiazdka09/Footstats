@@ -150,10 +150,38 @@ def test_injury_floor_minus_20_procent():
     assert skor >= 2.0 * 0.8
 
 
-def test_injury_ignoruje_napastnikow_jako_kluczowych():
-    # 'F' nie jest w (G,D,M) — nie liczony jako kluczowy
+def test_injury_napastnik_liczony():
+    # FIX: napastnik ('F') obniża własne λ (wcześniej ignorowany — bug)
     inj = [{"position": "F"}]
-    assert injury_correction(1.5, inj, is_home=False) == 1.5
+    assert injury_correction(1.5, inj, is_home=False) < 1.5
+
+
+# ── lambda_optimizer.injury_lambda_factors (model dwustronny) ─────────────
+
+def test_factors_brak_kontuzji():
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    assert injury_lambda_factors([]) == (1.0, 1.0)
+
+
+def test_factors_napastnik_obniza_atak():
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    atak, leak = injury_lambda_factors([{"position": "F"}, {"position": "M"}])
+    assert atak < 1.0       # własny atak spada
+    assert leak == 1.0      # obrona bez zmian
+
+
+def test_factors_obronca_zwieksza_leak():
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    atak, leak = injury_lambda_factors([{"position": "D"}, {"position": "G"}])
+    assert atak == 1.0      # atak bez zmian
+    assert leak > 1.0       # rywal strzeli więcej
+
+
+def test_factors_cap_20_procent():
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    atak, leak = injury_lambda_factors([{"position": "F"}] * 20 + [{"position": "D"}] * 20)
+    assert atak == 0.80     # cap -20%
+    assert leak == 1.20     # cap +20%
 
 
 # ── ImportanceIndex.analiza ───────────────────────────────────────────────

@@ -143,29 +143,45 @@ def _predict_lambdas(hist: pd.DataFrame, home: str, away: str) -> tuple[float, f
     return lh * corr, la / corr
 
 
+# Pozycje wg SofaScore: F=napastnik, M=pomocnik, D=obrońca, G=bramkarz.
+_POZ_ATAK = ("F", "M")   # nieobecność → mniej strzelamy (niżej OWN λ)
+_POZ_OBRONA = ("D", "G")  # nieobecność → więcej tracimy (wyżej λ RYWALA)
+_KARA_ATAK = 0.05         # -5% OWN λ za brakującego napastnika/pomocnika
+_LEAK_OBRONA = 0.05       # +5% λ rywala za brakującego obrońcy/bramkarza
+_CAP = 0.20               # twardy limit ±20%
+
+
+def injury_lambda_factors(injuries: list[dict]) -> tuple[float, float]:
+    """
+    Z listy kontuzji zwraca (atak_factor, obrona_leak_factor):
+      atak_factor      — mnożnik WŁASNEGO λ (≤1.0; spada za brakujących F/M)
+      obrona_leak_factor — mnożnik λ RYWALA (≥1.0; rośnie za brakujących D/G)
+
+    Football logic: brak napastnika = mniej strzelamy; brak obrońcy = rywal strzela więcej.
+    Bez wagi udziału w golach (dane per-gracz osobno) — flat per pozycja, cap ±20%.
+    """
+    if not injuries:
+        return 1.0, 1.0
+    n_atak = sum(1 for i in injuries if (i.get("position") or "").upper() in _POZ_ATAK)
+    n_obrona = sum(1 for i in injuries if (i.get("position") or "").upper() in _POZ_OBRONA)
+    atak = max(1.0 - _CAP, 1.0 - n_atak * _KARA_ATAK)
+    obrona_leak = min(1.0 + _CAP, 1.0 + n_obrona * _LEAK_OBRONA)
+    return round(atak, 4), round(obrona_leak, 4)
+
+
 def injury_correction(lambda_val: float, injuries: list[dict], is_home: bool) -> float:
     """
-    Koryguj lambde na podstawie kontuzji kluczowych graczy.
-
-    Args:
-        lambda_val: Wyjściowa lambda (expected goals)
-        injuries: Lista słowników z danymi kontuzji (muszą mieć klucz 'position')
-        is_home: True jeśli drużyna domowa (mniej strat, domowe warunki pomagają)
-
-    Returns:
-        Skorygowana lambda (max -20%, min -5% na grę domową)
+    Koryguj WŁASNE lambda za kontuzje ofensywne (F/M). Zachowane dla kompatybilności
+    (bet_builder). Pełny model dwustronny: `injury_lambda_factors`.
+    Drużyna domowa ma większą tolerancję (połowa kary).
     """
     if not injuries:
         return lambda_val
-
-    key_players = [i for i in injuries if i.get("position") in ("G", "D", "M")]
-    penalty = len(key_players) * 0.03  # -3% za każdego kontuzjowanego
-
-    # Drużyna domowa ma większą tolerancję na kontuzje (mniej niż gość)
+    atak, _ = injury_lambda_factors(injuries)
+    penalty = 1.0 - atak
     if is_home:
-        penalty *= 0.6  # -1.8% zamiast -3%
-
-    return max(lambda_val * (1 - penalty), lambda_val * 0.8)
+        penalty *= 0.6
+    return round(lambda_val * (1.0 - penalty), 4)
 
 
 # ── Główna funkcja kalibracji ─────────────────────────────────────────────
