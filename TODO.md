@@ -44,6 +44,38 @@
 
 ---
 
+## 🔍 AUDYT CORE (06-17) — sygnały liczone ale NIEwpięte w daily
+
+> Wzorzec jak bug z kontuzjami: feature istnieje, ale autonomiczny pipeline
+> (daily_agent → szybkie_pewniaczki_2dni → quick_picks) go pomija. Pełny model
+> jest tylko w `pewniaczki_tygodnia` (CLI), NIE w bocie. Ranking wg wpływu na accuracy.
+
+### 🔴 A1: Daily λ to MODEL OKROJONY (wpływ: wysoki)
+- quick_picks:179 woła `predict_match` tylko z `fortress_g, h2h_g, h2h_a`.
+- **NIE wpięte:** ImportanceIndex (motywacja: spadek/tytuł), Heurystyka (zmęczenie/rotacja),
+  KlasyfikatorMeczu (puchar/rewanż boost). Wszystkie istnieją, używane tylko w weekly/CLI.
+- Bot codzienny + System paper-trading liczą słabsze λ niż możliwe.
+- **Fix:** policzyć importance/heurystyka/klasyfikację w quick_picks i przekazać do predict_match.
+  Koszt: importance wymaga tabeli ligi, heurystyka historii — per mecz, wolniej (dlatego okrojono).
+
+### 🔴 A2: Wagi ensemble 70/30 NIE w realnych prob (wpływ: średni)
+- quick_picks:184 blenduje Poisson+Bzzoiro **na sztywno 50/50**.
+- `ensemble_probs` (wagi 70/30 z Fazy 16.4) używane TYLKO do `roznica_modeli` (diagnostyka
+  → decision_score), nie do faktycznych pw/pp/o25.
+- Faza 16.4 A/B efektywnie martwa w produkcyjnych predykcjach.
+- **Fix:** quick_picks ma użyć `ensemble_probs(... liga=liga)` zamiast hardcode 0.5/0.5.
+
+### 🟡 A3: Kalibracja łamie normalizację 1X2 (wpływ: średni)
+- quick_picks:161-163 kalibruje pw/pr/pp **niezależnie** przez isotonic → suma ≠ 100%.
+- Możliwa też podwójna kalibracja (quick_picks + daily_filters.calibrate_candidates).
+- **Fix:** kalibrować raz + renormalizować 1X2 do sumy 100%.
+
+### ✅ Poprawnie wpięte (zweryfikowane)
+- Kontuzje (po fixie 06-17), xG+obrona (06-17), h2h/fortress w daily λ,
+  referee/lineup → decision_score, calibrate_confidence w quick_picks.
+
+---
+
 ## 💰 MONETYZACJA / LAUNCH (wymaga Ciebie)
 
 ### Prawne
