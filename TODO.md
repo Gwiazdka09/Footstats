@@ -1,12 +1,12 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-16
+**Ostatnia aktualizacja:** 2026-06-18
 **Wersja:** v3.4-stable
-**Accuracy:** 31.7% live (41 settled) — pipeline naprawiony (Faza 17), czeka na świeże dane
+**Accuracy:** 31.7% live (41 settled) — pipeline + λ naprawione, **czeka na świeże dane**
 **Cel:** M1 = 55% win rate
 
-> Ukończone: `git log`. Fazy DONE: 16 (accuracy fixes), 17 (root-cause), 18 (BetBuilder),
-> 19 (System paper-trading), 20 (katalog rynków), GUI/UX polish, SEO, RODO.
+> Ukończone: `git log`. Fazy DONE: 16-20, GUI/UX, SEO, RODO, multi-user (15.6),
+> audyt core (A1-A3), λ: kontuzje + xG+obrona. Suite: 1037 testów pass.
 
 ---
 
@@ -14,60 +14,37 @@
 
 | Milestone | Cel | Status | Warunek |
 |-----------|-----|--------|---------|
-| **M1** | 55% win rate | 🔴 W toku | świeże settled z naprawionego pipeline + A/B |
+| **M1** | 55% win rate | 🔴 W toku | świeże settled + walidacja A/B |
 | **M2** | 60% win rate | ⏸️ | Po M1 — tuning |
 | **M3** | 65% selected | ⏸️ | Po M2 |
 | **BETA** | Testerzy | ⏸️ | Po M1 |
 
 ---
 
-## 🔴 PRIORYTET — walidacja modelu (17.7)
+## 🔴 PRIORYTET — WALIDACJA (czekaj i mierz, NIE dokładaj zmian λ)
 
-- [x] Narzędzie monitoringu: `python scripts/calibration_monitor.py` (Neon, read-only) —
-  monotoniczność kalibracji + per-tip + ROI System paper-trading
-- [ ] Uruchamiać monitor co kilka dni — czy kalibracja przestaje być odwrócona na świeżych danych
-- [ ] A/B accuracy po ~20 nowych settled z naprawionego pipeline
-- **Zbieranie:** System paper-trading działa autonomicznie (Task Scheduler 08:00). ~1-2 tyg.
-- **Obecnie:** stare 41 settled wciąż odwrócone (sprzed Fazy 17) — to oczekiwane
+> **Decyzja 06-18:** wpięto 6 zmian λ (kontuzje, xG+obrona, heurystyka, klasyfikacja,
+> wagi 70/30, renorm 1X2) — wszystkie NIEzwalidowane na danych. Dalsze zmiany psują
+> atrybucję (nie wiadomo co pomogło). STOP na nowe λ aż zbierzemy dane.
 
----
-
-## 🎯 JAKOŚĆ λ (lambda) — sufit accuracy
-
-- [x] Kontuzje: naprawione (były martwym kodem + bug) — przeliczają λ i prawdopodobieństwa
-  dwustronnie (napastnik out→własne λ↓, obrońca out→λ rywala↑), cap ±20% (06-17)
-- [x] **xG pogłębione** (06-17): blend uwzględnia obronę rywala — λ_dom=(xGF_dom+xGA_gość)/2;
-  prefetch Understat już zasila cache przed Poissonem. Było: tylko własny xGF.
-- [ ] Kontuzje v2: waga udziałem w golach (utrata kluczowego strzelca > rezerwowy) —
-  wymaga scrape per-gracz (SofaScore goals) — większy nakład
-- [ ] Opponent-adjusted λ (Dixon-Coles attack/defense ratings) — λ skorygowane o siłę rywala
+- [ ] Co kilka dni: `python scripts/calibration_monitor.py` (Neon, read-only)
+  - czy kalibracja przestała być **odwrócona** (była: 90%+ pewność → 11% trafność)
+  - System (bez Groq) vs Pipeline (Groq) — werdykt bottlenecku LLM (potrzeba ≥15 System settled)
+  - czy accuracy ruszyła z 31.7%
+- [ ] Po ~20 świeżych settled z naprawionego pipeline → A/B, ocena które λ-zmiany pomogły
+- **Zbieranie:** System paper-trading autonomiczne (Task Scheduler 08:00). ~1-2 tyg.
+- **Stare 41 settled** są sprzed fixów → wciąż odwrócone, to oczekiwane.
 
 ---
 
-## 🔍 AUDYT CORE (06-17) — sygnały liczone ale NIEwpięte w daily
+## 🎯 JAKOŚĆ λ — kandydaci PO walidacji (nie wcześniej)
 
-> Wzorzec jak bug z kontuzjami: feature istnieje, ale autonomiczny pipeline go pomijał.
-> A1-A3 NAPRAWIONE 06-17.
-
-### ✅ A1: Daily λ — heurystyka + klasyfikacja wpięte (b55b5ef8f)
-- quick_picks buduje HeurystaZmeczeniaRotacji + KlasyfikatorMeczu z df_mecze,
-  przekazuje do predict_match. Zmęczenie/rotacja wpływa teraz na daily λ.
-- [ ] **ImportanceIndex blocked** — `football_data.tabela(kod)` zwraca gotowe kolumny
-  (Poz./Druzyna/M), ale brak: (1) mapy nazwa-ligi Bzzoiro→kod football-data.org,
-  (2) cache standings per liga (rate limit free 10/min). Wartość TYLKO w końcówce
-  sezonu (walka o tytuł/spadek) — **odłożone do startu sezonu lig** (off-season = NORMAL).
-
-### ✅ A2: Wagi ensemble 70/30 realnie używane (41b203394)
-- quick_picks używa `ensemble_probs(liga=liga)` zamiast hardcode 50/50.
-- ensemble_weights.json zregenerowany (_default 70/30). Wagi strojone po danych z paper-tradingu.
-
-### ✅ A3: Renormalizacja 1X2 po kalibracji (fee8d91e0)
-- pw/pr/pp renormalizowane do sumy 100% po isotonic. Podwójnej kalibracji brak
-  (calibrate_candidates dodaje osobne pole, nie nadpisuje).
-
-### ✅ Poprawnie wpięte (zweryfikowane)
-- Kontuzje (fix 06-17), xG+obrona (06-17), heurystyka/klasyfikacja (A1),
-  ensemble 70/30 (A2), h2h/fortress, referee/lineup → decision_score, kalibracja+renorm (A3).
+- [ ] **Dixon-Coles opponent-adjusted** — λ skorygowane o siłę rywala (z istniejącej historii,
+  bez nowych danych). Najwyższy następny lewar.
+- [ ] **Kontuzje v2** — waga udziałem w golach (utrata strzelca > rezerwowy); wymaga scrape per-gracz.
+- [ ] **ImportanceIndex** (motywacja spadek/tytuł) — `football_data.tabela(kod)` daje kolumny,
+  ale brak: mapy nazwa-ligi Bzzoiro→kod football-data.org + cache standings. **Tylko końcówka
+  sezonu** ma wartość → odłożone do startu lig (teraz off-season = NORMAL).
 
 ---
 
@@ -92,19 +69,11 @@
 
 ---
 
-## 🟡 TECHNICZNE (po M1)
+## 🟡 TECHNICZNE / SECURITY
 
-### Testy modułów core (TD-31) — pozostałe
-- [x] form + weekly_picks._typy_pewne — `tests/test_form_weekly.py` (11 testów, 06-17)
-- [ ] daily_io — czysta integracja DB (glue nad coupon_tracker/bankroll już testowanymi);
-  niska wartość vs nakład (fixture sqlite). Opcjonalne.
-
-### 15.6: Multi-user support — ✅ DONE (06-17)
-- [x] Per-user bankroll (bankroll_state.user_id, funkcje biorą user_id) — było wcześniej
-- [x] Per-user risk profile (bot_settings per user_id) — było wcześniej
-- [x] Per-user Telegram chat_id: migracja 6, `send_message_to_user`, endpoint
-  `POST /auth/telegram`, pole w Ustawieniach. Globalny flow nietknięty (additive).
-- [ ] 15.7: weryfikacja własności czatu (nonce /start przez webhook bota) — przed realnymi userami (security MEDIUM)
+- [ ] 15.7: weryfikacja własności czatu Telegram (nonce /start przez webhook) —
+  przed realnymi userami (security MEDIUM). Teraz: walidacja formatu numerycznego.
+- [ ] daily_io — testy (czysta integracja DB, glue nad już-testowanym; niska wartość). Opcjonalne.
 
 ---
 
@@ -117,9 +86,8 @@
 
 ---
 
-## 📋 Następne kroki (priorytet)
+## 📋 Następne kroki
 
-1. **Pasywne:** System paper-trading zbiera dane codziennie → po ~20 settled A/B (17.7)
-2. **Wymaga Ciebie:** Email (Resend key)
-3. **Przed płatnym userem:** JDG + prawnik
-4. **Płatności:** Lemon Squeezy/Paddle po JDG
+1. **Pasywne (priorytet):** monitor co kilka dni, czekaj na ~20 świeżych settled → walidacja
+2. **Po walidacji:** Dixon-Coles (jeśli accuracy nadal poniżej celu)
+3. **Wymaga Ciebie:** Email (Resend key) → JDG + prawnik → płatności
