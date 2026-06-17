@@ -165,7 +165,9 @@ def szybkie_pewniaczki_2dni(
         o25 = round(calibrate_confidence(o25_raw) * 100.0, 1)
         u25 = round(100.0 - o25, 1)
 
-        # ── 11.4+11.9: Poisson ensemble z fortress/h2h — blend z Bzzoiro 50/50 ──
+        # ── 11.4+11.9: Poisson ensemble z fortress/h2h — blend z Bzzoiro ──
+        # A2 (06-17): wagi per-liga z ensemble_probs (domyślnie 70/30 Poisson/Bzzoiro,
+        # Faza 16.4) zamiast sztywnego 50/50. Wagi są teraz realnie używane i strojone.
         poisson_blend = False
         _fort_g = None
         _h2h_g  = None
@@ -173,6 +175,7 @@ def szybkie_pewniaczki_2dni(
         if df_mecze is not None:
             try:
                 from footstats.core.poisson import predict_match
+                from footstats.core.ensemble import ensemble_probs
                 _fort_g = fortress_sys.analiza(g) if fortress_sys else None
                 _h2h_g  = h2h_sys.analiza(g, a)  if h2h_sys  else None
                 _h2h_a  = h2h_sys.analiza(a, g)  if h2h_sys  else None
@@ -181,11 +184,16 @@ def szybkie_pewniaczki_2dni(
                     fortress_g=_fort_g, h2h_g=_h2h_g, h2h_a=_h2h_a,
                 )
                 if _pred_p:
-                    pw  = round(pw  * 0.5 + _pred_p["p_wygrana"]   * 0.5, 1)
-                    pr  = round(pr  * 0.5 + _pred_p["p_remis"]     * 0.5, 1)
-                    pp  = round(pp  * 0.5 + _pred_p["p_przegrana"] * 0.5, 1)
-                    bt  = round(bt  * 0.5 + _pred_p["btts"]        * 0.5, 1)
-                    o25 = round(o25 * 0.5 + _pred_p["over25"]      * 0.5, 1)
+                    _p_pois = {"pw": _pred_p["p_wygrana"], "pr": _pred_p["p_remis"],
+                               "pp": _pred_p["p_przegrana"], "bt": _pred_p["btts"],
+                               "o25": _pred_p["over25"]}
+                    _p_bzz  = {"pw": pw, "pr": pr, "pp": pp, "bt": bt, "o25": o25}
+                    _bl = ensemble_probs(_p_pois, _p_bzz, liga=liga)
+                    pw  = round(_bl["pw"], 1)
+                    pr  = round(_bl["pr"], 1)
+                    pp  = round(_bl["pp"], 1)
+                    bt  = round(_bl["bt"], 1)
+                    o25 = round(_bl["o25"], 1)
                     u25 = round(100.0 - o25, 1)
                     poisson_blend = True
             except (ImportError, AttributeError, ValueError, KeyError, TypeError):
