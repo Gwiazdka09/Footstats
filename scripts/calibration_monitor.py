@@ -108,11 +108,67 @@ def raport_system_paper() -> None:
     print(f"  ROI        : {(profit / staked * 100):+.1f}%" if staked else "  ROI: —")
 
 
+def raport_system_vs_groq() -> None:
+    """
+    KLUCZOWY EKSPERYMENT: czy Groq (LLM) pomaga, czy bottleneckiem jest model?
+    - System (bez Groq): single-leg kupony, wybór max p_modelu — naiwna selekcja.
+    - Pipeline (Groq): typy wybrane przez Groq (tabela predictions).
+    Oba używają tych samych prawdopodobieństw Poissona → różni je SELEKCJA.
+
+    Werdykt:
+      System ≈ Groq  → bottleneck to model/dane, nie LLM (większy LLM nie pomoże)
+      System > Groq  → Groq szkodzi w selekcji (wtedy lepszy LLM/prompt pomoże)
+      System < Groq  → Groq dodaje wartość w selekcji
+    """
+    _sep("SYSTEM (bez Groq) vs PIPELINE (Groq) — izolacja wpływu LLM")
+    with connect() as c:
+        uid = c.execute("SELECT id FROM users WHERE username='System' LIMIT 1").fetchone()
+        sys_n = sys_won = 0
+        if uid:
+            r = c.execute(
+                "SELECT COUNT(*) n, SUM(CASE WHEN status='WON' THEN 1 ELSE 0 END) won "
+                "FROM coupons WHERE user_id = ? AND status IN ('WON','LOST')",
+                (uid["id"],),
+            ).fetchone()
+            sys_n, sys_won = r["n"] or 0, r["won"] or 0
+        rg = c.execute(
+            "SELECT COUNT(*) n, SUM(CASE WHEN tip_correct=1 THEN 1 ELSE 0 END) won "
+            "FROM predictions WHERE tip_correct IS NOT NULL"
+        ).fetchone()
+        groq_n, groq_won = rg["n"] or 0, rg["won"] or 0
+
+    sys_acc = (sys_won / sys_n * 100) if sys_n else None
+    groq_acc = (groq_won / groq_n * 100) if groq_n else None
+    print(f"  System (bez Groq) : {_pct(sys_won, sys_n)} ({sys_won}/{sys_n})")
+    print(f"  Pipeline (Groq)   : {_pct(groq_won, groq_n)} ({groq_won}/{groq_n})")
+    print()
+
+    MIN_N = 15
+    if sys_n < MIN_N:
+        print(f"  ⏳ System ma {sys_n} settled (potrzeba >= {MIN_N}) — paper-trading zbiera dane.")
+        print("     Werdykt dostępny gdy System uzbiera próbkę (Task Scheduler 08:00 codziennie).")
+        return
+    if groq_acc is None:
+        print("  Brak danych Groq.")
+        return
+
+    delta = sys_acc - groq_acc
+    if abs(delta) <= 5:
+        print(f"  ⚖️  System ≈ Groq (Δ{delta:+.1f}pp) → BOTTLENECK TO MODEL/DANE, nie LLM.")
+        print("     Większy Groq nie podniesie sufitu — popraw lambdy/dane wejściowe.")
+    elif delta > 5:
+        print(f"  🔴 System > Groq (Δ{delta:+.1f}pp) → Groq SZKODZI w selekcji.")
+        print("     Lepszy prompt/LLM lub mocniejsze ograniczenie Groq pomoże.")
+    else:
+        print(f"  ✅ Groq > System (Δ{delta:+.1f}pp) → Groq dodaje wartość w selekcji.")
+
+
 def main() -> None:
     print("FootStats — monitor kalibracji (Neon prod, read-only)")
     raport_kalibracji()
     raport_per_typ()
     raport_system_paper()
+    raport_system_vs_groq()
     print()
 
 
