@@ -54,17 +54,11 @@ class TestTelegramAvailability:
 class TestTelegramMessaging:
     """Testy wysyłania wiadomości."""
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_send_simple_message(self):
-        """Wysyła prostą testową wiadomość."""
-        if not telegram_dostepny():
-            pytest.skip("Telegram not available")
-
-        result = send_message(
-            "🤖 <b>FootStats Test</b>\n"
-            "Test integracji Telegramu — wiadomość testowa\n"
-            "Jeśli widzisz tę wiadomość, Telegram jest skonfigurowany poprawnie ✅"
-        )
+        """send_message() zwraca True — _send zamockowany (BEZ realnej wysyłki)."""
+        with patch("footstats.utils.telegram_notify._send", return_value=True):
+            result = send_message("test")
         assert result is True, "send_message() should return True on success"
 
     @pytest.mark.integration
@@ -123,47 +117,27 @@ class TestTelegramMessaging:
             result = send_kupon(test_kupon, stawka_a=10.0, stawka_b=5.0)
         assert result is True, "send_kupon() should return True on success"
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_send_wynik_update_test(self):
-        """Wysyła testowe powiadomienie wyniku."""
-        if not telegram_dostepny():
-            pytest.skip("Telegram not available")
-
-        result = send_wynik_update(
-            match_id=1,
-            mecz="Arsenal - Chelsea",
-            ai_tip="Over 2.5",
-            actual_result="3:2",
-            tip_correct=1,
-        )
+        """send_wynik_update() zwraca True — _send zamockowany (BEZ realnej wysyłki)."""
+        with patch("footstats.utils.telegram_notify._send", return_value=True):
+            result = send_wynik_update(
+                match_id=1,
+                mecz="Test A - Test B",
+                ai_tip="Over 2.5",
+                actual_result="3:2",
+                tip_correct=1,
+            )
         assert result is True, "send_wynik_update() should return True on success"
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_send_draft_kupon_test(self):
-        """Wysyła testowe powiadomienie DRAFT kuponu."""
-        if not telegram_dostepny():
-            pytest.skip("Telegram not available")
-
+        """send_draft_kupon() zwraca True — _send zamockowany (BEZ realnej wysyłki)."""
         test_legs = [
-            {
-                "mecz": "Arsenal - Chelsea",
-                "typ": "Over 2.5",
-                "kurs": 1.85,
-                "decision_score": 0.87,
-            },
-            {
-                "mecz": "Liverpool - Man City",
-                "typ": "Over 2.5",
-                "kurs": 1.75,
-                "decision_score": 0.92,
-            },
+            {"mecz": "Test A - Test B", "typ": "Over 2.5", "kurs": 1.85, "decision_score": 0.87},
         ]
-
-        result = send_draft_kupon(
-            coupon_id=999,
-            legs=test_legs,
-            total_odds=3.24,
-        )
+        with patch("footstats.utils.telegram_notify._send", return_value=True):
+            result = send_draft_kupon(coupon_id=999, legs=test_legs, total_odds=1.85)
         assert result is True, "send_draft_kupon() should return True on success"
 
 
