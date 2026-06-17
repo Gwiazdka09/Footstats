@@ -52,8 +52,10 @@
 ### ✅ A1: Daily λ — heurystyka + klasyfikacja wpięte (b55b5ef8f)
 - quick_picks buduje HeurystaZmeczeniaRotacji + KlasyfikatorMeczu z df_mecze,
   przekazuje do predict_match. Zmęczenie/rotacja wpływa teraz na daily λ.
-- [ ] **ImportanceIndex wciąż blocked** — wymaga tabeli ligi (standings), brak źródła
-  w ścieżce Bzzoiro. TODO: dociągnąć standings (np. football-data.org) i wpiąć motywację.
+- [ ] **ImportanceIndex blocked** — `football_data.tabela(kod)` zwraca gotowe kolumny
+  (Poz./Druzyna/M), ale brak: (1) mapy nazwa-ligi Bzzoiro→kod football-data.org,
+  (2) cache standings per liga (rate limit free 10/min). Wartość TYLKO w końcówce
+  sezonu (walka o tytuł/spadek) — **odłożone do startu sezonu lig** (off-season = NORMAL).
 
 ### ✅ A2: Wagi ensemble 70/30 realnie używane (41b203394)
 - quick_picks używa `ensemble_probs(liga=liga)` zamiast hardcode 50/50.
