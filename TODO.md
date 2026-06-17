@@ -46,33 +46,26 @@
 
 ## 🔍 AUDYT CORE (06-17) — sygnały liczone ale NIEwpięte w daily
 
-> Wzorzec jak bug z kontuzjami: feature istnieje, ale autonomiczny pipeline
-> (daily_agent → szybkie_pewniaczki_2dni → quick_picks) go pomija. Pełny model
-> jest tylko w `pewniaczki_tygodnia` (CLI), NIE w bocie. Ranking wg wpływu na accuracy.
+> Wzorzec jak bug z kontuzjami: feature istnieje, ale autonomiczny pipeline go pomijał.
+> A1-A3 NAPRAWIONE 06-17.
 
-### 🔴 A1: Daily λ to MODEL OKROJONY (wpływ: wysoki)
-- quick_picks:179 woła `predict_match` tylko z `fortress_g, h2h_g, h2h_a`.
-- **NIE wpięte:** ImportanceIndex (motywacja: spadek/tytuł), Heurystyka (zmęczenie/rotacja),
-  KlasyfikatorMeczu (puchar/rewanż boost). Wszystkie istnieją, używane tylko w weekly/CLI.
-- Bot codzienny + System paper-trading liczą słabsze λ niż możliwe.
-- **Fix:** policzyć importance/heurystyka/klasyfikację w quick_picks i przekazać do predict_match.
-  Koszt: importance wymaga tabeli ligi, heurystyka historii — per mecz, wolniej (dlatego okrojono).
+### ✅ A1: Daily λ — heurystyka + klasyfikacja wpięte (b55b5ef8f)
+- quick_picks buduje HeurystaZmeczeniaRotacji + KlasyfikatorMeczu z df_mecze,
+  przekazuje do predict_match. Zmęczenie/rotacja wpływa teraz na daily λ.
+- [ ] **ImportanceIndex wciąż blocked** — wymaga tabeli ligi (standings), brak źródła
+  w ścieżce Bzzoiro. TODO: dociągnąć standings (np. football-data.org) i wpiąć motywację.
 
-### 🔴 A2: Wagi ensemble 70/30 NIE w realnych prob (wpływ: średni)
-- quick_picks:184 blenduje Poisson+Bzzoiro **na sztywno 50/50**.
-- `ensemble_probs` (wagi 70/30 z Fazy 16.4) używane TYLKO do `roznica_modeli` (diagnostyka
-  → decision_score), nie do faktycznych pw/pp/o25.
-- Faza 16.4 A/B efektywnie martwa w produkcyjnych predykcjach.
-- **Fix:** quick_picks ma użyć `ensemble_probs(... liga=liga)` zamiast hardcode 0.5/0.5.
+### ✅ A2: Wagi ensemble 70/30 realnie używane (41b203394)
+- quick_picks używa `ensemble_probs(liga=liga)` zamiast hardcode 50/50.
+- ensemble_weights.json zregenerowany (_default 70/30). Wagi strojone po danych z paper-tradingu.
 
-### 🟡 A3: Kalibracja łamie normalizację 1X2 (wpływ: średni)
-- quick_picks:161-163 kalibruje pw/pr/pp **niezależnie** przez isotonic → suma ≠ 100%.
-- Możliwa też podwójna kalibracja (quick_picks + daily_filters.calibrate_candidates).
-- **Fix:** kalibrować raz + renormalizować 1X2 do sumy 100%.
+### ✅ A3: Renormalizacja 1X2 po kalibracji (fee8d91e0)
+- pw/pr/pp renormalizowane do sumy 100% po isotonic. Podwójnej kalibracji brak
+  (calibrate_candidates dodaje osobne pole, nie nadpisuje).
 
 ### ✅ Poprawnie wpięte (zweryfikowane)
-- Kontuzje (po fixie 06-17), xG+obrona (06-17), h2h/fortress w daily λ,
-  referee/lineup → decision_score, calibrate_confidence w quick_picks.
+- Kontuzje (fix 06-17), xG+obrona (06-17), heurystyka/klasyfikacja (A1),
+  ensemble 70/30 (A2), h2h/fortress, referee/lineup → decision_score, kalibracja+renorm (A3).
 
 ---
 
