@@ -65,8 +65,8 @@ def test_no_blend_when_no_df_mecze_and_no_cache():
     assert wyniki[0]["poisson_blend"] is False
 
 
-def test_blend_50_50_applied_when_df_mecze_provided():
-    """Poisson blend 50/50 zmienia pw/pr/pp/bt/o25 gdy predict_match zwraca dane."""
+def test_blend_ensemble_applied_when_df_mecze_provided():
+    """Poisson blend ensemble (70/30) zmienia pw/pr/pp/bt/o25 gdy predict_match zwraca dane."""
     bzz = _make_bzzoiro([_BZZ_EVENT])
     df_dummy = pd.DataFrame({"col": [1]})  # niepuste, ale predict_match mockowany
 
@@ -74,6 +74,10 @@ def test_blend_50_50_applied_when_df_mecze_provided():
     mock_fort.analiza.return_value = None
     mock_h2h = MagicMock()
     mock_h2h.analiza.return_value = None
+    mock_heur = MagicMock()
+    mock_heur.analiza.return_value = None
+    mock_klas = MagicMock()
+    mock_klas.klasyfikuj.return_value = None
 
     with patch(
         "footstats.core.quick_picks.calibrate_confidence", side_effect=lambda x: x / 100
@@ -83,6 +87,10 @@ def test_blend_50_50_applied_when_df_mecze_provided():
         "footstats.core.fortress.HomeFortress", return_value=mock_fort
     ), patch(
         "footstats.core.h2h.AnalizaH2H", return_value=mock_h2h
+    ), patch(
+        "footstats.core.fatigue.HeurystaZmeczeniaRotacji", return_value=mock_heur
+    ), patch(
+        "footstats.core.classifier.KlasyfikatorMeczu", return_value=mock_klas
     ):
         wyniki = szybkie_pewniaczki_2dni(bzz, prog=0.0, df_mecze=df_dummy)
 
@@ -91,9 +99,10 @@ def test_blend_50_50_applied_when_df_mecze_provided():
     assert len(wyniki) >= 1
     r = wyniki[0]
     assert r["poisson_blend"] is True
-    # Bzzoiro calibrated (div/100): pw=0.60 → 60%, Poisson: 50% → blend = 55%
-    assert r["pw"] == pytest.approx(55.0, abs=1.0)
-    assert r["pr"] == pytest.approx(25.0, abs=1.0)
+    # Ensemble 70/30 (Poisson/Bzzoiro): pw = 0.7*50 + 0.3*60 = 53
+    assert r["pw"] == pytest.approx(53.0, abs=1.0)
+    # pr = 0.7*30 + 0.3*20 = 27.0
+    assert r["pr"] == pytest.approx(27.0, abs=1.0)
 
 
 def test_blend_skipped_when_predict_match_returns_none():

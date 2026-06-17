@@ -99,15 +99,24 @@ def szybkie_pewniaczki_2dni(
     except (ImportError, AttributeError):
         pass
 
-    # 11.9: Inicjalizacja HomeFortress + AnalizaH2H przed pętlą
+    # 11.9 + A1(06-17): Inicjalizacja systemów λ przed pętlą.
+    # fortress/h2h/heurystyka/klasyfikator budowane z df_mecze (historia).
+    # ImportanceIndex POMINIĘTY — wymaga tabeli ligi (standings), niedostępnej
+    # w ścieżce Bzzoiro. Patrz TODO A1 (źródło standings).
     fortress_sys = None
     h2h_sys = None
+    heur_sys = None
+    klas_sys = None
     if df_mecze is not None:
         try:
             from footstats.core.fortress import HomeFortress
             from footstats.core.h2h import AnalizaH2H
+            from footstats.core.fatigue import HeurystaZmeczeniaRotacji
+            from footstats.core.classifier import KlasyfikatorMeczu
             fortress_sys = HomeFortress(df_mecze)
             h2h_sys      = AnalizaH2H(df_mecze)
+            heur_sys     = HeurystaZmeczeniaRotacji(df_mecze)
+            klas_sys     = KlasyfikatorMeczu(df_mecze)
         except (ImportError, AttributeError):
             pass
 
@@ -179,9 +188,15 @@ def szybkie_pewniaczki_2dni(
                 _fort_g = fortress_sys.analiza(g) if fortress_sys else None
                 _h2h_g  = h2h_sys.analiza(g, a)  if h2h_sys  else None
                 _h2h_a  = h2h_sys.analiza(a, g)  if h2h_sys  else None
+                # A1: zmęczenie/rotacja + typ meczu (stage=LIGA dla danych Bzzoiro)
+                _heur_g = heur_sys.analiza(g, d) if heur_sys else None
+                _heur_a = heur_sys.analiza(a, d) if heur_sys else None
+                _klas = klas_sys.klasyfikuj(g, a, "REGULAR_SEASON", d) if klas_sys else None
                 _pred_p = predict_match(
                     g, a, df_mecze,
-                    fortress_g=_fort_g, h2h_g=_h2h_g, h2h_a=_h2h_a,
+                    heurystyka_g=_heur_g, heurystyka_a=_heur_a,
+                    h2h_g=_h2h_g, h2h_a=_h2h_a,
+                    fortress_g=_fort_g, klasyfikacja=_klas,
                 )
                 if _pred_p:
                     _p_pois = {"pw": _pred_p["p_wygrana"], "pr": _pred_p["p_remis"],
