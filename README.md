@@ -3,11 +3,11 @@
 [![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![License: Portfolio](https://img.shields.io/badge/License-All%20Rights%20Reserved-yellow.svg)](LICENSE)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green.svg)](https://fastapi.tiangolo.com/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.32-ff4b4b.svg)](https://streamlit.io/)
+[![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Playwright](https://img.shields.io/badge/Playwright-1.40-45ba4b.svg)](https://playwright.dev/)
-[![Tests](https://img.shields.io/badge/tests-900%2B-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1037-brightgreen.svg)](tests/)
 
-**FootStats** to autonomiczny system typowania piłkarskiego łączący statystykę Bayesowską (Poisson), ML (CatBoost/Bzzoiro), analizę xG oraz LLM (Groq/Llama 3.1). Działa w pełni bezobsługowo: scraping → analiza → generowanie kuponu → rozliczenie → nauka na błędach.
+**FootStats** to autonomiczny system typowania piłkarskiego łączący statystykę Bayesowską (Poisson + Dixon-Coles), ML (CatBoost/Bzzoiro), analizę xG (Understat) oraz LLM (Groq/Llama 3.1). Działa w pełni bezobsługowo: scraping → analiza → generowanie kuponu → rozliczenie → nauka na błędach. Frontend React/Vite (Vercel), backend FastAPI (Cloud Run), DB Neon PostgreSQL.
 
 ---
 
@@ -19,11 +19,11 @@ Projekt demonstruje zaawansowane techniki inżynierii oprogramowania:
 |--------|--------------|
 | **Autonomous Agents** | Scheduler Draft→Final, Evening Agent (23:00), Operator Agent |
 | **RAG Feedback Loop** | Groq analizuje przegrane kupony → wektory → kontekst następnej predykcji |
-| **Feature Engineering** | Poisson + xG (Understat) + forma H/A + zmęczenie + kontuzje + sędzia |
-| **Bayesian Statistics** | Walk-forward kalibracja modelu, ensemble Poisson+ML, CLV tracking |
+| **Feature Engineering** | Poisson + xG (atak×obrona rywala) + forma H/A + zmęczenie/rotacja + kontuzje (dwustronne) + sędzia |
+| **Bayesian Statistics** | Isotonic kalibracja + renorm 1X2, ensemble Poisson+ML (wagi per-liga), CLV tracking |
 | **Advanced Scraping** | Playwright (Superbet, FlashScore, STS), requests (Understat, Bzzoiro, API-Football) |
-| **Full-Stack** | FastAPI REST + Streamlit dashboard + SQLite + Cloud Run deployment |
-| **Quality** | 900+ testów pytest, regression gate na broad-except, version consistency CI |
+| **Full-Stack** | FastAPI REST (Cloud Run) + React/Vite SPA (Vercel) + Neon PostgreSQL + multi-user (JWT) |
+| **Quality** | 1037 testów pytest, regression gate na broad-except, CI + Docker health + daily DB backup |
 
 ---
 
@@ -53,7 +53,7 @@ graph TD
     I --> K[Coupon Generation]
 
     K --> L[(footstats_backtest.db)]
-    L --> M[Streamlit Dashboard]
+    L --> M[React SPA Vercel]
     L --> N[FastAPI /api]
 
     O[Evening Agent 23:00] --> L
@@ -70,8 +70,8 @@ graph TD
 | **AI / ML** | Groq (Llama 3.1 70B/8B), CatBoost (Bzzoiro), Poisson Bayesian, Ensemble |
 | **Feature Eng.** | xG (Understat), forma H/A (`core/form.py`), zmęczenie (`core/fatigue.py`), kontuzje |
 | **Scraping** | Playwright, requests + BS4, Understat JSON, API-Football v3 |
-| **Backend** | FastAPI, Uvicorn, SQLite (WAL), Pydantic v2 |
-| **Frontend** | Streamlit, vis-network (Brain Graph), Rich (CLI) |
+| **Backend** | FastAPI, Uvicorn, Neon PostgreSQL (prod) / SQLite (dev), Pydantic v2 |
+| **Frontend** | React/Vite SPA (Vercel) — kreator kuponów, BetBuilder, katalog rynków; Streamlit/Rich (dev/CLI) |
 | **Tracking** | CLV (Closing Line Value), A/B accuracy tab, weekly per-liga raport |
 | **Ops** | Windows Task Scheduler, Cloud Run (GCP), Docker, Sentry |
 
@@ -117,7 +117,7 @@ src/footstats/
 ├── evening_agent.py       # rozliczanie kuponów @ 23:00
 ├── daily_agent_scheduler.py
 └── operator_agent.py      # smoke + pipeline + review orchestrator
-tests/             # 900+ testów pytest
+tests/             # 1037 testów pytest
 scripts/           # preflight, backup_db, visualize_brain, run_operator.bat
 data/              # footstats_backtest.db, model_calibration.json
 cache/             # api_football/, understat_xg/, flashscore/, kursy/
@@ -177,7 +177,7 @@ Logi: `data/logs/operator_agent.log` | Raporty: `data/operator_reports/`
 ## 🧪 Testy
 
 ```bash
-pytest tests/ -v                          # 900+ testów
+pytest tests/ -v                          # 1037 testów
 pytest tests/test_poisson.py -v           # Bayesian Poisson + edge cases
 pytest tests/test_clv_tracker.py -v       # CLV tracking
 pytest tests/test_broad_except_audit.py   # regression gate: brak nowych broad except

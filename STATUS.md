@@ -1,6 +1,6 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-16
+**Last Updated:** 2026-06-18
 **Current Version:** v3.4-stable
 **System State:** FUNCTIONAL — PRODUCTION
 
@@ -10,16 +10,15 @@
 
 | Metric | Status | Value |
 |--------|--------|-------|
-| **Accuracy** | 🟡 | 31.7% live (41 unikalnych settled, Neon) — Faza 17 fixy wdrożone |
-| **Model fixes** | ✅ | Faza 17 (pewność z prob, longshot filtr, whitelist, dedup) DONE |
-| **Data collection** | ✅ | System paper-trading (single-leg) autonomiczne od 06-16 |
-| **Syntax** | ✅ | 0 SyntaxError |
-| **Tests** | ✅ | ~990 testów pass (dodano core/betbuilder/system_paper) |
-| **Automation** | ✅ | Task Scheduler: draft 08:00 + final + evening 23:00 |
+| **Accuracy** | 🟡 | 31.7% live (41 settled, stare) — pipeline + λ naprawione, czeka na świeże dane |
+| **Model fixes** | ✅ | Faza 17 (root-cause) + audyt core A1-A3 + λ (kontuzje, xG+obrona) |
+| **Data collection** | ✅ | System paper-trading (single-leg, bez Groq) autonomiczne od 06-16 |
+| **Tests** | ✅ | 1037 testów pass (telegram testy zmockowane — koniec spamu) |
+| **Automation** | ✅ | Task Scheduler: draft 08:00 (+System paper) + final + evening 23:00 |
 | **API** | ✅ | FastAPI + Sentry + SlowAPI + CORS + Timeout |
-| **DB** | ✅ | Neon PG (prod), keepalives, pool maxconn=10 |
-| **Security** | ✅ | Rate limit 60/min, SQL parametryzowane, brak sekretów |
-| **Auth** | ✅ | JWT, login/register/delete account (UI w Ustawieniach) |
+| **DB** | ✅ | Neon PG (prod), keepalives, pool maxconn=10, migracja 6 (telegram_chat_id) |
+| **Security** | ✅ | Rate limit 60/min, SQL parametryzowane, walidacja telegram chat_id |
+| **Auth** | ✅ | JWT, login/register/delete, per-user (bankroll/settings/telegram) |
 | **RODO** | ✅ | Cookie consent, polityka, regulamin, self-delete UI |
 | **SEO** | ✅ | meta/OG/Twitter, sitemap.xml, robots.txt |
 
@@ -43,35 +42,34 @@
 
 | # | Problem | Priorytet |
 |---|---------|-----------|
-| 1 | Accuracy 31.7% — czeka na świeże settled z naprawionego pipeline (Faza 17.7 A/B) | 🔴 P1 |
+| 1 | Accuracy 31.7% — czeka na świeże settled (walidacja: monitor + A/B za ~1-2 tyg) | 🔴 P1 |
 | 2 | Email transakcyjny (Resend) — wymaga klucza od użytkownika | 🟡 P2 |
-| 3 | JDG rejestracja — przed pierwszym płatnym userem | 🟡 P2 |
-| 4 | Płatności (Lemon Squeezy) — nie zintegrowane | 🟡 P2 |
-| 5 | 3 moduły core bez testów (daily_io/form/weekly_picks) | ⚪ P4 |
+| 3 | JDG + prawnik — przed pierwszym płatnym userem | 🟡 P2 |
+| 4 | Płatności (Lemon Squeezy) — nie zintegrowane (po JDG) | 🟡 P2 |
+| 5 | Telegram 15.7: weryfikacja własności czatu (nonce) — przed realnymi userami | 🟡 P3 |
+| 6 | ImportanceIndex λ — blocked (standings map + off-season) | ⚪ P4 |
 
 ---
 
 ## FUNKCJE (recent)
 
-| Funkcja | Faza | Data |
-|---------|------|------|
-| System paper-trading single-leg (autonomiczne) | 19 | 06-16 |
-| Kreator BetBuilder + reguły korelacji | 18 | 06-16 |
-| Root-cause accuracy: 6 fixów modelu | 17 | 06-16 |
-| Usuwanie konta (RODO) UI + SEO + GUI polish | — | 06-16 |
-| Kalibracja + A/B wag 70/30 | 16.4 | 06-16 |
+| Funkcja | Data |
+|---------|------|
+| Audyt core A1-A3 (ensemble 70/30, heurystyka/klasyfikacja, renorm 1X2) | 06-17 |
+| λ: kontuzje (dwustronne) + xG+obrona rywala — koniec martwego kodu | 06-17 |
+| Multi-user 15.6 (per-user bankroll/settings/telegram) | 06-17 |
+| System paper-trading single-leg + katalog rynków (Faza 19/20) | 06-16 |
+| Root-cause accuracy Faza 17 + BetBuilder Faza 18 | 06-16 |
 
 ---
 
-## HISTORIA (resolved)
+## HISTORIA (resolved — wybrane)
 
 | Problem | Data |
 |---------|------|
-| Layout: footer ściskał content (flex-row) | 06-16 |
-| Pewność z EV → z prob modelu (kalibracja odwrócona) | 06-16 |
-| 47 duplikatów predykcji usuniętych z prod Neon | 06-16 |
-| Whitelist lig no-op → egzekwowana | 06-16 |
-| SPA routing Vercel + frontend deploy | 06-16 |
-| Cookie consent + polityka + regulamin (RODO) | 06-15/16 |
-| Sentry DSN + Neon idle timeout + UptimeRobot | 06-15 |
-| Draw bias fix (p_remis sufit 40%) | 06-12 |
+| **Telegram spam (Arsenal-Chelsea 3:2)** — testy wysyłały realnie, zmockowane | 06-17 |
+| backup.yml padał — przywrócono backup_db.sh (błędnie usunięty) | 06-17 |
+| 5 sygnałów λ liczonych ale niewpiętych w daily (audyt core) | 06-17 |
+| Layout footer ściskał content; pewność z EV; 47 duplikatów predykcji | 06-16 |
+| Whitelist lig no-op; SPA routing Vercel; frontend deploy | 06-16 |
+| Cookie consent + RODO; Sentry; Neon idle timeout; UptimeRobot | 06-15/16 |
