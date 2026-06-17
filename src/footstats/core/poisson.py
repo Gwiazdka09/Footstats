@@ -197,18 +197,27 @@ def predict_match(
     lambda_a = max(0.05, lambda_a)
 
     # ── xG blend (Understat cache-only, no live request) ─────────────
+    # λ_dom = atak gospodarza (xGF) ZDERZONY z obroną gościa (xGA): (xGF_h + xGA_a)/2.
+    # Wcześniej brano tylko xGF własny — ignorowało słabość/siłę obrony rywala.
     try:
         from footstats.scrapers.understat_xg import _cache_get, _to_slug
         from datetime import datetime as _dt
         _season = _dt.now().year if _dt.now().month >= 7 else _dt.now().year - 1
-        xg_h = _cache_get(_to_slug(g), _season)
-        xg_a = _cache_get(_to_slug(a), _season)
-        if (xg_h and xg_a
-                and xg_h.get("xg_for_avg") and xg_a.get("xg_for_avg")
-                and xg_h["xg_for_avg"] > 0 and xg_a["xg_for_avg"] > 0):
-            _XG_W = 0.20
-            lambda_g = round((1 - _XG_W) * lambda_g + _XG_W * xg_h["xg_for_avg"], 4)
-            lambda_a = round((1 - _XG_W) * lambda_a + _XG_W * xg_a["xg_for_avg"], 4)
+        xg_h = _cache_get(_to_slug(g), _season) or {}
+        xg_a = _cache_get(_to_slug(a), _season) or {}
+        _XG_W = 0.20
+
+        h_xgf, h_xga = xg_h.get("xg_for_avg"), xg_h.get("xga_avg")
+        a_xgf, a_xga = xg_a.get("xg_for_avg"), xg_a.get("xga_avg")
+
+        # Gospodarz strzela: jego atak vs obrona gościa
+        if h_xgf and h_xgf > 0:
+            xg_lambda_g = (h_xgf + a_xga) / 2 if (a_xga and a_xga > 0) else h_xgf
+            lambda_g = round((1 - _XG_W) * lambda_g + _XG_W * xg_lambda_g, 4)
+        # Gość strzela: jego atak vs obrona gospodarza
+        if a_xgf and a_xgf > 0:
+            xg_lambda_a = (a_xgf + h_xga) / 2 if (h_xga and h_xga > 0) else a_xgf
+            lambda_a = round((1 - _XG_W) * lambda_a + _XG_W * xg_lambda_a, 4)
     except (ImportError, AttributeError, OSError, ValueError, KeyError):
         pass  # xG cache niedostępny → czyste lambdy Poissona
 

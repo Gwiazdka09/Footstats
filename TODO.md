@@ -36,8 +36,8 @@
 
 - [x] Kontuzje: naprawione (były martwym kodem + bug) — przeliczają λ i prawdopodobieństwa
   dwustronnie (napastnik out→własne λ↓, obrońca out→λ rywala↑), cap ±20% (06-17)
-- [ ] **xG pogłębić** (największy zysk): teraz miesza tylko gdy cache jest (poisson.py:199);
-  prefetch Understat dla analizowanych meczów + użyć xGA (obrona), nie tylko xGF
+- [x] **xG pogłębione** (06-17): blend uwzględnia obronę rywala — λ_dom=(xGF_dom+xGA_gość)/2;
+  prefetch Understat już zasila cache przed Poissonem. Było: tylko własny xGF.
 - [ ] Kontuzje v2: waga udziałem w golach (utrata kluczowego strzelca > rezerwowy) —
   wymaga scrape per-gracz (SofaScore goals) — większy nakład
 - [ ] Opponent-adjusted λ (Dixon-Coles attack/defense ratings) — λ skorygowane o siłę rywala
