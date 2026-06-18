@@ -68,7 +68,7 @@ def test_no_blend_when_no_df_mecze_and_no_cache():
 def test_blend_ensemble_applied_when_df_mecze_provided():
     """Poisson blend ensemble (70/30) zmienia pw/pr/pp/bt/o25 gdy predict_match zwraca dane."""
     bzz = _make_bzzoiro([_BZZ_EVENT])
-    df_dummy = pd.DataFrame({"col": [1]})  # niepuste, ale predict_match mockowany
+    df_dummy = pd.DataFrame([{"gospodarz": "A", "goscie": "B", "gole_g": 1, "gole_a": 0, "data": "2026-01-01"}])  # waliduj_df_wyniki: poprawny
 
     mock_fort = MagicMock()
     mock_fort.analiza.return_value = None
@@ -108,7 +108,7 @@ def test_blend_ensemble_applied_when_df_mecze_provided():
 def test_blend_skipped_when_predict_match_returns_none():
     """Gdy predict_match zwraca None (za mało danych), poisson_blend=False."""
     bzz = _make_bzzoiro([_BZZ_EVENT])
-    df_dummy = pd.DataFrame({"col": [1]})
+    df_dummy = pd.DataFrame([{"gospodarz": "A", "goscie": "B", "gole_g": 1, "gole_a": 0, "data": "2026-01-01"}])
 
     with patch(
         "footstats.core.quick_picks.calibrate_confidence", side_effect=lambda x: x / 100
@@ -122,7 +122,7 @@ def test_blend_skipped_when_predict_match_returns_none():
 def test_blend_skipped_on_predict_match_exception():
     """Wyjątek w predict_match → fallback do Bzzoiro, poisson_blend=False."""
     bzz = _make_bzzoiro([_BZZ_EVENT])
-    df_dummy = pd.DataFrame({"col": [1]})
+    df_dummy = pd.DataFrame([{"gospodarz": "A", "goscie": "B", "gole_g": 1, "gole_a": 0, "data": "2026-01-01"}])
 
     with patch(
         "footstats.core.quick_picks.calibrate_confidence", side_effect=lambda x: x / 100

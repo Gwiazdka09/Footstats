@@ -66,6 +66,16 @@ def szybkie_pewniaczki_2dni(
         except (FileNotFoundError, ImportError, OSError, ValueError):
             df_mecze = None
 
+    # Data-quality guard: waliduj df_mecze (kolumny/typy) przed użyciem w Poissonie.
+    # Gdy niepoprawny → log + df_mecze=None (Poisson pominięty, zostaje Bzzoiro ML).
+    if df_mecze is not None:
+        try:
+            from footstats.utils.logging import waliduj_df_wyniki
+            if not waliduj_df_wyniki(df_mecze, "df_mecze (quick_picks)"):
+                df_mecze = None
+        except ImportError:
+            pass
+
     teraz    = datetime.now()
     granica  = teraz + timedelta(hours=godziny)
 
