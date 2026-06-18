@@ -10,6 +10,33 @@
 
 ---
 
+## 🔍 AUDYT GŁĘBOKI (06-18) — bugi side-effect / cruft
+
+> Wzorzec: kod tworzony wcześnie z efektami ubocznymi na PRODUKCJI lub martwy.
+
+### ✅ Bug 1: Testy Telegram wysyłały realnie (5e77b517c)
+- "Arsenal-Chelsea 3:2" na prawdziwy Telegram przy każdym pytest z kluczami. Zmockowane.
+
+### ✅ Bug 2: Testy auth tworzyły userów w PROD Neon (598063e02)
+- `test_delete_account_flow` + `test_create_and_deactivate_user` → 30 z 41 userów w prod
+  to test garbage (22 testuser_ + 8 deleted_user_). Gate DATABASE_URL→FOOTSTATS_TEST_DB.
+- [ ] **Wyczyścić istniejące 30 test-userów z prod** (FK-aware: bankroll_state/history/
+  bot_settings/coupons per user_id → potem user). Wymaga zgody (destrukcyjny prod DELETE).
+
+### 🔴 Bug 3: Mock matches leak do realnych userów
+- `coupons.py:_fetch_predictions` zwraca `_mock_predictions()` (Legia/Lech/Ajax — FAKE)
+  gdy brak BZZOIRO_KEY / Bzzoiro down / off-season. Realny user w GUI widzi nieistniejące
+  mecze jako realne, może budować kupony. **Fix: gate DEMO_MODE, inaczej pusta lista.**
+
+### 🟡 Dead code (cruft — featury działają przez inne ścieżki, NIE broken)
+- ~25 nieużywanych funkcji (duplikaty/alternatywy). Zweryfikowane że działające odpowiedniki:
+  RAG przez `post_match_analyzer`, lineup przez `lineup_ok`, CLV przez `record_closing_odds`.
+- Kandydaci do usunięcia: `_generate_lesson`, `lineup_confidence_penalty`,
+  `batch_record_closing_odds`, `fetch_match_xg`, `export/json_export.*` (4), `send_trening_raport`,
+  `dozwolone_dodatki` (tylko test), cache cleanup funkcje. **Niski priorytet — czyszczenie.**
+
+---
+
 ## Milestones
 
 | Milestone | Cel | Status | Warunek |

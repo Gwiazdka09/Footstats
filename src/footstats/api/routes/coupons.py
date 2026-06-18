@@ -21,6 +21,16 @@ router = APIRouter(prefix="/api", tags=["coupons"])
 _MATCHES_CACHE: list = []
 
 
+def _fallback_predictions() -> list:
+    """
+    Gdy brak realnych danych: mock TYLKO w trybie demo (DEMO_MODE=1), inaczej pusta
+    lista. Bez tego realny user widziałby fałszywe mecze (Legia/Lech) jako prawdziwe.
+    """
+    if os.getenv("DEMO_MODE", "").strip() == "1":
+        return _mock_predictions()
+    return []
+
+
 def _fetch_predictions() -> list:
     try:
         from footstats.scrapers.bzzoiro import BzzoiroClient
@@ -28,15 +38,15 @@ def _fetch_predictions() -> list:
         key = os.getenv(ENV_BZZOIRO, "").strip()
         _log.info("BZZOIRO_KEY present: %s, length: %d", bool(key), len(key))
         if not key:
-            _log.warning("Brak BZZOIRO_KEY — using mock predictions")
-            return _mock_predictions()
+            _log.warning("Brak BZZOIRO_KEY — brak realnych predykcji (mock tylko w DEMO_MODE)")
+            return _fallback_predictions()
         client = BzzoiroClient(key)
         preds = client.predykcje_tygodnia()
         _log.info("Bzzoiro returned %d predictions", len(preds) if preds else 0)
-        return preds if preds else _mock_predictions()
+        return preds if preds else _fallback_predictions()
     except (OSError, ValueError, RuntimeError) as e:
         _log.error("_fetch_predictions error: %s", e, exc_info=True)
-        return _mock_predictions()
+        return _fallback_predictions()
 
 
 def _mock_predictions() -> list:
