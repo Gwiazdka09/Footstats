@@ -226,6 +226,16 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     init_coupon_tables()
     init_db()
 
+    # Rozlicz WSZYSTKIE pending predykcje (nie tylko nogi kuponów) — standalone typy
+    # Groq + System paper-trading. Bez tego predictions.tip_correct nie rośnie i
+    # calibration_monitor / walidacja są zagłodzone (fix 06-18).
+    try:
+        from footstats.scrapers.results_updater import update_pending
+        rp = update_pending(days_back=3, dry_run=False, verbose=False)
+        console.print(f"[dim]Predykcje pending: rozliczono {rp.get('updated', 0)}[/dim]")
+    except (OSError, ValueError, RuntimeError, ImportError) as e:
+        console.print(f"[yellow]update_pending pominięty: {e}[/yellow]")
+
     fixtures = _fetch_results_today(api_key, date_str)
     console.print(f"[dim]API-Football: {len(fixtures)} zakończonych meczów[/dim]")
 
