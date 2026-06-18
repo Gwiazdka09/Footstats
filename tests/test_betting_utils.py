@@ -164,3 +164,26 @@ class TestObliczTipCorrect:
     def test_bb_combo_czlon_nierozliczalny_none(self):
         # nieznany człon → całość None (nie zgaduj)
         assert oblicz_tip_correct("BB: 1 + Zawodnik gola", "2-1") is None
+
+    # ── Nazwane rynki BetBuilder (betbuilder_rules) — muszą się rozliczać ──────
+
+    def test_gospodarz_over_05_liczy_gole_gospodarza_nie_total(self):
+        # 0-1: total=1 (>0.5) ale gospodarz=0 → NIE trafione (regresja: łapało total)
+        assert oblicz_tip_correct("Gospodarz Over 0.5", "0-1") == 0
+        assert oblicz_tip_correct("Gospodarz Over 0.5", "1-0") == 1
+
+    def test_gosc_over_15_liczy_gole_goscia(self):
+        assert oblicz_tip_correct("Gość Over 1.5", "0-2") == 1
+        assert oblicz_tip_correct("Gość Over 1.5", "2-1") == 0
+
+    def test_handicap_minus1_gospodarz(self):
+        assert oblicz_tip_correct("Handicap -1 Gospodarz", "3-1") == 1   # margin 2
+        assert oblicz_tip_correct("Handicap -1 Gospodarz", "2-1") == 0   # margin 1
+
+    def test_handicap_plus1_gosc(self):
+        assert oblicz_tip_correct("Handicap +1 Gość", "1-1") == 1   # h-a=0 <=1
+        assert oblicz_tip_correct("Handicap +1 Gość", "2-0") == 0   # h-a=2 >1
+
+    def test_bb_combo_z_nazwanym_handicapem(self):
+        assert oblicz_tip_correct("BB: 1 + Handicap -1 Gospodarz", "3-0") == 1
+        assert oblicz_tip_correct("BB: 1 + Handicap -1 Gospodarz", "2-1") == 0  # handicap nietraf

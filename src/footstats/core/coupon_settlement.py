@@ -201,6 +201,23 @@ def settle_active_coupons(
     today = datetime.now().date()
     cutoff = today - timedelta(days=days_back)
 
+    # Cleanup stale-DRAFT: kupony DRAFT z przeszla data meczu nigdy nie zostaly
+    # awansowane do ACTIVE (np. final phase nie pykl) -> nigdy by nie settlowaly
+    # i rosly w nieskonczonosc. Po VOID_AFTER_DAYS oznaczamy VOID (nigdy nie byly zywym
+    # zakladem, nie licza sie do accuracy/M1).
+    void_cutoff = (today - timedelta(days=VOID_AFTER_DAYS)).isoformat()
+    stale_voided = 0
+    if not dry_run:
+        with _connect() as conn:
+            cur = conn.execute(
+                """UPDATE coupons SET status='VOID'
+                   WHERE status='DRAFT' AND substr(match_date_first,1,10) < ?""",
+                (void_cutoff,),
+            )
+            stale_voided = cur.rowcount or 0
+    if verbose and stale_voided:
+        print(f"[CouponSettlement] Stale-DRAFT → VOID: {stale_voided}")
+
     with _connect() as conn:
         rows = conn.execute(
             """SELECT id, legs_json, total_odds, stake_pln, match_date_first
@@ -212,7 +229,7 @@ def settle_active_coupons(
     if not rows:
         if verbose:
             print("[CouponSettlement] Brak ACTIVE kuponów do rozliczenia.")
-        return {"settled": 0, "partial": 0, "errors": 0, "voided": 0}
+        return {"settled": 0, "partial": 0, "errors": 0, "voided": stale_voided}
 
     if verbose:
         print(f"[CouponSettlement] ACTIVE kuponów do sprawdzenia: {len(rows)}")
@@ -220,7 +237,7 @@ def settle_active_coupons(
     import os
     api_key = _get_api_key()
     fdb_key = os.getenv("FOOTBALL_API_KEY", "").strip()
-    stats = {"settled": 0, "partial": 0, "errors": 0, "voided": 0}
+    stats = {"settled": 0, "partial": 0, "errors": 0, "voided": stale_voided}
     fixtures_cache: dict[str, list] = {}
     fdb_cache: dict[str, list] = {}
 

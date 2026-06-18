@@ -84,6 +84,18 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
             return 1 if goals > val else 0
         return 1 if goals < val else 0
 
+    # Gole druzyny nazwane (BetBuilder): "GOSPODARZ OVER 0.5" / "GOŚĆ OVER 1.5".
+    # MUSI byc przed generycznym Over/Under (ten liczy TOTAL, nie gole druzyny).
+    team_named = re.match(r"^(GOSPODARZ|GOŚĆ|GOSC)\s+(OVER|UNDER)\s+(\d+\.\d+|\d+)$", tip)
+    if team_named:
+        if home_g is None or away_g is None:
+            return None
+        side, direction, val = team_named.group(1), team_named.group(2), float(team_named.group(3))
+        goals = home_g if side == "GOSPODARZ" else away_g
+        if direction == "OVER":
+            return 1 if goals > val else 0
+        return 1 if goals < val else 0
+
     # Over/Under
     if "OVER" in tip or "UNDER" in tip:
         if total_goals is None: return None
@@ -116,6 +128,17 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
         if side == "1":
             return 1 if (home_g + line) > away_g else 0
         return 1 if (away_g + line) > home_g else 0
+
+    # Nazwane handicapy z BetBuilder (betbuilder_rules._PREDYKATY) — by combo "BB: ..." z nimi
+    # bylo rozliczalne. Semantyka 1:1 z regulami: -1 Gospodarz = wygrana o 2+, +1 Gosc = h-a<=1.
+    if tip == "HANDICAP -1 GOSPODARZ":
+        if home_g is None or away_g is None:
+            return None
+        return 1 if (home_g - away_g) >= 2 else 0
+    if tip == "HANDICAP +1 GOŚĆ":
+        if home_g is None or away_g is None:
+            return None
+        return 1 if (away_g + 1) >= home_g else 0
 
     # Parzysta / nieparzysta liczba goli (0 = parzysta)
     if tip in ("PARZYSTE", "EVEN"):

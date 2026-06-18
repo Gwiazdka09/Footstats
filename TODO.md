@@ -10,6 +10,32 @@
 
 ---
 
+## 🔍 AUDYT SETTLEMENT (06-18) — główna funkcja, sprawdzone na wszystkie sposoby
+
+> Werdykt: **settlement dobrze wpięty**. Ścieżki: `daily_agent.py:1256` (co run pipeline)
+> + `/coupons/settle` (admin) + `/cron/settle` (x_cron_secret) + `__main__` + evening_agent
+> `update_pending` (predykcje 23:00). `settle_active_coupons` bez filtra user → wszyscy + System.
+
+### ✅ Bug A: 2 rynki BetBuilder niesettlowalne (Handicap)
+- `Handicap -1 Gospodarz` / `Handicap +1 Gość` → `oblicz_tip_correct` zwracał None →
+  combo "BB: ..." z nimi NIGDY się nie rozliczał. Dodano obsługę (1:1 z betbuilder_rules).
+
+### ✅ Bug B: "Gospodarz/Gość Over X.5" liczyło TOTAL gole zamiast drużynowych
+- Łapało się na generyczny Over/Under (suma goli) → fałszywe trafienia (np. 0-1 dla
+  "Gospodarz Over 0.5" = WON, źle). Dodano regex drużynowy PRZED generycznym. Latentny
+  (brak w prod settled), fix prewencyjny. **Pełna zgodność WSZYSTKICH rynków z _PREDYKATY (0 niezgodności).**
+
+### ✅ Bug C: stale-DRAFT nigdy nie czyszczone
+- DRAFT z przeszłą datą nigdy nie awansowany do ACTIVE → nie settluje, nie VOID, rośnie
+  w nieskończoność (prod: 9 takich). Dodano cleanup w `settle_active_coupons`: DRAFT +
+  data < dziś-VOID_AFTER_DAYS → VOID. 3 stare (05-30) pójdą do VOID przy następnym runie.
+
+### 🟡 Kosmetyka (zamknięte kupony, NIE naprawiam)
+- Kupon #154 LOST: leg "BB: 1 + Under 3.5" @ 3-0 ma `leg_won=False` (źle, dom wygrał+Under),
+  ale combo i tak LOST (drugi leg przegrał) → status końcowy poprawny. Tylko display legu.
+
+---
+
 ## 🔍 AUDYT GŁĘBOKI (06-18) — bugi side-effect / cruft
 
 > Wzorzec: kod tworzony wcześnie z efektami ubocznymi na PRODUKCJI lub martwy.
