@@ -61,7 +61,11 @@
   - System (bez Groq) vs Pipeline (Groq) — werdykt bottlenecku LLM (potrzeba ≥15 System settled)
   - czy accuracy ruszyła z 31.7%
 - [ ] Po ~20 świeżych settled z naprawionego pipeline → A/B, ocena które λ-zmiany pomogły
-- **Zbieranie:** System paper-trading autonomiczne (Task Scheduler 08:00). ~1-2 tyg.
+- [x] **FIX (06-18): rozliczanie predykcji było zepsute** — standalone predykcje (Groq +
+  System) nigdy nie settlowały auto (results_updater poza Task Scheduler; evening tylko
+  nogi kuponów). Wpięte `update_pending` w evening_agent (23:00). Backlog 41→58 settled.
+  **Bez tego plan walidacji był zagłodzony** — teraz predykcje rosną codziennie.
+- **Zbieranie:** System paper-trading autonomiczne (Task Scheduler 08:00) + settle 23:00. ~1-2 tyg.
 - **Stare 41 settled** są sprzed fixów → wciąż odwrócone, to oczekiwane.
 
 ---
