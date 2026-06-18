@@ -16,7 +16,18 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
             return None
 
     tip  = (ai_tip or "").strip().upper()
-    
+
+    # BetBuilder combo: "BB: 1 + Over 1.5" = KONIUNKCJA członów (wszystkie muszą trafić).
+    # Bez tego oceniany byl tylko pierwszy pasujacy czlon -> przegrane combo jako WON.
+    if tip.startswith("BB:") or tip.startswith("BB "):
+        czlony = [c.strip() for c in tip[3:].split("+") if c.strip()]
+        if not czlony:
+            return None
+        wyniki = [oblicz_tip_correct(c, actual_result) for c in czlony]
+        if any(w is None for w in wyniki):
+            return None          # któryś człon nierozliczalny → całość nieznana
+        return 1 if all(w == 1 for w in wyniki) else 0
+
     # Upewniamy się, że res jest stringiem przed strip()
     res = str(actual_result).strip()
 

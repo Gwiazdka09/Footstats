@@ -141,3 +141,26 @@ class TestObliczTipCorrect:
 
     def test_parzyste_miss(self):
         assert oblicz_tip_correct("PARZYSTE", "2-1") == 0
+
+    # ── BetBuilder combo = koniunkcja członów (krytyczny fix) ─────────────────
+
+    def test_bb_combo_oba_trafione(self):
+        assert oblicz_tip_correct("BB: 1 + Over 1.5", "3-1") == 1
+
+    def test_bb_combo_pierwszy_czlon_przegral(self):
+        # gospodarz PRZEGRAL (1-3) → combo przegrane mimo Over
+        assert oblicz_tip_correct("BB: 1 + Over 1.5", "1-3") == 0
+
+    def test_bb_combo_drugi_czlon_przegral(self):
+        # 1 wygral (3-0) ale Under 3.5 też trafione (total 3) → wygrane
+        assert oblicz_tip_correct("BB: 1 + Under 3.5", "3-0") == 1
+        # 1 wygral ale total 4 > 3.5 → Under nietrafione → przegrane
+        assert oblicz_tip_correct("BB: 1 + Under 3.5", "3-1") == 0
+
+    def test_bb_combo_btts(self):
+        assert oblicz_tip_correct("BB: 2 + BTTS", "1-2") == 1   # gość wygrał + oba strzeliły
+        assert oblicz_tip_correct("BB: 2 + BTTS", "2-1") == 0   # gość przegrał
+
+    def test_bb_combo_czlon_nierozliczalny_none(self):
+        # nieznany człon → całość None (nie zgaduj)
+        assert oblicz_tip_correct("BB: 1 + Zawodnik gola", "2-1") is None
