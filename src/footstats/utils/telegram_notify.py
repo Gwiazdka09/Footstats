@@ -254,24 +254,6 @@ def send_message(text: str) -> bool:
     return _send(text)
 
 
-def send_trening_raport(n_matches: int, marchewki: list, kije: list) -> bool:
-    """Wysyła skrót wyników treningu Groq."""
-    linie = [f"<b>FootStats Trening – {datetime.now().strftime('%d.%m')}</b>"]
-    linie.append(f"Przeanalizowano {n_matches:,} meczow historycznych\n")
-
-    if marchewki:
-        linie.append("<b>Marchewki:</b>")
-        for m in marchewki[:3]:
-            linie.append(f"  + {m.get('regula', m) if isinstance(m, dict) else m}")
-
-    if kije:
-        linie.append("\n<b>Kije (mity):</b>")
-        for k in kije[:3]:
-            linie.append(f"  - {k.get('mit', k) if isinstance(k, dict) else k}")
-
-    return _send("\n".join(linie))
-
-
 def send_alert(title: str, body: str) -> bool:
     """Wysyła alert operacyjny (agent down, accuracy drop, itp.)."""
     text = f"⚠️ <b>ALERT: {title}</b>\n{body}"

@@ -240,28 +240,6 @@ def fetch_team_xg(
     return wynik
 
 
-def fetch_match_xg(
-    team_home: str,
-    team_away: str,
-    season: int | None = None,
-) -> dict:
-    """
-    Wygodna funkcja zwracająca xG dla pary drużyn (do integracji z daily_agent).
-
-    Zwraca:
-        {"home_xg_for": float|None, "home_xga": float|None,
-         "away_xg_for": float|None, "away_xga": float|None}
-    """
-    home = fetch_team_xg(team_home, season)
-    away = fetch_team_xg(team_away, season)
-    return {
-        "home_xg_for": home["xg_for_avg"] if home else None,
-        "home_xga":    home["xga_avg"]    if home else None,
-        "away_xg_for": away["xg_for_avg"] if away else None,
-        "away_xga":    away["xga_avg"]    if away else None,
-    }
-
-
 if __name__ == "__main__":
     import sys
     import logging as _logging

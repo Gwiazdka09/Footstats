@@ -362,46 +362,6 @@ def analizuj_mecz_ai(
 # wyswietl_analiza_ai → footstats.ai.output
 
 
-def analizuj_liste_meczow(mecze: list, liga: str = "premier-league") -> list:
-    """
-    Analizuje listę meczów.
-    mecze = lista słowników z kluczami z predict_match() FootStats.
-    Zwraca listę wyników AI.
-    """
-    wyniki = []
-    for i, m in enumerate(mecze, 1):
-        g  = m.get("gospodarz", "")
-        a  = m.get("gosc", "")  # FootStats używa "gosc" nie "goscie"
-        print(f"\n[{i}/{len(mecze)}] Przetwarzam: {g} vs {a}")
-
-        # Szukaj kursów z Betexplorer
-        kursy_meczu = szukaj_kursy_meczu(g, a, liga)
-
-        wynik = analizuj_mecz_ai(
-            gospodarz          = g,
-            goscie             = a,
-            p_wygrana          = m.get("p_wygrana", 0),
-            p_remis            = m.get("p_remis", 0),
-            p_przegrana        = m.get("p_przegrana", 0),
-            btts               = m.get("btts", 0),
-            over25             = m.get("over25", 0),
-            forma_g            = m.get("forma_g_str", "-"),
-            forma_a            = m.get("forma_a_str", "-"),
-            h2h_opis           = m.get("h2h_opis", "-"),
-            pewnosc_modelu     = m.get("pewnosc", 0),
-            komentarz_footstats= m.get("komentarz", ""),
-            kursy              = kursy_meczu,
-        )
-        wyswietl_analiza_ai(wynik)
-        wyniki.append(wynik)
-
-    # Zapisz wyniki do JSON
-    plik = Path(f"ai_typy_{__import__('datetime').datetime.now().strftime('%Y%m%d_%H%M')}.json")
-    plik.write_text(json.dumps(wyniki, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\n[AI] Zapisano typy do: {plik.resolve()}")
-
-    return wyniki
-
 
 # ── Tryb interaktywny (samodzielny) ──────────────────────────────────
 

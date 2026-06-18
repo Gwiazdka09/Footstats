@@ -28,12 +28,14 @@
   gdy brak BZZOIRO_KEY / Bzzoiro down / off-season. Realny user w GUI widzi nieistniejące
   mecze jako realne, może budować kupony. **Fix: gate DEMO_MODE, inaczej pusta lista.**
 
-### 🟡 Dead code (cruft — featury działają przez inne ścieżki, NIE broken)
-- ~25 nieużywanych funkcji (duplikaty/alternatywy). Zweryfikowane że działające odpowiedniki:
-  RAG przez `post_match_analyzer`, lineup przez `lineup_ok`, CLV przez `record_closing_odds`.
-- Kandydaci do usunięcia: `_generate_lesson`, `lineup_confidence_penalty`,
-  `batch_record_closing_odds`, `fetch_match_xg`, `export/json_export.*` (4), `send_trening_raport`,
-  `dozwolone_dodatki` (tylko test), cache cleanup funkcje. **Niski priorytet — czyszczenie.**
+### ✅ Dead code — wyczyszczone (06-18)
+- Usunięto: `json_export.py` (cały martwy moduł, 246 linii), `_generate_lesson`
+  (dup post_match), `analizuj_liste_meczow` (stary CLI flow), `fetch_match_xg`
+  (nieużywany wrapper), `send_trening_raport` (nieużywany notif). 112 testów pass.
+- [ ] **Do WPIĘCIA (nie usuwać — użyteczne):** `waliduj_df_wyniki` (walidacja df_mecze —
+  data-quality check którego brakuje przed predykcją!) + `bezpieczny_budget_use` (guard budżetu API).
+- Reszta (lineup_confidence_penalty, batch_record_closing_odds, cache cleanup, dozwolone_dodatki/test) —
+  niski priorytet, featury działają przez inne ścieżki.
 
 ---
 

@@ -438,19 +438,6 @@ def _send_to_rag_feedback(coupon_id: int, legs: list, mdate: str, reason: str, v
             log.warning("Błąd wysyłania feedback do RAG dla kuponu #%s, leg #%s: %s", coupon_id, i + 1, e)
 
 
-def _generate_lesson(legs: list, results: str | None) -> str:
-    """
-    Generuje krótki wniosek z porażki dla RAG.
-    """
-    lessons = []
-    for leg in legs:
-        mecz = leg.get("mecz", "?")
-        tip = leg.get("tip", "?")
-        lessons.append(f"• {mecz}: {tip} (wynik: {results})")
-
-    return "Kupon nietrafiany:\n" + "\n".join(lessons)
-
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
