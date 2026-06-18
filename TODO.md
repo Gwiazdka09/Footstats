@@ -20,8 +20,8 @@
 ### ✅ Bug 2: Testy auth tworzyły userów w PROD Neon (598063e02)
 - `test_delete_account_flow` + `test_create_and_deactivate_user` → 30 z 41 userów w prod
   to test garbage (22 testuser_ + 8 deleted_user_). Gate DATABASE_URL→FOOTSTATS_TEST_DB.
-- [ ] **Wyczyścić istniejące 30 test-userów z prod** (FK-aware: bankroll_state/history/
-  bot_settings/coupons per user_id → potem user). Wymaga zgody (destrukcyjny prod DELETE).
+- [x] **Wyczyszczono 30 test-userów z prod** (06-18): backup + FK-aware DELETE
+  (30 bankroll_state + users). Prod: 41→11 userów, 0 śmieci. Zostali realni + System.
 
 ### 🔴 Bug 3: Mock matches leak do realnych userów
 - `coupons.py:_fetch_predictions` zwraca `_mock_predictions()` (Legia/Lech/Ajax — FAKE)
