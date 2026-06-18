@@ -117,7 +117,7 @@ def test_list_users_rejects_non_admin_token(client):
     assert resp.status_code == 403
 
 
-@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
+@pytest.mark.skipif(not os.environ.get("FOOTSTATS_TEST_DB"), reason="requires dedykowana test-DB (FOOTSTATS_TEST_DB) - NIE prod (DATABASE_URL)")
 def test_list_users_as_admin(client, admin_token):
     resp = client.get("/api/admin/users", headers={"Authorization": f"Bearer {admin_token}"})
     assert resp.status_code == 200
@@ -145,7 +145,7 @@ def test_delete_account_requires_auth(client):
     assert resp.status_code == 401
 
 
-@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
+@pytest.mark.skipif(not os.environ.get("FOOTSTATS_TEST_DB"), reason="requires dedykowana test-DB (FOOTSTATS_TEST_DB) - NIE prod (DATABASE_URL)")
 def test_delete_account_admin_blocked(client, admin_token):
     resp = client.request(
         "DELETE", "/api/auth/me",
@@ -155,7 +155,7 @@ def test_delete_account_admin_blocked(client, admin_token):
     assert resp.status_code == 400
 
 
-@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
+@pytest.mark.skipif(not os.environ.get("FOOTSTATS_TEST_DB"), reason="requires dedykowana test-DB (FOOTSTATS_TEST_DB) - NIE prod (DATABASE_URL)")
 def test_delete_account_flow(client):
     import uuid
     from footstats.utils.db import connect
@@ -188,7 +188,7 @@ def test_delete_account_flow(client):
     assert row is None  # username zanonimizowany na deleted_user_{id}
 
 
-@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="requires live DB")
+@pytest.mark.skipif(not os.environ.get("FOOTSTATS_TEST_DB"), reason="requires dedykowana test-DB (FOOTSTATS_TEST_DB) - NIE prod (DATABASE_URL)")
 def test_create_and_deactivate_user(client, admin_token):
     import uuid
     uname = f"testuser_{uuid.uuid4().hex[:8]}"
