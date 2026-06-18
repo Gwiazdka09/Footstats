@@ -66,6 +66,8 @@ def predict_match(
     first_leg_g=None, first_leg_a=None,
     stage: str = "REGULAR_SEASON",
     klasyfikacja: dict = None,
+    use_xg: bool = True,
+    use_calibration: bool = True,
 ) -> dict | None:
     """
     Kompletna predykcja v2.6 z:
@@ -185,44 +187,46 @@ def predict_match(
     lambda_a = max(0.05, lambda_a)
 
     # ── Kalibracja modelu (walk-forward bias correction) ─────────────
-    try:
-        from footstats.core.lambda_optimizer import load_calibration
-        _cal_h, _cal_a = load_calibration()
-        lambda_g *= _cal_h
-        lambda_a *= _cal_a
-    except (ImportError, OSError, ValueError):
-        pass  # Brak pliku kalibracji → działaj z domyślnymi lambdami
+    if use_calibration:
+        try:
+            from footstats.core.lambda_optimizer import load_calibration
+            _cal_h, _cal_a = load_calibration()
+            lambda_g *= _cal_h
+            lambda_a *= _cal_a
+        except (ImportError, OSError, ValueError):
+            pass  # Brak pliku kalibracji → działaj z domyślnymi lambdami
 
-    lambda_g = max(0.05, lambda_g)
-    lambda_a = max(0.05, lambda_a)
+        lambda_g = max(0.05, lambda_g)
+        lambda_a = max(0.05, lambda_a)
 
     # ── xG blend (Understat cache-only, no live request) ─────────────
     # λ_dom = atak gospodarza (xGF) ZDERZONY z obroną gościa (xGA): (xGF_h + xGA_a)/2.
     # Wcześniej brano tylko xGF własny — ignorowało słabość/siłę obrony rywala.
-    try:
-        from footstats.scrapers.understat_xg import _cache_get, _to_slug
-        from datetime import datetime as _dt
-        _season = _dt.now().year if _dt.now().month >= 7 else _dt.now().year - 1
-        xg_h = _cache_get(_to_slug(g), _season) or {}
-        xg_a = _cache_get(_to_slug(a), _season) or {}
-        _XG_W = 0.20
+    if use_xg:
+        try:
+            from footstats.scrapers.understat_xg import _cache_get, _to_slug
+            from datetime import datetime as _dt
+            _season = _dt.now().year if _dt.now().month >= 7 else _dt.now().year - 1
+            xg_h = _cache_get(_to_slug(g), _season) or {}
+            xg_a = _cache_get(_to_slug(a), _season) or {}
+            _XG_W = 0.20
 
-        h_xgf, h_xga = xg_h.get("xg_for_avg"), xg_h.get("xga_avg")
-        a_xgf, a_xga = xg_a.get("xg_for_avg"), xg_a.get("xga_avg")
+            h_xgf, h_xga = xg_h.get("xg_for_avg"), xg_h.get("xga_avg")
+            a_xgf, a_xga = xg_a.get("xg_for_avg"), xg_a.get("xga_avg")
 
-        # Gospodarz strzela: jego atak vs obrona gościa
-        if h_xgf and h_xgf > 0:
-            xg_lambda_g = (h_xgf + a_xga) / 2 if (a_xga and a_xga > 0) else h_xgf
-            lambda_g = round((1 - _XG_W) * lambda_g + _XG_W * xg_lambda_g, 4)
-        # Gość strzela: jego atak vs obrona gospodarza
-        if a_xgf and a_xgf > 0:
-            xg_lambda_a = (a_xgf + h_xga) / 2 if (h_xga and h_xga > 0) else a_xgf
-            lambda_a = round((1 - _XG_W) * lambda_a + _XG_W * xg_lambda_a, 4)
-    except (ImportError, AttributeError, OSError, ValueError, KeyError):
-        pass  # xG cache niedostępny → czyste lambdy Poissona
+            # Gospodarz strzela: jego atak vs obrona gościa
+            if h_xgf and h_xgf > 0:
+                xg_lambda_g = (h_xgf + a_xga) / 2 if (a_xga and a_xga > 0) else h_xgf
+                lambda_g = round((1 - _XG_W) * lambda_g + _XG_W * xg_lambda_g, 4)
+            # Gość strzela: jego atak vs obrona gospodarza
+            if a_xgf and a_xgf > 0:
+                xg_lambda_a = (a_xgf + h_xga) / 2 if (h_xga and h_xga > 0) else a_xgf
+                lambda_a = round((1 - _XG_W) * lambda_a + _XG_W * xg_lambda_a, 4)
+        except (ImportError, AttributeError, OSError, ValueError, KeyError):
+            pass  # xG cache niedostępny → czyste lambdy Poissona
 
-    lambda_g = max(0.05, lambda_g)
-    lambda_a = max(0.05, lambda_a)
+        lambda_g = max(0.05, lambda_g)
+        lambda_a = max(0.05, lambda_a)
 
     # ── Macierz Poissona (cached) ────────────────────────────────────
     from footstats.config import FINAL_REMIS_BOOST

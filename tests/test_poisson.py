@@ -108,3 +108,27 @@ class TestPredictMatch:
         df = _df_minimal(20)
         wynik = predict_match("Nieznana FC", "Obca United", df)
         assert wynik is None
+
+
+@pytest.fixture
+def df_mecze_fixture():
+    """Minimalne df_mecze do testu flag use_xg/use_calibration (deterministyczny replay)."""
+    rows = []
+    for i in range(8):
+        rows.append({"gospodarz": "Alfa", "goscie": "Beta", "gole_g": 2, "gole_a": 1,
+                     "data": f"2020-01-{i+1:02d}"})
+        rows.append({"gospodarz": "Beta", "goscie": "Alfa", "gole_g": 0, "gole_a": 1,
+                     "data": f"2020-02-{i+1:02d}"})
+    return pd.DataFrame(rows)
+
+
+def test_predict_match_use_xg_flag_disables_now_based_xg(df_mecze_fixture):
+    """use_xg=False musi pominac blok xG (datetime.now) — wynik deterministyczny w replay historycznym."""
+    from footstats.core.poisson import predict_match
+    g, a = df_mecze_fixture["gospodarz"].iloc[0], df_mecze_fixture["goscie"].iloc[0]
+
+    pred_xg_off = predict_match(g, a, df_mecze_fixture, use_xg=False, use_calibration=False)
+    assert pred_xg_off is not None
+    pred_again = predict_match(g, a, df_mecze_fixture, use_xg=False, use_calibration=False)
+    assert pred_xg_off["lambda_g"] == pred_again["lambda_g"]
+    assert pred_xg_off["lambda_a"] == pred_again["lambda_a"]
