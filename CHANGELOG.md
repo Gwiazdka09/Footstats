@@ -24,5 +24,11 @@
 - Code review: `footstats-reviewer` APPROVE z uwagami (0× P1/P2), `footstats-data-guard` SAFE. P3 #1 (luka testu wiringu) naprawiona e2e testem.
 - Suita: **1078 pass** / 4 skip.
 
+### Sprzątanie audytu + wpięcia (sesja 06-19 wieczór)
+- **Bug 3 (mock leak) — potwierdzony naprawiony:** `coupons.py:_fallback_predictions` (24-31) — mock tylko `DEMO_MODE==1`, inaczej pusta lista; wszystkie 3 ścieżki fetch (brak klucza / pusty wynik / wyjątek) przez fallback. Realny user nie widzi już FAKE meczów (Legia/Lech/Ajax).
+- **`waliduj_df_wyniki` — potwierdzony wpięty:** data-quality check przed predykcją (`quick_picks.py:73-74`).
+- **`bezpieczny_budget_use` — WPIĘTY** (`25f6bc92a`): swap z `af_budget_use` w `api_football.py:_get`. Typed `BladBudzetu` zamiast `RuntimeError` + pełne logowanie budżetu. Ten sam plik/schema/progi (`cache/api_football/af_budget.json`, 100/5/20) → zero rozjechania liczników. Fallback do wygasłych danych cache zachowany. TDD + suita 1079 pass / 4 skip.
+- Uwaga: `af_budget_use` (cache.py) jest teraz martwy w prod (callery tylko w testach) — kandydat do usunięcia osobnym taskiem.
+
 ### Zespół subagentów
 - Dodany `footstats-scribe` (kronikarz: sesja → TODO/CHANGELOG/STATUS + commit, archiwizuje zamiast kasować).

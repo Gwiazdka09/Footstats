@@ -14,7 +14,7 @@
 | **Accuracy (live)** | 🟡 | 31.7% (stare 58 settled, sprzed fixów Cel B) — czeka na świeże dane po fixach |
 | **Model fixes** | ✅ | Cel B root-cause (bug 1 conf naprawiony) + Dixon-Coles w prod (flaga ON) + Faza 17 + A1-A3 + λ |
 | **Data collection** | ✅ | System paper-trading (single-leg, bez Groq) autonomiczne od 06-16 |
-| **Tests** | ✅ | 1076 testów pass (telegram testy zmockowane — koniec spamu) |
+| **Tests** | ✅ | 1079 testów pass / 4 skip (telegram testy zmockowane — koniec spamu) |
 | **Automation** | ✅ | Task Scheduler: draft 08:00 (+System paper) + final + evening 23:00 |
 | **API** | ✅ | FastAPI + Sentry + SlowAPI + CORS + Timeout |
 | **DB** | ✅ | Neon PG (prod), keepalives, pool maxconn=10, migracja 6 (telegram_chat_id) |

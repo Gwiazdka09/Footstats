@@ -7,7 +7,7 @@
 
 > Ukończone: `git log`. Fazy DONE: 16-20, GUI/UX, SEO, RODO, multi-user (15.6),
 > audyt core (A1-A3), λ: kontuzje + xG+obrona, Cel A (walk-forward), Cel B bug 1,
-> Cel C (Dixon-Coles w prod). Suite: 1076 testów pass.
+> Cel C (Dixon-Coles w prod). Suite: 1079 testów pass.
 
 ---
 
@@ -50,17 +50,21 @@
 - [x] **Wyczyszczono 30 test-userów z prod** (06-18): backup + FK-aware DELETE
   (30 bankroll_state + users). Prod: 41→11 userów, 0 śmieci. Zostali realni + System.
 
-### 🔴 Bug 3: Mock matches leak do realnych userów
-- `coupons.py:_fetch_predictions` zwraca `_mock_predictions()` (Legia/Lech/Ajax — FAKE)
-  gdy brak BZZOIRO_KEY / Bzzoiro down / off-season. Realny user w GUI widzi nieistniejące
-  mecze jako realne, może budować kupony. **Fix: gate DEMO_MODE, inaczej pusta lista.**
+### ✅ Bug 3: Mock matches leak do realnych userów (06-19)
+- `coupons.py:_fetch_predictions` zwracał `_mock_predictions()` (Legia/Lech/Ajax — FAKE)
+  gdy brak BZZOIRO_KEY / Bzzoiro down / off-season → realny user widział nieistniejące mecze.
+- Fix: `_fallback_predictions()` (`coupons.py:24-31`) — mock TYLKO przy `DEMO_MODE==1`,
+  inaczej pusta lista. Wszystkie 3 ścieżki fetch (brak klucza / pusty wynik / wyjątek) idą przez fallback.
 
 ### ✅ Dead code — wyczyszczone (06-18)
 - Usunięto: `json_export.py` (cały martwy moduł, 246 linii), `_generate_lesson`
   (dup post_match), `analizuj_liste_meczow` (stary CLI flow), `fetch_match_xg`
   (nieużywany wrapper), `send_trening_raport` (nieużywany notif). 112 testów pass.
-- [ ] **Do WPIĘCIA (nie usuwać — użyteczne):** `waliduj_df_wyniki` (walidacja df_mecze —
-  data-quality check którego brakuje przed predykcją!) + `bezpieczny_budget_use` (guard budżetu API).
+- [x] **WPIĘTE (06-19):** `waliduj_df_wyniki` — data-quality check przed predykcją
+  (`quick_picks.py:73-74`). `bezpieczny_budget_use` — guard budżetu API z typed `BladBudzetu`
+  + logowaniem, swap z `af_budget_use` w `api_football.py:_get` (commit `25f6bc92a`).
+- [ ] **Martwy kod (osobny task):** `af_budget_use` w `cache.py` po wpięciu `bezpieczny_budget_use`
+  ma callery już tylko w testach (`test_cache.py`) — kandydat do usunięcia, NIE teraz.
 - Reszta (lineup_confidence_penalty, batch_record_closing_odds, cache cleanup, dozwolone_dodatki/test) —
   niski priorytet, featury działają przez inne ścieżki.
 
