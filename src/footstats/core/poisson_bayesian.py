@@ -175,3 +175,34 @@ def blend_with_classic(
         "pa": round(w_bayesian * bayesian["pa"] + w_c * classic.get("pa", bayesian["pa"]), 4),
         "model": f"blend_{w_bayesian:.1f}b",
     }
+
+
+def blend_dixon_coles(
+    p_model: dict,
+    g: str,
+    a: str,
+    df: pd.DataFrame,
+    w_bayesian: float = 0.5,
+) -> dict:
+    """Blenduje ramie Dixon-Coles do p_model (TYLKO pw/pr/pp).
+
+    p_model: dict {pw,pr,pp,...} w procentach 0-100 (z classic predict_match).
+    DC zwraca pa (away win) jako ulamek 0-1 -> remap pa->pp + x100.
+    Gdy DC zwroci None (za malo danych) -> p_model bez zmian (graceful, = baseline).
+    Klucze spoza {pw,pr,pp} (np. bt/o25) NIE sa modyfikowane.
+    Renormalizacja pw/pr/pp do 100 (zdarzenia rozlaczne i wyczerpujace).
+    """
+    bay = predict_match_bayesian(g, a, df)
+    if not bay:
+        return p_model
+
+    p_bay = {"pw": bay["pw"] * 100.0, "pr": bay["pr"] * 100.0, "pp": bay["pa"] * 100.0}
+    w_c = 1.0 - w_bayesian
+    blended = {k: p_model[k] * w_c + p_bay[k] * w_bayesian for k in ("pw", "pr", "pp")}
+
+    s = blended["pw"] + blended["pr"] + blended["pp"] or 1.0
+    out = dict(p_model)  # zachowaj bt/o25 i pozostale klucze
+    out["pw"] = round(blended["pw"] / s * 100.0, 4)
+    out["pr"] = round(blended["pr"] / s * 100.0, 4)
+    out["pp"] = round(blended["pp"] / s * 100.0, 4)
+    return out
