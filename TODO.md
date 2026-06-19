@@ -77,29 +77,11 @@
 
 ---
 
-## ✅ WALK-FORWARD OFFLINE (Cel A — 2026-06-18, ZROBIONE)
+## 🎯 MODEL — następne kroki (Cel A/B/C ZROBIONE → `CHANGELOG.md` 2026-06-19)
 
-> Harness `scripts/run_walkforward_prod.py` (classic+Dixon-Coles+ensemble, devig kursów,
-> no-lookahead, zapis `data/walkforward.db`, NIE Neon). Branch `feat/walkforward-harness`.
-> Suite: 1061 pass.
+> Zrobione: walk-forward 10 lig (DC 51.3%, kalibracja monotoniczna), Cel B bug 1 fix,
+> Dixon-Coles w prod (flaga `USE_DIXON_COLES` ON). Szczegóły + hashe → `CHANGELOG.md`.
 
-- **Werdykt NED n=1842 (out-of-sample, kalibracja OFF):** dixoncoles 54.1% > baseline 52.2% >
-  poisson_only 50.5%. Kalibracja **MONOTONICZNA** (37→42→49→70% per pasmo) — NIE odwrócona.
-- **Walidacja 10 lig (2026-06-19, out-of-sample, n=25738):** dixoncoles **51.3%** > baseline 49.6%
-  > poisson_only 48.1%. DC +1.7pp nad baseline — **generalizuje** (NED było +1.9pp). Kalibracja
-  MONOTONICZNA (37.5→43.2→46.4→58.8%) na wszystkich 10 ligach. Per liga (DC): NED 54.9, SCO 54.8,
-  ENG 53.4, ITA 53.1, GER 51.5, ESP 51.2, BEL 50.4, FRA 49.8, AUT 47.8, POL 44.6. Pasmo 65%+ = 58.8%.
-  Cache: `data/hist_cache/full_dataset.parquet` (32400 meczów, 10 lig, xgabora OFF).
-- **Kluczowy wniosek:** model statystyczny zdrowy i kalibracja monotoniczna na 10 ligach. Live
-  31.7%/odwrócenie NIE z modelu → Cel B.
-- [x] **Cel B root cause ZNALEZIONY (06-19):** bug 1 = quick_picks nie budował `pred` → confidence
-  z Groq fallback (overconfident) zamiast modelu → inwersja. **Naprawione + w main** (072ee9035).
-  bug 2 = `ai_tip` = selekcja Groq (44% remisy, 12.5% wyjazdy) zamiast argmax modelu — czeka na
-  ≥15 System settled (decyzja a/b/c po danych).
-- [x] **Cel C: Dixon-Coles wpięty w prod (06-19)** — flaga `USE_DIXON_COLES` (default ON, env-toggle),
-  `W_BAYESIAN=0.5`. `blend_dixon_coles` (poisson_bayesian) w quick_picks za flagą, przed ensemble.
-  Wspólna funkcja z wf_harness (parytet). Smoke A/B NED: DC 55.2% > baseline 54.0%. Suite 1076 pass.
-  Spec/plan: `docs/superpowers/{specs,plans}/2026-06-19-dixon-coles-prod-integration*`.
 - [ ] **Mierz efekt DC live** — `calibration_monitor.py` co kilka dni; po ≥15-20 settled porównaj z baseline.
 - [ ] **Bug 2 decyzja** — po ≥15 System settled: czy Groq selekcja szkodzi (a: ogranicz / b: argmax modelu / c: tnij conf).
 - [ ] Fast-follow perf: pętla O(n²), 10 lig ~3-5h — optymalizacja (searchsorted/kursor).
