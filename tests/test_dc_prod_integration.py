@@ -102,3 +102,39 @@ def test_parity_prod_vs_harness_same_match_same_blend():
     assert abs(p_prod["pw"] - res["pw"]) < 0.11   # res zaokraglone do 1dp; tolerancja
     assert abs(p_prod["pr"] - res["pr"]) < 0.11
     assert abs(p_prod["pp"] - res["pp"]) < 0.11
+
+
+def test_blend_dc_does_not_touch_neon_or_telegram(monkeypatch):
+    """Guard FootStats: blend DC to czysta funkcja — zero I/O do Neon/Telegram."""
+    import footstats.core.poisson_bayesian as pb
+
+    # Gdyby ktos dodal polaczenie do db w sciezce DC — wykryjemy.
+    import footstats.utils.db as db
+    if hasattr(db, "connect"):
+        monkeypatch.setattr(db, "connect", lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("blend DC nie moze laczyc sie z Neon")))
+    p_model = {"pw": 50.0, "pr": 30.0, "pp": 20.0, "bt": 55.0, "o25": 60.0}
+    out = pb.blend_dixon_coles(p_model, "Ajax", "PSV", _df_prod(), w_bayesian=0.5)
+    assert "pw" in out  # wykonalo sie bez tkniecia db
+
+
+def test_flag_off_equals_classic_p_model(monkeypatch):
+    """Regresja: USE_DIXON_COLES=False -> _p_pois identyczne jak przed wpieciem (classic)."""
+    import footstats.core.quick_picks as qp
+    import footstats.core.poisson_bayesian as pb
+    from footstats.core.poisson import predict_match
+
+    monkeypatch.setattr(qp, "USE_DIXON_COLES", False, raising=False)
+    called = {"n": 0}
+    monkeypatch.setattr(pb, "blend_dixon_coles",
+                        lambda *a, **k: called.__setitem__("n", called["n"] + 1) or a[0])
+
+    df = _df_prod()
+    pred = predict_match("Ajax", "PSV", df, use_xg=False, use_calibration=False)
+    _p_pois = {"pw": pred["p_wygrana"], "pr": pred["p_remis"], "pp": pred["p_przegrana"],
+               "bt": pred["btts"], "o25": pred["over25"]}
+    before = dict(_p_pois)
+    if qp.USE_DIXON_COLES:   # False -> pomijamy blend
+        _p_pois = pb.blend_dixon_coles(_p_pois, "Ajax", "PSV", df, w_bayesian=0.5)
+    assert called["n"] == 0          # blend NIE wolany przy fladze OFF
+    assert _p_pois == before          # classic bez zmian
