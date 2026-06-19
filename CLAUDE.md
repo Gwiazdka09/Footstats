@@ -13,6 +13,16 @@ Lang: PL. Context: Soccer predictions (Poisson + RAG + LLM).
 - ASK: `pip install`, `.env` changes, destructive ops (reset/force push/rm).
 - Style: PEP8, Type hints, PL comments/logs.
 
+## Subagent team (.claude/agents/)
+Ja = orchestrator. Workflow feature: subagent-driven-development (planner→coder→reviewer, 2-stage review, branch+TDD+commit per task).
+- `footstats-planner` (opus) — spec→plan TDD, read-only.
+- `footstats-coder` (sonnet) — implementer 1 task, TDD, commit.
+- `footstats-reviewer` (opus) — spec + quality review.
+- `footstats-data-guard` (sonnet) — guard: prod Neon writes / Telegram spam / lookahead.
+- `footstats-model-analyst` (opus) — walk-forward, kalibracja, A/B, λ (Poisson/Dixon-Coles).
+- `footstats-explorer` (haiku) — read-only lokalizator kodu (tani, oszczędza kontekst).
+- `footstats-debugger` (opus) — root-cause hunt (np. live≪offline: Groq/settlement).
+
 ## Architecture (Pointers)
 - Structure: See `PROJECT_STRUCTURE.md`
 - Core: `src/footstats/` (AI, Core, Scrapers)
