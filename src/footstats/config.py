@@ -93,6 +93,12 @@ LIGI_WHITELIST: frozenset[str] = frozenset({
     "Serie B",
     "Brasileirao Serie A",
     "Liga MX",
+    # 2026-06-19: aktywne ligi klubowe (lato — Europa off-season) by System paper-trading
+    # zbierał dane teraz. MŚ celowo POZA (kadry ≠ model λ klubowy → szum walidacji M1).
+    "Brasileirao Serie B",
+    "USL Championship",
+    "Segunda Division",
+    "Botola Pro",
 })
 
 # Słowa kluczowe → odrzuć nawet jeśli liga nie jest w blackliście
