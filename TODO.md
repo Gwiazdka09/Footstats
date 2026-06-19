@@ -88,7 +88,12 @@
 
 - [ ] **Mierz efekt DC live** — `calibration_monitor.py` co kilka dni; po ≥15-20 settled porównaj z baseline.
 - [ ] **Bug 2 decyzja** — po ≥15 System settled: czy Groq selekcja szkodzi (a: ogranicz / b: argmax modelu / c: tnij conf).
-- [ ] Fast-follow perf: pętla O(n²), 10 lig ~3-5h — optymalizacja (searchsorted/kursor).
+- [~] Perf walk-forward (3-5h): zbadane 06-19. Harness sfaktoryzowany (searchsorted prefix,
+  historia raz — `09c517a9e`, bit-parytet) ale **zysk wall-clock ~0**. Wąskie gardło NIE w
+  filtrowaniu df, tylko w `predict_match`/`blend_dixon_coles` (skan rosnącej historii per mecz,
+  `.tail(OSTATNIE_N)`). Prawdziwy lewar = trim okna historii, ale Dixon-Coles fituje att/def po
+  całej historii → zmiana semantyki modelu, wymaga model-analyst + walidacji trafności. ODŁOŻONE
+  (pętla offline, odpalana rzadko). NIE goń jako "darmowy perf".
 
 ## 🔴 PRIORYTET — WALIDACJA (czekaj i mierz, NIE dokładaj zmian λ)
 
