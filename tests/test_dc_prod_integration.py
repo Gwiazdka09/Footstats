@@ -73,3 +73,32 @@ def test_quick_picks_calls_blend_when_flag_on(monkeypatch):
         _p_pois = pb.blend_dixon_coles(_p_pois, "Ajax", "PSV", df, w_bayesian=qp.W_BAYESIAN)
     assert calls["n"] == 1
     assert "bt" in _p_pois and "o25" in _p_pois  # rynki goli zachowane
+
+
+def test_parity_prod_vs_harness_same_match_same_blend():
+    """Ten sam (g,a,df,w_bayesian) -> harness predict_one i prod-side blend daja identyczne pw/pr/pp.
+
+    Gwarantuje ze prod odtwarza zwycieska konfiguracje harness 1:1 (po stronie modelu,
+    PRZED ensemble z kursami).
+    """
+    from footstats.core.poisson import predict_match
+    from footstats.core.poisson_bayesian import blend_dixon_coles
+    from footstats.core.wf_harness import predict_one, ModelFlags
+
+    df = _df_prod()
+    g, a, w = "Ajax", "PSV", 0.5
+
+    # Strona prod: classic (use_xg=False jak harness do parytetu) -> blend DC, BEZ ensemble.
+    pred = predict_match(g, a, df, use_xg=False, use_calibration=False)
+    p_prod = {"pw": pred["p_wygrana"], "pr": pred["p_remis"], "pp": pred["p_przegrana"],
+              "bt": pred["btts"], "o25": pred["over25"]}
+    p_prod = blend_dixon_coles(p_prod, g, a, df, w_bayesian=w)
+
+    # Strona harness: predict_one BEZ ensemble (use_ensemble=False) -> czysty p_model po DC.
+    flags = ModelFlags(use_bayesian=True, use_ensemble=False, use_calibration=False, w_bayesian=w)
+    res = predict_one(g, a, df, league="NED-Eredivisie",
+                      odds_h=None, odds_d=None, odds_a=None, flags=flags)
+    assert res is not None
+    assert abs(p_prod["pw"] - res["pw"]) < 0.11   # res zaokraglone do 1dp; tolerancja
+    assert abs(p_prod["pr"] - res["pr"]) < 0.11
+    assert abs(p_prod["pp"] - res["pp"]) < 0.11
