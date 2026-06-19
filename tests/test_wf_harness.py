@@ -29,3 +29,23 @@ def test_adapt_to_prod_schema_missing_column_raises():
     df = pd.DataFrame([{"home": "A", "away": "B"}])
     with pytest.raises(ValueError, match="brak"):
         adapt_to_prod_schema(df)
+
+
+from footstats.core.wf_harness import devig_1x2
+
+
+def test_devig_1x2_sums_to_100():
+    p = devig_1x2(odds_h=1.57, odds_d=3.9, odds_a=7.5)
+    assert p is not None
+    total = p["pw"] + p["pr"] + p["pp"]
+    assert abs(total - 100.0) < 0.01
+
+
+def test_devig_1x2_favorite_has_highest_prob():
+    p = devig_1x2(odds_h=1.57, odds_d=3.9, odds_a=7.5)
+    assert p["pw"] > p["pr"] > p["pp"]
+
+
+def test_devig_1x2_none_on_missing_odds():
+    assert devig_1x2(odds_h=None, odds_d=3.9, odds_a=7.5) is None
+    assert devig_1x2(odds_h=float("nan"), odds_d=3.9, odds_a=7.5) is None
