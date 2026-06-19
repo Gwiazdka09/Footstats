@@ -5,7 +5,7 @@ from rich.panel import Panel
 from rich import box
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
-from footstats.config import PEWNIACZEK_PROG
+from footstats.config import PEWNIACZEK_PROG, USE_DIXON_COLES, W_BAYESIAN
 from footstats.scrapers.bzzoiro import BzzoiroClient, _bzz_parse_prob
 from footstats.core.weekly_picks import _typy_pewne
 from footstats.core.probability_calibrator import calibrate_confidence
@@ -219,6 +219,11 @@ def szybkie_pewniaczki_2dni(
                     _p_pois = {"pw": _pred_p["p_wygrana"], "pr": _pred_p["p_remis"],
                                "pp": _pred_p["p_przegrana"], "bt": _pred_p["btts"],
                                "o25": _pred_p["over25"]}
+                    # ── Cel C: ramie Dixon-Coles (flaga) — blend nad pw/pr/pp przed ensemble ──
+                    # DC dotyka TYLKO 1X2; bt/o25 zostaja z classic. DC None -> _p_pois bez zmian.
+                    if USE_DIXON_COLES:
+                        from footstats.core.poisson_bayesian import blend_dixon_coles
+                        _p_pois = blend_dixon_coles(_p_pois, g, a, df_mecze, w_bayesian=W_BAYESIAN)
                     _p_bzz  = {"pw": pw, "pr": pr, "pp": pp, "bt": bt, "o25": o25}
                     _bl = ensemble_probs(_p_pois, _p_bzz, liga=liga)
                     pw  = round(_bl["pw"], 1)
