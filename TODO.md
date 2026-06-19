@@ -84,11 +84,19 @@
 
 - **Werdykt NED n=1842 (out-of-sample, kalibracja OFF):** dixoncoles 54.1% > baseline 52.2% >
   poisson_only 50.5%. Kalibracja **MONOTONICZNA** (37→42→49→70% per pasmo) — NIE odwrócona.
-- **Kluczowy wniosek:** model statystyczny zdrowy (~54%, blisko M1). Live 31.7%/odwrócenie
-  NIE jest winą modelu → przyczyna w **Groq/selekcji albo settlemencie** (→ Cel B, polowanie na bug).
-- [ ] **Dixon-Coles do wpięcia w prod** (+1.9pp, zmierzone) — osobny spec.
-- [ ] **Cel B:** prześledź warstwę LLM/selekcja + settlement live (czemu live ≪ offline).
-- [ ] Fast-follow perf: pętla O(n²), pełne 5 lig za wolne — optymalizacja (searchsorted/kursor).
+- **Walidacja 10 lig (2026-06-19, out-of-sample, n=25738):** dixoncoles **51.3%** > baseline 49.6%
+  > poisson_only 48.1%. DC +1.7pp nad baseline — **generalizuje** (NED było +1.9pp). Kalibracja
+  MONOTONICZNA (37.5→43.2→46.4→58.8%) na wszystkich 10 ligach. Per liga (DC): NED 54.9, SCO 54.8,
+  ENG 53.4, ITA 53.1, GER 51.5, ESP 51.2, BEL 50.4, FRA 49.8, AUT 47.8, POL 44.6. Pasmo 65%+ = 58.8%.
+  Cache: `data/hist_cache/full_dataset.parquet` (32400 meczów, 10 lig, xgabora OFF).
+- **Kluczowy wniosek:** model statystyczny zdrowy i kalibracja monotoniczna na 10 ligach. Live
+  31.7%/odwrócenie NIE z modelu → Cel B.
+- [x] **Cel B root cause ZNALEZIONY (06-19):** bug 1 = quick_picks nie budował `pred` → confidence
+  z Groq fallback (overconfident) zamiast modelu → inwersja. **Naprawione + w main** (072ee9035).
+  bug 2 = `ai_tip` = selekcja Groq (44% remisy, 12.5% wyjazdy) zamiast argmax modelu — czeka na
+  ≥15 System settled (decyzja a/b/c po danych).
+- [ ] **Dixon-Coles do wpięcia w prod** (+1.7pp na 10 ligach potwierdzone) — osobny spec.
+- [ ] Fast-follow perf: pętla O(n²), 10 lig ~3-5h — optymalizacja (searchsorted/kursor).
 
 ## 🔴 PRIORYTET — WALIDACJA (czekaj i mierz, NIE dokładaj zmian λ)
 
