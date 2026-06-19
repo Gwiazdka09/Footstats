@@ -924,7 +924,7 @@ const CouponWizard = ({ apiFetch, onComplete, onCancel, initialProposal }) => {
                     </div>
                     <div className="text-right">
                       <span className="text-xs text-slate-500 block">Sugerowany typ:</span>
-                      <span className="font-bold text-indigo-400">{m.tips[0]?.tip} (@{m.tips[0]?.odds})</span>
+                      <span className="font-bold text-indigo-400">{(m.suggested_tip || m.tips[0])?.tip} (@{(m.suggested_tip || m.tips[0])?.odds})</span>
                     </div>
                   </div>
                   <div className="space-y-4">

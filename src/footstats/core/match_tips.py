@@ -62,9 +62,19 @@ def build_tips(m: dict) -> dict:
         {"tip": "Over 1.5", "label": "Over 1.5",   "odds": o_o15,    "prob": po15,            "color": "teal"},
         {"tip": "Over 2.5", "label": "Over 2.5",   "odds": o_o25,    "prob": po,              "color": "emerald"},
     ]
+    # Sugerowany typ = najbardziej prawdopodobny wynik 1X2 (argmax), NIE zawsze "1".
+    # Wcześniej GUI brało tips[0] (stała kolejność listy) → zawsze "1".
+    suggested_tip = max(
+        ({"tip": "1", "odds": o1, "prob": ph},
+         {"tip": "X", "odds": ox, "prob": pr},
+         {"tip": "2", "odds": o2, "prob": pp}),
+        key=lambda t: t["prob"],
+    )
+
     return {
         "id": m["id"], "home": m["gosp"], "away": m["gosc"],
         "liga": m.get("liga", ""), "data": m.get("data", ""), "godzina": m.get("godzina", ""),
         "prob_home": ph, "prob_draw": pr, "prob_away": pp,
         "prob_over": po, "prob_btts": pbt, "tips": tips,
+        "suggested_tip": suggested_tip,
     }
