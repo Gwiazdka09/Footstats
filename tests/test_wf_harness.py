@@ -136,3 +136,22 @@ def test_report_has_accuracy_and_calibration():
     txt = report(out)
     assert "Accuracy 1X2" in txt
     assert "pasmo pewno" in txt.lower()
+
+
+from footstats.core.wf_harness import run_ab
+
+
+def test_run_ab_compares_arms(tmp_path):
+    df = _hist_df_english()
+    db = tmp_path / "ab.db"
+    arms = {
+        "baseline": ModelFlags(use_bayesian=False, use_ensemble=True, use_calibration=False),
+        "dixoncoles": ModelFlags(use_bayesian=True, use_ensemble=True, use_calibration=False),
+    }
+    summary = run_ab(df, arms, league="TEST", db_path=db, verbose=False)
+    assert set(summary.keys()) == {"baseline", "dixoncoles"}
+    for tag, stat in summary.items():
+        assert "accuracy" in stat and "n" in stat
+        assert stat["n"] > 0
+    from footstats.core.wf_db import load_run
+    assert len(load_run(db, "baseline")) > 0

@@ -10,6 +10,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from footstats.core import wf_db
+
 _COL_MAP = {"home": "gospodarz", "away": "goscie", "hg": "gole_g", "ag": "gole_a"}
 _REQUIRED = ("home", "away", "hg", "ag")
 
@@ -202,3 +204,26 @@ def report(out: pd.DataFrame) -> str:
             linie.append(f"    {lo:.0%}-{hi:.0%}: {sub['correct'].mean()*100:.1f}% (n={len(sub)})")
     linie.append("=" * 60)
     return "\n".join(linie)
+
+
+def run_ab(df, arms: dict, league=None, db_path=None, max_matches=None,
+           min_date=None, verbose=True) -> dict:
+    """Uruchamia wiele ramion (tag -> ModelFlags), zapisuje do wf_db, zwraca podsumowanie.
+
+    Zwraca {tag: {"accuracy": float, "n": int}}.
+    """
+    db_path = db_path or wf_db.DEFAULT_DB
+    wf_db.init_db(db_path)
+
+    summary = {}
+    for tag, flags in arms.items():
+        out = run_walkforward(df, league=league, flags=flags, run_tag=tag,
+                              max_matches=max_matches, min_date=min_date, verbose=verbose)
+        if len(out):
+            wf_db.save_run(db_path, out.to_dict("records"))
+            summary[tag] = {"accuracy": round(out["correct"].mean() * 100, 1), "n": len(out)}
+            if verbose:
+                print(report(out))
+        else:
+            summary[tag] = {"accuracy": None, "n": 0}
+    return summary
