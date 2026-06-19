@@ -39,14 +39,14 @@ FDCO_LEAGUES = {
     "SP1": "ESP-La Liga",
     "I1":  "ITA-Serie A",
     "F1":  "FRA-Ligue 1",
+    "B1":  "BEL-First Division A",   # Belgia: format sezonowy (brak w /new/)
+    "SC0": "SCO-Premiership",        # Szkocja: format sezonowy (brak w /new/)
 }
 
 # Ligi z nowego formatu (jeden plik zbiorczy z całą historią)
 FDCO_NEW_LEAGUES = {
     "POL": "POL-Ekstraklasa",
     "AUT": "AUT-Bundesliga",
-    "BEL": "BEL-First Division A",
-    "SCO": "SCO-Premiership",
 }
 
 XGABORA_MATCHES_URL = (
