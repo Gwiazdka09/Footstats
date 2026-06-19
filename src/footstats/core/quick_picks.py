@@ -257,6 +257,16 @@ def szybkie_pewniaczki_2dni(
             "bt": bt, "o25": o25,
             "pw_raw": pw_raw, "pr_raw": pr_raw, "pp_raw": pp_raw,
             "bt_raw": bt_raw, "o25_raw": o25_raw,
+            # FIX Cel B #1: schemat oczekiwany przez warstwe AI (pewnosc_z_modelu/
+            # wyciagnij_faktory) — bez tego confidence wraca do fallback Groq.
+            "pred": {
+                "p_wygrana":   pw,
+                "p_remis":     pr,
+                "p_przegrana": pp,
+                "btts":        bt,
+                "over25":      o25,
+                "under25":     u25,
+            },
             "wynik_g":    wg,
             "wynik_a":    wa,
             "odds":         odds,

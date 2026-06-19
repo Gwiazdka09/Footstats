@@ -138,3 +138,36 @@ def test_invalid_bzzoiro_returns_empty():
     bzz = MagicMock()
     bzz._valid = False
     assert szybkie_pewniaczki_2dni(bzz) == []
+
+
+def test_wynik_zawiera_pred_dict_z_prob_modelu():
+    """
+    Bug Cel B #1: wyniki musi zawierać klucz "pred" ze skalibrowanymi prob,
+    inaczej warstwa AI (pewnosc_z_modelu) czyta pred={} i wraca do fallback
+    Groq (overconfident) zamiast prawdopodobienstwa modelu -> inwersja kalibracji.
+    """
+    bzz = _make_bzzoiro([_BZZ_EVENT])
+    with patch(
+        "footstats.core.quick_picks.calibrate_confidence", side_effect=lambda x: x / 100
+    ), patch(
+        "footstats.data.historical_loader.load_cached",
+        side_effect=FileNotFoundError("brak cache"),
+    ):
+        wyniki = szybkie_pewniaczki_2dni(bzz, prog=0.0)
+
+    assert len(wyniki) >= 1
+    r = wyniki[0]
+    assert "pred" in r
+    pred = r["pred"]
+    assert pred["p_wygrana"] == r["pw"]
+    assert pred["p_remis"] == r["pr"]
+    assert pred["p_przegrana"] == r["pp"]
+    assert pred["btts"] == r["bt"]
+    assert pred["over25"] == r["o25"]
+
+    # Warstwa AI: pewnosc_z_modelu musi czytac prob modelu (pr), NIE fallback.
+    from footstats.ai.analyzer_helpers import pewnosc_z_modelu
+
+    conf = pewnosc_z_modelu("x", r.get("pred") or {}, fallback_pct=90)
+    assert conf == int(round(max(1, min(99, r["pr"]))))
+    assert conf != 90
