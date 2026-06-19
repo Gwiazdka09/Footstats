@@ -75,9 +75,10 @@ def test_ligi_keyword_case_insensitive():
 # ── FAZA 17.4: egzekwowanie whitelist ────────────────────────────────────
 
 def test_ligi_spoza_whitelist_odrzucone():
-    # Botola/Veikkausliiga nie są w whitelist → odrzuć (gdy enforce=True).
+    # Allsvenskan/Veikkausliiga nie są w whitelist → odrzuć (gdy enforce=True).
+    # (Botola Pro dodane do whitelist 2026-06-19 — patrz test_whitelist_active_leagues.)
     kandydaci = [
-        {"liga": "Botola Pro", "gospodarz": "Wydad"},
+        {"liga": "Allsvenskan", "gospodarz": "Malmö"},
         {"liga": "Veikkausliiga", "gospodarz": "HJK"},
     ]
     result = _pre_filtruj_ligi(kandydaci)
