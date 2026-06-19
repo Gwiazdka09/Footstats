@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from footstats.core import wf_db
@@ -120,6 +121,13 @@ def run_walkforward(df, league=None, flags=None, run_tag="run",
     Dla każdego meczu: historia = mecze z date < match.date (po filtrze ligi),
     zaadaptowana do schematu prod; predict_one; porównanie z wynikiem.
     Zwraca DataFrame rekordów (kolumny m.in. tip, correct, pred_conf, match_date).
+
+    Optymalizacja O(n^2) -> O(n*k): baza historii (po filtrze ligi) liczona
+    i adaptowana RAZ przed pętlą; granica historii per mecz wyznaczana przez
+    `np.searchsorted` na posortowanych datach (prefiks) — zachowuje to samo
+    członkostwo i tę samą kolejność wierszy co oryginalny per-mecz skan,
+    co gwarantuje bit-identyczny wynik (model jest wrażliwy na porządek —
+    `poisson.py` używa `.tail(N)` po pozycji).
     """
     flags = flags or ModelFlags()
 
@@ -137,14 +145,18 @@ def run_walkforward(df, league=None, flags=None, run_tag="run",
     if verbose:
         print(f"[WF] liga={league or 'wszystkie'} | meczów={len(work):,} | tag={run_tag}")
 
+    # Baza historii (po filtrze ligi) — liczona i adaptowana RAZ, nie per mecz.
+    base = df if league is None else df[df["league"] == league]
+    base = base.sort_values("date", kind="stable").reset_index(drop=True)
+    base_prod = adapt_to_prod_schema(base)
+    dates = base["date"].to_numpy()
+
     records = []
     for _, row in work.iterrows():
-        hist = df[df["date"] < row["date"]]
-        if league:
-            hist = hist[hist["league"] == league]
-        if len(hist) < 4:
+        idx = int(np.searchsorted(dates, np.datetime64(row["date"]), side="left"))
+        if idx < 4:
             continue
-        hist_prod = adapt_to_prod_schema(hist)
+        hist_prod = base_prod.iloc[:idx]
 
         res = predict_one(
             row["home"], row["away"], hist_prod, league=row.get("league"),

@@ -174,3 +174,79 @@ def test_run_ab_compares_arms(tmp_path):
         assert stat["n"] > 0
     from footstats.core.wf_db import load_run
     assert len(load_run(db, "baseline")) > 0
+
+
+def _run_walkforward_ref(df, league=None, flags=None, run_tag="run",
+                         max_matches=None, min_date=None, verbose=False):
+    """Referencyjna kopia STAREJ (przedoptymalizacyjnej) pętli walk-forward.
+
+    Dokładny algorytm O(n^2): per-mecz pełny skan `df[df["date"] < row["date"]]`
+    + filtr ligi + adapt_to_prod_schema per mecz. Używana wyłącznie do testu
+    parytetu bit-identycznego z nową (zoptymalizowaną) implementacją.
+    """
+    from footstats.core.wf_harness import adapt_to_prod_schema, predict_one
+
+    flags = flags or ModelFlags()
+
+    work = df if league is None else df[df["league"] == league]
+    work = work.sort_values("date").reset_index(drop=True)
+
+    if min_date:
+        work = work[work["date"] >= pd.Timestamp(min_date)].reset_index(drop=True)
+    else:
+        start = max(50, len(work) // 5)
+        work = work.iloc[start:].reset_index(drop=True)
+    if max_matches:
+        work = work.head(max_matches)
+
+    records = []
+    for _, row in work.iterrows():
+        hist = df[df["date"] < row["date"]]
+        if league:
+            hist = hist[hist["league"] == league]
+        if len(hist) < 4:
+            continue
+        hist_prod = adapt_to_prod_schema(hist)
+
+        res = predict_one(
+            row["home"], row["away"], hist_prod, league=row.get("league"),
+            odds_h=row.get("odds_h"), odds_d=row.get("odds_d"), odds_a=row.get("odds_a"),
+            flags=flags,
+        )
+        if res is None:
+            continue
+
+        actual = row.get("result", "")
+        if actual not in ("H", "D", "A"):
+            continue
+        tip_to_res = {"1": "H", "X": "D", "2": "A"}
+        correct = 1 if tip_to_res[res["tip"]] == actual else 0
+
+        records.append({
+            "run_tag": run_tag,
+            "league": row.get("league", ""),
+            "match_date": str(row["date"])[:10],
+            "home": row["home"], "away": row["away"],
+            "actual_res": actual,
+            "tip": res["tip"], "pred_tip": res["tip"],
+            "pred_conf": res["conf"],
+            "correct": correct,
+            "no_odds": 1 if res["no_odds"] else 0,
+        })
+
+    return pd.DataFrame(records)
+
+
+@pytest.mark.parametrize("use_bayesian", [False, True])
+def test_run_walkforward_matches_reference_implementation(use_bayesian):
+    """Parytet bit-identyczny: zoptymalizowana petla (searchsorted) == stara O(n^2)."""
+    df = _hist_df_english(n_pairs=100)
+    flags = ModelFlags(use_bayesian=use_bayesian, use_ensemble=True, use_calibration=False)
+
+    new = run_walkforward(df, league="TEST", flags=flags, run_tag="t", verbose=False)
+    ref = _run_walkforward_ref(df, league="TEST", flags=flags, run_tag="t", verbose=False)
+
+    assert len(new) > 0
+    pd.testing.assert_frame_equal(
+        new.reset_index(drop=True), ref.reset_index(drop=True)
+    )
