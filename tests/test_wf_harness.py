@@ -98,3 +98,41 @@ def test_predict_one_returns_none_when_no_history():
     flags = ModelFlags()
     assert predict_one("X", "Y", empty, league="TEST",
                        odds_h=2.0, odds_d=3.0, odds_a=3.5, flags=flags) is None
+
+
+from footstats.core.wf_harness import run_walkforward, report
+
+
+def _hist_df_english(n_pairs=60):
+    """DataFrame w schemacie historical_loader (English) z kursami."""
+    import pandas as pd
+    rows = []
+    teams = ["Alfa", "Beta", "Gama", "Delta"]
+    for i in range(n_pairs):
+        h = teams[i % 4]
+        a = teams[(i + 1) % 4]
+        rows.append({
+            "date": pd.Timestamp("2019-01-01") + pd.Timedelta(days=i * 3),
+            "league": "TEST", "home": h, "away": a,
+            "hg": (i % 3), "ag": (i % 2), "result": "H" if (i % 3) > (i % 2) else "A",
+            "odds_h": 1.9, "odds_d": 3.4, "odds_a": 4.0,
+        })
+    return pd.DataFrame(rows)
+
+
+def test_run_walkforward_produces_records():
+    df = _hist_df_english()
+    flags = ModelFlags(use_bayesian=False, use_ensemble=True, use_calibration=False)
+    out = run_walkforward(df, league="TEST", flags=flags, run_tag="t", verbose=False)
+    assert len(out) > 0
+    assert set(["tip", "correct", "pred_conf", "match_date"]).issubset(out.columns)
+    assert out["match_date"].min() > str(df["date"].min())[:10]
+
+
+def test_report_has_accuracy_and_calibration():
+    df = _hist_df_english()
+    flags = ModelFlags(use_calibration=False)
+    out = run_walkforward(df, league="TEST", flags=flags, run_tag="t", verbose=False)
+    txt = report(out)
+    assert "Accuracy 1X2" in txt
+    assert "pasmo pewno" in txt.lower()

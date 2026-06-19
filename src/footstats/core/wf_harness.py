@@ -112,3 +112,93 @@ def predict_one(g, a, hist_prod, league, odds_h, odds_d, odds_a, flags) -> dict 
         "pp": round(p_final["pp"], 1),
         "no_odds": no_odds,
     }
+
+
+def run_walkforward(df, league=None, flags=None, run_tag="run",
+                    max_matches=None, min_date=None, verbose=True):
+    """Pętla walk-forward (no-lookahead) na danych historical_loader (schema English).
+
+    Dla każdego meczu: historia = mecze z date < match.date (po filtrze ligi),
+    zaadaptowana do schematu prod; predict_one; porównanie z wynikiem.
+    Zwraca DataFrame rekordów (kolumny m.in. tip, correct, pred_conf, match_date).
+    """
+    flags = flags or ModelFlags()
+
+    work = df if league is None else df[df["league"] == league]
+    work = work.sort_values("date").reset_index(drop=True)
+
+    if min_date:
+        work = work[work["date"] >= pd.Timestamp(min_date)].reset_index(drop=True)
+    else:
+        start = max(50, len(work) // 5)   # start od ~20% by mieć historię
+        work = work.iloc[start:].reset_index(drop=True)
+    if max_matches:
+        work = work.head(max_matches)
+
+    if verbose:
+        print(f"[WF] liga={league or 'wszystkie'} | meczów={len(work):,} | tag={run_tag}")
+
+    records = []
+    for _, row in work.iterrows():
+        hist = df[df["date"] < row["date"]]
+        if league:
+            hist = hist[hist["league"] == league]
+        if len(hist) < 4:
+            continue
+        hist_prod = adapt_to_prod_schema(hist)
+
+        res = predict_one(
+            row["home"], row["away"], hist_prod, league=row.get("league"),
+            odds_h=row.get("odds_h"), odds_d=row.get("odds_d"), odds_a=row.get("odds_a"),
+            flags=flags,
+        )
+        if res is None:
+            continue
+
+        actual = row.get("result", "")
+        if actual not in ("H", "D", "A"):
+            continue
+        tip_to_res = {"1": "H", "X": "D", "2": "A"}
+        correct = 1 if tip_to_res[res["tip"]] == actual else 0
+
+        records.append({
+            "run_tag": run_tag,
+            "league": row.get("league", ""),
+            "match_date": str(row["date"])[:10],
+            "home": row["home"], "away": row["away"],
+            "actual_res": actual,
+            "tip": res["tip"], "pred_tip": res["tip"],
+            "pred_conf": res["conf"],
+            "correct": correct,
+            "no_odds": 1 if res["no_odds"] else 0,
+        })
+
+    out = pd.DataFrame(records)
+    if verbose and len(out):
+        acc = out["correct"].mean() * 100
+        print(f"[WF] Accuracy 1X2: {acc:.1f}% (n={len(out)})")
+    return out
+
+
+def report(out: pd.DataFrame) -> str:
+    """Raport tekstowy: accuracy globalnie/per liga + kalibracja per pasmo pewności."""
+    if out is None or len(out) == 0:
+        return "Brak rekordów do raportu."
+
+    linie = ["=" * 60, "  WALK-FORWARD (prod model) — FootStats", "=" * 60]
+    acc = out["correct"].mean() * 100
+    linie.append(f"  Accuracy 1X2: {acc:.1f}% (n={len(out)})")
+    no_odds = int(out["no_odds"].sum()) if "no_odds" in out.columns else 0
+    linie.append(f"  Mecze bez kursów (Poisson-only): {no_odds}")
+
+    linie.append("\n  Per liga:")
+    for liga, grp in out.groupby("league"):
+        linie.append(f"    {liga}: {grp['correct'].mean()*100:.1f}% (n={len(grp)})")
+
+    linie.append("\n  Kalibracja per pasmo pewności (1X2):")
+    for lo, hi in [(0.33, 0.45), (0.45, 0.55), (0.55, 0.65), (0.65, 1.01)]:
+        sub = out[(out["pred_conf"] >= lo) & (out["pred_conf"] < hi)]
+        if len(sub) >= 5:
+            linie.append(f"    {lo:.0%}-{hi:.0%}: {sub['correct'].mean()*100:.1f}% (n={len(sub)})")
+    linie.append("=" * 60)
+    return "\n".join(linie)
