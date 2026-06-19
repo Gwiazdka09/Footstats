@@ -1,12 +1,13 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-18
+**Ostatnia aktualizacja:** 2026-06-19
 **Wersja:** v3.4-stable
-**Accuracy:** 31.7% live (41 settled) — pipeline + λ naprawione, **czeka na świeże dane**
+**Accuracy:** model offline 51.3% 10 lig (DC, NED 54.9%, kalibracja monotoniczna) | live 31.7% (stare, sprzed fixów Cel B — czeka na świeże)
 **Cel:** M1 = 55% win rate
 
 > Ukończone: `git log`. Fazy DONE: 16-20, GUI/UX, SEO, RODO, multi-user (15.6),
-> audyt core (A1-A3), λ: kontuzje + xG+obrona. Suite: 1037 testów pass.
+> audyt core (A1-A3), λ: kontuzje + xG+obrona, Cel A (walk-forward), Cel B bug 1,
+> Cel C (Dixon-Coles w prod). Suite: 1076 testów pass.
 
 ---
 
@@ -95,7 +96,12 @@
   z Groq fallback (overconfident) zamiast modelu → inwersja. **Naprawione + w main** (072ee9035).
   bug 2 = `ai_tip` = selekcja Groq (44% remisy, 12.5% wyjazdy) zamiast argmax modelu — czeka na
   ≥15 System settled (decyzja a/b/c po danych).
-- [ ] **Dixon-Coles do wpięcia w prod** (+1.7pp na 10 ligach potwierdzone) — osobny spec.
+- [x] **Cel C: Dixon-Coles wpięty w prod (06-19)** — flaga `USE_DIXON_COLES` (default ON, env-toggle),
+  `W_BAYESIAN=0.5`. `blend_dixon_coles` (poisson_bayesian) w quick_picks za flagą, przed ensemble.
+  Wspólna funkcja z wf_harness (parytet). Smoke A/B NED: DC 55.2% > baseline 54.0%. Suite 1076 pass.
+  Spec/plan: `docs/superpowers/{specs,plans}/2026-06-19-dixon-coles-prod-integration*`.
+- [ ] **Mierz efekt DC live** — `calibration_monitor.py` co kilka dni; po ≥15-20 settled porównaj z baseline.
+- [ ] **Bug 2 decyzja** — po ≥15 System settled: czy Groq selekcja szkodzi (a: ogranicz / b: argmax modelu / c: tnij conf).
 - [ ] Fast-follow perf: pętla O(n²), 10 lig ~3-5h — optymalizacja (searchsorted/kursor).
 
 ## 🔴 PRIORYTET — WALIDACJA (czekaj i mierz, NIE dokładaj zmian λ)

@@ -1,6 +1,6 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-18
+**Last Updated:** 2026-06-19
 **Current Version:** v3.4-stable
 **System State:** FUNCTIONAL — PRODUCTION
 
@@ -10,10 +10,11 @@
 
 | Metric | Status | Value |
 |--------|--------|-------|
-| **Accuracy** | 🟡 | 31.7% live (41 settled, stare) — pipeline + λ naprawione, czeka na świeże dane |
-| **Model fixes** | ✅ | Faza 17 (root-cause) + audyt core A1-A3 + λ (kontuzje, xG+obrona) |
+| **Accuracy (model offline)** | ✅ | Walk-forward 10 lig: DC **51.3%** > baseline 49.6% (NED 54.9%), kalibracja monotoniczna |
+| **Accuracy (live)** | 🟡 | 31.7% (stare 58 settled, sprzed fixów Cel B) — czeka na świeże dane po fixach |
+| **Model fixes** | ✅ | Cel B root-cause (bug 1 conf naprawiony) + Dixon-Coles w prod (flaga ON) + Faza 17 + A1-A3 + λ |
 | **Data collection** | ✅ | System paper-trading (single-leg, bez Groq) autonomiczne od 06-16 |
-| **Tests** | ✅ | 1037 testów pass (telegram testy zmockowane — koniec spamu) |
+| **Tests** | ✅ | 1076 testów pass (telegram testy zmockowane — koniec spamu) |
 | **Automation** | ✅ | Task Scheduler: draft 08:00 (+System paper) + final + evening 23:00 |
 | **API** | ✅ | FastAPI + Sentry + SlowAPI + CORS + Timeout |
 | **DB** | ✅ | Neon PG (prod), keepalives, pool maxconn=10, migracja 6 (telegram_chat_id) |
@@ -42,14 +43,21 @@
 
 | # | Problem | Priorytet |
 |---|---------|-----------|
-| 1 | Accuracy 31.7% live — walk-forward offline wykazał model OK (NED 52-54%, kalibracja monotoniczna). Gap leży w warstwie Groq/selekcja LUB settlement, NIE w modelu → Cel B | 🔴 P1 |
+| 1 | Live accuracy 31.7% (stare settled) — root-cause ZNALEZIONY (Cel B). Bug 1 (conf=Groq fallback zamiast modelu) naprawiony. Bug 2 (ai_tip=selekcja Groq) czeka na ≥15 System settled do decyzji | 🟡 P1 |
 
-### Wynik walk-forward offline (Cel A, 2026-06-18) — NED-Eredivisie n=1842, out-of-sample
-- **Kalibracja MONOTONICZNA (nie odwrócona):** pasma 37% → 42% → 49% → 70% (rośnie z pewnością).
-- **A/B:** dixoncoles **54.1%** > baseline 52.2% > poisson_only 50.5%. Dixon-Coles +1.9pp, ensemble z kursami +1.7pp.
-- **Wniosek:** warstwa statystyczna zdrowa (~54%, blisko M1=55%). Live odwrócenie 90%→11% NIE pochodzi z modelu → następny cel: warstwa LLM/selekcja albo settlement.
+### Cel A — walk-forward offline (10 lig, 2026-06-19, out-of-sample, n=25738)
+- **A/B:** dixoncoles **51.3%** > baseline 49.6% > poisson_only 48.1%. DC +1.7pp — generalizuje (NED było +1.9pp).
+- **Kalibracja MONOTONICZNA** na wszystkich 10 ligach: 37.5% → 43.2% → 46.4% → 58.8% (pasmo 65%+ = strefa zakładów).
+- Per liga (DC): NED 54.9, SCO 54.8, ENG 53.4, ITA 53.1, GER 51.5, ESP 51.2, BEL 50.4, FRA 49.8, AUT 47.8, POL 44.6.
 - Narzędzie: `python scripts/run_walkforward_prod.py [--liga X] [--max N]` (offline, bez kluczy, zapis `data/walkforward.db`).
-- Fast-follow: pętla O(n²) — pełny przebieg 5 lig za wolny; optymalizacja w osobnym tasku.
+
+### Cel B — root cause live≪offline (2026-06-19)
+- **Bug 1 (naprawiony, main):** quick_picks nie budował `pred` → confidence z Groq fallback (overconfident) zamiast modelu → inwersja kalibracji. Fix: quick_picks buduje `pred` dict (072ee9035).
+- **Bug 2 (otwarty):** `ai_tip` = selekcja Groq (44% remisy, 12.5% wyjazdy hit) zamiast argmax modelu. Decyzja (a/b/c) po ≥15 System settled.
+
+### Cel C — Dixon-Coles w prod (2026-06-19, main)
+- Wpięte za flagą `USE_DIXON_COLES` (default ON, env-toggle), `W_BAYESIAN=0.5`. Blend nad pw/pr/pp przed ensemble, bt/o25 nietknięte, graceful. Lewar +1.7pp zwalidowany. Smoke A/B NED: DC 55.2% > baseline 54.0%.
+- Fast-follow: pętla O(n²) — 10 lig ~3-5h; optymalizacja (searchsorted/kursor) w osobnym tasku.
 | 2 | Email transakcyjny (Resend) — wymaga klucza od użytkownika | 🟡 P2 |
 | 3 | JDG + prawnik — przed pierwszym płatnym userem | 🟡 P2 |
 | 4 | Płatności (Lemon Squeezy) — nie zintegrowane (po JDG) | 🟡 P2 |
@@ -62,6 +70,9 @@
 
 | Funkcja | Data |
 |---------|------|
+| **Dixon-Coles w prod (flaga USE_DIXON_COLES, +1.7pp 10 lig)** | 06-19 |
+| **Cel B root cause (bug 1 conf naprawiony) + walk-forward 10 lig** | 06-19 |
+| **Cel A walk-forward harness offline (replay prod, no-lookahead, SQLite)** | 06-18 |
 | Audyt core A1-A3 (ensemble 70/30, heurystyka/klasyfikacja, renorm 1X2) | 06-17 |
 | λ: kontuzje (dwustronne) + xG+obrona rywala — koniec martwego kodu | 06-17 |
 | Multi-user 15.6 (per-user bankroll/settings/telegram) | 06-17 |
