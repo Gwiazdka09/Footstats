@@ -53,6 +53,11 @@ AGENT_KANDYDAT_PROG = 0.55 # prog pewnosci dla daily_agent (nizszy niz PEWNIACZE
 AGENT_BANKROLL      = 100.0 # bankroll do Kelly Criterion (PLN)
 AGENT_KELLY_FRACTION = 4    # bezpieczny fractional Kelly: f*/4 (bardziej konserwatywny dla 100 PLN)
 
+# ── Cel C: Dixon-Coles w produkcji (zwalidowane offline +1.7pp, kalibracja monotoniczna) ──
+# Domyslnie ON — blend graceful (DC None -> classic bez zmian), env toggle bez redeploya.
+USE_DIXON_COLES = os.getenv("USE_DIXON_COLES", "1").strip() not in ("0", "false", "False", "")
+W_BAYESIAN      = float(os.getenv("W_BAYESIAN", "0.5"))   # waga ramienia DC (0=classic, 1=pelny DC)
+
 # Konto docelowe: daily_agent, operator_agent, zapis kuponów systemowych
 OPERATOR_ADMIN_USERNAME = os.getenv("OPERATOR_ADMIN_USERNAME", "Admin_JG").strip() or "Admin_JG"
 OPERATOR_STAWKA_A = float(os.getenv("OPERATOR_STAWKA_A", "10"))

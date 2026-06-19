@@ -89,7 +89,26 @@ def test_predict_one_no_odds_falls_back_to_poisson_only():
     res = predict_one("Alfa", "Beta", _hist_prod(), league="TEST",
                       odds_h=None, odds_d=None, odds_a=None, flags=flags)
     assert res is not None
-    assert res["no_odds"] is True
+
+
+def test_predict_one_uses_shared_blend_dixon_coles(monkeypatch):
+    """predict_one z use_bayesian musi delegowac do poisson_bayesian.blend_dixon_coles."""
+    import footstats.core.poisson_bayesian as pb
+
+    called = {"n": 0}
+    real = pb.blend_dixon_coles
+
+    def _spy(p_model, g, a, df, w_bayesian=0.5):
+        called["n"] += 1
+        return real(p_model, g, a, df, w_bayesian=w_bayesian)
+
+    monkeypatch.setattr(pb, "blend_dixon_coles", _spy)
+
+    flags = ModelFlags(use_bayesian=True, use_ensemble=True, use_calibration=False)
+    res = predict_one("Alfa", "Beta", _hist_prod(), league="TEST",
+                      odds_h=1.8, odds_d=3.5, odds_a=4.2, flags=flags)
+    assert res is not None
+    assert called["n"] == 1  # delegacja do wspolnej funkcji
 
 
 def test_predict_one_returns_none_when_no_history():

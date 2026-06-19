@@ -88,13 +88,10 @@ def predict_one(g, a, hist_prod, league, odds_h, odds_d, odds_a, flags) -> dict 
 
     p_model = {"pw": pred["p_wygrana"], "pr": pred["p_remis"], "pp": pred["p_przegrana"]}
 
-    # Ramię Dixon-Coles (opcjonalne)
+    # Ramię Dixon-Coles (opcjonalne) — wspólna funkcja z prod (parytet)
     if flags.use_bayesian:
-        from footstats.core.poisson_bayesian import predict_match_bayesian
-        bay = predict_match_bayesian(g, a, hist_prod)
-        if bay:
-            p_bay = {"pw": bay["pw"] * 100, "pr": bay["pr"] * 100, "pp": bay["pa"] * 100}
-            p_model = _weighted_blend(p_model, p_bay, 1.0 - flags.w_bayesian, flags.w_bayesian)
+        from footstats.core.poisson_bayesian import blend_dixon_coles
+        p_model = blend_dixon_coles(p_model, g, a, hist_prod, w_bayesian=flags.w_bayesian)
 
     # Ensemble z kursami (devig) — jak prod (poisson ⊕ bzzoiro)
     p_bzz = devig_1x2(odds_h, odds_d, odds_a)

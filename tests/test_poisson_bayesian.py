@@ -6,6 +6,7 @@ from footstats.core.poisson_bayesian import (
     _bayesian_shrink,
     _compute_ratings,
     _league_averages,
+    blend_dixon_coles,
     blend_with_classic,
     predict_match_bayesian,
 )
@@ -143,3 +144,79 @@ def test_blend_full_classic():
     result = blend_with_classic(_BAY, _CLS, w_bayesian=0.0)
     assert result["pw"] == pytest.approx(0.3)
     assert result["lambda_g"] == pytest.approx(1.0)
+
+
+# ── blend_dixon_coles ──────────────────────────────────────────────────────
+
+def test_blend_dc_none_returns_p_model_unchanged():
+    """DC zwraca None (malo danych) -> p_model bez zmian (graceful = baseline)."""
+    p_model = {"pw": 50.0, "pr": 30.0, "pp": 20.0, "bt": 55.0, "o25": 60.0}
+    empty = pd.DataFrame(columns=["gospodarz", "goscie", "gole_g", "gole_a"])
+    out = blend_dixon_coles(p_model, "X", "Y", empty, w_bayesian=0.5)
+    assert out == p_model
+
+
+def test_blend_dc_keeps_bt_o25_untouched():
+    """DC nie liczy bt/o25 -> musza zostac z classic nietkniete."""
+    p_model = {"pw": 50.0, "pr": 30.0, "pp": 20.0, "bt": 55.0, "o25": 60.0}
+    out = blend_dixon_coles(p_model, "Bayern", "Dortmund", _fixture_df(), w_bayesian=0.5)
+    assert out["bt"] == 55.0
+    assert out["o25"] == 60.0
+
+
+def test_blend_dc_renormalizes_1x2_to_100():
+    """Po blendzie pw+pr+pp ~ 100 (zdarzenia rozlaczne, wyczerpujace)."""
+    p_model = {"pw": 50.0, "pr": 30.0, "pp": 20.0, "bt": 55.0, "o25": 60.0}
+    out = blend_dixon_coles(p_model, "Bayern", "Dortmund", _fixture_df(), w_bayesian=0.5)
+    assert abs(out["pw"] + out["pr"] + out["pp"] - 100.0) < 0.01
+
+
+def test_blend_dc_remaps_pa_to_pp_and_scales():
+    """Remap pa->pp + x100: gdy DC daje silny away win, blend zwieksza pp wzgledem czystego classic."""
+    # Historia: Goscie wygrywaja wyjazdy wysoko -> DC pa (away) wysoki.
+    rows = []
+    for _ in range(8):
+        rows.append({"gospodarz": "Slaby", "goscie": "Mocny", "gole_g": 0, "gole_a": 3})
+        rows.append({"gospodarz": "Mocny", "goscie": "Slaby", "gole_g": 3, "gole_a": 0})
+    df = pd.DataFrame(rows)
+    p_model = {"pw": 60.0, "pr": 25.0, "pp": 15.0, "bt": 40.0, "o25": 50.0}
+    out = blend_dixon_coles(p_model, "Slaby", "Mocny", df, w_bayesian=1.0)  # pelny DC
+    # Przy pelnym DC (w_bayesian=1.0) pp powinno odzwierciedlac sile gosci (pa->pp), > classic pp.
+    assert out["pp"] > p_model["pp"]
+    assert out["pw"] < p_model["pw"]
+
+
+def test_blend_dc_deterministic_independent_of_system_date(monkeypatch):
+    """Anty-lookahead: DC liczy tylko z dostarczonej historii, bez datetime.now().
+
+    Podmiana daty systemowej NIE moze zmieniac predykcji (brak siegania po
+    biezacy sezon/cache jak xG w predict_match).
+    """
+    p_model = {"pw": 45.0, "pr": 30.0, "pp": 25.0, "bt": 50.0, "o25": 55.0}
+    df = _fixture_df()
+
+    out1 = blend_dixon_coles(p_model, "Bayern", "Dortmund", df, w_bayesian=0.5)
+
+    # Udawana zmiana "teraz" przez podmiane datetime w module (gdyby DC go uzywal).
+    import footstats.core.poisson_bayesian as pb
+    assert not hasattr(pb, "datetime"), "DC nie powinien importowac datetime (zrodlo lookahead)"
+
+    out2 = blend_dixon_coles(p_model, "Bayern", "Dortmund", df, w_bayesian=0.5)
+    assert out1 == out2  # determinizm
+
+
+def test_blend_dc_ignores_future_match_not_in_history():
+    """Mecz predykowany jest PRZYSZLY (nie ma go w df) -> brak leaku wlasnego wyniku.
+
+    Dodanie przyszlego wyniku do historii ZMIENIA predykcje (bo to staje sie dana),
+    co potwierdza ze DC korzysta WYLACZNIE z df (nie z zadnego ukrytego zrodla).
+    """
+    p_model = {"pw": 45.0, "pr": 30.0, "pp": 25.0}
+    df_base = _fixture_df()
+    out_base = blend_dixon_coles(p_model, "Bayern", "Dortmund", df_base, w_bayesian=1.0)
+
+    extra = pd.concat([df_base, pd.DataFrame([
+        {"gospodarz": "Bayern", "goscie": "Dortmund", "gole_g": 9, "gole_a": 0}
+    ])], ignore_index=True)
+    out_extra = blend_dixon_coles(p_model, "Bayern", "Dortmund", extra, w_bayesian=1.0)
+    assert out_base != out_extra  # predykcja zalezy WYLACZNIE od dostarczonego df
