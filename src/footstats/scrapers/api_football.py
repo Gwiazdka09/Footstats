@@ -3,10 +3,11 @@ import requests
 import pandas as pd
 from datetime import datetime
 from footstats.utils.cache import (
-    _af_cache_get, _af_cache_set, af_budget_use, af_budget_status,
+    _af_cache_get, _af_cache_set, af_budget_status,
     _af_load_disk_cache, _af_budget_load, _af_budget_save,
     AF_BUDGET_DAILY, AF_WARN_THRESHOLD, AF_BLOCK_THRESHOLD,
 )
+from footstats.utils.logging import bezpieczny_budget_use, BladBudzetu
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
 from footstats.config import ENV_APISPORTS
@@ -134,8 +135,8 @@ class APIFootball:
 
         # 3. Wyslij request
         try:
-            pozostalo = af_budget_use(endpoint)
-        except RuntimeError:
+            pozostalo = bezpieczny_budget_use(endpoint)
+        except BladBudzetu:
             # Budzet zablokowany – sprobuj wygasle dane
             stare = _af_load_disk_cache().get(cache_key, {}).get("data")
             return stare
