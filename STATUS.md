@@ -42,7 +42,14 @@
 
 | # | Problem | Priorytet |
 |---|---------|-----------|
-| 1 | Accuracy 31.7% — czeka na świeże settled (walidacja: monitor + A/B za ~1-2 tyg) | 🔴 P1 |
+| 1 | Accuracy 31.7% live — walk-forward offline wykazał model OK (NED 52-54%, kalibracja monotoniczna). Gap leży w warstwie Groq/selekcja LUB settlement, NIE w modelu → Cel B | 🔴 P1 |
+
+### Wynik walk-forward offline (Cel A, 2026-06-18) — NED-Eredivisie n=1842, out-of-sample
+- **Kalibracja MONOTONICZNA (nie odwrócona):** pasma 37% → 42% → 49% → 70% (rośnie z pewnością).
+- **A/B:** dixoncoles **54.1%** > baseline 52.2% > poisson_only 50.5%. Dixon-Coles +1.9pp, ensemble z kursami +1.7pp.
+- **Wniosek:** warstwa statystyczna zdrowa (~54%, blisko M1=55%). Live odwrócenie 90%→11% NIE pochodzi z modelu → następny cel: warstwa LLM/selekcja albo settlement.
+- Narzędzie: `python scripts/run_walkforward_prod.py [--liga X] [--max N]` (offline, bez kluczy, zapis `data/walkforward.db`).
+- Fast-follow: pętla O(n²) — pełny przebieg 5 lig za wolny; optymalizacja w osobnym tasku.
 | 2 | Email transakcyjny (Resend) — wymaga klucza od użytkownika | 🟡 P2 |
 | 3 | JDG + prawnik — przed pierwszym płatnym userem | 🟡 P2 |
 | 4 | Płatności (Lemon Squeezy) — nie zintegrowane (po JDG) | 🟡 P2 |

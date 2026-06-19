@@ -76,6 +76,20 @@
 
 ---
 
+## ✅ WALK-FORWARD OFFLINE (Cel A — 2026-06-18, ZROBIONE)
+
+> Harness `scripts/run_walkforward_prod.py` (classic+Dixon-Coles+ensemble, devig kursów,
+> no-lookahead, zapis `data/walkforward.db`, NIE Neon). Branch `feat/walkforward-harness`.
+> Suite: 1061 pass.
+
+- **Werdykt NED n=1842 (out-of-sample, kalibracja OFF):** dixoncoles 54.1% > baseline 52.2% >
+  poisson_only 50.5%. Kalibracja **MONOTONICZNA** (37→42→49→70% per pasmo) — NIE odwrócona.
+- **Kluczowy wniosek:** model statystyczny zdrowy (~54%, blisko M1). Live 31.7%/odwrócenie
+  NIE jest winą modelu → przyczyna w **Groq/selekcji albo settlemencie** (→ Cel B, polowanie na bug).
+- [ ] **Dixon-Coles do wpięcia w prod** (+1.9pp, zmierzone) — osobny spec.
+- [ ] **Cel B:** prześledź warstwę LLM/selekcja + settlement live (czemu live ≪ offline).
+- [ ] Fast-follow perf: pętla O(n²), pełne 5 lig za wolne — optymalizacja (searchsorted/kursor).
+
 ## 🔴 PRIORYTET — WALIDACJA (czekaj i mierz, NIE dokładaj zmian λ)
 
 > **Decyzja 06-18:** wpięto 6 zmian λ (kontuzje, xG+obrona, heurystyka, klasyfikacja,
