@@ -173,21 +173,24 @@
 > Ocena warstw: core A-, testy A, API B+, AI B-, GUI C, scrapers C+, daily_agent C.
 > Rdzeń + testy = poziom zawodowy. Długi ciągnące w dół ↓ (kolejność = priorytet pracy).
 
-- [ ] **#5 Kalibracja w Kelly/value-bet** — `calibrate_confidence` wciąż czynny w
-  `daily_agent.py:816,824` (Kelly) + `daily_filters.py:52` (value-bet). cc(<66)=0.286 zaniża
-  stawki / odrzuca value (ten sam zdegenerowany root co Cel B). Fix: identity/bypass aż do
-  re-fit na czystych danych. SZYBKI, kończy temat kalibracji. **← START**
-- [ ] **#1 Refactor `App.jsx` (2144 linie, monolit)** — 🔴 największy dług frontu. Rozbić na
-  komponenty (MatchCard, WizardStep, Dashboard, Settings, History; MarketsPanel/CookieConsent już są).
-  Łamie regułę CLAUDE.md (max 800). Po zmianie: weryfikacja Playwright (desktop+mobile).
-- [ ] **#2 Odporność scraperów + single-source** — Playwright kruchy (superbet 1128, sts 604;
-  psują się przy zmianie HTML), całość wisi na Bzzoiro bez fallbacku. Dodać health-check +
-  alert Telegram gdy źródło zwraca 0/zmienia strukturę; rozważyć 2. źródło.
-- [ ] **#3 Rozbić `daily_agent.py` (1546 linii, god-module)** — wydzielić fazy
-  (fetch/enrich/groq/persist) do testowalnych funkcji. Tam chowały się bugi Cel B.
-- [ ] **#4 Podwójny backtest** — `backtest_engine.py` (644, AI-driven, anti-pattern z zapisem
-  do prod Neon, obs 3596) vs walk-forward. Usunąć/oznaczyć engine, zostawić walk-forward jako jedyny.
-- [ ] **Inne god-moduły** (po #1/#3): `cli.py` 1112, `analyzer.py` 930 — dekompozycja niższy priorytet.
+- [x] **#5 Kalibracja w Kelly/value-bet** (06-20, `9faa72067`) — gate `CALIBRATION_ENABLED`
+  (domyślnie OFF → identity); mechanizm krzywej zachowany jako `_calibrate_raw` do re-fit.
+  Domyka temat zdegenerowanej calibration.json (Kelly + value-bet już nie zaniżają). [[user-decyzja: re-fit]]
+- [x] **#1 Refactor `App.jsx`** (06-20, `2e112dc2c`) — 2144→**267** linii. Wydzielone
+  components/ (LoginView, DashboardHome, History, Leaderboard, Settings, AdminPanel, ui,
+  Wizard/*) + lib/ (api, leagues, tips). Behavior-preserving, build PASS, Playwright OK.
+  (CouponWizard 411 — świadomie, spójny stan kreatora; dalszy podział obniżyłby czytelność.)
+- [x] **#2 Odporność scraperów** (06-20, `f3366933e`) — `check_and_alert_source_down`: alert
+  Telegram + log WARNING gdy Bzzoiro zwróci 0/`_valid=False`; graceful (nie crash), 1 alert/run.
+  Wpięte w `_pobierz_kandydatow`. (2. źródło = dalej otwarte, niższy priorytet.)
+- [x] **#3 Rozbić `daily_agent.py`** (06-20, `391e7b1b9`) — 1553→**1046**; 9 spójnych faz
+  do `core/daily_phases.py` (injury/forma/betbuilder/kelly/groq-walidacja/ensemble/final-enrich).
+  Behavior-preserving (zero zmian asercji), smoke parytet OK. Splątane bloki zostawione świadomie.
+- [x] **#4 Podwójny backtest** (06-20, `366b495d2`) — `backtest_engine.py` izolowany od prod
+  (guard test-DB, rzuca gdy prod Neon bez opt-in) + DEPRECATED na rzecz walk-forward. NIE usunięty.
+  [[user-decyzja: czy usunąć backtest_engine.py + run_backtest.py całkiem]]
+- [ ] **Inne god-moduły** (niższy priorytet): `cli.py` 1112, `analyzer.py` 930 — dekompozycja kiedyś.
+- [ ] **2. źródło danych** (po Bzzoiro) — fallback gdy główne źródło padnie. Wymaga wyboru/integracji.
 
 ---
 
