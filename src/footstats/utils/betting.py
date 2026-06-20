@@ -148,4 +148,19 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
         if total_goals is None: return None
         return 1 if total_goals % 2 == 1 else 0
 
+    # Dokładny wynik: "WYNIK 2:1" lub "2:1" — bramki dom:gość muszą się zgadzać dokładnie.
+    cs = re.match(r"^(?:WYNIK\s+)?(\d+)\s*:\s*(\d+)$", tip)
+    if cs:
+        if home_g is None or away_g is None:
+            return None
+        return 1 if (home_g == int(cs.group(1)) and away_g == int(cs.group(2))) else 0
+
+    # Multigoal: "MULTIGOAL 2-3" — łączna liczba goli w przedziale [lo, hi] włącznie.
+    mg = re.match(r"^MULTIGOAL\s+(\d+)\s*-\s*(\d+)$", tip)
+    if mg:
+        if total_goals is None:
+            return None
+        lo, hi = int(mg.group(1)), int(mg.group(2))
+        return 1 if lo <= total_goals <= hi else 0
+
     return None

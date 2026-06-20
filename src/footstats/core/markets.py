@@ -106,4 +106,23 @@ def build_market_catalog(lh: float, la: float, bzz_odds: dict | None = None) -> 
         entry("Nieparzysta liczba goli", "NIEPARZYSTE", _suma(mat, lambda h, a: (h + a) % 2 == 1)),
     ]})
 
+    # Multigoal — łączna liczba goli w przedziale (rozliczane "MULTIGOAL lo-hi").
+    multigoal = []
+    for lo, hi in ((0, 1), (1, 2), (2, 3), (3, 4), (1, 3), (2, 4), (4, 6)):
+        multigoal.append(entry(
+            f"Multigoal {lo}-{hi}", f"Multigoal {lo}-{hi}",
+            _suma(mat, lambda h, a, L=lo, H=hi: L <= h + a <= H),
+        ))
+    grupy.append({"grupa": "Multigoal", "rynki": multigoal})
+
+    # Dokładny wynik — top-10 najbardziej prawdopodobnych wyników (rozliczane "Wynik h:a").
+    n = len(mat)
+    top_wyniki = sorted(
+        ((mat[h][a], h, a) for h in range(n) for a in range(len(mat[h]))),
+        key=lambda t: t[0], reverse=True,
+    )[:10]
+    grupy.append({"grupa": "Dokładny wynik", "rynki": [
+        entry(f"Wynik {h}:{a}", f"Wynik {h}:{a}", prob) for prob, h, a in top_wyniki
+    ]})
+
     return grupy
