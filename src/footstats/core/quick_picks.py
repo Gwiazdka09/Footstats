@@ -174,21 +174,24 @@ def szybkie_pewniaczki_2dni(
             continue
         pw_raw, pr_raw, pp_raw, bt_raw, o25_raw = wyp
 
-        # ── 11.2: Probability Calibrator — koryguje overconfidence ML ──
-        # Surowe prob Bzzoiro: 70% → realna ~62% historycznie.
-        # calibrate_confidence(0-100) -> 0-1, ×100 by zachowac format.
-        pw  = round(calibrate_confidence(pw_raw)  * 100.0, 1)
-        pr  = round(calibrate_confidence(pr_raw)  * 100.0, 1)
-        pp  = round(calibrate_confidence(pp_raw)  * 100.0, 1)
-        # A3 (06-17): kalibracja per-wynik łamie sumę 1X2 (≠100%) — renormalizuj
-        # do prawidłowego rozkładu (1/X/2 to zdarzenia rozłączne i wyczerpujące).
-        _s1x2 = pw + pr + pp
+        # ── Cel B fix (06-20): NIE kalibruj per-wynik 1X2/bt/o25 ──
+        # calibrate_confidence było zaprojektowane dla JEDNEJ liczby (confidence
+        # wybranego typu vs tip_correct), nie dla rozkładu pw/pr/pp. Stosowane
+        # per-wynik na zdegenerowanej krzywej (calibration.json n_train=41, stare
+        # odwrócone predykcje, y∈[0.2857,0.35]) spłaszczało WSZYSTKIE wyniki do tej
+        # samej wartości → po renorm UNIFORM 33.3/33.3/33.3 → sygnał ginął, System
+        # paper-trading tworzył 0 kuponów (uniform < MIN_PROB=40). Root-cause Cel B.
+        # Surowe prob Bzzoiro/Poisson niosą sygnał — używamy ich znormalizowanych
+        # do 100% (parytet z offline walk-forward, który też NIE kalibruje).
+        _s1x2 = pw_raw + pr_raw + pp_raw
         if _s1x2 > 0:
-            pw  = round(pw / _s1x2 * 100.0, 1)
-            pr  = round(pr / _s1x2 * 100.0, 1)
-            pp  = round(pp / _s1x2 * 100.0, 1)
-        bt  = round(calibrate_confidence(bt_raw)  * 100.0, 1)
-        o25 = round(calibrate_confidence(o25_raw) * 100.0, 1)
+            pw  = round(pw_raw / _s1x2 * 100.0, 1)
+            pr  = round(pr_raw / _s1x2 * 100.0, 1)
+            pp  = round(pp_raw / _s1x2 * 100.0, 1)
+        else:
+            pw = pr = pp = round(100.0 / 3.0, 1)
+        bt  = round(bt_raw, 1)
+        o25 = round(o25_raw, 1)
         u25 = round(100.0 - o25, 1)
 
         # ── 11.4+11.9: Poisson ensemble z fortress/h2h — blend z Bzzoiro ──

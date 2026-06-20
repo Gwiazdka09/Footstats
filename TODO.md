@@ -169,3 +169,6 @@
 1. **Pasywne (priorytet):** monitor co kilka dni, czekaj na ~20 świeżych settled → walidacja
 2. **Po walidacji:** Dixon-Coles (jeśli accuracy nadal poniżej celu)
 3. **Wymaga Ciebie:** Email (Resend key) → JDG + prawnik → płatności
+
+## Moje uwagi
+- widzałem że kreator kuponów podał kurs na 1x 0,93 nie może być takich kursów bo nie ma i jest to nie logiczne 

@@ -140,6 +140,75 @@ def test_invalid_bzzoiro_returns_empty():
     assert szybkie_pewniaczki_2dni(bzz) == []
 
 
+_BZZ_EVENT_SYGNAL = {
+    "gosp": "Londrina",
+    "gosc": "Athletic",
+    "liga": "Brazil Serie B",
+    "data": _DATE,
+    "godzina": _HOUR,
+    # Asymetryczny sygnal: gosc faworytem (away 52), gospodarz outsider (home 18).
+    "pred_ml": {
+        "percent": {"home": "18%", "draw": "30%", "away": "52%"},
+        "btts": "55%",
+        "over_2_5": "58%",
+    },
+    "odds": {"home": 4.0, "draw": 3.3, "away": 1.9, "over_2_5": 1.85},
+}
+
+
+def test_1x2_zachowuje_sygnal_nie_uniform_bez_calibrate():
+    """
+    Cel B root-cause: per-wynik calibrate_confidence na zdegenerowanej krzywej
+    (calibration.json n_train=41) splaszczalo pw/pr/pp do 33.3/33.3/33.3 uniform.
+    Po fixie quick_picks NIE wola calibrate_confidence — uzywa surowych prob
+    Bzzoiro znormalizowanych do 100%. Ten test NIE mockuje calibrate_confidence,
+    wiec gdyby produkcja nadal go wolala, uniform by wrocil i test FAILUJE (RED).
+    """
+    bzz = _make_bzzoiro([_BZZ_EVENT_SYGNAL])
+    with patch(
+        "footstats.data.historical_loader.load_cached",
+        side_effect=FileNotFoundError("brak cache"),
+    ):
+        wyniki = szybkie_pewniaczki_2dni(bzz, prog=0.0)
+
+    assert len(wyniki) >= 1
+    r = wyniki[0]
+    assert r["poisson_blend"] is False  # brak df -> czyste Bzzoiro raw
+
+    # NIE uniform — sygnal zachowany.
+    assert not (r["pw"] == r["pr"] == r["pp"]), f"uniform nadal: {r['pw']}/{r['pr']}/{r['pp']}"
+    # Kolejnosc sygnalu zachowana: away (pp) > draw (pr) > home (pw).
+    assert r["pp"] > r["pr"] > r["pw"]
+    # Surowe 18/30/52 sumuja sie do 100 -> renorm bezstratna.
+    assert r["pw"] == pytest.approx(18.0, abs=0.5)
+    assert r["pp"] == pytest.approx(52.0, abs=0.5)
+    # Suma 1X2 ≈ 100%.
+    assert r["pw"] + r["pr"] + r["pp"] == pytest.approx(100.0, abs=0.5)
+    # bt/o25 surowe, nie splaszczone do 28.6.
+    assert r["bt"] == pytest.approx(55.0, abs=0.5)
+    assert r["o25"] == pytest.approx(58.0, abs=0.5)
+
+
+def test_najlepszy_typ_zwraca_typ_po_fixie_gdy_sa_kursy():
+    """
+    Po fixie System paper-trading znowu tworzy kupony: najlepszy_typ znajduje typ
+    >= MIN_PROB (40). Przed fixem uniform 33.3 + o25=28.6 < 40 -> None (0 kuponow).
+    """
+    from footstats.core.system_paper import najlepszy_typ
+
+    bzz = _make_bzzoiro([_BZZ_EVENT_SYGNAL])
+    with patch(
+        "footstats.data.historical_loader.load_cached",
+        side_effect=FileNotFoundError("brak cache"),
+    ):
+        wyniki = szybkie_pewniaczki_2dni(bzz, prog=0.0)
+
+    best = najlepszy_typ(wyniki[0])
+    assert best is not None, "najlepszy_typ=None -> System paper tworzy 0 kuponow (regresja Cel B)"
+    prob, tip, kurs = best
+    assert prob >= 40.0
+
+
 def test_wynik_zawiera_pred_dict_z_prob_modelu():
     """
     Bug Cel B #1: wyniki musi zawierać klucz "pred" ze skalibrowanymi prob,
