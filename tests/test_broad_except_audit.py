@@ -35,6 +35,7 @@ BASELINE: dict[str, int] = {
     "core/clv_tracker.py": 1,
     "core/coupon_settlement.py": 4,
     "core/coupon_tracker.py": 0,
+    "core/daily_phases.py": 1,  # Superbet BB scrape — Playwright raises varied types (przeniesione z daily_agent.py)
     "core/data.py": 1,
     "core/ensemble.py": 1,
     "core/ensemble_optimizer.py": 1,
@@ -45,7 +46,7 @@ BASELINE: dict[str, int] = {
     "core/quick_picks.py": 1,
     "core/response_cache.py": 2,
     "core/weekly_picks.py": 3,
-    "daily_agent.py": 1,
+    "daily_agent.py": 0,
     "dashboard.py": 5,
     "data/context_scraper.py": 1,
     "data/historical_loader.py": 7,
