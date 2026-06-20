@@ -17,10 +17,19 @@ def fair_odds(prob_pct: float) -> float:
     return round(100.0 / prob_pct, 2) if prob_pct > 0 else 0.0
 
 
-def dc_odds(a, b):
-    if not a or not b:
+def dc_odds(o_a, o_b, o_other):
+    """Kurs double-chance (1X / X2) z DEVIG.
+
+    Kursy bukmacherskie mają marżę (Σ 1/kurs > 1). Naiwne 1/(1/a+1/b) sumuje
+    zawyżone prawdopodobieństwa → dla faworyta wynik < 1.0 (kurs niemożliwy).
+    Devig: zdejmij marżę z całej trójki 1X2, policz prawdziwe łączne prob dwóch
+    wyników, dopiero z niego kurs. Zawsze > 1.0 (prob dwóch wyników < 1)."""
+    if not o_a or not o_b or not o_other:
         return None
-    return round(1 / (1 / a + 1 / b), 2)
+    inv_a, inv_b, inv_o = 1.0 / o_a, 1.0 / o_b, 1.0 / o_other
+    over = inv_a + inv_b + inv_o
+    p_dc = (inv_a + inv_b) / over if over > 0 else 0.0
+    return round(1.0 / p_dc, 2) if p_dc > 0 else None
 
 
 def build_tips(m: dict) -> dict:
@@ -40,8 +49,8 @@ def build_tips(m: dict) -> dict:
     o1 = odds.get("home") or fair_odds(ph)
     ox = odds.get("draw") or fair_odds(pr)
     o2 = odds.get("away") or fair_odds(pp)
-    o1x = dc_odds(o1, ox) or fair_odds(round(ph + pr, 1))
-    ox2 = dc_odds(ox, o2) or fair_odds(round(pr + pp, 1))
+    o1x = dc_odds(o1, ox, o2) or fair_odds(round(ph + pr, 1))
+    ox2 = dc_odds(ox, o2, o1) or fair_odds(round(pr + pp, 1))
 
     pbtts_no = round(100.0 - pbt, 1)
     o_btts_y = odds.get("btts") or fair_odds(pbt)

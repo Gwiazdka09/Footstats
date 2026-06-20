@@ -34,3 +34,28 @@ def test_suggested_tip_niesie_kurs_zgodny_z_wyborem():
     sug = out["suggested_tip"]
     assert sug["tip"] == "2"
     assert sug["odds"] == 1.55  # kurs sugerowanego = kurs "2", nie "1"
+
+
+def _tip(out, tip):
+    return next(t for t in out["tips"] if t["tip"] == tip)
+
+
+def test_double_chance_nigdy_ponizej_1():
+    # Faworyt-gospodarz z realnymi kursami: naiwne 1/(1/a+1/b) dawało 1X < 1.0
+    # (kurs niemożliwy). Devig musi dać > 1.0. Regresja "Moje uwagi" (06-20).
+    odds = {"home": 1.15, "draw": 6.5, "away": 13.0}
+    out = build_tips(_match(0.85, 0.11, 0.04, odds=odds))
+    o1x = _tip(out, "1X")["odds"]
+    ox2 = _tip(out, "X2")["odds"]
+    assert o1x > 1.0, f"1X={o1x} nie może być <=1.0"
+    assert ox2 > 1.0, f"X2={ox2} nie może być <=1.0"
+    # 1X (gosp+remis) przy faworycie-gospodarzu = niski kurs, ale realny (>1)
+    assert 1.0 < o1x < 1.2
+
+
+def test_wszystkie_kursy_powyzej_1():
+    # Żaden wyświetlany kurs nie może być <= 1.0 (nie istnieją takie u bukmachera).
+    odds = {"home": 1.08, "draw": 9.0, "away": 21.0}
+    out = build_tips(_match(0.92, 0.06, 0.02, odds=odds))
+    zle = [(t["tip"], t["odds"]) for t in out["tips"] if t["odds"] <= 1.0]
+    assert zle == [], f"kursy <=1.0: {zle}"
