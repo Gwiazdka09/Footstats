@@ -28,7 +28,6 @@ BASELINE: dict[str, int] = {
     "api/routes/status.py": 2,
     "core/async_utils.py": 1,
     "core/backtest.py": 3,
-    "core/backtest_engine.py": 6,
     "core/calibration.py": 3,
     "core/checkpoint.py": 4,
     "core/circuit_breaker.py": 1,
