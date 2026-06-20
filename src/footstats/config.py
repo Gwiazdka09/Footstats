@@ -94,11 +94,16 @@ LIGI_WHITELIST: frozenset[str] = frozenset({
     "Brasileirao Serie A",
     "Liga MX",
     # 2026-06-19: aktywne ligi klubowe (lato — Europa off-season) by System paper-trading
-    # zbierał dane teraz. MŚ celowo POZA (kadry ≠ model λ klubowy → szum walidacji M1).
+    # zbierał dane teraz.
     "Brasileirao Serie B",
     "USL Championship",
     "Segunda Division",
     "Botola Pro",
+    # 2026-06-20 (D1a): MŚ dodane decyzją usera — więcej danych teraz mimo że kadry ≠ model
+    # klubowy (świadomy szum walidacji M1). Kwalifikacje MŚ NADAL odrzucane (blacklist "WC Qual").
+    "World Cup 2026",
+    "World Cup",
+    "Mundial",
 })
 
 # Słowa kluczowe → odrzuć nawet jeśli liga nie jest w blackliście
