@@ -2,6 +2,7 @@
 telegram_bot.py – Interaktywny bot Telegram dla FootStats.
 
 Komendy:
+    /start <nonce> – weryfikacja własności czatu (wiąże chat_id z kontem; FAZA 15.7)
     /status  – aktualny bankroll, drawdown, status agenta
     /kupon   – ostatni aktywny kupon
     /void <id> – void kuponu po ID
@@ -159,11 +160,55 @@ def _cmd_stats() -> str:
         return f"Błąd: {e}"
 
 
+def _cmd_start(chat_id: str, nonce: str) -> str:
+    """FAZA 15.7: weryfikacja własności czatu — wiąże chat_id z kontem usera.
+
+    Jednorazowy nonce (TTL 15 min, generowany przez `POST /telegram/link/start`)
+    musi pasować do `users.telegram_link_nonce` i nie być wygasły. Po sukcesie
+    nonce jest czyszczony (zużyty raz), aby uniemożliwić powtórne/przejęte użycie.
+    """
+    nonce = nonce.strip()
+    if not nonce:
+        return "Użycie: /start <nonce> — kod wygenerowany w panelu FootStats (Ustawienia → Telegram)."
+    try:
+        from footstats.utils.db import connect
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with connect() as conn:
+            row = conn.execute(
+                "SELECT id, username FROM users"
+                " WHERE telegram_link_nonce = ? AND telegram_link_nonce_exp > ?",
+                (nonce, now),
+            ).fetchone()
+            if not row:
+                return "❌ Nieprawidłowy lub wygasły kod. Wygeneruj nowy w panelu FootStats."
+            conn.execute(
+                "UPDATE users SET telegram_chat_id = ?, telegram_link_nonce = NULL,"
+                " telegram_link_nonce_exp = NULL WHERE id = ?",
+                (chat_id, row["id"]),
+            )
+        return f"✅ Czat zweryfikowany i połączony z kontem {row['username']}"
+    except (ImportError, RuntimeError, OSError) as e:
+        return f"Błąd: {e}"
+
+
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 def _handle(message: dict) -> None:
     chat_id = str(message.get("chat", {}).get("id", ""))
     text = message.get("text", "").strip()
+
+    if not text.startswith("/"):
+        return
+
+    parts = text.split(None, 1)
+    cmd = parts[0].lower().split("@")[0]
+    arg = parts[1] if len(parts) > 1 else ""
+
+    # /start musi działać PRZED gate'em allowed-chat — nowy user (jeszcze
+    # niezweryfikowany) nie jest dopuszczony przez `_allowed_chat()`.
+    if cmd == "/start":
+        _reply(chat_id, _cmd_start(chat_id, arg))
+        return
 
     allowed = _allowed_chat()
     if not allowed:
@@ -172,13 +217,6 @@ def _handle(message: dict) -> None:
     if chat_id != allowed:
         logger.warning("Odrzucono wiadomość z nieautoryzowanego chat_id: %s", chat_id)
         return
-
-    if not text.startswith("/"):
-        return
-
-    parts = text.split(None, 1)
-    cmd = parts[0].lower().split("@")[0]
-    arg = parts[1] if len(parts) > 1 else ""
 
     if cmd == "/status":
         _reply(chat_id, _cmd_status())

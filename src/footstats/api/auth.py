@@ -1,6 +1,7 @@
 """JWT authentication for FootStats API — DB-backed multi-user."""
 import os
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -278,9 +279,11 @@ class TelegramRequest(BaseModel):
 def set_telegram_chat_id(req: TelegramRequest, user_id: int = Depends(require_auth)):
     """
     FAZA 15.6: ustaw/wyczyść telegram_chat_id użytkownika (powiadomienia per-user).
-    UWAGA: brak weryfikacji własności czatu — user deklaruje swój chat_id. Format
-    walidowany (numeryczny). Pełna weryfikacja (nonce /start przez webhook bota)
-    do dodania gdy pojawią się realni użytkownicy — patrz TODO 15.7.
+    UWAGA — DEPRECATED jako ścieżka weryfikacji: brak dowodu własności czatu,
+    user deklaruje dowolny chat_id (może podszyć się pod cudzy czat). Zostaje
+    dla kompatybilności z GUI Settings (np. ręczne odłączenie / fallback),
+    ale preferowaną, bezpieczną ścieżką jest nonce `/start <nonce>` przez webhook
+    bota — patrz `telegram_link_start()` (FAZA 15.7).
     """
     from footstats.utils.db import connect
     chat_id = req.chat_id.strip() or None
@@ -290,6 +293,35 @@ def set_telegram_chat_id(req: TelegramRequest, user_id: int = Depends(require_au
             (chat_id, user_id),
         )
     return {"ok": True, "telegram_chat_id": chat_id}
+
+
+_NONCE_TTL_SECONDS = 900
+
+
+@router.post("/telegram/link/start", status_code=status.HTTP_200_OK)
+def telegram_link_start(user_id: int = Depends(require_auth)) -> dict:
+    """
+    FAZA 15.7 (D7): generuje jednorazowy nonce do weryfikacji własności czatu
+    Telegram. User wysyła `/start <nonce>` do bota — webhook (telegram_bot.py)
+    wiąże faktyczny chat_id nadawcy z kontem, eliminując możliwość podszycia
+    się pod cudzy czat (bug w `set_telegram_chat_id`, gdzie user deklarował
+    chat_id bez dowodu kontroli nad nim).
+    """
+    from footstats.utils.db import connect
+
+    nonce = secrets.token_urlsafe(8)
+    expires_at = (datetime.now() + timedelta(seconds=_NONCE_TTL_SECONDS)).strftime("%Y-%m-%d %H:%M:%S")
+    with connect() as conn:
+        conn.execute(
+            "UPDATE users SET telegram_link_nonce = ?, telegram_link_nonce_exp = ? WHERE id = ?",
+            (nonce, expires_at, user_id),
+        )
+    bot_name = os.environ.get("TELEGRAM_BOT_USERNAME", "FootStatsBot")
+    return {
+        "nonce": nonce,
+        "instructions": f"Wyślij /start {nonce} do @{bot_name}",
+        "expires_in": _NONCE_TTL_SECONDS,
+    }
 
 
 class ChangeUsernameRequest(BaseModel):

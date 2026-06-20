@@ -86,6 +86,14 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "ALTER TABLE users ADD COLUMN telegram_chat_id TEXT",
                 ],
             ),
+            (
+                7,
+                "add_telegram_link_nonce_to_users",
+                [
+                    "ALTER TABLE users ADD COLUMN telegram_link_nonce TEXT",
+                    "ALTER TABLE users ADD COLUMN telegram_link_nonce_exp TIMESTAMP",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -159,6 +167,14 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                 "add_telegram_chat_id_to_users",
                 [
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT",
+                ],
+            ),
+            (
+                7,
+                "add_telegram_link_nonce_to_users",
+                [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_link_nonce TEXT",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_link_nonce_exp TIMESTAMP",
                 ],
             ),
         ]
