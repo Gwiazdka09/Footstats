@@ -168,11 +168,35 @@
 
 ---
 
+## 🏗 DŁUG TECHNICZNY / ARCHITEKTURA (audyt całościowy 06-20)
+
+> Ocena warstw: core A-, testy A, API B+, AI B-, GUI C, scrapers C+, daily_agent C.
+> Rdzeń + testy = poziom zawodowy. Długi ciągnące w dół ↓ (kolejność = priorytet pracy).
+
+- [ ] **#5 Kalibracja w Kelly/value-bet** — `calibrate_confidence` wciąż czynny w
+  `daily_agent.py:816,824` (Kelly) + `daily_filters.py:52` (value-bet). cc(<66)=0.286 zaniża
+  stawki / odrzuca value (ten sam zdegenerowany root co Cel B). Fix: identity/bypass aż do
+  re-fit na czystych danych. SZYBKI, kończy temat kalibracji. **← START**
+- [ ] **#1 Refactor `App.jsx` (2144 linie, monolit)** — 🔴 największy dług frontu. Rozbić na
+  komponenty (MatchCard, WizardStep, Dashboard, Settings, History; MarketsPanel/CookieConsent już są).
+  Łamie regułę CLAUDE.md (max 800). Po zmianie: weryfikacja Playwright (desktop+mobile).
+- [ ] **#2 Odporność scraperów + single-source** — Playwright kruchy (superbet 1128, sts 604;
+  psują się przy zmianie HTML), całość wisi na Bzzoiro bez fallbacku. Dodać health-check +
+  alert Telegram gdy źródło zwraca 0/zmienia strukturę; rozważyć 2. źródło.
+- [ ] **#3 Rozbić `daily_agent.py` (1546 linii, god-module)** — wydzielić fazy
+  (fetch/enrich/groq/persist) do testowalnych funkcji. Tam chowały się bugi Cel B.
+- [ ] **#4 Podwójny backtest** — `backtest_engine.py` (644, AI-driven, anti-pattern z zapisem
+  do prod Neon, obs 3596) vs walk-forward. Usunąć/oznaczyć engine, zostawić walk-forward jako jedyny.
+- [ ] **Inne god-moduły** (po #1/#3): `cli.py` 1112, `analyzer.py` 930 — dekompozycja niższy priorytet.
+
+---
+
 ## 📋 Następne kroki
 
-1. **Pasywne (priorytet):** monitor co kilka dni, czekaj na ~20 świeżych settled → walidacja
-2. **Po walidacji:** Dixon-Coles (jeśli accuracy nadal poniżej celu)
-3. **Wymaga Ciebie:** Email (Resend key) → JDG + prawnik → płatności
+1. **Praca teraz:** dług techniczny #5 → #1 → #2 → #3 → #4 (sekcja wyżej).
+2. **Pasywne (równolegle):** monitor co kilka dni, czekaj na ~20 świeżych settled → walidacja.
+3. **Po walidacji:** ocena λ / Dixon-Coles efekt live; decyzja Cel B bug 2 (Groq selekcja).
+4. **Wymaga Ciebie:** Email (Resend key) → JDG + prawnik → płatności.
 
 ## Moje uwagi
 - [x] **Kreator 1X kurs 0.93 (niemożliwy)** — NAPRAWIONE (06-20, `30ac7c66b`). `dc_odds` liczyło
