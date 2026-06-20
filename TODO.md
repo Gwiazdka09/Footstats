@@ -197,48 +197,46 @@
 
 > Użytkownik zatwierdził kierunki. Wykorzystaj subagentów. Kolejność = priorytet.
 
-- [ ] **D1a — Whitelist +MŚ.** Dodaj World Cup / Mundial do `LIGI_WHITELIST` (`config.py`).
-  Świadomie: kadry ≠ model klubowy (szum), ale user chce więcej danych teraz. +test.
-- [ ] **D1b — Kursy z 2. źródła (KLUCZOWE).** Bzzoiro nie ma kursów dla wielu lig (egzotyki,
-  MŚ) → System nie wytypuje (single-leg wymaga kursu). Scrapuj kursy z DARMOWYCH źródeł
-  (patrz D6). Wpięcie: gdy `odds` puste z Bzzoiro → uzupełnij z fallback-scrapera. Akceptujemy
-  WOLNE tempo (mecze nie co godzinę) — to OK, ważna jakość nie ilość.
-- [ ] **D2 — Auto-refit kalibracji co +30 SKOŃCZONYCH predykcji.** Stan 06-20: tabela
-  `predictions` = 101 total, **58 settled** (stary fit był na 41). Kupony: max #175, 64 settled.
-  UWAGA: kalibracja trenuje na `predictions` (ai_confidence, tip_correct), NIE na coupons —
-  ale numeracja usera (#130→#160) to kupony; trzymaj cadence "co +30 świeżych settled".
-  Zadanie: trigger w pipeline/evening — gdy liczba settled predykcji wzrośnie o ≥30 od ostatniego
-  fitu → `fit_calibrator()` + dopiero gdy dane CZYSTE (post-fix Cel B) ustaw `CALIBRATION_ENABLED=1`.
-  Mała liczba userów teraz = wolno, potem szybciej. Zapisz `n_train` ostatniego fitu by liczyć delta.
+- [x] **D1a — Whitelist +MŚ** (06-21, commit w sesji) — "World Cup 2026"/"World Cup"/"Mundial"
+  w `LIGI_WHITELIST`; kwalifikacje MŚ NADAL odrzucane (blacklist). +2 testy.
+- [~] **D1b/D6 — Kursy z 2. źródła = Sofascore scraper** (06-21, `6b3b2bfd1`). Zbudowany
+  `scrapers/sofascore_odds.py` (reuse Playwright z form_scraper) + faza fallback
+  `_wzbogac_o_kursy_fallback` w `daily_phases` (uzupełnia gdy Bzzoiro brak odds), wpięte
+  w daily_agent przed System paper. +25 testów (parsing/event-match/fallback).
+  🔴 **CONCERN OTWARTY:** Sofascore zwraca obecnie **HTTP 403 challenge** (anti-bot) na
+  `_sofa_session` — blokuje TEŻ istniejący `form_scraper`. Kod+parsing gotowe ale LIVE nie
+  pobiera aż 403 rozwiązane. **DO ZROBIENIA:** stealth/inny fingerprint LUB inne źródło
+  z listy (Flashscore/Soccer24/Meczyki) na kursy. Bez tego unblock danych NIE działa live.
+- [x] **D2 — Auto-refit kalibracji co +30 settled** (06-21, sesja) — `maybe_refit_calibration()`
+  w evening_agent po `update_pending`; gdy settled - n_train ≥ 30 → `fit_calibrator()` +
+  ostrzeżenie gdy krzywa płaska. Gate `CALIBRATION_ENABLED` ZOSTAJE u usera (refit nie włącza).
+  Stan 06-20: 58 settled, n_train=41 (delta 17 < 30 → następny refit ~88 settled). +5 testów.
 - [ ] **D3 — Cel B bug 2 (Groq selekcja).** Bez zmian — czeka na ≥15 ŚWIEŻYCH System settled.
   Potem decyzja: ogranicz Groq / argmax modelu / tnij conf. (User: nic do douszczegółowienia.)
-- [ ] **D4 — backtest_engine: usuń lub przerób.** Decyzja usera: jak nieprzydatny → USUŃ
-  (`core/backtest_engine.py` + `scripts/run_backtest.py` + martwe testy), bo walk-forward
-  zastępuje. Najpierw oceń czy coś unikalnego daje; jak nie → czysta usuwka. Destrukcyjne → ostrożnie.
-- [ ] **D5 — Scal 2 taski 08:00 w jeden pipeline.** `FootStats-DailyAgent` (predykcje, bez fazy)
-  + `FootStats-DailyAgentDraft` (--faza draft, kupony) robią pełny pipeline 2× → podwójny koszt API.
-  Scal w jeden run (predykcje + kupony razem, jeden fetch). Zaktualizuj Task Scheduler + usuń duplikat.
-- [ ] **D6 — 2. źródło danych przez SCRAPERY (brak budżetu na płatne API).** Kandydaci (darmowe):
-  Flashscore.pl, Sofascore (już używany na formę), Meczyki.pl, polsatsport.pl, sport.tvp.pl,
-  Soccer24, LiveScore, Eurosport Polska, Interia Sport, Transfermarkt. Priorytet danych:
-  **kursy** (D1b) + wyniki (settlement fallback). Oceń które mają kursy 1X2/Over/BTTS, zbuduj
-  scraper (Playwright, wzorzec istniejących w `scrapers/`), health-check (#2 już jest).
-- [ ] **D7 — 15.7 weryfikacja własności czatu Telegram** (nonce /start przez webhook). ZROBIĆ —
-  security MEDIUM przed realnymi userami. Teraz tylko walidacja formatu numerycznego.
+- [x] **D4 — backtest_engine USUNIĘTY** (06-21, `a7e845470`) — moduł + `run_backtest.py` +
+  2 testy + baseline broad-except. Walk-forward zastępuje. `core/backtest.py` (save_prediction) nietknięty.
+- [x] **D5 — Scal taski 08:00** (06-21) — `--faza draft` zapisuje predykcje (`_auto_zapisz_backtest`
+  bezwarunkowo) + kupony + system_paper + propozycje → no-faza `FootStats-DailyAgent` redundantny
+  (robił ściśle mniej, bez enrichu). **WYŁĄCZONY** (Disabled). 08:00 = tylko Draft, 11:00 Final, 23:00 Evening.
+- [x] **D7 — 15.7 weryfikacja czatu Telegram (nonce)** (06-21, `4cbd01d58`) — `POST /telegram/link/start`
+  generuje nonce (TTL 15min), webhook `/start <nonce>` wiąże zweryfikowany chat_id (przed gate'em admina),
+  jednorazowy. Migracja kolumn + 9 testów. `set_telegram_chat_id` deprecated (fallback).
 - [ ] **D8 — JDG / prawnik — WSTRZYMANE (sam koniec).** User waha się: konsekwencje JDG jak
-  się nie uda; prawnik za drogi. Bez akcji teraz. Tylko notatka — wrócić po walidacji modelu.
+  się nie uda; prawnik za drogi. Bez akcji. Wrócić po walidacji modelu.
 
 ---
 
 ## 📋 Następne kroki
 
-> Dług techniczny #1-#5 ZROBIONY (06-20). Teraz: realizacja DECYZJI 06-20 (sekcja D1-D8).
+> Dług techniczny #1-#5 ZROBIONY (06-20). DECYZJE D1-D8: D1a/D2/D4/D5/D7 ✓, D6/D1b ~(403),
+> D3/D8 czekają. Suite 1150 pass / 4 skip.
 
-1. **Praca następnej sesji (większy model):** D1b kursy-2.źródło + D6 scrapery (odblokowuje
-   dane) → D1a +MŚ → D5 scal taski 08:00 → D2 auto-refit kalibracji → D4 usuń backtest_engine
-   → D7 Telegram nonce. Wykorzystaj subagentów.
+1. **🔴 TOP unblock — Sofascore 403** (D1b/D6 concern): kod kursów gotowy ale Sofascore blokuje
+   anti-botem (dotyczy też form_scraper). Rozwiąż: playwright-stealth / inny fingerprint / proxy,
+   ALBO inne źródło z listy (Flashscore/Soccer24/Meczyki) na kursy. Bez tego dane nie płyną.
 2. **Pasywne (równolegle):** monitor co kilka dni; zbieraj świeże settled (wolne tempo OK).
-3. **Po walidacji (~+30 settled):** D2 re-fit + włącz kalibrację; D3 decyzja Cel B bug 2.
+3. **Po walidacji (~+30 settled, czyli ~88):** D2 odpali auto-refit; gdy krzywa zdrowa →
+   włącz `CALIBRATION_ENABLED=1`; D3 decyzja Cel B bug 2.
 4. **Sam koniec (D8):** JDG/prawnik — wstrzymane (koszt/ryzyko). Email/płatności po walidacji.
 
 ## Moje uwagi
