@@ -23,6 +23,7 @@ from footstats.utils.telegram_notify import (
     send_kupon,
     send_wynik_update,
     send_draft_kupon,
+    check_and_alert_source_down,
 )
 
 load_dotenv()
@@ -216,3 +217,43 @@ class TestPerUserTelegram:
         import footstats.utils.db as dbmod
         monkeypatch.setattr(dbmod, "connect", lambda: _Conn())
         assert tn.send_message_to_user(99, "hej") is False
+
+
+class TestSourceHealthCheck:
+    """Health-check zrodel danych — alert gdy scraper zwraca 0 wydarzen/niedostepny (dlug techniczny #2)."""
+
+    @pytest.mark.unit
+    def test_alert_wysylany_gdy_zero_wynikow(self, monkeypatch):
+        """0 wydarzen → woła send_alert (mock), zwraca True."""
+        from footstats.utils import telegram_notify as tn
+        mock_alert = MagicMock(return_value=True)
+        monkeypatch.setattr(tn, "send_alert", mock_alert)
+
+        result = tn.check_and_alert_source_down("Bzzoiro", ok=True, n_wyniki=0)
+
+        assert result is True
+        mock_alert.assert_called_once()
+
+    @pytest.mark.unit
+    def test_alert_wysylany_gdy_niedostepny(self, monkeypatch):
+        """ok=False (walidacja klienta nie przeszla) → woła send_alert, niezaleznie od n_wyniki."""
+        from footstats.utils import telegram_notify as tn
+        mock_alert = MagicMock(return_value=True)
+        monkeypatch.setattr(tn, "send_alert", mock_alert)
+
+        result = tn.check_and_alert_source_down("Bzzoiro", ok=False, n_wyniki=5)
+
+        assert result is True
+        mock_alert.assert_called_once()
+
+    @pytest.mark.unit
+    def test_brak_alertu_gdy_dane_normalne(self, monkeypatch):
+        """ok=True i n_wyniki>0 → NIE woła send_alert."""
+        from footstats.utils import telegram_notify as tn
+        mock_alert = MagicMock(return_value=True)
+        monkeypatch.setattr(tn, "send_alert", mock_alert)
+
+        result = tn.check_and_alert_source_down("Bzzoiro", ok=True, n_wyniki=12)
+
+        assert result is False
+        mock_alert.assert_not_called()

@@ -69,10 +69,17 @@ def _pobierz_kandydatow(dni: int = 2) -> tuple[list, dict]:
     c = BzzoiroClient(klucz)
     ok, msg = c.waliduj()
     if not ok:
-        _blad(f"Bzzoiro: {msg}")
+        console.print(f"[bold red]Bzzoiro: {msg}[/bold red]")
 
-    wyniki = szybkie_pewniaczki_2dni(c, prog=AGENT_KANDYDAT_PROG, godziny=dni * 24)
+    wyniki = szybkie_pewniaczki_2dni(c, prog=AGENT_KANDYDAT_PROG, godziny=dni * 24) if ok else []
     console.print(f"[dim]Bzzoiro: {len(wyniki)} kandydatów w oknie {dni*24}h[/dim]")
+
+    # Health-check zrodla (dlug techniczny #2): alert gdy 0 wydarzen / niedostepne.
+    try:
+        from footstats.utils.telegram_notify import check_and_alert_source_down
+        check_and_alert_source_down("Bzzoiro", ok=ok, n_wyniki=len(wyniki))
+    except (ImportError, OSError, RuntimeError) as e:
+        log.warning("Health-check Bzzoiro nie powiodl sie: %s", e)
 
     # Buduj indeks: (norm_gosp, norm_gosc) → dane meczu
     indeks: dict = {}

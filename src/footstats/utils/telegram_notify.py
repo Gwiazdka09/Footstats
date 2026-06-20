@@ -19,6 +19,7 @@ Użycie:
 
 import hashlib
 import json
+import logging
 import os
 import requests
 from datetime import datetime, timedelta
@@ -26,6 +27,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+
+log = logging.getLogger(__name__)
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 _DEDUP_FILE = Path(__file__).resolve().parents[3] / "data" / "telegram_dedup.json"
@@ -269,6 +272,30 @@ def send_stop_loss_alert(drawdown_pct: float, bankroll: float) -> bool:
         "Wznów przez dashboard → sekcja Bankroll → 'Wznów agenta'"
     )
     return _send(text)
+
+
+def check_and_alert_source_down(source_name: str, ok: bool, n_wyniki: int) -> bool:
+    """
+    Health-check pobierania danych (dlug techniczny #2 — single-source guard).
+
+    Wysyla alert gdy zrodlo (np. Bzzoiro) jest niedostepne (ok=False) lub
+    zwrocilo 0 wydarzen — pipeline moze dzialac w ciszy na pustych danych.
+    Zawsze loguje WARNING przy problemie. Nie podnosi wyjatku gdy Telegram
+    niedostepny (send_alert zwraca False bez kredencjalow).
+
+    Zwraca True jesli alert zostal wyslany (problem wykryty), False gdy dane OK.
+    """
+    if ok and n_wyniki > 0:
+        return False
+    log.warning(
+        "Scraper %s: %s wydarzen (ok=%s) — mozliwe ciche zrodlo danych",
+        source_name, n_wyniki, ok,
+    )
+    send_alert(
+        f"Scraper {source_name}: 0 wydarzeń / niedostępny",
+        f"{source_name}: pobrano {n_wyniki} wydarzeń (ok={ok}) — pipeline może działać na pustych danych.",
+    )
+    return True
 
 
 def check_and_alert_agent_down() -> bool:
