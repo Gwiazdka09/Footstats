@@ -175,7 +175,7 @@
 
 - [x] **#5 Kalibracja w Kelly/value-bet** (06-20, `9faa72067`) — gate `CALIBRATION_ENABLED`
   (domyślnie OFF → identity); mechanizm krzywej zachowany jako `_calibrate_raw` do re-fit.
-  Domyka temat zdegenerowanej calibration.json (Kelly + value-bet już nie zaniżają). [[user-decyzja: re-fit]]
+  Domyka temat zdegenerowanej calibration.json (Kelly + value-bet już nie zaniżają). → re-fit: patrz **D2**.
 - [x] **#1 Refactor `App.jsx`** (06-20, `2e112dc2c`) — 2144→**267** linii. Wydzielone
   components/ (LoginView, DashboardHome, History, Leaderboard, Settings, AdminPanel, ui,
   Wizard/*) + lib/ (api, leagues, tips). Behavior-preserving, build PASS, Playwright OK.
@@ -188,18 +188,58 @@
   Behavior-preserving (zero zmian asercji), smoke parytet OK. Splątane bloki zostawione świadomie.
 - [x] **#4 Podwójny backtest** (06-20, `366b495d2`) — `backtest_engine.py` izolowany od prod
   (guard test-DB, rzuca gdy prod Neon bez opt-in) + DEPRECATED na rzecz walk-forward. NIE usunięty.
-  [[user-decyzja: czy usunąć backtest_engine.py + run_backtest.py całkiem]]
+  → decyzja usera: USUNĄĆ jak nieprzydatny, patrz **D4**.
 - [ ] **Inne god-moduły** (niższy priorytet): `cli.py` 1112, `analyzer.py` 930 — dekompozycja kiedyś.
-- [ ] **2. źródło danych** (po Bzzoiro) — fallback gdy główne źródło padnie. Wymaga wyboru/integracji.
+
+---
+
+## 🚀 DECYZJE 06-20 → DO REALIZACJI (następna sesja, większy model)
+
+> Użytkownik zatwierdził kierunki. Wykorzystaj subagentów. Kolejność = priorytet.
+
+- [ ] **D1a — Whitelist +MŚ.** Dodaj World Cup / Mundial do `LIGI_WHITELIST` (`config.py`).
+  Świadomie: kadry ≠ model klubowy (szum), ale user chce więcej danych teraz. +test.
+- [ ] **D1b — Kursy z 2. źródła (KLUCZOWE).** Bzzoiro nie ma kursów dla wielu lig (egzotyki,
+  MŚ) → System nie wytypuje (single-leg wymaga kursu). Scrapuj kursy z DARMOWYCH źródeł
+  (patrz D6). Wpięcie: gdy `odds` puste z Bzzoiro → uzupełnij z fallback-scrapera. Akceptujemy
+  WOLNE tempo (mecze nie co godzinę) — to OK, ważna jakość nie ilość.
+- [ ] **D2 — Auto-refit kalibracji co +30 SKOŃCZONYCH predykcji.** Stan 06-20: tabela
+  `predictions` = 101 total, **58 settled** (stary fit był na 41). Kupony: max #175, 64 settled.
+  UWAGA: kalibracja trenuje na `predictions` (ai_confidence, tip_correct), NIE na coupons —
+  ale numeracja usera (#130→#160) to kupony; trzymaj cadence "co +30 świeżych settled".
+  Zadanie: trigger w pipeline/evening — gdy liczba settled predykcji wzrośnie o ≥30 od ostatniego
+  fitu → `fit_calibrator()` + dopiero gdy dane CZYSTE (post-fix Cel B) ustaw `CALIBRATION_ENABLED=1`.
+  Mała liczba userów teraz = wolno, potem szybciej. Zapisz `n_train` ostatniego fitu by liczyć delta.
+- [ ] **D3 — Cel B bug 2 (Groq selekcja).** Bez zmian — czeka na ≥15 ŚWIEŻYCH System settled.
+  Potem decyzja: ogranicz Groq / argmax modelu / tnij conf. (User: nic do douszczegółowienia.)
+- [ ] **D4 — backtest_engine: usuń lub przerób.** Decyzja usera: jak nieprzydatny → USUŃ
+  (`core/backtest_engine.py` + `scripts/run_backtest.py` + martwe testy), bo walk-forward
+  zastępuje. Najpierw oceń czy coś unikalnego daje; jak nie → czysta usuwka. Destrukcyjne → ostrożnie.
+- [ ] **D5 — Scal 2 taski 08:00 w jeden pipeline.** `FootStats-DailyAgent` (predykcje, bez fazy)
+  + `FootStats-DailyAgentDraft` (--faza draft, kupony) robią pełny pipeline 2× → podwójny koszt API.
+  Scal w jeden run (predykcje + kupony razem, jeden fetch). Zaktualizuj Task Scheduler + usuń duplikat.
+- [ ] **D6 — 2. źródło danych przez SCRAPERY (brak budżetu na płatne API).** Kandydaci (darmowe):
+  Flashscore.pl, Sofascore (już używany na formę), Meczyki.pl, polsatsport.pl, sport.tvp.pl,
+  Soccer24, LiveScore, Eurosport Polska, Interia Sport, Transfermarkt. Priorytet danych:
+  **kursy** (D1b) + wyniki (settlement fallback). Oceń które mają kursy 1X2/Over/BTTS, zbuduj
+  scraper (Playwright, wzorzec istniejących w `scrapers/`), health-check (#2 już jest).
+- [ ] **D7 — 15.7 weryfikacja własności czatu Telegram** (nonce /start przez webhook). ZROBIĆ —
+  security MEDIUM przed realnymi userami. Teraz tylko walidacja formatu numerycznego.
+- [ ] **D8 — JDG / prawnik — WSTRZYMANE (sam koniec).** User waha się: konsekwencje JDG jak
+  się nie uda; prawnik za drogi. Bez akcji teraz. Tylko notatka — wrócić po walidacji modelu.
 
 ---
 
 ## 📋 Następne kroki
 
-1. **Praca teraz:** dług techniczny #5 → #1 → #2 → #3 → #4 (sekcja wyżej).
-2. **Pasywne (równolegle):** monitor co kilka dni, czekaj na ~20 świeżych settled → walidacja.
-3. **Po walidacji:** ocena λ / Dixon-Coles efekt live; decyzja Cel B bug 2 (Groq selekcja).
-4. **Wymaga Ciebie:** Email (Resend key) → JDG + prawnik → płatności.
+> Dług techniczny #1-#5 ZROBIONY (06-20). Teraz: realizacja DECYZJI 06-20 (sekcja D1-D8).
+
+1. **Praca następnej sesji (większy model):** D1b kursy-2.źródło + D6 scrapery (odblokowuje
+   dane) → D1a +MŚ → D5 scal taski 08:00 → D2 auto-refit kalibracji → D4 usuń backtest_engine
+   → D7 Telegram nonce. Wykorzystaj subagentów.
+2. **Pasywne (równolegle):** monitor co kilka dni; zbieraj świeże settled (wolne tempo OK).
+3. **Po walidacji (~+30 settled):** D2 re-fit + włącz kalibrację; D3 decyzja Cel B bug 2.
+4. **Sam koniec (D8):** JDG/prawnik — wstrzymane (koszt/ryzyko). Email/płatności po walidacji.
 
 ## Moje uwagi
 - [x] **Kreator 1X kurs 0.93 (niemożliwy)** — NAPRAWIONE (06-20, `30ac7c66b`). `dc_odds` liczyło
