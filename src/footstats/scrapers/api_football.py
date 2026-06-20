@@ -10,7 +10,8 @@ from footstats.utils.cache import (
 from footstats.utils.logging import bezpieczny_budget_use, BladBudzetu
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
-from footstats.config import ENV_APISPORTS
+from footstats.config import ENV_APISPORTS, _czytaj_wszystkie_klucze
+from footstats.utils.normalize import normalize_team_name
 from rich.panel import Panel
 
 # ================================================================
@@ -379,3 +380,123 @@ class APIFootball:
 
         return wyniki
 
+    def kursy_fixture(self, fix_id: int) -> dict:
+        """
+        Pobiera kursy bukmacherskie dla danego fixture przez /odds (1 req, cache'owane).
+
+        Parsuje PIERWSZEGO dostępnego bukmachera z odpowiedzi (rynki: "Match Winner"
+        -> home/draw/away, "Goals Over/Under" -> over_2_5/under_2_5, "Both Teams Score"
+        -> btts). Pomija rynki, których brak (zero fałszywych wartości).
+        Zwraca pusty dict gdy brak danych/bukmacherów.
+        """
+        dane = self._get("/odds", {"fixture": fix_id})
+        if not dane:
+            return {}
+
+        response = dane.get("response", [])
+        if not response:
+            return {}
+
+        bookmakers = response[0].get("bookmakers", [])
+        if not bookmakers:
+            return {}
+
+        bets = bookmakers[0].get("bets", [])
+        wynik: dict = {}
+
+        for bet in bets:
+            nazwa = bet.get("name", "")
+            values = bet.get("values", [])
+
+            if nazwa == "Match Winner":
+                for v in values:
+                    label = v.get("value", "")
+                    odd = _parse_odd(v.get("odd"))
+                    if odd is None:
+                        continue
+                    if label == "Home":
+                        wynik["home"] = odd
+                    elif label == "Draw":
+                        wynik["draw"] = odd
+                    elif label == "Away":
+                        wynik["away"] = odd
+
+            elif nazwa == "Goals Over/Under":
+                for v in values:
+                    label = (v.get("value", "") or "").lower()
+                    odd = _parse_odd(v.get("odd"))
+                    if odd is None:
+                        continue
+                    if "over 2.5" in label:
+                        wynik["over_2_5"] = odd
+                    elif "under 2.5" in label:
+                        wynik["under_2_5"] = odd
+
+            elif nazwa == "Both Teams Score":
+                for v in values:
+                    if (v.get("value", "") or "").lower() == "yes":
+                        odd = _parse_odd(v.get("odd"))
+                        if odd is not None:
+                            wynik["btts"] = odd
+
+        return wynik
+
+    def znajdz_fixture_id(self, home: str, away: str, data: str) -> int | None:
+        """
+        Szuka fixture_id meczu home vs away w dniu `data` przez /fixtures?date=.
+
+        Fuzzy match nazw drużyn (normalizacja + substring dwukierunkowy). Cache
+        wyniku odbywa się na poziomie _get (jeden request /fixtures na dzień,
+        reużywany dla wielu meczów tego samego dnia).
+        """
+        dane = self._get("/fixtures", {"date": data[:10]})
+        if not dane:
+            return None
+
+        n_home = normalize_team_name(home)
+        n_away = normalize_team_name(away)
+
+        for m in dane.get("response", []):
+            teams = m.get("teams", {})
+            fh = normalize_team_name(_s(teams.get("home", {}).get("name", "")))
+            fa = normalize_team_name(_s(teams.get("away", {}).get("name", "")))
+            if not fh or not fa:
+                continue
+
+            home_match = fh == n_home or fh in n_home or n_home in fh
+            away_match = fa == n_away or fa in n_away or n_away in fa
+            if home_match and away_match:
+                return m.get("fixture", {}).get("id")
+
+        return None
+
+
+def _parse_odd(raw: str | float | None) -> float | None:
+    """Konwertuje surowy kurs decimal z API-Football (string) na float. None gdy niepoprawny."""
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (ValueError, TypeError):
+        return None
+
+
+def fetch_odds_af(home: str, away: str, data: str) -> dict | None:
+    """
+    Fallback kursów przez API-Football /odds — alternatywa dla SofaScore (403 anti-bot).
+
+    Reużywa istniejącego klucza APISPORTS_KEY + wbudowany budżet/cache klienta
+    APIFootball. Zwraca dict {home, draw, away, over_2_5, under_2_5, btts}
+    (tylko realnie znalezione rynki) albo None gdy brak klucza/meczu/kursów.
+    """
+    klucz = _czytaj_wszystkie_klucze().get(ENV_APISPORTS)
+    if not klucz:
+        return None
+
+    klient = APIFootball(klucz)
+    fix_id = klient.znajdz_fixture_id(home, away, data)
+    if fix_id is None:
+        return None
+
+    odds = klient.kursy_fixture(fix_id)
+    return odds or None

@@ -10,6 +10,7 @@ import logging
 
 from rich.console import Console
 
+from footstats.scrapers.api_football import fetch_odds_af
 from footstats.utils.normalize import normalize_team_name
 
 log = logging.getLogger(__name__)
@@ -285,27 +286,30 @@ def _wzbogac_o_inspiracje(wyniki: list, debug: bool = False) -> None:
         )
 
 
-# ── Krok 2b: Fallback kursów SofaScore (gdy Bzzoiro brak) ─────────────────────
+# ── Krok 2b: Fallback kursów API-Football -> SofaScore (gdy Bzzoiro brak) ────
+
+def _uzupelnij_kursy(w: dict, fallback_odds: dict | None) -> bool:
+    """Dopisuje brakujące klucze kursów do kandydata `w` (nie nadpisuje istniejących)."""
+    if not fallback_odds:
+        return False
+    existing = dict(w.get("odds") or {})
+    for key, val in fallback_odds.items():
+        existing.setdefault(key, val)
+    w["odds"] = existing
+    return True
+
 
 def _wzbogac_o_kursy_fallback(wyniki: list, top_n: int | None = None) -> None:
     """
     Dla meczów bez kompletnych kursów (home/draw/away) Bzzoiro próbuje uzupełnić
-    je z SofaScore (scraper, fallback gdy płatne API nie pokrywa egzotyk/MŚ).
+    je dwustopniowo:
+      1. API-Football /odds (reuse APISPORTS_KEY + budżet, brak anti-bot) — priorytet.
+      2. SofaScore (scraper Playwright) jako drugi fallback, gdy AF nie znalazł kursów
+         lub nie uzupełnił wszystkich rynków.
 
-    Jedna sesja Playwright na wszystkie mecze (efektywność). NIE nadpisuje
-    istniejących kursów Bzzoiro — wzbogaca tylko brakujące/puste.
+    NIE nadpisuje istniejących kursów Bzzoiro (i nie nadpisuje kursów AF kursami
+    SofaScore) — wzbogaca tylko brakujące/puste klucze.
     """
-    try:
-        from footstats.scrapers.sofascore_odds import fetch_odds, PLAYWRIGHT_OK
-        from footstats.scrapers.form_scraper import _sofa_session
-    except ImportError:
-        console.print("[dim]sofascore_odds niedostępny — pomijam fallback kursów[/dim]")
-        return
-
-    if not PLAYWRIGHT_OK:
-        console.print("[yellow]SofaScore niedostępny (Playwright) — pomijam fallback kursów[/yellow]")
-        return
-
     braki = [
         w for w in wyniki
         if not all((w.get("odds") or {}).get(k) for k in ("home", "draw", "away"))
@@ -315,17 +319,55 @@ def _wzbogac_o_kursy_fallback(wyniki: list, top_n: int | None = None) -> None:
     if top_n is not None:
         braki = braki[:top_n]
 
-    console.print(f"[dim]SofaScore: uzupełniam kursy dla {len(braki)} meczów bez kursów Bzzoiro...[/dim]")
+    console.print(f"[dim]Fallback kursów: API-Football dla {len(braki)} meczów bez kursów Bzzoiro...[/dim]")
+
+    uzupelniono_af = 0
+    nadal_braki = []
+    for w in braki:
+        g = w.get("gospodarz", "")
+        a = w.get("goscie", "")
+        data_meczu = w.get("data") or w.get("date") or ""
+        if not g or not a:
+            continue
+        try:
+            af_odds = fetch_odds_af(g, a, data_meczu)
+        except (OSError, RuntimeError, ValueError) as e:
+            log.debug("API-Football odds fallback error %s vs %s: %s", g, a, e)
+            af_odds = None
+
+        if _uzupelnij_kursy(w, af_odds):
+            uzupelniono_af += 1
+
+        if not all((w.get("odds") or {}).get(k) for k in ("home", "draw", "away")):
+            nadal_braki.append(w)
+
+    console.print(f"[cyan]API-Football fallback kursów: uzupełniono {uzupelniono_af}/{len(braki)} meczów[/cyan]")
+
+    if not nadal_braki:
+        return
+
+    try:
+        from footstats.scrapers.sofascore_odds import fetch_odds, PLAYWRIGHT_OK
+        from footstats.scrapers.form_scraper import _sofa_session
+    except ImportError:
+        console.print("[dim]sofascore_odds niedostępny — pomijam 2. fallback kursów[/dim]")
+        return
+
+    if not PLAYWRIGHT_OK:
+        console.print("[yellow]SofaScore niedostępny (Playwright) — pomijam 2. fallback kursów[/yellow]")
+        return
+
+    console.print(f"[dim]SofaScore (2. fallback): uzupełniam kursy dla {len(nadal_braki)} meczów...[/dim]")
 
     sess = _sofa_session()
     if sess is None:
-        console.print("[yellow]SofaScore: błąd sesji — pomijam fallback kursów[/yellow]")
+        console.print("[yellow]SofaScore: błąd sesji — pomijam 2. fallback kursów[/yellow]")
         return
     p, browser, page = sess
 
-    uzupelniono = 0
+    uzupelniono_sofa = 0
     try:
-        for w in braki:
+        for w in nadal_braki:
             g = w.get("gospodarz", "")
             a = w.get("goscie", "")
             data_meczu = w.get("data") or w.get("date") or ""
@@ -336,19 +378,13 @@ def _wzbogac_o_kursy_fallback(wyniki: list, top_n: int | None = None) -> None:
             except (OSError, RuntimeError, ValueError) as e:
                 log.debug("SofaScore odds fallback error %s vs %s: %s", g, a, e)
                 continue
-            if not fallback_odds:
-                continue
-
-            existing = dict(w.get("odds") or {})
-            for key, val in fallback_odds.items():
-                existing.setdefault(key, val)
-            w["odds"] = existing
-            uzupelniono += 1
+            if _uzupelnij_kursy(w, fallback_odds):
+                uzupelniono_sofa += 1
     finally:
         browser.close()
         p.stop()
 
-    console.print(f"[cyan]SofaScore fallback kursów: uzupełniono {uzupelniono}/{len(braki)} meczów[/cyan]")
+    console.print(f"[cyan]SofaScore fallback kursów: uzupełniono {uzupelniono_sofa}/{len(nadal_braki)} meczów[/cyan]")
 
 
 # ── Krok 4b: Kelly Criterion ──────────────────────────────────────────────────
