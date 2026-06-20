@@ -2,7 +2,7 @@
 test_daily_phases.py — testy czystych helperów wydzielonych z daily_agent.py
 do core/daily_phases.py (dług techniczny #3, behavior-preserving refactor).
 """
-from footstats.core.daily_phases import _dodaj_kelly
+from footstats.core.daily_phases import _dodaj_kelly, _wzbogac_o_kursy_fallback
 
 
 def _no_calibration(monkeypatch):
@@ -49,3 +49,111 @@ def test_dodaj_kelly_brak_kuponow_nie_crashuje(monkeypatch):
     dane = {}
     _dodaj_kelly(dane, bankroll=200.0)  # nie powinno rzucić
     assert dane == {}
+
+
+# ── _wzbogac_o_kursy_fallback (D6/D1b — SofaScore fallback kursów) ────────────
+
+def _mock_sofa_session(monkeypatch):
+    """Mock sesji Playwright — nie odpala realnej przeglądarki."""
+
+    class _FakeBrowser:
+        def close(self):
+            pass
+
+    class _FakeP:
+        def stop(self):
+            pass
+
+    monkeypatch.setattr(
+        "footstats.scrapers.form_scraper._sofa_session",
+        lambda: (_FakeP(), _FakeBrowser(), object()),
+    )
+
+
+def test_fallback_uzupelnia_gdy_odds_puste(monkeypatch):
+    import footstats.scrapers.sofascore_odds as so_mod
+
+    monkeypatch.setattr(so_mod, "PLAYWRIGHT_OK", True)
+    _mock_sofa_session(monkeypatch)
+    monkeypatch.setattr(
+        so_mod, "fetch_odds",
+        lambda home, away, data, page=None: {"home": 1.5, "draw": 3.5, "away": 4.5},
+    )
+
+    wyniki = [{"gospodarz": "Real Madrid", "goscie": "Barcelona", "data": "2026-06-21", "odds": {}}]
+    _wzbogac_o_kursy_fallback(wyniki)
+
+    assert wyniki[0]["odds"] == {"home": 1.5, "draw": 3.5, "away": 4.5}
+
+
+def test_fallback_pomija_gdy_bzzoiro_juz_ma_kursy(monkeypatch):
+    import footstats.scrapers.sofascore_odds as so_mod
+
+    monkeypatch.setattr(so_mod, "PLAYWRIGHT_OK", True)
+    _mock_sofa_session(monkeypatch)
+
+    calls = []
+    monkeypatch.setattr(
+        so_mod, "fetch_odds",
+        lambda home, away, data, page=None: calls.append((home, away)) or {"home": 9.9},
+    )
+
+    wyniki = [{
+        "gospodarz": "Real Madrid", "goscie": "Barcelona", "data": "2026-06-21",
+        "odds": {"home": 1.5, "draw": 3.5, "away": 4.5},
+    }]
+    _wzbogac_o_kursy_fallback(wyniki)
+
+    assert wyniki[0]["odds"] == {"home": 1.5, "draw": 3.5, "away": 4.5}  # niezmienione
+    assert calls == []  # fetch_odds nie wywołany
+
+
+def test_fallback_nie_nadpisuje_istniejacych_kluczy_tylko_dopisuje_brakujace(monkeypatch):
+    import footstats.scrapers.sofascore_odds as so_mod
+
+    monkeypatch.setattr(so_mod, "PLAYWRIGHT_OK", True)
+    _mock_sofa_session(monkeypatch)
+    monkeypatch.setattr(
+        so_mod, "fetch_odds",
+        lambda home, away, data, page=None: {"home": 1.1, "draw": 3.5, "away": 4.5, "btts": 1.8},
+    )
+
+    # Niekompletne kursy: brak 'away' -> kwalifikuje się do fallbacku
+    wyniki = [{
+        "gospodarz": "Real Madrid", "goscie": "Barcelona", "data": "2026-06-21",
+        "odds": {"home": 1.5, "draw": 3.5},
+    }]
+    _wzbogac_o_kursy_fallback(wyniki)
+
+    # 'home' z Bzzoiro (1.5) NIE jest nadpisany kursem SofaScore (1.1)
+    assert wyniki[0]["odds"]["home"] == 1.5
+    assert wyniki[0]["odds"]["away"] == 4.5
+    assert wyniki[0]["odds"]["btts"] == 1.8
+
+
+def test_fallback_brak_playwright_nie_crashuje(monkeypatch):
+    import footstats.scrapers.sofascore_odds as so_mod
+    monkeypatch.setattr(so_mod, "PLAYWRIGHT_OK", False)
+
+    wyniki = [{"gospodarz": "A", "goscie": "B", "data": "2026-06-21", "odds": {}}]
+    _wzbogac_o_kursy_fallback(wyniki)  # nie powinno rzucić
+    assert wyniki[0]["odds"] == {}
+
+
+def test_fallback_brak_meczow_do_uzupelnienia_nie_woła_sesji(monkeypatch):
+    import footstats.scrapers.sofascore_odds as so_mod
+
+    monkeypatch.setattr(so_mod, "PLAYWRIGHT_OK", True)
+
+    def _should_not_be_called():
+        raise AssertionError("sesja Playwright nie powinna być tworzona gdy brak braków")
+
+    monkeypatch.setattr(
+        "footstats.scrapers.form_scraper._sofa_session", lambda: _should_not_be_called()
+    )
+
+    wyniki = [{
+        "gospodarz": "A", "goscie": "B", "data": "2026-06-21",
+        "odds": {"home": 1.5, "draw": 3.5, "away": 4.5},
+    }]
+    _wzbogac_o_kursy_fallback(wyniki)  # nie powinno rzucić / nie powinno wołać sesji

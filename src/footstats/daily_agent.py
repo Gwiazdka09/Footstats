@@ -144,6 +144,7 @@ from footstats.core.daily_phases import (
     _wzbogac_forme_top,
     _wzbogac_o_betbuilder,
     _wzbogac_o_inspiracje,
+    _wzbogac_o_kursy_fallback,
 )
 
 
@@ -897,6 +898,15 @@ def main():
         if args.bb:
             _wzbogac_o_inspiracje(wyniki)
         _apply_injury_corrections(wyniki)
+
+    # D6/D1b: fallback kursów SofaScore — uzupełnia mecze bez kursów Bzzoiro
+    # (egzotyki, MŚ), żeby System paper-trading mógł je typować (wymaga kursu).
+    if getattr(args, "system_paper", False) and not args.dry_run:
+        _sep("KROK 2a — Fallback kursów SofaScore")
+        try:
+            _wzbogac_o_kursy_fallback(wyniki)
+        except (OSError, ValueError, KeyError, RuntimeError) as e:
+            console.print(f"[yellow]Fallback kursów SofaScore pominięty: {e}[/yellow]")
 
     # FAZA 19: paper-trading bota — single-leg kupony System (per-tip ROI/win rate)
     if getattr(args, "system_paper", False) and not args.dry_run:
