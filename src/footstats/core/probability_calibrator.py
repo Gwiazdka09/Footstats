@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +12,12 @@ from footstats.utils import db as _db
 _log = logging.getLogger(__name__)
 
 _CALIBRATION_PATH = Path(__file__).parents[3] / "data" / "calibration.json"
+
+# 06-20: kalibracja WYŁĄCZONA domyślnie. `calibration.json` był zdegenerowany — fit na 41
+# odwróconych próbkach (sprzed fixów Cel B) → krzywa płaska 0.286-0.35, niszczyła sygnał
+# (cc(<66%)=0.286 niezależnie od wejścia). Aktywne callery: Kelly (daily_agent) + value-bet
+# (daily_filters). Identity aż do re-fit na czystych, post-Cel-B danych. Włącz: CALIBRATION_ENABLED=1.
+_CALIBRATION_ENABLED = os.getenv("CALIBRATION_ENABLED", "0") == "1"
 
 # Fallback lookup: predicted_band → calibrated_prob (from empirical data 2026-05-26)
 _FALLBACK_TABLE: dict[int, float] = {
@@ -72,8 +79,19 @@ def _load_calibration_curve() -> Optional[tuple[list[float], list[float]]]:
 def calibrate_confidence(confidence_pct: float) -> float:
     """
     Map raw AI confidence (0–100) to calibrated probability (0–1).
-    Uses fitted isotonic regression curve or fallback lookup table.
+
+    Gate: gdy kalibracja WYŁĄCZONA (domyślnie — patrz _CALIBRATION_ENABLED) zwraca
+    identity (confidence/100), bo aktualny calibration.json niszczy sygnał. Po re-fit
+    na czystych danych ustaw CALIBRATION_ENABLED=1.
     """
+    if not _CALIBRATION_ENABLED:
+        return confidence_pct / 100.0
+    return _calibrate_raw(confidence_pct)
+
+
+def _calibrate_raw(confidence_pct: float) -> float:
+    """Surowa kalibracja: isotonic curve z dysku lub fallback table. Mechanizm
+    (testowany bezpośrednio); produkcja przechodzi przez gate `calibrate_confidence`."""
     p = confidence_pct / 100.0
     curve = _load_calibration_curve()
     if curve is not None:
