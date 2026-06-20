@@ -1,0 +1,30 @@
+// Mapowanie ligi -> flaga kraju (emoji) dla kreatora kuponów
+const LEAGUE_FLAGS = {
+  "premier league": "🏴",
+  "eng-premier league": "🏴",
+  "championship": "🏴",
+  "la liga": "🇪🇸",
+  "esp-la liga": "🇪🇸",
+  "bundesliga": "🇩🇪",
+  "ger-bundesliga": "🇩🇪",
+  "ligue 1": "🇫🇷",
+  "fra-ligue 1": "🇫🇷",
+  "serie a": "🇮🇹",
+  "ita-serie a": "🇮🇹",
+  "serie b": "🇮🇹",
+  "pko bp ekstraklasa": "🇵🇱",
+  "ekstraklasa": "🇵🇱",
+  "eredivisie": "🇳🇱",
+  "primeira liga": "🇵🇹",
+  "jupiler pro league": "🇧🇪",
+  "super lig": "🇹🇷",
+  "brasileirao serie a": "🇧🇷",
+  "bra-brasileirao serie a": "🇧🇷",
+  "brasileirao serie b": "🇧🇷",
+  "bra-brasileirao serie b": "🇧🇷",
+  "liga mx": "🇲🇽",
+  "world cup 2026": "🏆",
+  "world cup": "🏆",
+};
+
+export const getLeagueFlag = (liga) => LEAGUE_FLAGS[(liga || "").toLowerCase()] ?? "🌍";
