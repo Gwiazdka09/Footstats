@@ -199,14 +199,14 @@
 
 - [x] **D1a — Whitelist +MŚ** (06-21, commit w sesji) — "World Cup 2026"/"World Cup"/"Mundial"
   w `LIGI_WHITELIST`; kwalifikacje MŚ NADAL odrzucane (blacklist). +2 testy.
-- [~] **D1b/D6 — Kursy z 2. źródła = Sofascore scraper** (06-21, `6b3b2bfd1`). Zbudowany
-  `scrapers/sofascore_odds.py` (reuse Playwright z form_scraper) + faza fallback
-  `_wzbogac_o_kursy_fallback` w `daily_phases` (uzupełnia gdy Bzzoiro brak odds), wpięte
-  w daily_agent przed System paper. +25 testów (parsing/event-match/fallback).
-  🔴 **CONCERN OTWARTY:** Sofascore zwraca obecnie **HTTP 403 challenge** (anti-bot) na
-  `_sofa_session` — blokuje TEŻ istniejący `form_scraper`. Kod+parsing gotowe ale LIVE nie
-  pobiera aż 403 rozwiązane. **DO ZROBIENIA:** stealth/inny fingerprint LUB inne źródło
-  z listy (Flashscore/Soccer24/Meczyki) na kursy. Bez tego unblock danych NIE działa live.
+- [x] **D1b/D6 — Kursy z 2. źródła = ROZWIĄZANE** (06-21). Fallback chain kursów:
+  **Bzzoiro → API-Football `/odds` → Sofascore**. Wpięte w `_wzbogac_o_kursy_fallback` (daily_phases).
+  - **AF `/odds`** (`131abc1bf`, `api_football.kursy_fixture`/`znajdz_fixture_id`/`fetch_odds_af`) =
+    PODSTAWOWY fallback. Reuse `APISPORTS_KEY`+budżet, **zero anti-bot**. LIVE smoke potwierdził
+    (Ecuador-Curaçao: home 1.17/draw 7.4/away 13.0/over25 1.6/btts 2.55). Koszt ~1 req/mecz/dzień (/fixtures cache'owane).
+  - **Sofascore** (`6b3b2bfd1`, `sofascore_odds.py`) = 2. fallback. ⚠️ obecnie 403 anti-bot
+    (dotyczy też form_scraper) — działa tylko gdy AF nie ma danego meczu I 403 ustąpi. Niski priorytet.
+  - +42 testy (AF parsing/fixture-match + Sofascore + fallback order). Budżet AF mockowany w testach.
 - [x] **D2 — Auto-refit kalibracji co +30 settled** (06-21, sesja) — `maybe_refit_calibration()`
   w evening_agent po `update_pending`; gdy settled - n_train ≥ 30 → `fit_calibrator()` +
   ostrzeżenie gdy krzywa płaska. Gate `CALIBRATION_ENABLED` ZOSTAJE u usera (refit nie włącza).
@@ -228,16 +228,16 @@
 
 ## 📋 Następne kroki
 
-> Dług techniczny #1-#5 ZROBIONY (06-20). DECYZJE D1-D8: D1a/D2/D4/D5/D7 ✓, D6/D1b ~(403),
-> D3/D8 czekają. Suite 1150 pass / 4 skip.
+> Dług techniczny #1-#5 ZROBIONY (06-20). DECYZJE D1-D8: D1a/D1b/D2/D4/D5/D6/D7 ✓,
+> D3/D8 czekają. Suite 1167 pass / 4 skip. Kursy odblokowane (AF /odds, live OK).
 
-1. **🔴 TOP unblock — Sofascore 403** (D1b/D6 concern): kod kursów gotowy ale Sofascore blokuje
-   anti-botem (dotyczy też form_scraper). Rozwiąż: playwright-stealth / inny fingerprint / proxy,
-   ALBO inne źródło z listy (Flashscore/Soccer24/Meczyki) na kursy. Bez tego dane nie płyną.
-2. **Pasywne (równolegle):** monitor co kilka dni; zbieraj świeże settled (wolne tempo OK).
-3. **Po walidacji (~+30 settled, czyli ~88):** D2 odpali auto-refit; gdy krzywa zdrowa →
-   włącz `CALIBRATION_ENABLED=1`; D3 decyzja Cel B bug 2.
-4. **Sam koniec (D8):** JDG/prawnik — wstrzymane (koszt/ryzyko). Email/płatności po walidacji.
+1. **Zweryfikuj live (jutro po 08:00):** czy System tworzy kupony — teraz ma kursy (AF fallback)
+   + sygnał (kalibracja OFF). Sprawdź `calibration_monitor.py` + liczbę nowych ACTIVE/settled.
+2. **Pasywne:** zbieraj świeże settled (wolne tempo OK, mecze nie co godzinę). Pilnuj budżetu AF (100/dzień).
+3. **Po walidacji (~+30 settled → ~88):** D2 auto-refit odpali sam; gdy krzywa zdrowa →
+   włącz `CALIBRATION_ENABLED=1`; D3 decyzja Cel B bug 2 (Groq selekcja).
+4. **Opcjonalnie:** Sofascore 403 stealth (tylko jeśli AF coverage za cienki na egzotyki).
+5. **Sam koniec (D8):** JDG/prawnik — wstrzymane (koszt/ryzyko). Email/płatności po walidacji.
 
 ## Moje uwagi
 - [x] **Kreator 1X kurs 0.93 (niemożliwy)** — NAPRAWIONE (06-20, `30ac7c66b`). `dc_odds` liczyło
