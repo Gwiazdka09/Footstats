@@ -157,10 +157,14 @@
 
 ## 💡 OPCJONALNE rozszerzenia
 
-- [ ] Rynki: dokładny wynik / multigoal (rozliczalne, dużo opcji)
-- [ ] Kartki/rożne — wymaga feedu zdarzeń (API-Football statistics) + settlement
-- [ ] BetBuilder: Bzzoiro odds dla compound + settlement combo "1 & Over 1.5"
-  (teraz kurs = fair 1/szansa; złożone typy nie przechodzą weryfikacji Bzzoiro)
+- [x] **Rynki: dokładny wynik / multigoal** (06-20, `549caa782`) — `markets.py` grupy
+  "Dokładny wynik" (top-10 z macierzy Poissona) + "Multigoal" (0-1..4-6); settlement
+  w `oblicz_tip_correct` ("Wynik h:a", "Multigoal lo-hi"). GUI renderuje generycznie. +9 testów.
+- [ ] **Kartki/rożne** — ZABLOKOWANE: brak danych. Wymaga feedu zdarzeń (API-Football
+  statistics) + osobnego modelu (Poisson jest dla goli) + budżet API. Nie do zbudowania bez feedu.
+- [x] **BetBuilder compound** — settlement combo "BB: 1 + Over 1.5" działa (`oblicz_tip_correct`),
+  a kursy są correlation-aware fair (`szansa_combo` liczy joint prob z macierzy, NIE naiwny iloczyn).
+  Pozostała luka (realne kursy bukmacherskie dla compound) ZABLOKOWANA — feed Bzzoiro ich nie dostarcza.
 
 ---
 
@@ -171,4 +175,6 @@
 3. **Wymaga Ciebie:** Email (Resend key) → JDG + prawnik → płatności
 
 ## Moje uwagi
-- widzałem że kreator kuponów podał kurs na 1x 0,93 nie może być takich kursów bo nie ma i jest to nie logiczne 
+- [x] **Kreator 1X kurs 0.93 (niemożliwy)** — NAPRAWIONE (06-20, `30ac7c66b`). `dc_odds` liczyło
+  `1/(1/a+1/b)` na kursach z marżą → double-count overround → <1.0 dla faworyta. Devig (zdejmij
+  marżę z trójki 1X2 nim policzysz joint prob) → kurs double-chance zawsze >1.0. +2 testy.
