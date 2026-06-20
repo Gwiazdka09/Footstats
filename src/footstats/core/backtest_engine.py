@@ -1,6 +1,12 @@
 """
 backtest_engine.py – Silnik backtestowania historycznych meczów z feedback do RAG.
 
+DEPRECATED: do walidacji modelu (Poisson/Dixon-Coles) preferuj walk-forward
+harness (`core/wf_harness.py` + `scripts/run_walkforward_prod.py`), który pisze
+do dedykowanej `data/walkforward.db`. Ten moduł to legacy AI-driven backtest
+(symulacje + RAG feedback) — pozostaje wyłącznie do manualnych eksperymentów
+i jest IZOLOWANY od prod (patrz _ensure_safe_backtest_db poniżej).
+
 Proces:
 1. Pobiera zakończone mecze z API-Football dla zadanego zakresu dat
 2. Dla każdego meczu uruchamia ai_analiza_pewniaczki() (symulacja historyczna)
@@ -11,6 +17,10 @@ Proces:
 Użycie:
     python -m footstats.core.backtest_engine --days 7
     python scripts/run_backtest.py --days 7
+
+UWAGA — izolacja od prod: zapis do DB wymaga jawnego opt-in przez zmienną
+środowiskową FOOTSTATS_TEST_DB. Bez niej, jeśli DATABASE_URL wskazuje na
+Postgres (Neon prod), zapis jest zablokowany (RuntimeError).
 """
 
 import json
@@ -231,6 +241,34 @@ def _match_tip_to_fixture(tip: dict, fixtures: list[dict]) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+#  Guard — izolacja od prod Neon
+# ---------------------------------------------------------------------------
+
+def _ensure_safe_backtest_db() -> None:
+    """
+    Blokuje zapis backtest_engine do produkcyjnej bazy Neon.
+
+    backtest_engine generuje symulowane/fake predykcje (BACKTEST) — nie mogą
+    one zanieczyścić tabel prod (predictions, ai_feedback). Wymagany jawny
+    opt-in: zmienna środowiskowa FOOTSTATS_TEST_DB (dedykowana baza testowa).
+    Bez niej, jeśli DATABASE_URL wskazuje na Postgres (Neon), zapis jest
+    zablokowany.
+
+    Raises:
+        RuntimeError: gdy DATABASE_URL wskazuje na prod bez FOOTSTATS_TEST_DB.
+    """
+    if os.environ.get("FOOTSTATS_TEST_DB", "").strip():
+        return  # jawny opt-in na dedykowaną bazę testową
+
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if database_url.startswith("postgres"):
+        raise RuntimeError(
+            "backtest_engine nie może pisać do prod — ustaw FOOTSTATS_TEST_DB "
+            "(dedykowana baza testowa), aby uruchomić zapis backtestu."
+        )
+
+
+# ---------------------------------------------------------------------------
 #  Pętla porównania + RAG feedback
 # ---------------------------------------------------------------------------
 
@@ -280,6 +318,8 @@ def _evaluate_tip(tip: dict, fixture: dict) -> dict:
 def _save_prediction_and_result(eval_result: dict, stawka: float) -> int | None:
     """Zapisuje predykcję + wynik do tabeli predictions. Zwraca ID."""
     from footstats.core.backtest import save_prediction, update_result
+
+    _ensure_safe_backtest_db()
 
     try:
         pred_id = save_prediction(
@@ -351,6 +391,8 @@ Odpowiedz wyłącznie tekstem wniosku, bez nagłówków.
 def _save_rag_feedback(pred_id: int, eval_result: dict, lesson: str):
     """Zapisuje lekcję do ai_feedback (kompatybilnie z post_match_analyzer)."""
     from footstats.core.backtest import _connect
+
+    _ensure_safe_backtest_db()
 
     prediction_details = json.dumps({
         "tip": eval_result["ai_tip"],
