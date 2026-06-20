@@ -3,6 +3,70 @@
 > Archiwum ukończonych prac (przeniesione z TODO.md przez `footstats-scribe`).
 > Aktywne zadania: `TODO.md`. Pełna historia commitów: `git log`.
 
+## 2026-06-20/21
+
+### Bugi / model (root-cause Cel B + kreator)
+- **Kalibracja per-wynik 1X2 — root cause Cel B** (`11cc57232`, 06-20): `calibrate_confidence`
+  zaprojektowane dla jednej liczby (confidence vs tip_correct), a stosowane per-wynik na
+  pw/pr/pp i bt/o25 w `quick_picks.py`. Na zdegenerowanej krzywej (n_train=41, stare odwrócone
+  predykcje) spłaszczało wszystkie wyniki do tej samej wartości → po renorm = uniform. Fix: nie
+  kalibruj per-wynik.
+- **Gate `CALIBRATION_ENABLED` OFF domyślnie** (`9faa72067`, 06-20): zdegenerowana
+  `calibration.json` psuła Kelly + value-bet (zaniżanie). Domyślnie identity, mechanizm krzywej
+  zachowany jako `_calibrate_raw` do re-fit (patrz D2 poniżej).
+- **Double-chance (1X/X2) devig** (`30ac7c66b`, 06-20): `dc_odds` liczyło `1/(1/a+1/b)` na
+  kursach z marżą → double-count overround → kurs <1.0 dla faworyta (kreator pokazał 1X 0.93).
+  Fix: zdejmij marżę z trójki 1X2 (devig) przed joint prob → kurs double-chance zawsze >1.0. +2 testy.
+- **Rynki: dokładny wynik + multigoal** (`549caa782`, 06-20): grupy "Dokładny wynik" (top-10 z
+  macierzy Poissona) + "Multigoal" (0-1..4-6) w `markets.py`; settlement w `oblicz_tip_correct`
+  ("Wynik h:a", "Multigoal lo-hi"). GUI renderuje generycznie. +9 testów.
+- **Sugerowany typ = argmax 1X2** (`5aa0b6f97`, 06-20): kreator nie zawsze pokazywał "1" jako
+  sugestię — teraz argmax modelu.
+
+### Dług techniczny #1-#5 (audyt całościowy 06-20)
+- **#1 Refactor `App.jsx`** (`2e112dc2c`, 06-20): 2144→267 linii. Wydzielone components/
+  (LoginView, DashboardHome, History, Leaderboard, Settings, AdminPanel, ui, Wizard/*) + lib/
+  (api, leagues, tips). Behavior-preserving, build PASS, Playwright OK.
+- **#2 Odporność scraperów — health-check** (`f3366933e`, 06-20): `check_and_alert_source_down`
+  — alert Telegram + log WARNING gdy źródło (Bzzoiro) zwróci 0/`_valid=False`; graceful, 1 alert/run.
+  Wpięte w `_pobierz_kandydatow`.
+- **#3 Rozbicie `daily_agent.py`** (`391e7b1b9`, 06-20): 1553→1046 linii; 9 spójnych faz
+  wyodrębnionych do `core/daily_phases.py` (injury/forma/betbuilder/kelly/groq-walidacja/
+  ensemble/final-enrich). Behavior-preserving, smoke parytet OK.
+- **#4 Podwójny backtest — izolacja + usunięcie** (`366b495d2`, `a7e845470`, 06-20/21):
+  `backtest_engine.py` najpierw izolowany od prod (guard test-DB, rzuca gdy prod Neon bez
+  opt-in), potem USUNIĘTY (moduł + `run_backtest.py` + 2 testy + baseline broad-except) —
+  walk-forward zastępuje. `core/backtest.py` (save_prediction) nietknięty.
+
+### Decyzje D1-D8 (06-20 zatwierdzone przez usera, zrealizowane w sesji)
+- **D1a — Whitelist +MŚ** (`e9ad8bf1f`, 06-20): "World Cup 2026"/"World Cup"/"Mundial" w
+  `LIGI_WHITELIST`; kwalifikacje MŚ nadal odrzucane (blacklist). +2 testy.
+- **D1b/D6 — Kursy z 2. źródła = ROZWIĄZANE.** Fallback chain: Bzzoiro → API-Football `/odds`
+  → Sofascore. Wpięte w `_wzbogac_o_kursy_fallback` (daily_phases).
+  - **AF `/odds`** (`131abc1bf`, 06-21) — PODSTAWOWY fallback, reuse `APISPORTS_KEY` + budżet,
+    zero anti-bot. Live smoke potwierdził (Ecuador-Curaçao: home 1.17/draw 7.4/away 13.0/
+    over25 1.6/btts 2.55). Koszt ~1 req/mecz/dzień.
+  - **Sofascore** (`6b3b2bfd1`, 06-20) — 2. fallback, `sofascore_odds.py`. Obecnie 403
+    anti-bot (dotyczy też form_scraper) — działa tylko gdy AF nie ma meczu I 403 ustąpi.
+  - +42 testy (AF parsing/fixture-match + Sofascore + fallback order).
+- **D2 — Auto-refit kalibracji co +30 settled** (`dd81d829b`, 06-21): `maybe_refit_calibration()`
+  w evening_agent po `update_pending`; gdy settled - n_train ≥ 30 → `fit_calibrator()` +
+  ostrzeżenie gdy krzywa płaska. Gate `CALIBRATION_ENABLED` zostaje u usera. Stan 06-20:
+  58 settled, n_train=41 (delta 17 < 30 → następny refit ~88 settled). +5 testów.
+- **D4 — backtest_engine USUNIĘTY** (`a7e845470`, 06-21) — patrz dług techniczny #4 wyżej.
+- **D5 — Scal taski 08:00** (06-21, Task Scheduler, NIE w git): `--faza draft` zapisuje
+  predykcje (`_auto_zapisz_backtest` bezwarunkowo) + kupony + system_paper + propozycje →
+  no-faza `FootStats-DailyAgent` redundantny (robił ściśle mniej, bez enrichu). WYŁĄCZONY
+  (Disabled w Task Scheduler). 08:00 = tylko Draft, 11:00 Final, 23:00 Evening.
+- **D7 — 15.7 weryfikacja czatu Telegram (nonce)** (`4cbd01d58`, 06-21): `POST /telegram/link/start`
+  generuje nonce (TTL 15min), webhook `/start <nonce>` wiąże zweryfikowany chat_id (przed
+  gate'em admina), jednorazowy. Migracja kolumn + 9 testów. `set_telegram_chat_id` deprecated
+  (fallback).
+- D3 (Cel B bug 2 — Groq selekcja) i D8 (JDG/prawnik) NIE zrealizowane — patrz `TODO.md`.
+
+### Suite
+- **1167 passed / 4 skipped** (było 1076 na starcie serii commitów tej sesji).
+
 ## 2026-06-19
 
 ### Cel A — walk-forward offline, walidacja 10 lig
