@@ -66,6 +66,59 @@ def fit_calibrator() -> None:
     _log.info("Calibrator fitted on %d samples → %s", len(predicted), _CALIBRATION_PATH)
 
 
+def _count_settled_predictions() -> int:
+    """Liczba rozliczonych predykcji (baza treningowa kalibracji)."""
+    with _db.connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM predictions WHERE tip_correct IS NOT NULL"
+        ).fetchone()
+    return int(row["n"]) if row else 0
+
+
+def _last_fit_n_train() -> int:
+    """n_train z ostatniego fitu (0 gdy brak pliku kalibracji)."""
+    if not _CALIBRATION_PATH.exists():
+        return 0
+    try:
+        return int(json.loads(_CALIBRATION_PATH.read_text(encoding="utf-8")).get("n_train", 0))
+    except (OSError, ValueError, KeyError, TypeError):
+        return 0
+
+
+def maybe_refit_calibration(threshold: int = 30) -> bool:
+    """Auto-refit kalibracji co +threshold rozliczonych predykcji (D2, decyzja usera 06-20).
+
+    Refit AKTUALIZUJE `calibration.json`, ale NIE włącza kalibracji w produkcji —
+    gate `CALIBRATION_ENABLED` zostaje pod kontrolą usera (włączy `=1` gdy krzywa zdrowa:
+    monotoniczna, dość próbek). Refit tylko utrzymuje krzywą świeżą na ten moment.
+    Graceful: błąd DB/sklearn → log WARNING, return False (nie blokuje pipeline).
+    """
+    try:
+        settled = _count_settled_predictions()
+        n_train = _last_fit_n_train()
+        if settled - n_train < threshold:
+            _log.debug("Auto-refit kalibracji pominięty: %d settled, n_train=%d (brakuje %d do +%d)",
+                       settled, n_train, threshold - (settled - n_train), threshold)
+            return False
+        _log.info("Auto-refit kalibracji: %d settled, było n_train=%d → refit (+%d)",
+                  settled, n_train, settled - n_train)
+        fit_calibrator()
+        # Diagnostyka zdrowia krzywej: płaska (rozpiętość y < 0.1) = wciąż zdegenerowana.
+        curve = _load_calibration_curve()
+        if curve:
+            ys = curve[1]
+            rozpietosc = max(ys) - min(ys)
+            if rozpietosc < 0.1:
+                _log.warning("Krzywa kalibracji wciąż PŁASKA (rozpiętość y=%.3f) — nie włączaj "
+                             "CALIBRATION_ENABLED, dane mogą być wciąż zaszumione/odwrócone", rozpietosc)
+            else:
+                _log.info("Krzywa kalibracji: rozpiętość y=%.3f (zdrowa jeśli monotoniczna)", rozpietosc)
+        return True
+    except (OSError, ValueError, RuntimeError, KeyError) as e:
+        _log.warning("Auto-refit kalibracji nieudany (graceful): %s", e)
+        return False
+
+
 def _load_calibration_curve() -> Optional[tuple[list[float], list[float]]]:
     if not _CALIBRATION_PATH.exists():
         return None

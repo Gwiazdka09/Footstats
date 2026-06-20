@@ -236,6 +236,14 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     except (OSError, ValueError, RuntimeError, ImportError) as e:
         console.print(f"[yellow]update_pending pominięty: {e}[/yellow]")
 
+    # D2 (06-20): auto-refit kalibracji co +30 settled predykcji (gate i tak pod kontrolą usera).
+    try:
+        from footstats.core.probability_calibrator import maybe_refit_calibration
+        if maybe_refit_calibration():
+            console.print("[dim]Kalibracja: auto-refit wykonany (calibration.json zaktualizowany)[/dim]")
+    except (OSError, ValueError, RuntimeError, ImportError) as e:
+        console.print(f"[yellow]auto-refit kalibracji pominięty: {e}[/yellow]")
+
     fixtures = _fetch_results_today(api_key, date_str)
     console.print(f"[dim]API-Football: {len(fixtures)} zakończonych meczów[/dim]")
 
