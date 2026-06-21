@@ -16,7 +16,7 @@
 | **Kalibracja** | 🟡 | Gate `CALIBRATION_ENABLED` OFF (identity) — zdegenerowana krzywa psuła Kelly/value-bet. Auto-refit co +30 settled wpięty (D2), czeka na próg ~88 settled |
 | **Kursy (odds)** | ✅ | Fallback chain Bzzoiro → API-Football `/odds` (live OK, zero anti-bot) → Sofascore (403, niski priorytet) |
 | **Data collection** | ✅ | System paper-trading (single-leg, bez Groq) autonomiczne od 06-16 |
-| **Tests** | ✅ | 1167 testów pass / 4 skip (telegram testy zmockowane — koniec spamu) |
+| **Tests** | ✅ | 1177 testów pass / 4 skip (telegram zmockowane; +cli/analyzer/daily_io/stealth 06-21) |
 | **Automation** | ✅ | Task Scheduler: draft 08:00 (zapisuje wszystko, enrich) + final 11:00 + evening 23:00. No-faza `FootStats-DailyAgent` WYŁĄCZONY (D5, redundantny) |
 | **API** | ✅ | FastAPI + Sentry + SlowAPI + CORS + Timeout |
 | **DB** | ✅ | Neon PG (prod), keepalives, pool maxconn=10, migracja 6 (telegram_chat_id) |

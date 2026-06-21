@@ -8,7 +8,8 @@
 > Ukończone: `git log` + `CHANGELOG.md`. Fazy DONE: 16-20, GUI/UX, SEO, RODO, multi-user (15.6),
 > audyt core (A1-A3), λ: kontuzje + xG+obrona, Cel A (walk-forward), Cel B bug 1,
 > Cel C (Dixon-Coles w prod), audyt settlement + audyt głęboki (06-18), dług techniczny #1-#5,
-> decyzje D1a/D1b/D2/D4/D5/D6/D7 (06-20/21 → `CHANGELOG.md`). Suite: **1167 testów pass / 4 skip**.
+> decyzje D1a/D1b/D2/D4/D5/D6/D7, TECHNICZNE/SECURITY (stealth, cli/analyzer decompose, daily_io)
+> (06-20/21 → `CHANGELOG.md`). Suite: **1177 testów pass / 4 skip**.
 
 ---
 
@@ -54,11 +55,14 @@
 
 ## 🟡 TECHNICZNE / SECURITY
 
-- [ ] **Sofascore 403 stealth** (OPCJONALNE) — `sofascore_odds.py` + form_scraper blokowane
-  anti-botem. Tylko jeśli AF `/odds` coverage okaże się za cienki na egzotyczne ligi/MŚ.
-- [ ] **Inne god-moduły** (niski priorytet): `cli.py` 1112 linii, `analyzer.py` 930 linii —
-  dekompozycja kiedyś (analogiczna do App.jsx/daily_agent).
-- [ ] daily_io — testy (czysta integracja DB, glue nad już-testowanym; niska wartość). Opcjonalne.
+- [x] **Sofascore stealth** (06-21, `a5af86ecf` + security fix `d085b5815`) — no-dep:
+  ukrycie `navigator.webdriver`/AutomationControlled. NIE gwarantuje obejścia 403 (AF /odds
+  pozostaje podstawą kursów). Sandbox Chromium przywrócony (review MEDIUM).
+- [x] **God-moduły rozbite** (06-21): `cli.py` 1112→773 (`210d9ec46`, → `cli_commands.py`),
+  `analyzer.py` 930→793 (`6fa110177`, czyste helpery → `analyzer_helpers.py`). Behavior-preserving.
+- [x] **daily_io — testy** (06-21, `3be80d1b9`) — +10 testów (`_zapisz_kupon_do_db`, mock prod).
+- [ ] Pre-existing bug (znaleziony przy refaktorze, NIE w scope): `cli.py::_analiza_kuponu`
+  woła nieistniejące `_bzz_parse_prob` → `NameError` przy trafieniu w ev_ml. Do naprawy osobno.
 
 ---
 
@@ -89,8 +93,10 @@
 > Dług techniczny #1-#5 i decyzje D1a/D1b/D2/D4/D5/D6/D7 ZROBIONE (06-20/21, → `CHANGELOG.md`).
 > D3/D8 aktywne/wstrzymane. Suite **1167 pass / 4 skip**. Kursy odblokowane (AF `/odds` fallback, live OK).
 
-1. **Zweryfikuj live (jutro po 08:00):** czy System tworzy kupony — teraz ma kursy (AF fallback)
-   + sygnał (kalibracja OFF). Sprawdź `calibration_monitor.py` + liczbę nowych ACTIVE/settled.
+1. **Weryfikacja (06-21, dry-run ZROBIONA):** pipeline z AF fallback → System BY utworzył
+   **15 kuponów** (było 0) na realnych danych (USL/MŚ, kursy AF, sygnał bo kalibracja OFF).
+   Cache AF pre-warmowany na 08:00. → Potwierdź realny run 08:00: `calibration_monitor.py` +
+   liczba nowych ACTIVE/settled (oczekiwane ~15 nowych ACTIVE).
 2. **Pasywne:** zbieraj świeże settled (wolne tempo OK, mecze nie co godzinę). Pilnuj budżetu AF (100/dzień).
 3. **Po walidacji (~88 settled):** D2 auto-refit odpali sam; gdy krzywa zdrowa →
    włącz `CALIBRATION_ENABLED=1`; D3 decyzja Cel B bug 2 (Groq selekcja).

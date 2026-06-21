@@ -64,8 +64,25 @@
   (fallback).
 - D3 (Cel B bug 2 — Groq selekcja) i D8 (JDG/prawnik) NIE zrealizowane — patrz `TODO.md`.
 
+### TECHNICZNE / SECURITY (06-21)
+- **Sofascore stealth** (`a5af86ecf`, security fix `d085b5815`): no-dep ukrycie
+  `navigator.webdriver`/AutomationControlled vs 403. `--no-sandbox` usunięty po review MEDIUM
+  (sandbox Chromium przy obcym JS) — stealth działa bez niego. NIE gwarantuje obejścia 403
+  (AF /odds podstawą kursów); pomaga też form_scraper.
+- **God-moduły rozbite (behavior-preserving):** `cli.py` 1112→773 (`210d9ec46`, spójne komendy/
+  helpery → `cli_commands.py`); `analyzer.py` 930→793 (`6fa110177`, 4 czyste funkcje
+  `_analizuj_forme`/`_wyciagnij_json`/`_deduplikuj_kupony`/`_wymusz_40pct` → `analyzer_helpers.py`).
+- **daily_io — testy** (`3be80d1b9`): +10 testów `_zapisz_kupon_do_db` (mock DB, zero prod).
+- Pre-existing bug udokumentowany (NIE naprawiony, poza scope): `cli.py::_analiza_kuponu` woła
+  nieistniejące `_bzz_parse_prob` → `NameError` przy trafieniu w ev_ml.
+
+### Weryfikacja unblocku (06-21, dry-run)
+- Pipeline z AF fallback kursów → **System BY utworzył 15 kuponów** (przed fixami: 0) na realnych
+  danych (USL/MŚ; kursy AF uzupełniły 7/18 brakujących; sygnał przywrócony bo kalibracja OFF).
+  Cache AF pre-warmowany na run 08:00. Budżet AF 11/100.
+
 ### Suite
-- **1167 passed / 4 skipped** (było 1076 na starcie serii commitów tej sesji).
+- **1177 passed / 4 skipped** (było 1076 na starcie serii commitów tej sesji).
 
 ## 2026-06-19
 
