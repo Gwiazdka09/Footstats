@@ -93,12 +93,16 @@
 > Dług techniczny #1-#5 i decyzje D1a/D1b/D2/D4/D5/D6/D7 ZROBIONE (06-20/21, → `CHANGELOG.md`).
 > D3/D8 aktywne/wstrzymane. Suite **1167 pass / 4 skip**. Kursy odblokowane (AF `/odds` fallback, live OK).
 
-1. **Weryfikacja (06-21, dry-run ZROBIONA):** pipeline z AF fallback → System BY utworzył
-   **15 kuponów** (było 0) na realnych danych (USL/MŚ, kursy AF, sygnał bo kalibracja OFF).
-   Cache AF pre-warmowany na 08:00. → Potwierdź realny run 08:00: `calibration_monitor.py` +
-   liczba nowych ACTIVE/settled (oczekiwane ~15 nowych ACTIVE).
-2. **Pasywne:** zbieraj świeże settled (wolne tempo OK, mecze nie co godzinę). Pilnuj budżetu AF (100/dzień).
-3. **Po walidacji (~88 settled):** D2 auto-refit odpali sam; gdy krzywa zdrowa →
+1. **✅ ZWERYFIKOWANE LIVE (06-21):** System tworzy kupony — **13 ACTIVE** dziś (było 0) + 7 nowych
+   predykcji. 🔴 ROOT przyczyny "0 kuponów": **agent auto-zapauzowany od 06-16** (stop-loss
+   tygodniowy 20%, drawdown z zepsutego pipeline'u Cel B) → `daily_agent` exit 0 CICHO, zero
+   pracy 5 dni. Naprawione: próg stop-loss konfigurowalny env `WEEKLY_DRAWDOWN_PCT` (paper-faza
+   =5.0 w .env), agent odpauzowany. ⚠️ **PRZYWRÓĆ `WEEKLY_DRAWDOWN_PCT=0.20` (lub usuń z .env) przed real-money/launch.**
+2. **🟡 LUKA OBSERWOWALNOŚCI (do zrobienia):** zarejestrowane taski Task Scheduler wołają python
+   BEZ przekierowania logów → ciche awarie (pauza 5 dni niewidoczna, exit 0). Dodać log file +
+   alert gdy run kończy się 0 kandydatów/kuponów. Bez tego kolejna cicha awaria znów zje dni.
+3. **Pasywne:** zbieraj świeże settled (wolne tempo OK). Pilnuj budżetu AF (100/dzień; dziś 14).
+4. **Po walidacji (~88 settled):** D2 auto-refit odpali sam; gdy krzywa zdrowa →
    włącz `CALIBRATION_ENABLED=1`; D3 decyzja Cel B bug 2 (Groq selekcja).
-4. **Opcjonalnie:** Sofascore 403 stealth (tylko jeśli AF coverage za cienki na egzotyki).
-5. **Sam koniec (D8):** JDG/prawnik — wstrzymane (koszt/ryzyko). Email/płatności po walidacji.
+5. **Opcjonalnie:** Sofascore 403 stealth (tylko jeśli AF coverage za cienki na egzotyki).
+6. **Sam koniec (D8):** JDG/prawnik — wstrzymane (koszt/ryzyko). Email/płatności po walidacji.
