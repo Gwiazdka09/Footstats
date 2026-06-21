@@ -96,11 +96,12 @@
 1. **✅ ZWERYFIKOWANE LIVE (06-21):** System tworzy kupony — **13 ACTIVE** dziś (było 0) + 7 nowych
    predykcji. 🔴 ROOT przyczyny "0 kuponów": **agent auto-zapauzowany od 06-16** (stop-loss
    tygodniowy 20%, drawdown z zepsutego pipeline'u Cel B) → `daily_agent` exit 0 CICHO, zero
-   pracy 5 dni. Naprawione: próg stop-loss konfigurowalny env `WEEKLY_DRAWDOWN_PCT` (paper-faza
-   =5.0 w .env), agent odpauzowany. ⚠️ **PRZYWRÓĆ `WEEKLY_DRAWDOWN_PCT=0.20` (lub usuń z .env) przed real-money/launch.**
-2. **🟡 LUKA OBSERWOWALNOŚCI (do zrobienia):** zarejestrowane taski Task Scheduler wołają python
-   BEZ przekierowania logów → ciche awarie (pauza 5 dni niewidoczna, exit 0). Dodać log file +
-   alert gdy run kończy się 0 kandydatów/kuponów. Bez tego kolejna cicha awaria znów zje dni.
+   pracy 5 dni. Naprawione: stop-loss auto-pauza WYŁĄCZONA dla fazy paper (`WEEKLY_DRAWDOWN_PCT`
+   wysokie w .env) — bankroll to symboliczna liczba, nie realne pieniądze, więc auto-pauza =
+   zbędna friction. (Przy ew. real-money: obniż próg w .env.)
+2. **✅ OBSERWOWALNOŚĆ NAPRAWIONA (06-21):** taski Scheduler logują do `data/logs/sched_*.log`
+   (pełny stdout/stderr) + `daily_agent` alarmuje (Telegram + log) gdy run kończy się 0
+   kuponów/kandydatów. Koniec cichych awarii.
 3. **Pasywne:** zbieraj świeże settled (wolne tempo OK). Pilnuj budżetu AF (100/dzień; dziś 14).
 4. **Po walidacji (~88 settled):** D2 auto-refit odpali sam; gdy krzywa zdrowa →
    włącz `CALIBRATION_ENABLED=1`; D3 decyzja Cel B bug 2 (Groq selekcja).
