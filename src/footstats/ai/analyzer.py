@@ -100,54 +100,6 @@ def _get_liga_statystyki_blok() -> str:
         return ""
 
 
-def _analizuj_forme(mecze: list) -> dict:
-    """Analyze last 5 matches: wins, losses, goals for/against, trend.
-
-    Args:
-        mecze: List of match dicts with keys: result (1/0/X), scored, conceded
-
-    Returns:
-        Dict with: wins, losses, draws, gf_avg, ga_avg, trend
-    """
-    if not mecze:
-        return {
-            "wins": 0, "losses": 0, "draws": 0,
-            "gf_avg": 0.0, "ga_avg": 0.0,
-            "trend": "unknown"
-        }
-
-    wins = sum(1 for m in mecze if m.get("result") == "1")
-    losses = sum(1 for m in mecze if m.get("result") == "0")
-    draws = sum(1 for m in mecze if m.get("result") == "X")
-
-    gf_sum = sum(m.get("scored", 0) for m in mecze)
-    ga_sum = sum(m.get("conceded", 0) for m in mecze)
-    gf_avg = round(gf_sum / len(mecze), 2)
-    ga_avg = round(ga_sum / len(mecze), 2)
-
-    # Trend: compare first 2 matches vs last 2 matches
-    if len(mecze) >= 2:
-        early_wins = sum(1 for m in mecze[:2] if m.get("result") == "1")
-        recent_wins = sum(1 for m in mecze[-2:] if m.get("result") == "1")
-        if recent_wins > early_wins:
-            trend = "strong_up" if recent_wins == 2 else "up"
-        elif recent_wins < early_wins:
-            trend = "strong_down" if recent_wins == 0 else "down"
-        else:
-            trend = "stable"
-    else:
-        trend = "unknown"
-
-    return {
-        "wins": wins,
-        "losses": losses,
-        "draws": draws,
-        "gf_avg": gf_avg,
-        "ga_avg": ga_avg,
-        "trend": trend
-    }
-
-
 def _kontynuuj_uciety_json(client, messages: list, partial: str, max_tokens: int = 700) -> str:
     """Wysyła ucięty JSON jako assistant turn i prosi o dokończenie."""
     cont_messages = messages + [
@@ -248,22 +200,7 @@ def _pobierz_podobne_mecze(home: str, away: str, n: int = 3) -> str:
 # ── Pomocnicze ───────────────────────────────────────────────────────
 
 # kurs_do_prob i value_bet → footstats.ai.scoring
-
-
-def _wyciagnij_json(tekst: str) -> dict:
-    """Wyciąga JSON z odpowiedzi AI (nawet jeśli AI doda tekst dookoła)."""
-    # Szukaj bloku JSON
-    match = re.search(r"\{[\s\S]*\}", tekst)
-    if match:
-        try:
-            return json.loads(match.group())
-        except json.JSONDecodeError:
-            pass
-    # Fallback – spróbuj cały tekst
-    try:
-        return json.loads(tekst)
-    except json.JSONDecodeError:
-        return {"typ": "brak", "pewnosc": 0, "uzasadnienie": tekst[:300], "value_bet": False}
+# _analizuj_forme i _wyciagnij_json → footstats.ai.analyzer_helpers
 
 
 # ── Główna analiza ───────────────────────────────────────────────────
@@ -664,6 +601,7 @@ def _buduj_opis_meczu(w: dict) -> str:
 
 from footstats.ai.analyzer_helpers import (
     _wzbogac_forme, _sygnaly_summary, _auto_zapisz_backtest, _buduj_cel_kuponow,
+    _analizuj_forme, _wyciagnij_json, _deduplikuj_kupony, _wymusz_40pct,
 )
 
 def ai_analiza_pewniaczki(
@@ -769,82 +707,7 @@ def ai_analiza_pewniaczki(
     return dane
 
 
-def _deduplikuj_kupony(dane: dict, min_wspolna_pewnosc: int = 75) -> None:
-    """
-    Usuwa z kupon_b nogi współdzielone z kupon_a gdy pewnosc_pct < min_wspolna_pewnosc.
-    Nogi o wysokiej pewności (kotwice >=75%) mogą być w obu kuponach — to legalna dywersyfikacja.
-    Przelicza kurs_laczny i szansa_wygranej_pct kupon_b po przycinaniu.
-    """
-    import math
-
-    a_zdarzenia = (dane.get("kupon_a") or {}).get("zdarzenia", [])
-    b_zdarzenia = (dane.get("kupon_b") or {}).get("zdarzenia", [])
-    if not a_zdarzenia or not b_zdarzenia:
-        return
-
-    # Klucz identyfikujący nogę: mecz + typ (lowercase, stripped)
-    a_klucze_slabe = {
-        (z.get("mecz", "").lower().strip(), z.get("typ", "").lower().strip())
-        for z in a_zdarzenia
-        if z.get("pewnosc_pct", 0) < min_wspolna_pewnosc
-    }
-
-    nowe_b = [
-        z for z in b_zdarzenia
-        if (z.get("mecz", "").lower().strip(), z.get("typ", "").lower().strip())
-        not in a_klucze_slabe
-    ]
-
-    if len(nowe_b) == len(b_zdarzenia):
-        return  # nic nie usunięto
-
-    kupon_b = dane["kupon_b"]
-    kupon_b["zdarzenia"] = nowe_b
-    if nowe_b:
-        kurs_l = math.prod(float(z.get("kurs", 1.0)) for z in nowe_b)
-        szansa = math.prod(z.get("pewnosc_pct", 50) / 100.0 for z in nowe_b) * 100
-    else:
-        kurs_l, szansa = 1.0, 0.0
-    kupon_b["kurs_laczny"] = round(kurs_l, 2)
-    kupon_b["szansa_wygranej_pct"] = round(szansa, 1)
-    kupon_b["_deduped"] = True
-
-
-def _wymusz_40pct(dane: dict, min_szansa: float = 40.0) -> None:
-    """
-    Walidacja po stronie Python: jeśli kupon ma szansa_wygranej_pct < 40,
-    usuwa nogi od najniższej pewności dopóki iloczyn >= 40% lub zostanie 1 noga.
-    Aktualizuje kurs_laczny, szansa_wygranej_pct, wygrana_netto w miejscu.
-    """
-    import math
-
-    for kupon_key in ("kupon_a", "kupon_b"):
-        kupon = dane.get(kupon_key, {})
-        zdarzenia = kupon.get("zdarzenia", [])
-        if not zdarzenia:
-            continue
-
-        def _szansa(legs):
-            probs = [z.get("pewnosc_pct", 50) / 100.0 for z in legs]
-            return math.prod(probs) * 100
-
-        # Przycinaj od najsłabszej nogi dopóki szansa < min_szansa i len > 1
-        while len(zdarzenia) > 1 and _szansa(zdarzenia) < min_szansa:
-            # usuń nogę z najniższą pewnością
-            zdarzenia.sort(key=lambda z: z.get("pewnosc_pct", 50))
-            zdarzenia.pop(0)
-
-        # Przelicz kurs i szansę
-        kurs_l = 1.0
-        for z in zdarzenia:
-            kurs_l *= z.get("kurs", 1.0)
-
-        szansa = _szansa(zdarzenia)
-        kupon["zdarzenia"]           = zdarzenia
-        kupon["kurs_laczny"]         = round(kurs_l, 2)
-        kupon["szansa_wygranej_pct"] = round(szansa, 1)
-        # wygrana_netto liczona ze stawki 10 PLN domyślnie (zaktualizuje się przy wyświetlaniu)
-        kupon["_trimmed"] = True
+# _deduplikuj_kupony i _wymusz_40pct → footstats.ai.analyzer_helpers
 
 
 def ai_sprawdz_kupon(picks_text: str, stawka: float = 5.0, wzorzec_ml: list = None) -> str:
