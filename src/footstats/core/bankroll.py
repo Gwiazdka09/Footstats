@@ -4,6 +4,7 @@ Obsługuje trwałość salda w SQLite oraz logikę reinvestmentu.
 """
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -77,7 +78,11 @@ def process_win(payout: float, description: str = "", user_id: int = 1) -> float
 # ── P7.8: Stop-Loss & Bankroll Protection ────────────────────────────────────
 
 DAILY_MAX_LOSS_PCT = 0.10   # 10% bankrolla dziennie
-WEEKLY_DRAWDOWN_ALERT_PCT = 0.20  # 20% w tygodniu → alert
+# 20% w tygodniu → alert/auto-pause. Konfigurowalne env `WEEKLY_DRAWDOWN_PCT`.
+# 06-21: faza PAPER-validation — stop-loss był blokerem (drawdown z zepsutego pipeline'u
+# Cel B, już naprawione) wstrzymywał CAŁY pipeline od 06-16. Paper = darmowe → próg
+# podniesiony w .env (WEEKLY_DRAWDOWN_PCT) by zbierać dane. PRZYWRÓĆ 0.20 przed real-money/launch.
+WEEKLY_DRAWDOWN_ALERT_PCT = float(os.getenv("WEEKLY_DRAWDOWN_PCT", "0.20") or "0.20")
 STREAK_THRESHOLD = 3        # po 3 przegranych z rzędu → reduce stakes
 STREAK_MULTIPLIER = 0.50    # 50% stawek po streak
 
