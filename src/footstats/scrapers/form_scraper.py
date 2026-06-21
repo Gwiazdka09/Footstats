@@ -94,17 +94,32 @@ def _sofa_fetch(page, path: str) -> Optional[dict]:
 
 
 def _sofa_session():
-    """Tworzy sesję Playwright do wywołań SofaScore API."""
+    """Tworzy sesję Playwright do wywołań SofaScore API.
+
+    Stealth (best-effort, bez dodatkowych zależności): ukrywa markery automatyzacji
+    (navigator.webdriver, AutomationControlled) by ograniczyć 403 anti-bot SofaScore.
+    NIE gwarantuje obejścia challenge — AF /odds jest podstawowym źródłem kursów.
+    """
     if not PLAYWRIGHT_OK:
         return None
     p = sync_playwright().start()
-    browser = p.chromium.launch(headless=True)
+    browser = p.chromium.launch(
+        headless=True,
+        args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+    )
     ctx = browser.new_context(
         user_agent=_UA,
+        locale="en-US",
         extra_http_headers={
             "Accept-Language": "en-US,en;q=0.9",
             "Referer": "https://www.sofascore.com/",
         },
+    )
+    # Ukryj navigator.webdriver i typowe markery headless przed JS strony.
+    ctx.add_init_script(
+        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+        "Object.defineProperty(navigator, 'languages', {get: () => ['en-US','en']});"
+        "Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});"
     )
     page = ctx.new_page()
     return p, browser, page
