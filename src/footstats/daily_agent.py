@@ -773,6 +773,7 @@ def main():
 
     _sep("KROK 1 — Bzzoiro ML")
     wyniki, indeks = _pobierz_kandydatow(dni=args.dni)
+    n_raw_kandydatow = len(wyniki)
 
     # Checkpoint: save predictions batch for recovery
     batch_id = f"daily_{datetime.now():%Y%m%d_%H%M}"
@@ -909,12 +910,13 @@ def main():
             console.print(f"[yellow]Fallback kursów SofaScore pominięty: {e}[/yellow]")
 
     # FAZA 19: paper-trading bota — single-leg kupony System (per-tip ROI/win rate)
+    n_system_coupons = 0
     if getattr(args, "system_paper", False) and not args.dry_run:
         _sep("KROK 2b — System paper-trading (single-leg)")
         try:
             from footstats.core.system_paper import build_single_leg_coupons
-            n = build_single_leg_coupons(wyniki)
-            console.print(f"[cyan]System: utworzono {n} single-leg kuponów na koncie System[/cyan]")
+            n_system_coupons = build_single_leg_coupons(wyniki)
+            console.print(f"[cyan]System: utworzono {n_system_coupons} single-leg kuponów na koncie System[/cyan]")
         except (OSError, ValueError, KeyError, RuntimeError) as e:
             console.print(f"[yellow]System paper-trading pominięty: {e}[/yellow]")
 
@@ -1045,6 +1047,28 @@ def main():
 
     # Cleanup old checkpoints (>7 days)
     cleanup_old_checkpoints(days=7)
+
+    # Obserwowalność (06-21): podsumowanie runu do logu + ALERT gdy "cicha awaria"
+    # (run się wykonał ale nic nie zrobił — np. pauza, 0 kandydatów, 0 kuponów).
+    # Bez tego pauza stop-loss blokowała pipeline 5 dni niezauważona (exit 0, brak logów).
+    faza_label = args.faza or "(no-faza)"
+    podsumowanie = (f"daily_agent {faza_label}: kandydaci={n_raw_kandydatow}, "
+                    f"po filtrach={len(wyniki)}, System kupony={n_system_coupons}")
+    log.info("RUN SUMMARY — %s", podsumowanie)
+    console.print(f"[dim]{podsumowanie}[/dim]")
+    if not args.dry_run:
+        anomalia = None
+        if n_raw_kandydatow == 0:
+            anomalia = "0 kandydatów z Bzzoiro (źródło puste/niedostępne?)"
+        elif getattr(args, "system_paper", False) and n_system_coupons == 0:
+            anomalia = "0 kuponów System mimo --system-paper (kursy? filtry? pauza?)"
+        if anomalia:
+            log.warning("ALERT cicha awaria: %s | %s", anomalia, podsumowanie)
+            try:
+                from footstats.utils.telegram_notify import send_alert
+                send_alert("FootStats — run bez efektu", f"{faza_label}: {anomalia}\n{podsumowanie}")
+            except (ImportError, OSError, RuntimeError):
+                pass
 
     console.print()
     console.print("[bold green]Gotowe.[/bold green] Powodzenia!\n")
