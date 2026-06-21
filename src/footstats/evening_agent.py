@@ -247,7 +247,9 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     fixtures = _fetch_results_today(api_key, date_str)
     console.print(f"[dim]API-Football: {len(fixtures)} zakończonych meczów[/dim]")
 
-    active_coupons = get_active_coupons()
+    # WSZYSCY userzy (System 408 + admin 2 + realni). Wcześniej default user_id=1 → 0 kuponów
+    # (nikt nie ma user_id=1) → evening rozliczał 0. Stale DRAFT VOIDuje settle_active_coupons (daily_agent).
+    active_coupons = get_active_coupons(user_id=None)
     console.print(f"[dim]Aktywne kupony do weryfikacji: {len(active_coupons)}[/dim]")
 
     summary: dict = {"checked": 0, "won": 0, "lost": 0, "partial": 0, "active": 0}

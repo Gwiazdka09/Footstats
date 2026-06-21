@@ -114,6 +114,16 @@ def test_lost_coupon_not_in_active():
     assert all(c["id"] != cid for c in active)
 
 
+def test_get_active_coupons_user_none_zwraca_wszystkich():
+    # Regresja 06-21: evening_agent rozliczał 0 bo get_active_coupons() default user_id=1,
+    # a kupony to user 408/2. user_id=None musi zwrócić kupony WSZYSTKICH userów.
+    cid = save_coupon("final", "A", [], stake_pln=10.0, user_id=408)
+    # filtr po user_id=1 NIE widzi kuponu usera 408
+    assert all(c["id"] != cid for c in get_active_coupons(user_id=1))
+    # user_id=None widzi (do rozliczeń evening)
+    assert any(c["id"] == cid for c in get_active_coupons(user_id=None))
+
+
 def test_won_coupon_roi_calculated():
     cid = save_coupon("final", "A", [], stake_pln=10.0)
     update_coupon_status(cid, "WON", payout_pln=110.0)

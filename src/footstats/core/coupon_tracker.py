@@ -118,11 +118,20 @@ def update_coupon_status(
     _exec(_fn)
 
 
-def get_active_coupons(user_id: int = 1) -> list:
-    """Zwraca kupony DRAFT/ACTIVE dla danego użytkownika, od najnowszych."""
+def get_active_coupons(user_id: "int | None" = 1) -> list:
+    """Zwraca kupony DRAFT/ACTIVE od najnowszych.
+
+    user_id=None → WSZYSCY użytkownicy (do rozliczeń evening_agent — kupony System=408,
+    admin=2 i realnych userów; wcześniej default=1 zwracał 0 bo nikt nie miał user_id=1).
+    """
     init_coupon_tables()
 
     def _fn(conn):
+        if user_id is None:
+            return conn.execute(
+                "SELECT * FROM coupons WHERE status IN (?, ?) ORDER BY created_at DESC",
+                (*ACTIVE_STATUSES,),
+            ).fetchall()
         return conn.execute(
             "SELECT * FROM coupons WHERE status IN (?, ?) AND user_id = ? ORDER BY created_at DESC",
             (*ACTIVE_STATUSES, user_id),
