@@ -218,6 +218,24 @@ def settle_active_coupons(
     if verbose and stale_voided:
         print(f"[CouponSettlement] Stale-DRAFT → VOID: {stale_voided}")
 
+    # Cleanup stale-ACTIVE: kupony ACTIVE które po VOID_AFTER_DAYS wciąż mają nierozliczalne
+    # nogi (mecze spoza coverage API-Football — ligi/towarzyskie poza modelem, np. #175 z
+    # Veikkausliiga + Uruguay-Cabo Verde) → nigdy się nie rozliczą, wiszą ACTIVE w nieskończoność.
+    # Po 10 dniach mecze dawno rozegrane → VOID (nie liczą się do accuracy/M1). Wcześniej VOID
+    # był TYLKO dla DRAFT (gap settlement).
+    stale_active = 0
+    if not dry_run:
+        with _connect() as conn:
+            cur = conn.execute(
+                """UPDATE coupons SET status='VOID'
+                   WHERE status='ACTIVE' AND substr(match_date_first,1,10) < ?""",
+                (void_cutoff,),
+            )
+            stale_active = cur.rowcount or 0
+    if verbose and stale_active:
+        print(f"[CouponSettlement] Stale-ACTIVE → VOID: {stale_active}")
+    stale_voided += stale_active
+
     with _connect() as conn:
         rows = conn.execute(
             """SELECT id, legs_json, total_odds, stake_pln, match_date_first

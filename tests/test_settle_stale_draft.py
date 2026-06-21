@@ -104,6 +104,25 @@ def test_stale_draft_voided_recent_and_future_kept(wired):
     assert stats["voided"] == 1
 
 
+def test_stale_active_voided_po_oknie(wired):
+    # Regresja #175: ACTIVE z nierozliczalną nogą (mecz spoza coverage) wisiał wiecznie —
+    # wcześniej VOID był tylko dla DRAFT. Stary ACTIVE (>10d) musi pójść do VOID.
+    from footstats.core.coupon_settlement import settle_active_coupons
+    old = (datetime.now().date() - timedelta(days=30)).isoformat()
+    conn = sqlite3.connect(wired)
+    conn.execute(
+        "INSERT INTO coupons (status, match_date_first, legs_json) VALUES ('ACTIVE', ?, '[]')",
+        (old,),
+    )
+    conn.commit(); conn.close()
+
+    stats = settle_active_coupons(days_back=3, dry_run=False, verbose=False)
+
+    st = _statuses(wired)
+    assert st[4] == "VOID"          # stary ACTIVE poza oknem 10d → VOID (stale-cleanup)
+    assert stats["voided"] >= 2     # stale DRAFT (#1) + stale ACTIVE (#4)
+
+
 def test_dry_run_nie_zmienia_statusow(wired):
     from footstats.core.coupon_settlement import settle_active_coupons
 
