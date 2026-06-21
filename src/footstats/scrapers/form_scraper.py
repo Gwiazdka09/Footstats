@@ -105,7 +105,7 @@ def _sofa_session():
     p = sync_playwright().start()
     browser = p.chromium.launch(
         headless=True,
-        args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+        args=["--disable-blink-features=AutomationControlled"],
     )
     ctx = browser.new_context(
         user_agent=_UA,
