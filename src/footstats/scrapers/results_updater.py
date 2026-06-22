@@ -167,6 +167,8 @@ def _fixture_to_result(fixture: dict, api_key: str = None) -> tuple[str, str, st
     """
     Zwraca (home_name, away_name, wynik, stats) np. ("PSG", "Lyon", "2-1", {"xG": ...}).
     Zwraca None jeśli mecz nie jest ukończony.
+    Gdy fixture ma dane półczasu (score.halftime) — dołącza sufiks ';HT:hh-ha'
+    wymagany przez rynki half-time (np. "[wynik] & gol w każdej połowie").
     """
     status = fixture.get("fixture", {}).get("status", {}).get("short", "")
     if status not in ("FT", "AET", "PEN"):
@@ -179,14 +181,20 @@ def _fixture_to_result(fixture: dict, api_key: str = None) -> tuple[str, str, st
     teams  = fixture.get("teams", {})
     home   = teams.get("home", {}).get("name", "")
     away   = teams.get("away", {}).get("name", "")
-    
+
+    wynik = f"{home_g}-{away_g}"
+    halftime = fixture.get("score", {}).get("halftime", {})
+    ht_h, ht_a = halftime.get("home"), halftime.get("away")
+    if ht_h is not None and ht_a is not None:
+        wynik += f";HT:{ht_h}-{ht_a}"
+
     # Pobierz statystyki jeśli mamy klucz
     match_id = fixture.get("fixture", {}).get("id")
     stats = {}
     if api_key and match_id:
         stats = _fetch_match_stats(api_key, match_id)
 
-    return home, away, f"{home_g}-{away_g}", stats
+    return home, away, wynik, stats
 
 
 def _fetch_match_stats(api_key: str, fixture_id: int) -> dict:

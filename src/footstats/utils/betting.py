@@ -4,6 +4,9 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
     """
     Oblicza czy typ był trafiony na podstawie wyniku meczu.
     Obsługuje formaty: str ("2-1"), tuple (2, 1) oraz list [2, 1].
+    Opcjonalny sufiks wyniku połowy: "2-1;HT:1-0" — wymagany tylko przez
+    rynki half-time (np. GG2H); pozostałe rynki parsują samo FT i działają
+    identycznie z sufiksem lub bez niego.
     """
     if not actual_result:
         return None
@@ -15,10 +18,13 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
         except (IndexError, TypeError):
             return None
 
+    actual_result = str(actual_result)
     tip  = (ai_tip or "").strip().upper()
 
     # BetBuilder combo: "BB: 1 + Over 1.5" = KONIUNKCJA członów (wszystkie muszą trafić).
     # Bez tego oceniany byl tylko pierwszy pasujacy czlon -> przegrane combo jako WON.
+    # Rekursja dostaje ORYGINALNY actual_result (z sufiksem HT) — człony typu GG2H
+    # potrzebują go niezależnie od reszty kombinacji.
     if tip.startswith("BB:") or tip.startswith("BB "):
         czlony = [c.strip() for c in tip[3:].split("+") if c.strip()]
         if not czlony:
@@ -27,6 +33,18 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
         if any(w is None for w in wyniki):
             return None          # któryś człon nierozliczalny → całość nieznana
         return 1 if all(w == 1 for w in wyniki) else 0
+
+    # Wydziel sufiks HT (";HT:hh-ha") — reszta (FT) parsowana jak dotychczas.
+    ht_home = ht_away = None
+    if ";HT:" in actual_result:
+        actual_result, ht_part = actual_result.split(";HT:", 1)
+        ht_clean = ht_part.strip().replace("–", "-")
+        ht_parts = ht_clean.split("-")
+        try:
+            ht_home = int(ht_parts[0].strip())
+            ht_away = int(ht_parts[1].strip())
+        except (ValueError, IndexError):
+            ht_home = ht_away = None
 
     # Upewniamy się, że res jest stringiem przed strip()
     res = str(actual_result).strip()
@@ -63,6 +81,20 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
     # Sprawdź typ
     if tip in ("1", "X", "2"):
         return 1 if match_result == tip else 0
+
+    # "[wynik] & gol w każdej połowie" (GG2H) — wynik 1X2 ORAZ ≥1 gol w 1. poł.
+    # ORAZ ≥1 gol w 2. poł. (semantyka Superbet). Wymaga danych HT — brak → None.
+    gg2h = re.match(r"^(1|X|2)\s*&\s*GG2H$", tip)
+    if gg2h:
+        if match_result is None or ht_home is None or ht_away is None:
+            return None
+        if home_g is None or away_g is None:
+            return None
+        if match_result != gg2h.group(1):
+            return 0
+        ht_total = ht_home + ht_away
+        sh_total = (home_g + away_g) - ht_total
+        return 1 if (ht_total >= 1 and sh_total >= 1) else 0
 
     if tip == "1X":
         return 1 if match_result in ("1", "X") else 0

@@ -17,11 +17,11 @@ def test_katalog_ma_grupy_i_rynki():
 
 
 def test_wszystkie_tipy_rozliczalne():
-    """Każdy tip z katalogu daje 0/1 (nie None) dla realnego wyniku."""
+    """Każdy tip z katalogu daje 0/1 (nie None) dla realnego wyniku (FT + HT)."""
     cat = build_market_catalog(2.0, 1.0)
     for g in cat:
         for r in g["rynki"]:
-            for score in ("3-1", "0-0", "1-1", "2-2"):
+            for score in ("3-1;HT:2-0", "0-0;HT:0-0", "1-1;HT:1-0", "2-2;HT:1-1"):
                 wynik = oblicz_tip_correct(r["tip"], score)
                 assert wynik in (0, 1), f"{r['rynek']} ({r['tip']}) @ {score} = {wynik}"
 
@@ -64,3 +64,30 @@ def test_silny_faworyt_wyzsza_szansa_1():
     p1 = next(r["szansa"] for r in wynik["rynki"] if r["tip"] == "1")
     p2 = next(r["szansa"] for r in wynik["rynki"] if r["tip"] == "2")
     assert p1 > p2
+
+
+# ── "Mecz & gol w każdej połowie" (Superbet) — GG2H ───────────────────────────
+
+def test_gg2h_grupa_w_katalogu():
+    cat = build_market_catalog(1.6, 1.2)
+    grupa = next(g for g in cat if g["grupa"] == "Mecz & gol w każdej połowie")
+    tipy = {r["tip"] for r in grupa["rynki"]}
+    assert tipy == {"1 & GG2H", "X & GG2H", "2 & GG2H"}
+
+
+def test_gg2h_kursy_powyzej_1():
+    cat = build_market_catalog(1.6, 1.2)
+    grupa = next(g for g in cat if g["grupa"] == "Mecz & gol w każdej połowie")
+    for r in grupa["rynki"]:
+        assert r["kurs"] > 1.0
+        assert 0 < r["szansa"] < 100
+
+
+def test_gg2h_prob_mniejsza_niz_sam_wynik_1x2():
+    """P(wynik & GG2H) <= P(wynik) — koniunkcja zdarzeń."""
+    cat = build_market_catalog(1.6, 1.2)
+    wynik = next(g for g in cat if g["grupa"] == "Wynik meczu")
+    gg2h = next(g for g in cat if g["grupa"] == "Mecz & gol w każdej połowie")
+    p1 = next(r["szansa"] for r in wynik["rynki"] if r["tip"] == "1")
+    p1_gg2h = next(r["szansa"] for r in gg2h["rynki"] if r["tip"] == "1 & GG2H")
+    assert p1_gg2h <= p1

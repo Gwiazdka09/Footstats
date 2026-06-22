@@ -10,6 +10,8 @@ Rynki zawodników/kartek/rożnych NIE są tu — brak danych do rozliczenia.
 """
 from __future__ import annotations
 
+import math
+
 from footstats.core.bet_builder import probability_matrix
 
 # Mapowanie rynku → klucz kursu Bzzoiro (gdy bukmacher go ma)
@@ -70,10 +72,10 @@ def build_market_catalog(lh: float, la: float, bzz_odds: dict | None = None) -> 
         entry("12", "12", _suma(mat, lambda h, a: h != a)),
     ]})
 
-    gole = []
-    for linia in (0.5, 1.5, 2.5, 3.5, 4.5):
-        gole.append(entry(f"Over {linia}", f"Over {linia}", _suma(mat, lambda h, a, L=linia: h + a > L)))
-        gole.append(entry(f"Under {linia}", f"Under {linia}", _suma(mat, lambda h, a, L=linia: h + a < L)))
+    # Czytelność (06-22): wszystkie Over na górze (rosnąco), potem wszystkie Under — nie przeplatane.
+    linie_gole = (0.5, 1.5, 2.5, 3.5, 4.5)
+    gole = [entry(f"Over {L}", f"Over {L}", _suma(mat, lambda h, a, L=L: h + a > L)) for L in linie_gole]
+    gole += [entry(f"Under {L}", f"Under {L}", _suma(mat, lambda h, a, L=L: h + a < L)) for L in linie_gole]
     grupy.append({"grupa": "Liczba goli", "rynki": gole})
 
     grupy.append({"grupa": "Gole gospodarza", "rynki": [
@@ -114,6 +116,24 @@ def build_market_catalog(lh: float, la: float, bzz_odds: dict | None = None) -> 
             _suma(mat, lambda h, a, L=lo, H=hi: L <= h + a <= H),
         ))
     grupy.append({"grupa": "Multigoal", "rynki": multigoal})
+
+    # "Mecz & gol w każdej połowie" (jak Superbet): wybrany wynik 1X2 ORAZ ≥1 gol
+    # (łącznie, dowolna drużyna) w 1. połowie ORAZ ≥1 gol w 2. połowie.
+    # Model połów: μ = (lh+la)/2 — oczekiwana łączna liczba goli na połowę (Poisson
+    # zakłada równy podział tempa strzeleckiego między połowy). P(gol w połowie)
+    # = 1 - exp(-μ). Połowy przyjęto jako iid i niezależne od końcowego wyniku
+    # (aproksymacja — uproszczenie, nie pełny model bivariate-Poisson per połowa).
+    mu_polowa = (lh + la) / 2.0
+    p_gol_w_polowie = 1.0 - math.exp(-mu_polowa)
+    p_gg2h = p_gol_w_polowie ** 2
+    p1 = _suma(mat, lambda h, a: h > a)
+    px = _suma(mat, lambda h, a: h == a)
+    p2 = _suma(mat, lambda h, a: a > h)
+    grupy.append({"grupa": "Mecz & gol w każdej połowie", "rynki": [
+        entry("1 & gol w każdej poł", "1 & GG2H", p1 * p_gg2h),
+        entry("X & gol w każdej poł", "X & GG2H", px * p_gg2h),
+        entry("2 & gol w każdej poł", "2 & GG2H", p2 * p_gg2h),
+    ]})
 
     # Dokładny wynik — top-10 najbardziej prawdopodobnych wyników (rozliczane "Wynik h:a").
     n = len(mat)

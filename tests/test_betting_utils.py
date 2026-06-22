@@ -187,3 +187,47 @@ class TestObliczTipCorrect:
     def test_bb_combo_z_nazwanym_handicapem(self):
         assert oblicz_tip_correct("BB: 1 + Handicap -1 Gospodarz", "3-0") == 1
         assert oblicz_tip_correct("BB: 1 + Handicap -1 Gospodarz", "2-1") == 0  # handicap nietraf
+
+    # ── HT suffix — backward compat: FT-rynki rozliczają się identycznie ──────
+
+    def test_ht_suffix_nie_psuje_1x2(self):
+        assert oblicz_tip_correct("1", "2-1;HT:1-0") == 1
+
+    def test_ht_suffix_nie_psuje_over(self):
+        assert oblicz_tip_correct("Over 2.5", "3-0;HT:1-0") == 1
+
+    def test_ht_suffix_nie_psuje_btts(self):
+        assert oblicz_tip_correct("BTTS", "1-1;HT:0-0") == 1
+
+    # ── "[wynik] & gol w każdej połowie" (GG2H) — wymaga HT ────────────────────
+
+    def test_gg2h_1_won_gol_w_kazdej_polowie(self):
+        # 4-0, HT 2-0 → dom wygrał, 2 gole w 1.poł, 2 w 2.poł → WON
+        assert oblicz_tip_correct("1 & GG2H", "4-0;HT:2-0") == 1
+
+    def test_gg2h_2_won(self):
+        # 0-4, HT 0-2 → gość wygrał, gole w obu połowach → WON
+        assert oblicz_tip_correct("2 & GG2H", "0-4;HT:0-2") == 1
+
+    def test_gg2h_brak_gola_w_2_polowie(self):
+        # 1-0, HT 1-0 → cały gol w 1. połowie, brak w 2. → LOSE
+        assert oblicz_tip_correct("1 & GG2H", "1-0;HT:1-0") == 0
+
+    def test_gg2h_brak_gola_w_1_polowie(self):
+        # 1-0, HT 0-0 → gol dopiero w 2. połowie, brak w 1. → LOSE
+        assert oblicz_tip_correct("1 & GG2H", "1-0;HT:0-0") == 0
+
+    def test_gg2h_wynik_1x2_nietrafiony(self):
+        # X & GG2H, ale wynik to "1" (dom wygrał) → LOSE niezależnie od goli w połowach
+        assert oblicz_tip_correct("X & GG2H", "2-1;HT:1-0") == 0
+
+    def test_gg2h_brak_ht_zwraca_none(self):
+        # brak danych HT → nierozliczalne
+        assert oblicz_tip_correct("1 & GG2H", "2-1") is None
+
+    def test_gg2h_case_insensitive(self):
+        assert oblicz_tip_correct("1 & gg2h", "4-0;HT:2-0") == 1
+
+    def test_bb_combo_z_gg2h(self):
+        assert oblicz_tip_correct("BB: 1 & GG2H + Over 1.5", "4-0;HT:2-0") == 1
+        assert oblicz_tip_correct("BB: 1 & GG2H + Over 1.5", "1-0;HT:1-0") == 0

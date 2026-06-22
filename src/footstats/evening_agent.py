@@ -51,6 +51,8 @@ def _wynik_z_fixture(fixture: dict) -> tuple[str, str, str] | None:
     """
     Parsuje fixture z API-Football.
     Zwraca (home_name, away_name, 'HG-AG') lub None jeśli mecz niezakończony.
+    Gdy fixture ma dane półczasu (score.halftime) — dołącza sufiks ';HT:hh-ha'
+    wymagany przez rynki half-time (np. "[wynik] & gol w każdej połowie").
     """
     status = fixture.get("fixture", {}).get("status", {}).get("short", "")
     if status not in ("FT", "AET", "PEN"):
@@ -62,7 +64,12 @@ def _wynik_z_fixture(fixture: dict) -> tuple[str, str, str] | None:
     hg, ag = goals.get("home"), goals.get("away")
     if hg is None or ag is None:
         return None
-    return home, away, f"{hg}-{ag}"
+    wynik = f"{hg}-{ag}"
+    halftime = fixture.get("score", {}).get("halftime", {})
+    ht_h, ht_a = halftime.get("home"), halftime.get("away")
+    if ht_h is not None and ht_a is not None:
+        wynik += f";HT:{ht_h}-{ht_a}"
+    return home, away, wynik
 
 
 def _find_result(home: str, away: str, fixtures: list[dict]) -> str | None:

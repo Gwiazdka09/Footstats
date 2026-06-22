@@ -172,6 +172,26 @@ def test_wynik_z_fixture_inprogress_returns_none(sample_fixture_inprogress):
     assert _wynik_z_fixture(sample_fixture_inprogress) is None
 
 
+def test_wynik_z_fixture_z_halftime_dodaje_sufiks_ht():
+    fixture = {
+        "fixture": {"status": {"short": "FT"}},
+        "teams": {
+            "home": {"name": "Paris Saint-Germain"},
+            "away": {"name": "Olympique Lyonnais"},
+        },
+        "goals": {"home": 2, "away": 1},
+        "score": {"halftime": {"home": 1, "away": 0}},
+    }
+    result = _wynik_z_fixture(fixture)
+    assert result == ("Paris Saint-Germain", "Olympique Lyonnais", "2-1;HT:1-0")
+
+
+def test_wynik_z_fixture_bez_halftime_samo_ft(sample_fixture_psg_lyon):
+    # fixture bez klucza "score" → brak HT, samo FT (jak dotychczas)
+    result = _wynik_z_fixture(sample_fixture_psg_lyon)
+    assert result == ("Paris Saint-Germain", "Olympique Lyonnais", "2-1")
+
+
 def test_find_result_fuzzy_match(sample_fixture_psg_lyon):
     wynik = _find_result("PSG", "Lyon", [sample_fixture_psg_lyon])
     assert wynik == "2-1"
