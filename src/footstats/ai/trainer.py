@@ -320,7 +320,9 @@ def get_kalibracja_inject() -> str:
         for rynek, v in kal.items():
             kor = v.get("korekta_pewnosci", 0)
             if kor != 0:
-                parts.append(f"{rynek}:{kor:+d}%")
+                # :+.0f — działa dla float i int (było :+d → ValueError gdy korekta float,
+                # crashowało CAŁY Groq → 0 predykcji/kuponów Groq, run padał w KROK 3).
+                parts.append(f"{rynek}:{kor:+.0f}%")
         if parts:
             lines.append(f"Korekty: {' | '.join(parts)}")
 
