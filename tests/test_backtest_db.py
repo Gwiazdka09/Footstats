@@ -23,7 +23,10 @@ CREATE TABLE IF NOT EXISTS predictions (
     prompt_version       TEXT NOT NULL DEFAULT '',
     factors              TEXT NOT NULL DEFAULT '[]',
     match_stats          TEXT,
-    coupon_id            INTEGER
+    coupon_id            INTEGER,
+    prob_home            REAL,
+    prob_draw            REAL,
+    prob_away            REAL
 );
 CREATE TABLE IF NOT EXISTS ai_feedback (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -68,7 +68,10 @@ def init_db() -> None:
                 prompt_version       TEXT NOT NULL DEFAULT '',
                 factors              TEXT NOT NULL DEFAULT '[]',
                 match_stats          TEXT,
-                coupon_id            INTEGER REFERENCES coupons(id)
+                coupon_id            INTEGER REFERENCES coupons(id),
+                prob_home            REAL,
+                prob_draw            REAL,
+                prob_away            REAL
             );
             CREATE INDEX IF NOT EXISTS idx_match_date  ON predictions(match_date);
             CREATE INDEX IF NOT EXISTS idx_tip_correct ON predictions(tip_correct);
@@ -102,9 +105,15 @@ def save_prediction(
     kodeks_rules_checked: list = None,
     prompt_version:       str  = "",
     factors:              list = None,
+    prob_home:            float | None = None,
+    prob_draw:            float | None = None,
+    prob_away:            float | None = None,
 ) -> int:
     """
     Zapisuje typ AI przed meczem. Zwraca id nowo utworzonego rekordu.
+
+    prob_home/draw/away: prob modelu 1X2 (%) — D3: pozwala porównać selekcję Groq (ai_tip)
+    z argmax modelu na danych settled (wcześniej brak → analiza Cel B bug 2 niemożliwa).
     """
     init_db()
     rules_json   = json.dumps(kodeks_rules_checked or [], ensure_ascii=False)
@@ -129,12 +138,14 @@ def save_prediction(
             INSERT INTO predictions
                 (match_date, team_home, team_away, league,
                  ai_tip, ai_confidence, ai_reasoning, odds,
-                 kupon_type, kodeks_rules_checked, prompt_version, factors)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+                 kupon_type, kodeks_rules_checked, prompt_version, factors,
+                 prob_home, prob_draw, prob_away)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
             """,
             (match_date, team_home, team_away, league,
              ai_tip, ai_confidence, ai_reasoning, odds,
-             kupon_type, rules_json, prompt_version, factors_json),
+             kupon_type, rules_json, prompt_version, factors_json,
+             prob_home, prob_draw, prob_away),
         ).fetchone()
         return row["id"]
 

@@ -157,6 +157,30 @@ def _sygnaly_summary(wyniki: list) -> str:
     return "\n".join(linie)
 
 
+def koryguj_tip_wg_modelu(tip: str, pw, pr, pp, prog_min: float = 15.0) -> "tuple[str, bool]":
+    """D3 / Cel B bug 2 — guard selekcji Groq.
+
+    Groq systematycznie wybierał wyjazdy/remisy (tip 2/X) przeciw faworytom-gospodarzom
+    → 12.5% trafność tip=2. Gdy Groq wybrał wynik 1X2 którego model daje prob < prog_min
+    (skrajny rozjazd) → override na argmax modelu (najbardziej prawdopodobny 1X2).
+    KONSERWATYWNY: tylko 1X2, tylko skrajne (<15%). Brak prob modelu → nie rusza.
+    Zwraca (tip, czy_override). Walidacja na danych po ~20 świeżych settled (prob teraz zapisywane).
+    """
+    if tip not in ("1", "X", "2"):
+        return tip, False
+    prob = {"1": pw, "X": pr, "2": pp}
+    if any(prob[k] is None for k in prob):
+        return tip, False  # brak prob modelu (np. mecz spoza coverage) → nie ruszaj
+    if prob[tip] >= prog_min:
+        return tip, False  # akceptowalna zgodność z modelem
+    argmax = max(("1", "X", "2"), key=lambda k: prob[k])
+    if argmax == tip:
+        return tip, False
+    logger.info("D3 guard: Groq tip=%s (prob modelu %.1f%% < %.0f) → override argmax=%s",
+                tip, prob[tip], prog_min, argmax)
+    return argmax, True
+
+
 def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
     """
     Zapisuje typy AI (top3 + kupony) do bazy backtest po każdej analizie.
@@ -198,6 +222,9 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
                 faktory = wyciagnij_faktory(w.get("pred") or {})
             except (ImportError, KeyError, AttributeError):
                 faktory = []
+            # D3: prob modelu 1X2 (do zapisu + guard selekcji). quick_picks daje pw/pr/pp top-level.
+            pw = w.get("pw"); pr = w.get("pr"); pp = w.get("pp")
+            tip, _override = koryguj_tip_wg_modelu(tip, pw, pr, pp)
             try:
                 save_prediction(
                     match_date=w.get("data", today),
@@ -210,6 +237,7 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
                     kupon_type=kupon_type,
                     prompt_version="v5_json",
                     factors=faktory,
+                    prob_home=pw, prob_draw=pr, prob_away=pp,
                 )
             except Exception:  # noqa: broad-except — optional telemetry, never block pipeline
                 pass
