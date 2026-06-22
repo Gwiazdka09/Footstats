@@ -3,6 +3,51 @@
 > Archiwum ukończonych prac (przeniesione z TODO.md przez `footstats-scribe`).
 > Aktywne zadania: `TODO.md`. Pełna historia commitów: `git log`.
 
+## 2026-06-22
+
+### Bugi / fixy
+- **Trainer crash na float korekcie** (`c99d41fe9`): `get_kalibracja_inject` formatował korektę
+  z `f"{kor:+d}"` (int-only) → `ValueError` gdy `korekta_pewnosci` float → KROK 3 (Groq) crashował
+  całkowicie, 0 predykcji zapisanych (baza kalibracji zagłodzona). Fix: `:+.0f` (float i int). +3
+  testy. Złapane przez obserwowalność (sched log) z 06-21 — wcześniej niewidoczne.
+- **Telegram HTML escape + cli NameError** (`6ad1dfd9a`): (1) nazwy drużyn z `</&` łamały
+  `parse_mode=HTML` → HTTP 400 "can't parse entities", cicha porażka wysyłki — naprawione
+  `html.escape` w `send_draft_kupon`/`send_kupon`/`_format_zdarzenia` + logowanie realnej
+  przyczyny. (2) `cli_commands._analiza_kuponu` wołał `_bzz_parse_prob` bez importu → `NameError`
+  przy trafieniu w ev_ml — dodany import z `bzzoiro`. +test regresji.
+- **Flaky test deterministyczny** (`fa61cd63b`): `test_zapisz_kupon_final_promotes` był
+  order-zależny (`resolve_admin_user_id()` ≠ user_id=1 draftu w izolacji) — zmockowany
+  `resolve_admin_user_id→1`.
+
+### D3 — Cel B bug 2 (Groq selekcja), część 1+2
+- **`4823ac9c0`**: prob modelu (pw/pr/pp) zapisywane w `predictions` (kolumny prob_home/draw/away,
+  migracja 8, DDL + `save_prediction`) — prerekwizyt: wcześniej brak prob modelu → retrospektywna
+  analiza Groq-tip vs argmax niemożliwa. Migracja zaaplikowana w prod. Plus guard konserwatywny
+  `koryguj_tip_wg_modelu` (w `analyzer_helpers.py`): Groq tip 1X2 z prob modelu <15% → override na
+  argmax modelu. Wpięty w `_auto_zapisz_backtest` (top3+kupony). Tylko skrajne przypadki, brak
+  prob → nie rusza. +6 testów. Pełna decyzja a/b/c po ~20 świeżych settled — w `TODO.md`.
+
+### Email transakcyjny — Resend
+- **`8dcb76a27`**: `utils/mailer.py` — `send_email` via Resend HTTP API (no-dep), `load_dotenv`,
+  czyta `RESEND_API_KEY`/`resend_api_key`. `send_welcome_email` wpięte w `/auth/register`
+  (graceful, nie blokuje rejestracji). `send_password_reset_email` gotowe na flow reset-tokenów.
+  Live test: email dostarczony. FROM=`onboarding@resend.dev` (test-sender, podmień przed prod).
+  +6 testów.
+- **`a7f815381`**: dokumentacja limitu Resend Free (100/dzień, 3000/mc, 1 domena) w mailer + TODO;
+  reset hasła / faktura / domena = follow-up.
+
+### Rynki — Mecz & gol w każdej połowie (GG2H) + HT capture
+- **`67f5f418b`**: nowy rynek "Mecz & gol w każdej połowie" — Poisson half-model (rozbicie λ na
+  1./2. połowę) + settlement z wyniku HT (`oblicz_tip_correct`) + capture HT z API-Football w
+  `results_updater.py` (zapis `ht_home`/`ht_away`). Reorder grupy "Liczba goli" w `markets.py`
+  (Over na górze, Under na dole, czytelniejszy UX). +4 pliki testów (`test_betting_utils.py`,
+  `test_evening_agent.py`, `test_markets.py`, `test_results_updater_ht.py` nowy).
+
+### Suite
+- **1209 passed / 4 skip** (2 fail + 2 error niezwiązane z sesją — `test_checkpoint.py` order
+  dependency, `test_file_integrity.py` length check `daily_agent.py` — do zbadania, nie ruszane
+  w tej sesji dokumentacyjnej).
+
 ## 2026-06-20/21
 
 ### Bugi / model (root-cause Cel B + kreator)

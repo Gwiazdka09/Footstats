@@ -1,6 +1,6 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-21
+**Ostatnia aktualizacja:** 2026-06-22
 **Wersja:** v3.4-stable
 **Accuracy:** model offline 51.3% 10 lig (DC, NED 54.9%, kalibracja monotoniczna) | live 31.7% (stare, sprzed fixów Cel B — czeka na świeże)
 **Cel:** M1 = 55% win rate
@@ -8,8 +8,10 @@
 > Ukończone: `git log` + `CHANGELOG.md`. Fazy DONE: 16-20, GUI/UX, SEO, RODO, multi-user (15.6),
 > audyt core (A1-A3), λ: kontuzje + xG+obrona, Cel A (walk-forward), Cel B bug 1,
 > Cel C (Dixon-Coles w prod), audyt settlement + audyt głęboki (06-18), dług techniczny #1-#5,
-> decyzje D1a/D1b/D2/D4/D5/D6/D7, TECHNICZNE/SECURITY (stealth, cli/analyzer decompose, daily_io)
-> (06-20/21 → `CHANGELOG.md`). Suite: **1188 testów pass / 4 skip**.
+> decyzje D1a/D1b/D2/D4/D5/D6/D7, TECHNICZNE/SECURITY (stealth, cli/analyzer decompose, daily_io),
+> trainer crash fix + D3 część 1+2 (prob/guard) + Telegram escape/cli import + flaky test +
+> email Resend + rynek GG2H+HT (06-22 → `CHANGELOG.md`). Suite: **1209 testów pass / 4 skip**
+> (2 fail + 2 error niezwiązane z sesją — checkpoint order, file_integrity length — do zbadania).
 
 ---
 
@@ -30,12 +32,12 @@
 > `CALIBRATION_ENABLED`), auto-refit czeka na dane (D2). Kursy odblokowane (AF `/odds` fallback).
 > STOP na nowe λ aż zbierzemy świeże dane.
 
-- [~] **D3 — Cel B bug 2 (Groq selekcja)** — CZĘŚCIOWO (06-22, `4823ac9c0`):
-  - ✅ Prerekwizyt: prob modelu (pw/pr/pp) zapisywane w `predictions` (migracja 8) — wcześniej brak
+- [x] **D3 część 1+2 — Cel B bug 2 (Groq selekcja)** (06-22, `4823ac9c0`):
+  - Prerekwizyt: prob modelu (pw/pr/pp) zapisywane w `predictions` (migracja 8) — wcześniej brak
     → retrospektywna analiza Groq-tip vs argmax niemożliwa. Teraz rośnie z każdym runem.
-  - ✅ Guard konserwatywny `koryguj_tip_wg_modelu`: Groq tip 1X2 z prob modelu <15% → override
+  - Guard konserwatywny `koryguj_tip_wg_modelu`: Groq tip 1X2 z prob modelu <15% → override
     na argmax. Wpięty w zapis predykcji. Tylko skrajne przypadki.
-  - [ ] **PEŁNA decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled
+- [ ] **D3 — PEŁNA decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled
     z zapisanym prob (analyst, gdy 529 minie). Zwaliduj że guard pomaga, dostrój próg.
   - [ ] **DECYZJA (nie bug):** Bzzoiro etykietuje towarzyskie kadr jako "World Cup 2026" → przechodzą
     przez whitelist MŚ (D1a, dodane świadomie dla danych). Norway-Senegal/Jordan-Algeria 06-22:
@@ -74,6 +76,13 @@
 - [x] **daily_io — testy** (06-21, `3be80d1b9`) — +10 testów (`_zapisz_kupon_do_db`, mock prod).
 - [x] **`_bzz_parse_prob` NameError** (06-22, `6ad1dfd9a`) — `cli_commands._analiza_kuponu` wołał
   bez importu → dodano `from footstats.scrapers.bzzoiro import _bzz_parse_prob`.
+- [x] **Trainer crash na float korekcie** (06-22, `c99d41fe9`) — `get_kalibracja_inject` `:+d`
+  (int-only) na float `korekta_pewnosci` → cały Groq (KROK 3) crashował, 0 predykcji zapisanych.
+  Fix `:+.0f`. +3 testy.
+- [x] **Telegram HTML escape** (06-22, `6ad1dfd9a`) — nazwy drużyn z `</&` łamały `parse_mode=HTML`
+  → HTTP 400 cicha porażka. `html.escape` w send_draft_kupon/send_kupon/_format_zdarzenia.
+- [x] **Flaky test deterministyczny** (06-22, `fa61cd63b`) — `test_zapisz_kupon_final_promotes`
+  order-zależny, zmockowany `resolve_admin_user_id→1`.
 
 ---
 
@@ -85,7 +94,7 @@
   walidacji modelu.
 
 ### Email transakcyjny
-- [x] **Resend wpięty** (06-22, `8dcb76a27`) — `utils/mailer.py` (HTTP, no-dep), klucz w .env
+- [x] **Resend wpięty** (06-22, `8dcb76a27`+`a7f815381`) — `utils/mailer.py` (HTTP, no-dep), klucz w .env
   (`resend_api_key`). Welcome po /auth/register (live OK, email dostarczony). `send_password_reset_email`
   gotowe. **LIMIT Free: 100/dzień, 3000/mc, 1 domena** — welcome=1/rejestrację, bezpieczne.
 - [ ] FROM: teraz `onboarding@resend.dev` (test-sender) → podmień na zweryfikowaną domenę przed prod.
@@ -103,10 +112,27 @@
 
 ---
 
+## 🌐 SCRAPERY — multi-source + cross-walidacja (start 06-22)
+
+> **Cel:** wiele źródeł danych (wyniki/HT/kursy) + warstwa porównująca → (1) redundancja gdy
+> API-Football nie pokrywa meczu, (2) cross-walidacja — rozjazdy między źródłami = sygnał błędu
+> danych albo wartości bukmacherskiej. Framework w budowie, osobny commit (jeszcze NIE w git).
+
+- [ ] **Architektura** `scrapers/sources/`: wspólny adapter `MatchData` (typ ujednolicony:
+  wynik/HT/kursy/timestamp/source) + `ResultsSource` protocol (interfejs każdego scrapera) +
+  `aggregator` (porównanie wielu źródeł → konsensus / flag rozjazdu).
+- [ ] **Źródła do dodania (darmowe, do oceny per-stabilność/anti-bot):** Flashscore, Soccer24,
+  Sofascore (już 403 — wymaga stealth, patrz TECHNICZNE), Meczyki, LiveScore, sport.tvp.pl,
+  polsatsport, Eurosport, Interia, Transfermarkt.
+- [ ] Status: framework w budowie — brak commitu jeszcze, czeka na pierwszy adapter + testy.
+
+---
+
 ## 📋 Następne kroki
 
 > Dług techniczny #1-#5 i decyzje D1a/D1b/D2/D4/D5/D6/D7 ZROBIONE (06-20/21, → `CHANGELOG.md`).
-> D3 częściowo (prob+guard) / D8 wstrzymane. Suite **1189 pass / 4 skip**. Kursy odblokowane (AF `/odds`).
+> D3 część 1+2 (prob+guard) ZROBIONE 06-22, pełna decyzja a/b/c czeka na dane. D8 wstrzymane.
+> Suite **1209 pass / 4 skip**. Kursy odblokowane (AF `/odds`).
 > Drobne ✅: Telegram "blad wysylki" = HTML parse 400 (nazwy z </&) → naprawione html.escape (`6ad1dfd9a`).
 
 1. **✅ ZWERYFIKOWANE LIVE (06-21):** System tworzy kupony — **13 ACTIVE** dziś (było 0) + 7 nowych
