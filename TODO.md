@@ -9,7 +9,7 @@
 > audyt core (A1-A3), λ: kontuzje + xG+obrona, Cel A (walk-forward), Cel B bug 1,
 > Cel C (Dixon-Coles w prod), audyt settlement + audyt głęboki (06-18), dług techniczny #1-#5,
 > decyzje D1a/D1b/D2/D4/D5/D6/D7, TECHNICZNE/SECURITY (stealth, cli/analyzer decompose, daily_io)
-> (06-20/21 → `CHANGELOG.md`). Suite: **1177 testów pass / 4 skip**.
+> (06-20/21 → `CHANGELOG.md`). Suite: **1188 testów pass / 4 skip**.
 
 ---
 
@@ -30,8 +30,15 @@
 > `CALIBRATION_ENABLED`), auto-refit czeka na dane (D2). Kursy odblokowane (AF `/odds` fallback).
 > STOP na nowe λ aż zbierzemy świeże dane.
 
-- [ ] **D3 — Cel B bug 2 (Groq selekcja).** Czeka na ≥15 ŚWIEŻYCH System settled. Potem decyzja:
-  ogranicz Groq / argmax modelu / tnij conf.
+- [~] **D3 — Cel B bug 2 (Groq selekcja)** — CZĘŚCIOWO (06-22, `4823ac9c0`):
+  - ✅ Prerekwizyt: prob modelu (pw/pr/pp) zapisywane w `predictions` (migracja 8) — wcześniej brak
+    → retrospektywna analiza Groq-tip vs argmax niemożliwa. Teraz rośnie z każdym runem.
+  - ✅ Guard konserwatywny `koryguj_tip_wg_modelu`: Groq tip 1X2 z prob modelu <15% → override
+    na argmax. Wpięty w zapis predykcji. Tylko skrajne przypadki.
+  - [ ] **PEŁNA decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled
+    z zapisanym prob (analyst, gdy 529 minie). Zwaliduj że guard pomaga, dostrój próg.
+  - [ ] **Powiązane:** Groq typuje mecze KADR/towarzyskie poza modelem (Norway-Senegal, Jordan-Algeria
+    06-22, tip=2 low-conf) — leak przez whitelist MŚ. Rozważyć: Groq tylko whitelisted klubowe.
 - [ ] Co kilka dni: `python scripts/calibration_monitor.py` (Neon, read-only)
   - System (bez Groq) vs Pipeline (Groq) — werdykt bottlenecku LLM (potrzeba ≥15 System settled)
   - czy accuracy ruszyła z 31.7%
@@ -91,7 +98,8 @@
 ## 📋 Następne kroki
 
 > Dług techniczny #1-#5 i decyzje D1a/D1b/D2/D4/D5/D6/D7 ZROBIONE (06-20/21, → `CHANGELOG.md`).
-> D3/D8 aktywne/wstrzymane. Suite **1167 pass / 4 skip**. Kursy odblokowane (AF `/odds` fallback, live OK).
+> D3 częściowo (prob+guard) / D8 wstrzymane. Suite **1188 pass / 4 skip**. Kursy odblokowane (AF `/odds`).
+> Drobne: Telegram "blad wysylki" przy wysyłce kuponu (notyfikacja, nie blokuje danych) — do zbadania.
 
 1. **✅ ZWERYFIKOWANE LIVE (06-21):** System tworzy kupony — **13 ACTIVE** dziś (było 0) + 7 nowych
    predykcji. 🔴 ROOT przyczyny "0 kuponów": **agent auto-zapauzowany od 06-16** (stop-loss
