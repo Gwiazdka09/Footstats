@@ -95,6 +95,11 @@ def _setup_sqlite_ct(tmp_path, monkeypatch):
     import footstats.core.bankroll as bk
     monkeypatch.setattr(ct, "_connect", conn_factory)
     monkeypatch.setattr(ct, "init_coupon_tables", lambda: None)
+    # Determinizm: _zapisz_kupon_do_db używa resolve_admin_user_id() do get_draft_today/save_coupon,
+    # a test zapisuje draft z save_coupon default user_id=1. Bez tego patcha test był order-zależny
+    # (w izolacji resolve≠1 → draft nieznaleziony → nowy kupon; w suite prior test seedował admina=1).
+    import footstats.utils.admin_user as au
+    monkeypatch.setattr(au, "resolve_admin_user_id", lambda: 1)
     monkeypatch.setattr(bk, "_db_connect", conn_factory)
     return db_path
 
