@@ -37,8 +37,12 @@
     na argmax. Wpięty w zapis predykcji. Tylko skrajne przypadki.
   - [ ] **PEŁNA decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled
     z zapisanym prob (analyst, gdy 529 minie). Zwaliduj że guard pomaga, dostrój próg.
-  - [ ] **Powiązane:** Groq typuje mecze KADR/towarzyskie poza modelem (Norway-Senegal, Jordan-Algeria
-    06-22, tip=2 low-conf) — leak przez whitelist MŚ. Rozważyć: Groq tylko whitelisted klubowe.
+  - [ ] **DECYZJA (nie bug):** Bzzoiro etykietuje towarzyskie kadr jako "World Cup 2026" → przechodzą
+    przez whitelist MŚ (D1a, dodane świadomie dla danych). Norway-Senegal/Jordan-Algeria 06-22:
+    conf 22/42 (low), brak kursów AF → System NIE obstawi; predykcje nie settlują (jak #175,
+    brak coverage). Niska szkoda + downstream łapią (guard D3, stale-VOID). Opcje gdy zechcesz:
+    (a) zostaw MŚ (więcej danych, trochę szumu), (b) wyklucz kadry z budowy kuponów Groq,
+    (c) zawęź whitelist do realnych fixture'ów WC (wymaga źródła fixture). Domyślnie: zostaw (a).
 - [ ] Co kilka dni: `python scripts/calibration_monitor.py` (Neon, read-only)
   - System (bez Groq) vs Pipeline (Groq) — werdykt bottlenecku LLM (potrzeba ≥15 System settled)
   - czy accuracy ruszyła z 31.7%
@@ -68,8 +72,8 @@
 - [x] **God-moduły rozbite** (06-21): `cli.py` 1112→773 (`210d9ec46`, → `cli_commands.py`),
   `analyzer.py` 930→793 (`6fa110177`, czyste helpery → `analyzer_helpers.py`). Behavior-preserving.
 - [x] **daily_io — testy** (06-21, `3be80d1b9`) — +10 testów (`_zapisz_kupon_do_db`, mock prod).
-- [ ] Pre-existing bug (znaleziony przy refaktorze, NIE w scope): `cli.py::_analiza_kuponu`
-  woła nieistniejące `_bzz_parse_prob` → `NameError` przy trafieniu w ev_ml. Do naprawy osobno.
+- [x] **`_bzz_parse_prob` NameError** (06-22, `6ad1dfd9a`) — `cli_commands._analiza_kuponu` wołał
+  bez importu → dodano `from footstats.scrapers.bzzoiro import _bzz_parse_prob`.
 
 ---
 
@@ -98,8 +102,8 @@
 ## 📋 Następne kroki
 
 > Dług techniczny #1-#5 i decyzje D1a/D1b/D2/D4/D5/D6/D7 ZROBIONE (06-20/21, → `CHANGELOG.md`).
-> D3 częściowo (prob+guard) / D8 wstrzymane. Suite **1188 pass / 4 skip**. Kursy odblokowane (AF `/odds`).
-> Drobne: Telegram "blad wysylki" przy wysyłce kuponu (notyfikacja, nie blokuje danych) — do zbadania.
+> D3 częściowo (prob+guard) / D8 wstrzymane. Suite **1189 pass / 4 skip**. Kursy odblokowane (AF `/odds`).
+> Drobne ✅: Telegram "blad wysylki" = HTML parse 400 (nazwy z </&) → naprawione html.escape (`6ad1dfd9a`).
 
 1. **✅ ZWERYFIKOWANE LIVE (06-21):** System tworzy kupony — **13 ACTIVE** dziś (było 0) + 7 nowych
    predykcji. 🔴 ROOT przyczyny "0 kuponów": **agent auto-zapauzowany od 06-16** (stop-loss
