@@ -19,6 +19,7 @@ Użycie:
 
 import hashlib
 import json
+import html
 import logging
 import os
 import requests
@@ -29,6 +30,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 log = logging.getLogger(__name__)
+
+
+def _esc(v) -> str:
+    """Escape <, >, & dla parse_mode=HTML Telegrama. Nazwy drużyn z '<'/'&' powodowały
+    HTTP 400 'can't parse entities' → cicha 'blad wysylki' (06-22)."""
+    return html.escape(str(v), quote=False)
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 _DEDUP_FILE = Path(__file__).resolve().parents[3] / "data" / "telegram_dedup.json"
@@ -99,6 +106,8 @@ def _send(text: str, parse_mode: str = "HTML", chat_id: str | None = None) -> bo
     token, env_chat = _get_credentials()
     target = (chat_id or env_chat or "").strip()
     if not token or not target:
+        log.warning("Telegram _send: brak %s — pomijam wysyłkę",
+                    "TELEGRAM_BOT_TOKEN" if not token else "chat_id")
         return False
     try:
         r = requests.post(
@@ -111,8 +120,12 @@ def _send(text: str, parse_mode: str = "HTML", chat_id: str | None = None) -> bo
             },
             timeout=15,
         )
+        if not r.ok:
+            # Najczęstsza przyczyna 400: niezaescapowane <,>,& w nazwach drużyn (HTML parse).
+            log.warning("Telegram _send: HTTP %s — %s", r.status_code, (r.text or "")[:250])
         return r.ok
-    except requests.RequestException:
+    except requests.RequestException as e:
+        log.warning("Telegram _send: błąd sieci: %s", e)
         return False
 
 
@@ -140,8 +153,8 @@ def _format_zdarzenia(zdarzenia: list[dict]) -> str:
     for z in zdarzenia:
         verified = "✓" if z.get("_verified") else "?"
         linie.append(
-            f"  {z.get('nr', '')}. {z.get('mecz', '?')} "
-            f"<b>{z.get('typ', '?')}</b> @{z.get('kurs', 0):.2f} {verified}"
+            f"  {z.get('nr', '')}. {_esc(z.get('mecz', '?'))} "
+            f"<b>{_esc(z.get('typ', '?'))}</b> @{z.get('kurs', 0):.2f} {verified}"
         )
     return "\n".join(linie)
 
@@ -190,7 +203,7 @@ def send_kupon(dane: dict, stawka_a: float = 10.0, stawka_b: float = 5.0) -> boo
         for row in top3[:3]:
             ev = row.get("ev_netto", 0) or 0
             linie.append(
-                f"  • {row.get('mecz','?')} <b>{row.get('typ','?')}</b> "
+                f"  • {_esc(row.get('mecz','?'))} <b>{_esc(row.get('typ','?'))}</b> "
                 f"@{row.get('kurs',0):.2f} EV={ev:+.1f}%"
             )
 
@@ -245,9 +258,9 @@ def send_draft_kupon(coupon_id: int, legs: list[dict], total_odds: float) -> boo
                 home, away = mecz.split(" - ", 1)
             else:
                 home, away = mecz, ""
-        home = home.strip() or "?"
-        away = away.strip() or "?"
-        linie.append(f"  \u2022 {home} \u2013 {away} <b>{tip}</b> @{float(odds):.2f} [score={score}]")
+        home = _esc(home.strip() or "?")
+        away = _esc(away.strip() or "?")
+        linie.append(f"  \u2022 {home} \u2013 {away} <b>{_esc(tip)}</b> @{float(odds):.2f} [score={score}]")
     linie.append("\n\u23f3 Status: DRAFT (fina\u0142 ~1h przed meczem)")
     return _send("\n".join(linie))
 

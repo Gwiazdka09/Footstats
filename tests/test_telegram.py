@@ -141,6 +141,18 @@ class TestTelegramMessaging:
             result = send_draft_kupon(coupon_id=999, legs=test_legs, total_odds=1.85)
         assert result is True, "send_draft_kupon() should return True on success"
 
+    def test_send_draft_kupon_escapuje_html(self):
+        """Regresja 06-22: nazwy z </&  powodowały HTTP 400 'can't parse entities'.
+        Treść musi mieć zaescapowane encje, nie surowe < / &."""
+        captured = {}
+        legs = [{"home": "Tom & Jerry FC", "away": "Club <X>", "tip": "1", "odds": 1.5}]
+        with patch("footstats.utils.telegram_notify._send",
+                   side_effect=lambda text, **kw: captured.update(text=text) or True):
+            send_draft_kupon(coupon_id=1, legs=legs, total_odds=1.5)
+        txt = captured["text"]
+        assert "Tom &amp; Jerry FC" in txt and "Club &lt;X&gt;" in txt
+        assert "Tom & Jerry" not in txt and "<X>" not in txt  # brak surowych
+
 
 class TestTelegramWithoutCredentials:
     """Testy działania bez skonfigurowanych kredencjałów."""

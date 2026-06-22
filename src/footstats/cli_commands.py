@@ -16,6 +16,7 @@ from footstats.core.h2h import AnalizaH2H
 from footstats.core.fortress import HomeFortress
 from footstats.core.classifier import KlasyfikatorMeczu
 from footstats.core.form import AnalizaDomWyjazd
+from footstats.scrapers.bzzoiro import _bzz_parse_prob
 from footstats.ai.analyzer import (
     ai_analiza_pewniaczki, ai_sprawdz_kupon, ai_groq_dostepny,
 )
