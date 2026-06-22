@@ -85,8 +85,12 @@
   walidacji modelu.
 
 ### Email transakcyjny
-- [ ] Resend.com — załóż konto, podaj `RESEND_API_KEY` + FROM adres
-- [ ] Potwierdzenie rejestracji, reset hasła, faktura
+- [x] **Resend wpięty** (06-22, `8dcb76a27`) — `utils/mailer.py` (HTTP, no-dep), klucz w .env
+  (`resend_api_key`). Welcome po /auth/register (live OK, email dostarczony). `send_password_reset_email`
+  gotowe. **LIMIT Free: 100/dzień, 3000/mc, 1 domena** — welcome=1/rejestrację, bezpieczne.
+- [ ] FROM: teraz `onboarding@resend.dev` (test-sender) → podmień na zweryfikowaną domenę przed prod.
+- [ ] Reset hasła — wpiąć flow tokenów (`send_password_reset_email` już jest) + endpoint.
+- [ ] Faktura (po płatnościach).
 
 ### Płatności (Lemon Squeezy / Paddle — zdecydowane, po JDG)
 - [ ] Cennik przed checkout + warunki auto-renewal

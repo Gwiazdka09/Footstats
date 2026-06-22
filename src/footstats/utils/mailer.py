@@ -3,6 +3,9 @@
 Klucz: env RESEND_API_KEY (lub resend_api_key). Nadawca: RESEND_FROM lub domyślny test-sender
 Resend (onboarding@resend.dev — podmień na własną zweryfikowaną domenę przed prod-launchem).
 Graceful: brak klucza / błąd HTTP → log WARNING + False, NIGDY nie blokuje flow (rejestracja itp.).
+
+LIMIT Resend Free: 100 emaili/DZIEŃ, 3000/mc, 1 domena. Welcome = 1/rejestrację (bezpieczne).
+Przy skalowaniu (>100 rejestracji/dzień lub batch/marketing) — pilnuj limitu / upgrade planu.
 """
 from __future__ import annotations
 
