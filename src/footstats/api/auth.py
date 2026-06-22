@@ -142,6 +142,14 @@ def register(req: RegisterRequest) -> TokenResponse:
     except psycopg2.Error:
         pass
 
+    # Email powitalny (Resend) — nie może blokować rejestracji (graceful).
+    # send_welcome_email sam łapie błędy sieci/HTTP; tu łapiemy import/nieoczekiwane.
+    try:
+        from footstats.utils.mailer import send_welcome_email
+        send_welcome_email(req.email, req.username)
+    except (ImportError, OSError, RuntimeError, ValueError):
+        pass
+
     return TokenResponse(access_token=_make_token(row["username"], row["id"], False))
 
 
