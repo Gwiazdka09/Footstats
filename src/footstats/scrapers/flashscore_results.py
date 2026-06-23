@@ -126,11 +126,18 @@ def _parse_mobi_html(html: str, home: str, away: str) -> str | None:
             
         # Wyciągnij tekst przed linkiem (drużyny) i w linku (wynik)
         # Przykład: <span>19:00</span>Vasteras SK - Hacken <a href="..." class="fin">3:3</a>
-        m = re.search(r"</span>(.*?)\s*<a[^>]*>(.*?)</a>", line)
+        m = re.search(r"</span>(.*?)\s*<a\s([^>]*)>(.*?)</a>", line)
         if m:
+            a_attrs = m.group(2)
+            # TYLKO mecze ZAKOŃCZONE: flashscore.mobi oznacza je class="fin".
+            # Live (minuta gry) / zaplanowane mają inną klasę → pomijamy. Bez tego
+            # zwracaliśmy LIVE score jako końcowy → kupon rozliczany przedwcześnie
+            # (#242: Norway-Senegal 0-0 @15min → BTTS=nie → cała akumulacja LOST błędnie).
+            if "fin" not in a_attrs:
+                continue
             # Usuń tagi HTML (np. <img class="rcard-1"> przy kartkach/czerwonych kartkach)
             teams_raw = re.sub(r"<[^>]+>", "", m.group(1))
-            score = m.group(2).strip()
+            score = m.group(3).strip()
 
             if " - " in teams_raw:
                 t_home_raw, t_away_raw = teams_raw.split(" - ", 1)
