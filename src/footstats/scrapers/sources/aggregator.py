@@ -9,6 +9,7 @@ nie pokrywa meczu — preferuje źródło z danymi HT.
 from __future__ import annotations
 
 from footstats.scrapers.sources.af_source import APIFootballSource
+from footstats.scrapers.sources.footballdata_source import FootballDataSource
 from footstats.scrapers.sources.base import MatchData, ResultsSource
 from footstats.utils.normalize import normalize_team_name
 
@@ -17,8 +18,10 @@ def get_sources() -> list[ResultsSource]:
     """
     Rejestr aktywnych źródeł wyników. Dodawanie kolejnego źródła
     (Flashscore/Soccer24/Meczyki...) = dopisanie instancji do tej listy.
+    - api-football: szerokie pokrycie (MŚ/ligi), kursy+HT, budżet 100/dzień.
+    - football-data.co.uk: CSV top-ligi EU, FT+HT, bez anti-bot — kotwica cross-walidacji.
     """
-    return [APIFootballSource()]
+    return [APIFootballSource(), FootballDataSource()]
 
 
 def fetch_all(date: str) -> dict[str, list[MatchData]]:
