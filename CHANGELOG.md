@@ -3,6 +3,38 @@
 > Archiwum ukończonych prac (przeniesione z TODO.md przez `footstats-scribe`).
 > Aktywne zadania: `TODO.md`. Pełna historia commitów: `git log`.
 
+## 2026-06-23
+
+### Scrapery multi-source + cross-walidacja
+- **`5c0a9adc2`**: framework `scrapers/sources/` — typ ujednolicony `MatchData` (wynik/HT/kursy/
+  timestamp/source), protokół `ResultsSource` (interfejs każdego adaptera), `aggregator`
+  (porównanie wielu źródeł → consensus/flag rozjazdu). Adapter API-Football jako 1. źródło
+  (`af_source.py`). +202 linii testów (`test_scrapers_sources.py`).
+- **`6ad9899d4`**: scraper football-data.co.uk jako `ResultsSource` (CSV wyniki+HT, bez anti-bot,
+  `footballdata_source.py`). +164 linie testów.
+- **`d35a074b4`**: rejestr aggregatora — football-data.co.uk jako 2. źródło (cross-walidacja);
+  live smoke OK (AF 79 meczów+HT).
+- **`0383a11ff`**: FlashScore (mobi, finished-only) jako `ResultsSource` — redundancja FT
+  (`flashscore_source.py`). +161 linii testów.
+- **`a0c22d2c6`**: rejestr aggregatora — FlashScore jako 3. źródło; live cross-walidacja OK —
+  AF 79 + FlashScore 98 meczów, **27 potwierdzonych przez ≥2 źródła, 0 rozjazdów**.
+
+### Fix — FlashScore live-leak
+- **`fb98b9188`**: `_parse_mobi_html` matchował każdy `<a>` ze score, ignorując `class="fin"`
+  (zakończony) → mecz w trakcie (Norway-Senegal 0-0 @15min) zwracany jako końcowy →
+  settlement: BTTS=nie → kupony **#240/241/242 LOST błędnie** (mecz trwał). Fix: tylko mecze
+  z `class="fin"`. Kupony zrewertowane do ACTIVE, FlashScore cache (live leaki) wyczyszczony.
+  +4 testy regresji.
+
+### Brain graph
+- **`53499bbfc`**: `scripts/visualize_brain.py` przepisany na warstwową architekturę aktualną
+  — 41 węzłów (było 15, przestarzałe: SQLite/db_main, brak scraperów/sources/phases/markets/D3).
+  Warstwy kolorami, pełny data-flow (pipeline→Groq→kupony→settlement, multi-source
+  cross-walidacja, RAG memory loop, FastAPI+GUI+Neon). `brain_graph.html` regenerowany (gitignored).
+
+### Suite
+- **1254 passed / 6 skip** (zweryfikowane lokalnym uruchomieniem `pytest tests/ -q`).
+
 ## 2026-06-22
 
 ### Bugi / fixy

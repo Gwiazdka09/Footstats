@@ -1,6 +1,6 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-22
+**Last Updated:** 2026-06-23
 **Current Version:** v3.4-stable
 **System State:** FUNCTIONAL — PRODUCTION
 
@@ -18,7 +18,11 @@
 | **Data collection** | ✅ | System paper-trading (single-leg, bez Groq) autonomiczne od 06-16 |
 | **Email transakcyjny** | ✅ | Resend (`utils/mailer.py`) wpięty — welcome po `/auth/register` (live OK, dostarczony). Limit Free 100/dzień, 3000/mc. FROM=test-sender, podmień przed prod |
 | **Rynki bukmacherskie** | ✅ | + "Mecz & gol w każdej połowie" (GG2H, Poisson half-model) + HT capture z API-Football (`67f5f418b`) |
-| **Tests** | ✅ | 1209 testów pass / 4 skip (telegram zmockowane; +cli/analyzer/daily_io/stealth 06-21; +D3/email/rynek GG2H 06-22) |
+| **Scrapery multi-source** | ✅ | `scrapers/sources/` — `MatchData`+`ResultsSource`+`aggregator`; 3 źródła (API-Football, football-data.co.uk, FlashScore mobi); live cross-walidacja: AF 79+FlashScore 98 meczów, 27 potwierdzonych ≥2 źródła, 0 rozjazdów (`5c0a9adc2` i nast.) |
+| **Brain graph** | ✅ | `scripts/visualize_brain.py` przepisany — 41 węzłów, warstwowa architektura aktualna (agenty/AI/model/settlement/scrapery/sources/API/DB) (`53499bbfc`) |
+| **CI/CD** | 🟡 | `ci.yml`: pytest + import check + Docker build + health-check w kontenerze. Brak: lint (`ruff`)/type-check (`mypy`) gate, brak coverage threshold |
+| **Standardy kodu** | 🟡 | God-moduły pozostałe: `superbet.py` 1128, `daily_agent.py` 1080, `logging.py` 725 linii — kandydaci do dekompozycji |
+| **Tests** | ✅ | 1254 testów pass / 6 skip (telegram zmockowane; +cli/analyzer/daily_io/stealth 06-21; +D3/email/rynek GG2H 06-22; +scrapery sources/footballdata/flashscore + brain graph 06-23) |
 | **Automation** | ✅ | Task Scheduler: draft 08:00 (zapisuje wszystko, enrich) + final 11:00 + evening 23:00. No-faza `FootStats-DailyAgent` WYŁĄCZONY (D5, redundantny) |
 | **API** | ✅ | FastAPI + Sentry + SlowAPI + CORS + Timeout |
 | **DB** | ✅ | Neon PG (prod), keepalives, pool maxconn=10, migracja 6 (telegram_chat_id) |
@@ -82,6 +86,8 @@
 
 | Funkcja | Data |
 |---------|------|
+| **Scrapery multi-source + cross-walidacja** — framework `scrapers/sources/` (MatchData/ResultsSource/aggregator) + 3 źródła (API-Football, football-data.co.uk, FlashScore); live 27 meczów potwierdzonych ≥2 źródła, 0 rozjazdów; **brain graph szczegółowy** (41 węzłów) | 06-23 |
+| **FlashScore live-leak fix** — `_parse_mobi_html` ignorował `class="fin"`, mecz w trakcie zwracany jako końcowy → kupony #240/241/242 LOST błędnie; fix + revert do ACTIVE + cache wyczyszczony | 06-23 |
 | **D3 część 1+2** — prob modelu w `predictions` (migracja 8) + guard `koryguj_tip_wg_modelu` (Groq tip <15% prob → override argmax) | 06-22 |
 | **Email transakcyjny Resend** — welcome po rejestracji (live OK) + **rynek GG2H + HT capture** (Poisson half-model, settlement z HT) | 06-22 |
 | **Cel B root cause USUNIĘTY w całości** (bug kalibracji per-wynik 1X2, `11cc57232`) + gate `CALIBRATION_ENABLED` OFF | 06-20 |

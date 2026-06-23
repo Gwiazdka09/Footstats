@@ -1,6 +1,6 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-22
+**Ostatnia aktualizacja:** 2026-06-23
 **Wersja:** v3.4-stable
 **Accuracy:** model offline 51.3% 10 lig (DC, NED 54.9%, kalibracja monotoniczna) | live 31.7% (stare, sprzed fixów Cel B — czeka na świeże)
 **Cel:** M1 = 55% win rate
@@ -10,8 +10,9 @@
 > Cel C (Dixon-Coles w prod), audyt settlement + audyt głęboki (06-18), dług techniczny #1-#5,
 > decyzje D1a/D1b/D2/D4/D5/D6/D7, TECHNICZNE/SECURITY (stealth, cli/analyzer decompose, daily_io),
 > trainer crash fix + D3 część 1+2 (prob/guard) + Telegram escape/cli import + flaky test +
-> email Resend + rynek GG2H+HT (06-22 → `CHANGELOG.md`). Suite: **1209 testów pass / 4 skip**
-> (2 fail + 2 error niezwiązane z sesją — checkpoint order, file_integrity length — do zbadania).
+> email Resend + rynek GG2H+HT (06-22) + scrapery multi-source framework + 3 źródła
+> (AF/football-data.co.uk/FlashScore) z cross-walidacją live + FlashScore live-leak fix +
+> brain graph szczegółowy (06-23 → `CHANGELOG.md`). Suite: **1254 testów pass / 6 skip**.
 
 ---
 
@@ -112,19 +113,35 @@
 
 ---
 
-## 🌐 SCRAPERY — multi-source + cross-walidacja (start 06-22)
+## 🌐 SCRAPERY — multi-source + cross-walidacja
 
-> **Cel:** wiele źródeł danych (wyniki/HT/kursy) + warstwa porównująca → (1) redundancja gdy
-> API-Football nie pokrywa meczu, (2) cross-walidacja — rozjazdy między źródłami = sygnał błędu
-> danych albo wartości bukmacherskiej. Framework w budowie, osobny commit (jeszcze NIE w git).
+- [x] **Architektura** `scrapers/sources/`** (06-23, `5c0a9adc2`): adapter `MatchData` (typ
+  ujednolicony: wynik/HT/kursy/timestamp/source) + `ResultsSource` protocol (interfejs każdego
+  scrapera) + `aggregator` (porównanie wielu źródeł → konsensus / flag rozjazdu).
+- [x] **3 źródła wpięte + cross-walidacja live OK** (06-23): API-Football (`5c0a9adc2`),
+  football-data.co.uk CSV (`6ad9899d4`), FlashScore mobi (`0383a11ff`); rejestr aggregatora
+  (`d35a074b4`, `a0c22d2c6`). Live: AF 79 + FlashScore 98 meczów, **27 potwierdzonych przez
+  ≥2 źródła, 0 rozjazdów**.
+- [ ] **Kolejne źródła (darmowe, do oceny per-stabilność/anti-bot):** Soccer24, Meczyki,
+  LiveScore, Transfermarkt (Sofascore już 403 — wymaga stealth, patrz TECHNICZNE).
+- [ ] **Wpięcie `aggregator.consensus_result` do settlementu** (`coupon_settlement._find_leg_result`)
+  jako zunifikowany fallback — dziś settlement i aggregator działają równolegle, nie scalone.
 
-- [ ] **Architektura** `scrapers/sources/`: wspólny adapter `MatchData` (typ ujednolicony:
-  wynik/HT/kursy/timestamp/source) + `ResultsSource` protocol (interfejs każdego scrapera) +
-  `aggregator` (porównanie wielu źródeł → konsensus / flag rozjazdu).
-- [ ] **Źródła do dodania (darmowe, do oceny per-stabilność/anti-bot):** Flashscore, Soccer24,
-  Sofascore (już 403 — wymaga stealth, patrz TECHNICZNE), Meczyki, LiveScore, sport.tvp.pl,
-  polsatsport, Eurosport, Interia, Transfermarkt.
-- [ ] Status: framework w budowie — brak commitu jeszcze, czeka na pierwszy adapter + testy.
+---
+
+## 🏗 AUDYT ARCHITEKTURY / STANDARDY (06-23)
+
+> Audyt CI/CD + jakość kodu. Werdykt: spełnia większość wymagań produkcyjnych (CI/CD, **1254
+> testy**, JWT/RODO/Sentry/Docker/Neon/migracje). Gapy do poziomu "enterprise" poniżej.
+
+- [ ] **CI bez lint/type-check** — `ci.yml` odpala pytest + import check + Docker build + health,
+  ALE brak kroku lintu/typowania. Dodać `ruff check` + `mypy` jako krok CI (obecnie repo nie ma
+  skonfigurowanego ruff w `pyproject.toml` ani `.pre-commit-config.yaml` — najpierw config, potem
+  gate w `ci.yml`).
+- [ ] **Brak progu coverage** — `pytest-cov` jest w deps, ale CI nie wymusza min% (`--cov-fail-under`).
+  Dodać gate (np. 80% wg globalnej reguły testing).
+- [ ] **Pozostałe god-moduły** (linie wg `wc -l`, 06-23): `superbet.py` 1128, `daily_agent.py` 1080,
+  `logging.py` 725 — kandydaci do dekompozycji (wzorem `cli.py`/`analyzer.py` z 06-21).
 
 ---
 
