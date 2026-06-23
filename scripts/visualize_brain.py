@@ -93,48 +93,101 @@ def fetch_dynamic_data():
 def create_brain_graph():
     """Generuje interaktywną mapę PREMIUM (Pełna Architektura + Live Data)"""
     
-    # 1. PEŁNA ARCHITEKTURA (Przywrócona z oryginału)
+    # 1. PEŁNA ARCHITEKTURA — szczegółowa, warstwowa (aktualna 2026-06-23).
+    # Kolory = warstwa. Rozmiar = centralność. Kształt database = tabela Neon PG.
+    C = {  # palety per warstwa
+        'agent': '#FFD700', 'phase': '#FF8C00', 'ai': '#9370DB', 'model': '#FF6B6B',
+        'money': '#32CD32', 'scrape': '#4DABF7', 'source': '#20C997', 'data': '#A0522D',
+        'api': '#4169E1', 'front': '#15AABF', 'db': '#2F9E44', 'cfg': '#868E96',
+    }
+    def N(i, lbl, layer, size=26, shape='dot', **kw):
+        return {'id': i, 'label': lbl, 'color': C[layer], 'size': size, 'shape': shape, 'group': layer, **kw}
+
     nodes = [
-        # Agenty
-        {'id': 'daily_agent', 'label': 'daily_agent.py\n(MAIN)', 'color': '#FFD700', 'size': 40, 'shape': 'dot', 'title': 'Główny orchestrator'},
-        {'id': 'evening_agent', 'label': 'evening_agent.py\n(SETTLEMENT)', 'color': '#FFC700', 'size': 35, 'shape': 'dot'},
-        # AI/RAG
-        {'id': 'analyzer', 'label': 'analyzer.py\n(LLM)', 'color': '#9370DB', 'size': 40, 'shape': 'dot'},
-        {'id': 'post_match_analyzer', 'label': 'post_match_analyzer.py\n(RAG)', 'color': '#BA55D3', 'size': 35, 'shape': 'dot'},
-        {'id': 'trainer', 'label': 'trainer.py\n(TRAINING)', 'color': '#DA70D6', 'size': 30, 'shape': 'dot'},
-        # Frontend/API
-        {'id': 'api_main', 'label': 'api/main.py\n(FastAPI)', 'color': '#4169E1', 'size': 35, 'shape': 'dot'},
-        {'id': 'preview', 'label': 'dashboard.py\n(Streamlit)', 'color': '#1E90FF', 'size': 30, 'shape': 'dot'},
-        # Database
-        {'id': 'coupons_db', 'label': 'coupons\n(TABLE)', 'color': '#32CD32', 'size': 35, 'shape': 'dot'},
-        {'id': 'predictions_db', 'label': 'predictions\n(TABLE)', 'color': '#3CB371', 'size': 30, 'shape': 'dot'},
-        {'id': 'ai_feedback_db', 'label': 'ai_feedback\n(RAG MEMORY)', 'color': '#FF1493', 'size': 45, 'shape': 'dot', 'borderWidth': 3, 'title': 'RAG Memory — Wnioski z porażek'},
-        {'id': 'db_main', 'label': 'footstats_backtest.db\n(SQLite)', 'color': '#228B22', 'size': 32, 'shape': 'database'},
-        # Configuration
-        {'id': 'config', 'label': 'config.py\n(CONFIG)', 'color': '#808080', 'size': 28, 'shape': 'dot'},
-        # Core
-        {'id': 'backtest', 'label': 'backtest.py\n(BACKTEST)', 'color': '#FF8C00', 'size': 30, 'shape': 'dot'},
-        {'id': 'calibration', 'label': 'calibration.py\n(KELLY)', 'color': '#FF7F50', 'size': 28, 'shape': 'dot'},
-        {'id': 'results_updater', 'label': 'results_updater.py\n(RESULTS)', 'color': '#6495ED', 'size': 30, 'shape': 'dot'},
+        # ── Agenty / scheduler (08:00 draft, 11:00 final, 23:00 evening) ──
+        N('daily_agent', 'daily_agent.py\n(ORCHESTRATOR)', 'agent', 42, title='Główny pipeline: fetch→enrich→Groq→kupony→predykcje'),
+        N('scheduler', 'daily_agent_scheduler\n(draft-wait-final)', 'agent', 28),
+        N('evening_agent', 'evening_agent.py\n(SETTLEMENT 23:00)', 'agent', 34, title='Rozlicza kupony+predykcje wszystkich userów; auto-refit kalibracji'),
+        N('daily_phases', 'core/daily_phases.py\n(FAZY: forma/kelly/odds-fallback)', 'phase', 30),
+        # ── AI / RAG / LLM ──
+        N('analyzer', 'ai/analyzer.py\n(Groq LLM selekcja)', 'ai', 36),
+        N('analyzer_helpers', 'ai/analyzer_helpers.py\n(+D3 guard, zapis predykcji)', 'ai', 26),
+        N('rag', 'ai/rag.py\n(RAG kontekst/faktory)', 'ai', 24),
+        N('post_match', 'ai/post_match_analyzer.py\n(RAG: wnioski z porażek)', 'ai', 28),
+        N('trainer', 'ai/trainer.py\n(kalibracja→prompt)', 'ai', 24),
+        # ── Model core (Poisson / Dixon-Coles / ensemble / rynki) ──
+        N('quick_picks', 'core/quick_picks.py\n(pewniaczki 2dni)', 'model', 30),
+        N('poisson', 'core/poisson.py\n(predict_match)', 'model', 30),
+        N('dc', 'core/poisson_bayesian.py\n(Dixon-Coles)', 'model', 28),
+        N('ensemble', 'core/ensemble.py\n(blend devig)', 'model', 24),
+        N('markets', 'core/markets.py\n(katalog: 1X2/Over/GG2H...)', 'model', 26),
+        N('betbuilder', 'core/bet_builder + betbuilder_rules\n(macierz, combo)', 'model', 24),
+        N('system_paper', 'core/system_paper.py\n(paper-trading System)', 'model', 26),
+        N('calibrator', 'core/probability_calibrator.py\n(gate OFF, auto-refit)', 'model', 24),
+        N('wf_harness', 'core/wf_harness.py\n(walk-forward offline)', 'model', 24),
+        # ── Settlement / pieniądze ──
+        N('settlement', 'core/coupon_settlement.py\n(rozliczenie + stale-VOID)', 'money', 30),
+        N('coupon_tracker', 'core/coupon_tracker.py\n(save/active/promote)', 'money', 26),
+        N('bankroll', 'core/bankroll.py\n(Kelly, stop-loss)', 'money', 24),
+        N('betting', 'utils/betting.py\n(oblicz_tip_correct +HT)', 'money', 24),
+        # ── Scrapery (źródła surowe) ──
+        N('bzzoiro', 'scrapers/bzzoiro.py\n(ML predykcje + kursy)', 'scrape', 30),
+        N('api_football', 'scrapers/api_football.py\n(/odds /fixtures +HT)', 'scrape', 30),
+        N('form_scraper', 'scrapers/form_scraper.py\n(Sofascore forma, stealth)', 'scrape', 22),
+        # ── Framework multi-source (cross-walidacja) ──
+        N('aggregator', 'sources/aggregator.py\n(compare/consensus)', 'source', 30, borderWidth=3, title='Cross-walidacja źródeł'),
+        N('af_source', 'sources/af_source', 'source', 20),
+        N('fd_source', 'sources/footballdata_source\n(CSV +HT)', 'source', 20),
+        N('fs_source', 'sources/flashscore_source\n(mobi FT)', 'source', 20),
+        # ── Dane / config ──
+        N('hist_loader', 'data/historical_loader.py\n(cache 10 lig, 32k)', 'data', 24),
+        N('config', 'config.py\n(whitelist, flagi, env)', 'cfg', 22),
+        # ── API / front ──
+        N('api_main', 'api/main.py\n(FastAPI + GUI /preview)', 'api', 32),
+        N('routes_coupons', 'api/routes/coupons.py\n(build_tips, markets)', 'api', 24),
+        N('auth', 'api/auth.py\n(JWT, register)', 'api', 24),
+        N('mailer', 'utils/mailer.py\n(Resend email)', 'api', 20),
+        N('gui', 'gui/ (React+Tailwind)\n(kreator, dashboard)', 'front', 30),
+        # ── DB (Neon PostgreSQL) ──
+        N('predictions_db', 'predictions\n(+prob, HT)', 'db', 30, shape='database'),
+        N('coupons_db', 'coupons', 'db', 30, shape='database'),
+        N('feedback_db', 'ai_feedback\n(RAG MEMORY)', 'db', 34, shape='database', borderWidth=3),
+        N('users_db', 'users / bankroll_state', 'db', 24, shape='database'),
     ]
 
+    def E(a, b, layer, w=2, dashes=False, **kw):
+        return {'from': a, 'to': b, 'color': C[layer], 'width': w, 'dashes': dashes, **kw}
     edges = [
-        {'from': 'daily_agent', 'to': 'analyzer', 'color': '#9370DB', 'width': 4},
-        {'from': 'analyzer', 'to': 'coupons_db', 'color': '#32CD32', 'width': 3},
-        {'from': 'analyzer', 'to': 'ai_feedback_db', 'color': '#FF1493', 'width': 3, 'dashes': True},
-        {'from': 'post_match_analyzer', 'to': 'ai_feedback_db', 'color': '#FF1493', 'width': 3},
-        {'from': 'daily_agent', 'to': 'post_match_analyzer', 'color': '#DA70D6', 'width': 3},
-        {'from': 'evening_agent', 'to': 'coupons_db', 'color': '#FFD700', 'width': 3},
-        {'from': 'results_updater', 'to': 'predictions_db', 'color': '#6495ED', 'width': 2},
-        {'from': 'backtest', 'to': 'trainer', 'color': '#DA70D6', 'width': 2, 'dashes': True, 'title': 'Trigger auto-training (co 20 wynikow)'},
-        {'from': 'trainer', 'to': 'analyzer', 'color': '#DA70D6', 'width': 2, 'dashes': True, 'title': 'Inject calibration blocks'},
-        {'from': 'trainer', 'to': 'db_main', 'color': '#228B22', 'width': 1, 'dashes': True},
-        {'from': 'ai_feedback_db', 'to': 'db_main', 'color': '#228B22', 'width': 2, 'dashes': True},
-        {'from': 'coupons_db', 'to': 'db_main', 'color': '#228B22', 'width': 1},
-        {'from': 'predictions_db', 'to': 'db_main', 'color': '#228B22', 'width': 1},
-        {'from': 'api_main', 'to': 'coupons_db', 'color': '#4169E1', 'width': 2},
-        {'from': 'api_main', 'to': 'preview', 'color': '#4169E1', 'width': 2},
-        {'from': 'daily_agent', 'to': 'calibration', 'color': '#FF8C00', 'width': 2},
+        # pipeline główny
+        E('scheduler', 'daily_agent', 'agent', 2), E('daily_agent', 'daily_phases', 'phase', 3),
+        E('daily_agent', 'quick_picks', 'model', 3), E('quick_picks', 'bzzoiro', 'scrape', 2),
+        E('quick_picks', 'poisson', 'model', 2), E('poisson', 'dc', 'model', 2),
+        E('poisson', 'ensemble', 'model', 2), E('daily_phases', 'api_football', 'scrape', 2, title='fallback kursów /odds'),
+        E('daily_agent', 'analyzer', 'ai', 3), E('analyzer', 'analyzer_helpers', 'ai', 2),
+        E('analyzer_helpers', 'rag', 'ai', 1, dashes=True), E('analyzer_helpers', 'predictions_db', 'db', 3),
+        E('analyzer', 'coupons_db', 'money', 2), E('daily_phases', 'system_paper', 'model', 2),
+        E('system_paper', 'coupons_db', 'money', 2), E('daily_agent', 'markets', 'model', 1),
+        E('markets', 'betbuilder', 'model', 1), E('daily_agent', 'bankroll', 'money', 2),
+        E('hist_loader', 'poisson', 'data', 1, dashes=True), E('hist_loader', 'wf_harness', 'data', 1, dashes=True),
+        # settlement
+        E('evening_agent', 'settlement', 'money', 3), E('settlement', 'betting', 'money', 2),
+        E('settlement', 'coupon_tracker', 'money', 2), E('coupon_tracker', 'coupons_db', 'db', 2),
+        E('settlement', 'api_football', 'scrape', 2), E('settlement', 'aggregator', 'source', 1, dashes=True, title='konsensus (planowane)'),
+        E('evening_agent', 'calibrator', 'model', 1, dashes=True, title='auto-refit co +30 settled'),
+        E('betting', 'predictions_db', 'db', 1),
+        # multi-source
+        E('aggregator', 'af_source', 'source', 1), E('aggregator', 'fd_source', 'source', 1),
+        E('aggregator', 'fs_source', 'source', 1), E('af_source', 'api_football', 'scrape', 1, dashes=True),
+        # RAG memory loop
+        E('daily_agent', 'post_match', 'ai', 2), E('post_match', 'feedback_db', 'db', 3),
+        E('rag', 'feedback_db', 'db', 2, dashes=True), E('trainer', 'analyzer', 'ai', 1, dashes=True, title='inject kalibracja'),
+        # API / front
+        E('api_main', 'routes_coupons', 'api', 2), E('routes_coupons', 'markets', 'model', 2),
+        E('api_main', 'auth', 'api', 1), E('auth', 'mailer', 'api', 1, dashes=True),
+        E('api_main', 'gui', 'front', 2), E('routes_coupons', 'coupons_db', 'db', 1),
+        E('auth', 'users_db', 'db', 1),
+        # config
+        E('config', 'daily_agent', 'cfg', 1, dashes=True), E('config', 'quick_picks', 'cfg', 1, dashes=True),
     ]
 
     # 2. DYNAMIKA: Pobierz lekcje
