@@ -12,7 +12,9 @@
 > trainer crash fix + D3 część 1+2 (prob/guard) + Telegram escape/cli import + flaky test +
 > email Resend + rynek GG2H+HT (06-22) + scrapery multi-source framework + 3 źródła
 > (AF/football-data.co.uk/FlashScore) z cross-walidacją live + FlashScore live-leak fix +
-> brain graph szczegółowy (06-23 → `CHANGELOG.md`). Suite: **1254 testów pass / 6 skip**.
+> brain graph szczegółowy (06-23) + consensus→settlement + CI lint/security gate +
+> hardening OWASP (live) + dekompozycja superbet (06-24/25 → `CHANGELOG.md`).
+> Suite: **1283 testów pass / 6 skip**.
 
 ---
 
@@ -124,8 +126,8 @@
   ≥2 źródła, 0 rozjazdów**.
 - [ ] **Kolejne źródła (darmowe, do oceny per-stabilność/anti-bot):** Soccer24, Meczyki,
   LiveScore, Transfermarkt (Sofascore już 403 — wymaga stealth, patrz TECHNICZNE).
-- [ ] **Wpięcie `aggregator.consensus_result` do settlementu** (`coupon_settlement._find_leg_result`)
-  jako zunifikowany fallback — dziś settlement i aggregator działają równolegle, nie scalone.
+- [x] **Wpięcie `aggregator.consensus_result` do settlementu** (06-24, `349fd919a`) —
+  Źródło 5 w `_find_leg_result`, additive fallback po źródłach 1-4. +3 testy.
 
 ---
 
@@ -134,14 +136,18 @@
 > Audyt CI/CD + jakość kodu. Werdykt: spełnia większość wymagań produkcyjnych (CI/CD, **1254
 > testy**, JWT/RODO/Sentry/Docker/Neon/migracje). Gapy do poziomu "enterprise" poniżej.
 
-- [ ] **CI bez lint/type-check** — `ci.yml` odpala pytest + import check + Docker build + health,
-  ALE brak kroku lintu/typowania. Dodać `ruff check` + `mypy` jako krok CI (obecnie repo nie ma
-  skonfigurowanego ruff w `pyproject.toml` ani `.pre-commit-config.yaml` — najpierw config, potem
-  gate w `ci.yml`).
+- [x] **CI lint/type/security gate** (06-24/25) — `ci.yml` 5 jobów: lint (`ruff` E9+F + `mypy`
+  sources, `e7ea3ea50`), security (`bandit`+`pip-audit`, `6afa46f6a`), secrets (`gitleaks`,
+  `9a09e6beb`), test, docker. Config w `pyproject.toml` + `.pre-commit-config.yaml` + Dependabot.
+  CI+CD green na main.
 - [ ] **Brak progu coverage** — `pytest-cov` jest w deps, ale CI nie wymusza min% (`--cov-fail-under`).
   Dodać gate (np. 80% wg globalnej reguły testing).
-- [ ] **Pozostałe god-moduły** (linie wg `wc -l`, 06-23): `superbet.py` 1128, `daily_agent.py` 1080,
-  `logging.py` 725 — kandydaci do dekompozycji (wzorem `cli.py`/`analyzer.py` z 06-21).
+- [x] **`superbet.py` rozbity** (06-25, `3ad91a844`) — 1128→867, parsery → `superbet_parsing.py`, +22 testy.
+- [ ] **Pozostałe god-moduły**: `daily_agent.py` 1080, `logging.py` 725 — kandydaci do dekompozycji
+  (wzorem `cli.py`/`analyzer.py`/`superbet.py`).
+- [ ] **PROD drobne (security):** `ALLOWED_ORIGINS` w Cloud Run nadal zawiera `localhost:5173/3000`
+  → usunąć z prod (zostaw Vercel + run.app). CRON_SECRET = plain env (działa); settlement lokalny
+  (Task Scheduler 23:00), więc Cloud Scheduler/`X-Cron-Secret` opcjonalne.
 
 ---
 

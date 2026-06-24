@@ -1,8 +1,8 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-23
+**Last Updated:** 2026-06-25
 **Current Version:** v3.4-stable
-**System State:** FUNCTIONAL — PRODUCTION
+**System State:** FUNCTIONAL — PRODUCTION (hardening OWASP wdrożony live)
 
 ---
 
@@ -20,13 +20,13 @@
 | **Rynki bukmacherskie** | ✅ | + "Mecz & gol w każdej połowie" (GG2H, Poisson half-model) + HT capture z API-Football (`67f5f418b`) |
 | **Scrapery multi-source** | ✅ | `scrapers/sources/` — `MatchData`+`ResultsSource`+`aggregator`; 3 źródła (API-Football, football-data.co.uk, FlashScore mobi); live cross-walidacja: AF 79+FlashScore 98 meczów, 27 potwierdzonych ≥2 źródła, 0 rozjazdów (`5c0a9adc2` i nast.) |
 | **Brain graph** | ✅ | `scripts/visualize_brain.py` przepisany — 41 węzłów, warstwowa architektura aktualna (agenty/AI/model/settlement/scrapery/sources/API/DB) (`53499bbfc`) |
-| **CI/CD** | 🟡 | `ci.yml`: pytest + import check + Docker build + health-check w kontenerze. Brak: lint (`ruff`)/type-check (`mypy`) gate, brak coverage threshold |
-| **Standardy kodu** | 🟡 | God-moduły pozostałe: `superbet.py` 1128, `daily_agent.py` 1080, `logging.py` 725 linii — kandydaci do dekompozycji |
-| **Tests** | ✅ | 1254 testów pass / 6 skip (telegram zmockowane; +cli/analyzer/daily_io/stealth 06-21; +D3/email/rynek GG2H 06-22; +scrapery sources/footballdata/flashscore + brain graph 06-23) |
+| **CI/CD** | ✅ | `ci.yml` 5 jobów: lint (`ruff` E9+F / `mypy` sources) + security (`bandit` + `pip-audit`) + secrets (`gitleaks`) + test + docker-health. Dependabot (pip/npm/actions) + pre-commit. CI+CD green na main (06-25) |
+| **Standardy kodu** | 🟡 | `superbet.py` rozbity 1128→867 (parsery → `superbet_parsing.py`, 06-25). Pozostałe god-moduły: `daily_agent.py` 1080, `logging.py` 725 — kandydaci |
+| **Tests** | ✅ | 1283 testów pass / 6 skip (+consensus settlement, +security hardening, +superbet parsing 06-24/25) |
 | **Automation** | ✅ | Task Scheduler: draft 08:00 (zapisuje wszystko, enrich) + final 11:00 + evening 23:00. No-faza `FootStats-DailyAgent` WYŁĄCZONY (D5, redundantny) |
 | **API** | ✅ | FastAPI + Sentry + SlowAPI + CORS + Timeout |
 | **DB** | ✅ | Neon PG (prod), keepalives, pool maxconn=10, migracja 6 (telegram_chat_id) |
-| **Security** | ✅ | Rate limit 60/min, SQL parametryzowane, walidacja telegram chat_id |
+| **Security** | ✅ | **Hardening OWASP API Top 10 LIVE (06-25)**: `/health` bez danych biznesowych, `/metrics` za METRICS_TOKEN (401), `/docs`+`/openapi` off w prod (ENV), nagłówki nosniff/DENY/HSTS/no-referrer, rate-limit login 10/min + register 5/min. SQL parametryzowane, JWT_SECRET fail-closed, zero hardcoded sekretów (gitleaks/bandit/pip-audit czyste), telegram chat_id allowlist |
 | **Auth** | ✅ | JWT, login/register/delete, per-user (bankroll/settings/telegram) |
 | **RODO** | ✅ | Cookie consent, polityka, regulamin, self-delete UI |
 | **SEO** | ✅ | meta/OG/Twitter, sitemap.xml, robots.txt |

@@ -3,6 +3,37 @@
 > Archiwum ukończonych prac (przeniesione z TODO.md przez `footstats-scribe`).
 > Aktywne zadania: `TODO.md`. Pełna historia commitów: `git log`.
 
+## 2026-06-24 / 06-25
+
+### Settlement — consensus multi-source
+- **`349fd919a`**: `coupon_settlement._find_leg_result` — Źródło 5: `aggregator.consensus_result`
+  jako additive fallback po źródłach 1-4 (dokłada football-data.co.uk CSV + cross-walidowany
+  FlashScore gdy AF/football-data.org/cache/DB nie pokryły meczu). +3 testy regresji.
+
+### CI — lint/type gate + sprzątanie martwego kodu
+- **`e7ea3ea50`**: job `lint` w `ci.yml` — `ruff check` (E9 składnia + F pyflakes, blokujący) +
+  `mypy` na `scrapers/sources` (ratchet). Config w `pyproject.toml` (select/per-file-ignores).
+  `ruff --fix` usunął ~200 martwych importów/zmiennych (51 src + 46 test, 99 plików). Przywrócone
+  2 re-eksporty potrzebne testom (`quick_picks.calibrate_confidence`, `bzzoiro.ENV_BZZOIRO`).
+
+### Bezpieczeństwo — hardening OWASP API Top 10 (wdrożony LIVE 06-25)
+- **`cd2667579`**: `/health` okrojony (zero bankroll/accuracy/userów/timestamp — był publiczny leak);
+  `/leaderboard/{u}/coupons` bez `user_id`; rate-limit `/auth/login` 10/min + `/auth/register` 5/min
+  (`api/limiter.py` wydzielony); `/docs`+`/redoc`+`/openapi.json` off w prod (`ENV`); `/metrics` za
+  `METRICS_TOKEN`; middleware nagłówków (nosniff/DENY/HSTS/no-referrer). +4 testy.
+- **`6afa46f6a`**: DevSecOps — `bandit` (SAST, 1 realny fix MD5 `usedforsecurity=False` + 5 false-pos
+  `# nosec`) + `pip-audit` (nasze deps: 0 CVE). Job `security` w CI + Dependabot (pip/npm/actions).
+- **`9a09e6beb`**: `gitleaks` (job `secrets` + `.gitleaks.toml` allowlist) + `.pre-commit-config.yaml`
+  (ruff/bandit/gitleaks/detect-private-key). Historia git: 0 realnych kluczy API.
+- **Wdrożenie prod (06-25):** push → CD → Cloud Run revision 00259; METRICS_TOKEN zamontowany jako
+  secret-ref env. Zweryfikowane live: `/health` minimal, `/metrics` 401, `/docs`+`/openapi` 404,
+  4 nagłówki bezpieczeństwa obecne. Audyt non-API czysty (sekrety/git, Telegram authz, DB fail-closed).
+
+### Refactor — dekompozycja superbet.py (ostatni god-moduł)
+- **`3ad91a844`**: `superbet.py` 1128→867 linii — 6 czystych parserów (dict/str/list → dict)
+  wydzielonych do `superbet_parsing.py` (AST-precyzyjnie, behavior-preserving). +22 testy
+  (logika wcześniej 0% pokryta). Scrapery Playwright (`zaloguj`/`pobierz_*`) zostają.
+
 ## 2026-06-23
 
 ### Scrapery multi-source + cross-walidacja
