@@ -27,7 +27,7 @@ from typing import Optional
 from urllib.parse import quote
 
 try:
-    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    from playwright.sync_api import sync_playwright
     PLAYWRIGHT_OK = True
 except ImportError:
     PLAYWRIGHT_OK = False
@@ -481,7 +481,7 @@ def formatuj_forme(data: dict) -> str:
         f"Forma (ost. 5): {form_str}  ({wins}W {draws}D {losses}L)\n"
         f"Gole: +{gs} -{gc}\n"
         f"Ostatnie mecze:\n" + "\n".join(match_lines) + "\n"
-        f"Kontuzje:\n" + "\n".join(inj_lines)
+        "Kontuzje:\n" + "\n".join(inj_lines)
     )
 
 

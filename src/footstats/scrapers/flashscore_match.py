@@ -10,7 +10,7 @@ Nuclear Regex version: przeszukuje surowy HTML.
 import time
 import json
 import re
-from typing import Optional, Dict, List
+from typing import Dict
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
     _PLAYWRIGHT_OK = True

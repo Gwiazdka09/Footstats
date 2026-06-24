@@ -23,7 +23,6 @@ from footstats.utils.telegram_notify import (
     send_kupon,
     send_wynik_update,
     send_draft_kupon,
-    check_and_alert_source_down,
 )
 
 load_dotenv()

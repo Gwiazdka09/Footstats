@@ -1,5 +1,4 @@
 import sqlite3
-from pathlib import Path
 
 from footstats.core.wf_db import init_db, save_run, load_run
 

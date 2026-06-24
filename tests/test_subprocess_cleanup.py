@@ -7,8 +7,6 @@ AND is wrapped in an OSError/FileNotFoundError handler.
 """
 from __future__ import annotations
 
-import ast
-import re
 from pathlib import Path
 
 import pytest
@@ -101,6 +99,6 @@ def test_no_new_popen_files() -> None:
             new_popen_files.append(f.relative_to(SRC))
 
     assert not new_popen_files, (
-        f"New files with Popen (add to POPEN_FILES or narrow to subprocess.run):\n"
+        "New files with Popen (add to POPEN_FILES or narrow to subprocess.run):\n"
         + "\n".join(str(p) for p in new_popen_files)
     )

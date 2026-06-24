@@ -98,13 +98,11 @@ def predict_match_bayesian(
     league_home = avgs["home_avg"]
     league_away = avgs["away_avg"]
 
-    # Home team ratings (as home team and overall defense)
+    # Home team ratings (as home team)
     home_home = _compute_ratings(g, df, is_home=True)
-    home_away_def = _compute_ratings(g, df, is_home=False)  # how many conceded as away
 
-    # Away team ratings (as away team and overall attack)
+    # Away team ratings (as away team)
     away_away = _compute_ratings(a, df, is_home=False)
-    away_home_def = _compute_ratings(a, df, is_home=True)  # how many conceded as home
 
     # Bayesian-shrunk attack/defense rates
     if home_home["att"] is None or away_away["att"] is None:

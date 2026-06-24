@@ -1,4 +1,3 @@
-from footstats.utils.helpers import _s
 from footstats.config import FINAL_REMIS_BOOST
 
 # ================================================================
@@ -24,7 +23,7 @@ def komentarz_analityka(w: dict) -> str:
             f"prawdopodobienstwo wzroslo o +{int((FINAL_REMIS_BOOST-1)*100)}% vs standard)."
         )
     elif typ == "PUCHAR_1":
-        linie.append(f"[PUCHAR 1/2] Pierwsza noga – wynik bedzie ksztaltowal rewanz.")
+        linie.append("[PUCHAR 1/2] Pierwsza noga – wynik bedzie ksztaltowal rewanz.")
 
     if pw >= 65:       linie.append(f"Model faworyzuje {g} ({pw:.0f}% szans na wygrana).")
     elif pp >= 65:     linie.append(f"Model faworyzuje {a} ({pp:.0f}% szans na wygrana).")

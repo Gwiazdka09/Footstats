@@ -9,7 +9,6 @@ Użycie:
 """
 
 import os
-import re
 import sys
 import argparse
 from datetime import datetime
@@ -228,7 +227,7 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     from datetime import datetime as dt
     now = dt.now().strftime("%Y-%m-%d %H:%M:%S")
     console.rule(f"[bold cyan]Evening Agent START — {date_str} ({now})[/bold cyan]")
-    console.print(f"[dim]Proces: Automatyczne rozliczanie kuponów (scheduled @ 23:00)[/dim]")
+    console.print("[dim]Proces: Automatyczne rozliczanie kuponów (scheduled @ 23:00)[/dim]")
 
     init_coupon_tables()
     init_db()

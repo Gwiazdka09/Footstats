@@ -2,7 +2,6 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-import requests
 from footstats.config import CACHE_TTL_MIN
 from footstats.utils.console import console
 

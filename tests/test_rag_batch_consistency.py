@@ -1,10 +1,6 @@
 """Testy spójności batch vs single dla RAG queries."""
-import json
-import sqlite3
-from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from footstats.ai.rag import pobierz_rag_kontekst, pobierz_rag_wzorce, wyciagnij_faktory
 

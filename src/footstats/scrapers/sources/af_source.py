@@ -28,7 +28,7 @@ class APIFootballSource:
 
     def _get(self, endpoint: str, params: dict | None = None) -> dict | None:
         """Pośredni wrapper na klienta — ułatwia mockowanie w testach."""
-        return self._klient._get(endpoint, params)
+        return self._klient._get(endpoint, params or {})
 
     def fetch(self, date: str) -> list[MatchData]:
         """

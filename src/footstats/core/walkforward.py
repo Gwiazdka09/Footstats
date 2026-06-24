@@ -12,12 +12,9 @@ Użycie:
     python -m footstats.core.walkforward --all --top 5
 """
 
-import json
 import sys
 from pathlib import Path
-from datetime import datetime
 
-import numpy as np
 import pandas as pd
 
 from footstats.utils.db import connect as _connect

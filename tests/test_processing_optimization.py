@@ -1,7 +1,6 @@
 """Tests for DataFrame optimization + chunking."""
 import pandas as pd
 import numpy as np
-import pytest
 
 from footstats.core.processing import (
     chunk_dataframe,

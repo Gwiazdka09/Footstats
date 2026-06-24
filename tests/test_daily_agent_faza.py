@@ -198,7 +198,6 @@ def test_enrichuj_finalna_faza_sets_fields_on_match(tmp_path):
         ]
     }
 
-    import requests
     def mock_get(url, **kwargs):
         m = MagicMock()
         m.raise_for_status = MagicMock()
@@ -235,7 +234,6 @@ def test_zapisz_next_final_txt_creates_file(tmp_path):
         old_parents = None
 
         # Prostszy sposób: testuj bezpośrednio przez monkey-patch DATA_DIR w funkcji
-        import types
         src = mod._zapisz_next_final_txt.__code__
         # Zamiast tego — sprawdź przez efekty uboczne z prawdziwą DATA_DIR
         pass

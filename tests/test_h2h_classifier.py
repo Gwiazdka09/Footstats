@@ -1,6 +1,5 @@
 """Unit tests for h2h.py and classifier.py."""
 import pandas as pd
-import pytest
 from datetime import datetime, timedelta
 
 

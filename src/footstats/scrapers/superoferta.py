@@ -29,7 +29,7 @@ from pathlib import Path
 from datetime import datetime
 
 try:
-    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    from playwright.sync_api import sync_playwright
 except ImportError:
     logger.info("BŁĄD: pip install playwright  następnie  python -m playwright install chromium")
     sys.exit(1)
@@ -41,7 +41,6 @@ from footstats.scrapers.base_playwright import (
     SUPEROFERTA_CONFIG as _CFG,
     zamknij_popup as _zamknij_popup_base,
     zaloguj as _zaloguj_base,
-    zapisz_cache as _zapisz_cache_base,
 )
 
 STS_URL   = "https://www.sts.pl"

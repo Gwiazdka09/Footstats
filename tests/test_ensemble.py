@@ -1,4 +1,3 @@
-import pytest
 from footstats.core.ensemble import ensemble_probs, get_roznica
 
 

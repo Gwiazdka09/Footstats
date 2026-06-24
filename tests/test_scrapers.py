@@ -1,5 +1,4 @@
 """Testy scrapers/ – mockowane połączenia HTTP."""
-import pytest
 import requests
 from unittest.mock import patch, MagicMock
 

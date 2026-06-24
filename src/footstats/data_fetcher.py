@@ -5,7 +5,6 @@ from rich.prompt import Prompt
 from rich import box
 from rich.table import Table
 from footstats.utils.console import console
-from footstats.utils.helpers import _s
 from footstats.config import SLEEP_LOOP
 from footstats.scrapers.football_data import APIClient
 from footstats.scrapers.api_football import APIFootball

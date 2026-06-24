@@ -1,7 +1,5 @@
 """Testy core/walkforward.py — walk-forward backtest."""
 import pandas as pd
-import pytest
-from unittest.mock import patch
 from footstats.core.walkforward import (
     _lambda,
     _forma,

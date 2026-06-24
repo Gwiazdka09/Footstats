@@ -1,5 +1,4 @@
 """Unit tests for utils/betting.py — oblicz_tip_correct and typy_zaklady."""
-import pytest
 from footstats.utils.betting import oblicz_tip_correct
 
 

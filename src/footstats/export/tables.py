@@ -8,7 +8,7 @@ from rich.align import Align
 from rich.prompt import Prompt
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
-from footstats.config import VERSION, PEWNIACZEK_PROG
+from footstats.config import VERSION
 import footstats.export.pdf_font as _pdf_font_mod
 from footstats.scrapers.football_data import APIClient
 from footstats.core.importance import ImportanceIndex
@@ -131,7 +131,7 @@ def wyswietl_predykcje(wynik: dict):
         ag, aa = klas.get("agg_g","?"), klas.get("agg_a","?")
         nt.append(f"\n  [REWANZ – wynik 1. meczu: {ag}:{aa}]  \n", style="bold cyan")
     elif typ_meczu == "FINAL":
-        nt.append(f"\n  [FINAL / MECZ BEZ REWANZU]  \n", style="bold magenta")
+        nt.append("\n  [FINAL / MECZ BEZ REWANZU]  \n", style="bold magenta")
     elif typ_meczu == "PUCHAR_1":
         nt.append("\n  [PUCHAR 1/2 – pierwsza noga]  \n", style="bold yellow")
     elif wynik.get("knockout"):
@@ -193,12 +193,12 @@ def wyswietl_predykcje(wynik: dict):
         ("Zmeczenie A",             "😫 TAK" if wynik.get("heur_a",{}).get("zmeczenie") else "–"),
         ("─"*28,                    "─"*16),
         (f"H2H {g[:10]} (24 mies.)",
-            f"🏅 Patent" if h2h_g.get("patent") else
-            f"⚔️ Zemsta" if h2h_g.get("zemsta") else
+            "🏅 Patent" if h2h_g.get("patent") else
+            "⚔️ Zemsta" if h2h_g.get("zemsta") else
             f"–  ({h2h_g.get('n_h2h',0)} meczow)"),
         (f"H2H {a[:10]} (24 mies.)",
-            f"🏅 Patent" if h2h_a.get("patent") else
-            f"⚔️ Zemsta" if h2h_a.get("zemsta") else
+            "🏅 Patent" if h2h_a.get("patent") else
+            "⚔️ Zemsta" if h2h_a.get("zemsta") else
             f"–  ({h2h_a.get('n_h2h',0)} meczow)"),
         ("Home Fortress",           f"🏰 {fort_g.get('seria',0)} mecze" if fort_g.get("fortress") else "–"),
         ("─"*28,                    "─"*16),

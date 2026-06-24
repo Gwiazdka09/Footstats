@@ -3,8 +3,8 @@ import pandas as pd
 import pytest
 from datetime import datetime, timedelta
 
-from footstats.core.classifier import _czy_knockout, KlasyfikatorMeczu
-from footstats.core.form import _wagi_mecze, _oblicz_sile_wazona
+from footstats.core.classifier import _czy_knockout
+from footstats.core.form import _wagi_mecze
 from footstats.core.poisson import predict_match
 
 

@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from footstats.core.circuit_breaker import CircuitBreaker, _Stan
+from footstats.core.circuit_breaker import CircuitBreaker
 from footstats.core.exceptions import (
     FootStatsCircuitOpenError,
     FootStatsDatabaseError,

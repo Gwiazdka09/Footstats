@@ -23,7 +23,7 @@ def wyswietl_analiza_ai(wynik: dict) -> None:
     print(separator)
     print(f"  TYP:      {t}")
     print(f"  PEWNOSC:  {p}%")
-    print(f"\n  UZASADNIENIE:")
+    print("\n  UZASADNIENIE:")
     print(f"  {uz}")
 
     if vb and vb_opis:

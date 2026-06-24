@@ -1,4 +1,3 @@
-from pathlib import Path
 from datetime import datetime
 import pandas as pd
 from reportlab.lib.pagesizes import A4
@@ -10,7 +9,6 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from footstats.export.pdf_font import _pdf, PDF_FONT, PDF_FONT_BOLD, FONT_OK
 _s = _pdf  # alias używany wewnętrznie
-from footstats.utils.console import console
 from footstats.config import VERSION, FINAL_REMIS_BOOST
 from footstats.core.value_bet import typy_zaklady
 from footstats.core.confidence import komentarz_analityka

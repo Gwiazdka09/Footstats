@@ -3,7 +3,6 @@ test_poisson_xg.py — FAZA λ: blend xG uwzględnia obronę rywala (xGA), nie t
 Słabsza obrona gościa (wyższe xga_avg) → wyższe λ gospodarza.
 """
 import pandas as pd
-import pytest
 
 from footstats.core import poisson as P
 

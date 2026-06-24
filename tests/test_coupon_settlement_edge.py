@@ -1,5 +1,4 @@
 """Testy edge case'ów rozliczania kuponów — oblicz_tip_correct."""
-import pytest
 from footstats.utils.betting import oblicz_tip_correct
 
 

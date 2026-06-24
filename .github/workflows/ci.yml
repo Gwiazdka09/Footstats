@@ -7,6 +7,30 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lint tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+
+      # ruff: błędy składni (E9) + pyflakes (F) na całym repo — blokujący.
+      - name: Ruff lint
+        run: python -m ruff check src/ tests/
+
+      # mypy: wąski czysty zakres (scrapers/sources) — ratchet w górę z czasem.
+      - name: Mypy type-check (scrapers/sources)
+        run: python -m mypy src/footstats/scrapers/sources/
+
   test:
     runs-on: ubuntu-latest
 

@@ -178,9 +178,9 @@ def get_corner_suggestions(lh: float, la: float) -> list[str]:
         sugestie.append(f"Rzuty rożne Under 9.5 (Est: {est_corners:.1f})")
     # Dominant attack → more corners for that team
     if lh > la * 1.5:
-        sugestie.append(f"Gospodarz rożne Over 5.5 (Atak dominujący)")
+        sugestie.append("Gospodarz rożne Over 5.5 (Atak dominujący)")
     if la > lh * 1.5:
-        sugestie.append(f"Gość rożne Over 5.5 (Atak dominujący)")
+        sugestie.append("Gość rożne Over 5.5 (Atak dominujący)")
     return sugestie
 
 

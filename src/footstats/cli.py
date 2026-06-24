@@ -1,7 +1,6 @@
 """FootStats CLI – Main entry point (MODUL 18)."""
 import os
 import time
-import json
 from datetime import datetime
 from pathlib import Path
 
@@ -13,11 +12,10 @@ from rich.table import Table
 from rich import box
 
 from footstats.utils.console import console
-from footstats.utils.helpers import _s
 from footstats.utils.cache import af_budget_status, af_cache_info, af_cache_clear, AF_BLOCK_THRESHOLD, AF_WARN_THRESHOLD, AF_CACHE_TTL_H
 from footstats.config import (
     VERSION, SLEEP_LOOP, SLEEP_KOLEJKA, PEWNIACZEK_PROG,
-    ENV_FOOTBALL, ENV_APISPORTS, ENV_BZZOIRO,
+    ENV_APISPORTS, ENV_BZZOIRO,
     _wczytaj_lub_stworz_env, _czytaj_wszystkie_klucze,
 )
 from footstats.export.pdf_font import _zarejestruj_font
@@ -45,7 +43,7 @@ from footstats.export.tables import (
 )
 from footstats.export.pdf import eksportuj_pdf
 from footstats.cli_commands import (
-    _wyswietl_ai_pewniaczki, _ai_blok_pewniaczki, _reinicjuj_systemy,
+    _ai_blok_pewniaczki, _reinicjuj_systemy,
     _wyswietl_menu_startowe, _analiza_kuponu,
 )
 

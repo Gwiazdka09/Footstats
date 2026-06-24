@@ -133,7 +133,6 @@ class KlasyfikatorMeczu:
                     agg_g, agg_a = fg, fa
                 else:
                     agg_g, agg_a = fa, fg
-                roznica = agg_g - agg_a
                 return {
                     "typ":          "REWANZ",
                     "etykieta":     f"[bold cyan][REWANZ ({agg_g}:{agg_a})][/bold cyan]",
@@ -209,7 +208,7 @@ def _korekta_rewanz_v26(lg: float, la: float,
         return round(lg * 1.10, 3), round(la * 1.10, 3), opis
     else:
         # Roznica 1 lub -1 → wyrownana rywalizacja
-        opis += f"Minimalna roznica (1 gol) → wyrownana walka, lekkie wzmocnienie ataku obu (+5%)."
+        opis += "Minimalna roznica (1 gol) → wyrownana walka, lekkie wzmocnienie ataku obu (+5%)."
         return round(lg * 1.05, 3), round(la * 1.05, 3), opis
 
 

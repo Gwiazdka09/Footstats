@@ -1,7 +1,7 @@
 """Unit tests for core/backtest.py — SQLite-backed mock."""
 import sqlite3
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 _SCHEMA = """

@@ -1,6 +1,4 @@
 """Testy pre-filtrów w daily_agent.py."""
-import pytest
-from unittest.mock import patch
 
 from footstats.daily_agent import (
     _pre_filtruj_ligi,

@@ -22,7 +22,6 @@ from typing import Optional
 
 from footstats.scrapers.form_scraper import (
     PLAYWRIGHT_OK,
-    SOFA_BASE,
     _sofa_fetch,
     _sofa_session,
     find_team_id,

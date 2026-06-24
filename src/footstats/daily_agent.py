@@ -23,8 +23,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from footstats.utils.normalize import normalize_team_name
-from footstats.core.checkpoint import save_predictions_batch, load_predictions_batch, list_checkpoints, cleanup_old_checkpoints
-from footstats.core.lambda_optimizer import injury_correction
+from footstats.core.checkpoint import save_predictions_batch, cleanup_old_checkpoints
 
 log = logging.getLogger(__name__)
 
@@ -664,7 +663,6 @@ def main():
 
     args = _build_parser().parse_args()
 
-    from footstats.config import AGENT_BANKROLL
     from footstats.core.bankroll import (
         get_current_bankroll, check_daily_stop_loss,
         get_stake_multiplier, check_weekly_alert, get_loss_streak,
@@ -966,7 +964,7 @@ def main():
                     f"[red]❌ ODRZUCONO: decision_score {avg_score}/{threshold} poniżej progu "
                     f"({args.faza.upper()})[/red]"
                 )
-                console.print(f"[dim]Kupon nie został zapisany do bazy danych[/dim]")
+                console.print("[dim]Kupon nie został zapisany do bazy danych[/dim]")
             else:
                 # LLM Scout filter (tylko faza final — oszczędność tokenów)
                 if args.faza == "final":

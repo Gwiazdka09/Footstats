@@ -2,7 +2,6 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from footstats.operator.manifest import iter_runnable
 from footstats.operator.runner import RunResult, run_capability

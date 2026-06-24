@@ -178,7 +178,6 @@ def analizuj_porazki(days_back: int = 14, dry_run: bool = False) -> dict:
 
 if __name__ == "__main__":
     import argparse
-    import sys
     logging.basicConfig(level=logging.WARNING)
 
     from footstats.core.backtest import init_db

@@ -40,6 +40,8 @@ scraper = [
 dev = [
     "pytest>=7.4",
     "pytest-cov",
+    "ruff>=0.6",
+    "mypy>=1.10",
 ]
 dashboard = [
     "streamlit>=1.32",
@@ -67,3 +69,32 @@ markers = [
 ]
 testpaths = ["tests"]
 python_files = "test_*.py"
+
+# ── Lint (ruff) ────────────────────────────────────────────────────────────
+# Gate CI start: błędy składni (E9) + pyflakes (F: martwe importy/zmienne,
+# undefined, redefinicje). Stylistyka E4/E7 (import-not-at-top, multi-statement,
+# ambiguous-name) ODŁOŻONA — rozsiana po legacy/god-modułach, ratchet później.
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# __init__.py re-eksportuje publiczne API → F401 (unused-import) zamierzone.
+"__init__.py" = ["F401"]
+# Testy: nieużywane bindowanie lokalne (np. response = client.get(...) dla
+# side-effectu cache) to częsty, niskoryzykowny wzorzec → F841 wyłączone.
+"tests/*" = ["F841"]
+
+# ── Type-check (mypy) ──────────────────────────────────────────────────────
+# Lenient na starcie (legacy nietypowany): brak strict, milczące importy.
+# Gate CI obejmuje wąski czysty zakres (scrapers/sources) — ratchet w górę.
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = false
+check_untyped_defs = false
+disable_error_code = ["import-untyped"]

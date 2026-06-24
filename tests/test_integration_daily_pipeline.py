@@ -9,8 +9,7 @@ Tests exercise the real code paths with:
 import json
 import sqlite3
 import pytest
-from unittest.mock import patch, MagicMock
-from contextlib import contextmanager
+from unittest.mock import patch
 
 
 # ── Schema helpers ────────────────────────────────────────────────────────────

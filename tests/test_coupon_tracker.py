@@ -1,5 +1,4 @@
 """tests/test_coupon_tracker.py — SQLite-backed fixture (PostgreSQL DDL mocked)."""
-import json
 import sqlite3
 import pytest
 

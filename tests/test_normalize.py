@@ -1,5 +1,4 @@
 """tests/test_normalize.py — testy dla utils.normalize.normalize_team_name"""
-import pytest
 from footstats.utils.normalize import normalize_team_name, reload_mappings
 
 

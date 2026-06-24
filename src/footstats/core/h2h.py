@@ -4,7 +4,6 @@ from footstats.config import (
     H2H_OKNO_DNI, H2H_MIN_MECZE, PATENT_BONUS,
     ZEMSTA_MIN_GOLE, ZEMSTA_BONUS, CONFIDENCE_H2H_MAX, OSTATNIE_N,
 )
-from footstats.utils.helpers import _parse_date
 
 # ================================================================
 #  MODUL 7 - ANALIZA H2H (v2.5) + SYSTEM ZEMSTY + PATENT

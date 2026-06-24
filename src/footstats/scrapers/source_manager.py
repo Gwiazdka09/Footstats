@@ -7,13 +7,11 @@ from footstats.scrapers.bzzoiro import BzzoiroClient
 from footstats.utils.console import console
 from footstats.utils.cache import (
     af_budget_status, af_cache_info,
-    AF_WARN_THRESHOLD, AF_BLOCK_THRESHOLD,
 )
 from footstats.config import (
     ENV_FOOTBALL, ENV_APISPORTS, ENV_BZZOIRO, VERSION,
     CACHE_TTL_MIN, ENV_FILE,
 )
-from rich.panel import Panel
 from rich.table import Table
 from rich.prompt import Prompt
 from rich import box

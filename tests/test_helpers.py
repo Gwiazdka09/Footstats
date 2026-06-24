@@ -1,6 +1,4 @@
 """Testy utils/helpers.py – _s() i _parse_date()."""
-import math
-import pytest
 from footstats.utils.helpers import _s, _parse_date
 
 

@@ -4,7 +4,6 @@ test_sofascore_odds.py – testy scrapera fallback kursów SofaScore (D6/D1b).
 Wszystkie testy mockują Playwright/_sofa_fetch — zero realnych wywołań sieciowych.
 """
 import shutil
-from pathlib import Path
 
 import pytest
 

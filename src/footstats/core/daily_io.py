@@ -29,12 +29,11 @@ def _zapisz_kupon_do_db(
             save_coupon, init_coupon_tables,
             get_draft_today, promote_to_active
         )
-        from footstats.core.bankroll import process_bet, get_current_bankroll
+        from footstats.core.bankroll import process_bet
         from footstats.utils.admin_user import resolve_admin_user_id
 
         admin_uid = resolve_admin_user_id()
         init_coupon_tables()
-        current_bankroll = get_current_bankroll(user_id=admin_uid)
 
         def _parse_home_away(k: dict) -> tuple[str, str]:
             home = k.get("gospodarz") or k.get("home", "")

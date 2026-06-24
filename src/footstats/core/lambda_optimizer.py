@@ -196,7 +196,7 @@ def run_calibration(n_matches: int = 200, verbose: bool = True) -> dict:
     from footstats.data.historical_loader import load_cached
 
     if verbose:
-        print(f"[LambdaOptimizer] Ładowanie danych historycznych...")
+        print("[LambdaOptimizer] Ładowanie danych historycznych...")
     df = load_cached()
     if df.empty:
         print("[LambdaOptimizer] Brak danych historycznych — przerywam.")

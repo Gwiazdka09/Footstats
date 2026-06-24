@@ -36,7 +36,7 @@ def get_match_result(
     """
     try:
         date_obj = datetime.fromisoformat(match_date)
-    except ValueError as exc:
+    except ValueError:
         log.warning("Niepoprawny format daty: %s", match_date)
         return None
 
@@ -165,7 +165,6 @@ def _parse_mobi_html(html: str, home: str, away: str) -> str | None:
 
 if __name__ == "__main__":
     # Test lokalny
-    import sys
     logging.basicConfig(level=logging.INFO)
     
     # Przykład z zgłoszenia: BK Häcken vs GAIS

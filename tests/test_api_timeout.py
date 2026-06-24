@@ -2,7 +2,6 @@
 import asyncio
 import uuid
 from contextvars import ContextVar
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -13,10 +12,7 @@ from fastapi.testclient import TestClient
 
 def _build_test_app(timeout: float = 10.0):
     """Buduje izolowaną testową aplikację z middleware."""
-    import asyncio
-    import json
-    from contextvars import ContextVar
-    from fastapi import FastAPI, Request
+    from fastapi import Request
     from fastapi.responses import JSONResponse
     from starlette.middleware.base import BaseHTTPMiddleware
 

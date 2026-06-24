@@ -222,7 +222,7 @@ elif sekcja == "Bankroll & ROI":
     st.subheader("Stop-Loss — Status Agenta")
     try:
         from footstats.core.bankroll import (
-            is_agent_paused, set_agent_paused, get_pause_state,
+            set_agent_paused, get_pause_state,
             get_weekly_drawdown, get_current_bankroll,
         )
         from footstats.utils.admin_user import resolve_admin_user_id

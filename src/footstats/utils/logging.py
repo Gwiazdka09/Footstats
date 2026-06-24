@@ -28,7 +28,6 @@ ARCHITEKTURA LOGOWANIA:
 import logging
 import logging.handlers
 import functools
-import traceback
 import time
 import sys
 from pathlib import Path
@@ -439,7 +438,6 @@ def bezpieczny_budget_use(endpoint: str,
     Wersja af_budget_use z pelnym logowaniem stanow budzetu.
     Rzuca BladBudzetu zamiast RuntimeError (latwiej lapac).
     """
-    import json
     from pathlib import Path
 
     cache_dir  = Path("cache/api_football")

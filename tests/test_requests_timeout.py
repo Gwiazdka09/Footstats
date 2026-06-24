@@ -1,6 +1,5 @@
 import glob
 import re
-import pytest
 import tokenize
 import io
 

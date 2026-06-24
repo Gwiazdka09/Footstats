@@ -17,7 +17,6 @@ Użycie:
     python -m footstats.scrapers.sts --top 20     # top 20 typerów (domyślnie 50)
 """
 
-import json
 import sys
 import time
 import os
@@ -484,7 +483,6 @@ def main():
 
                 for btn in kupony_btns_aktualne:
                     try:
-                        parent = btn.evaluate("el => el.closest('div[class]')")
                         parent_el = btn.evaluate_handle(
                             "el => el.parentElement.parentElement.parentElement"
                         ).as_element()

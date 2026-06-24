@@ -1,7 +1,6 @@
 import logging
 import time
 from datetime import datetime, timedelta
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 from rich.table import Table
@@ -15,12 +14,11 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer,
     Table as RLTable, TableStyle, HRFlowable, PageBreak,
 )
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.lib.enums import TA_CENTER
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
 from footstats.config import (
-    PEWNIACZEK_PROG, PEWNIACZEK_DNI, BZZOIRO_MAX_ROZN,
-    VERSION, SLEEP_LOOP,
+    PEWNIACZEK_PROG, PEWNIACZEK_DNI, VERSION, SLEEP_LOOP,
 )
 from footstats.core.poisson import predict_match
 from footstats.scrapers.bzzoiro import BzzoiroClient, _bzz_parse_prob

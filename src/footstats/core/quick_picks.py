@@ -1,14 +1,14 @@
-import time
 from datetime import datetime, timedelta
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
 from footstats.utils.console import console
-from footstats.utils.helpers import _s
 from footstats.config import PEWNIACZEK_PROG, USE_DIXON_COLES, W_BAYESIAN
 from footstats.scrapers.bzzoiro import BzzoiroClient, _bzz_parse_prob
 from footstats.core.weekly_picks import _typy_pewne
-from footstats.core.probability_calibrator import calibrate_confidence
+# Cel proxowania w testach (mock.patch). Kalibracja per-wynik wyłączona po Cel B
+# (patrz komentarz przy budowie pewnosci), import zostaje jako stabilny patch-target.
+from footstats.core.probability_calibrator import calibrate_confidence  # noqa: F401
 
 #  MODUL 13d – SZYBKIE PEWNIACZKI (2 DNI) + SCOUT BOT  (v2.7.1)
 # ================================================================

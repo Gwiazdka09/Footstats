@@ -3,8 +3,9 @@ import time
 import requests
 from datetime import datetime, timedelta
 from footstats.utils.cache import _cache_get, _cache_set
-from footstats.utils.console import console
-from footstats.config import ENV_BZZOIRO, PEWNIACZEK_DNI, BZZOIRO_MAX_ROZN
+from footstats.config import PEWNIACZEK_DNI, BZZOIRO_MAX_ROZN
+# Re-eksport wsteczny: daily_agent importuje ENV_BZZOIRO z tego modułu.
+from footstats.config import ENV_BZZOIRO  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

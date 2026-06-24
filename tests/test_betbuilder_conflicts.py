@@ -1,6 +1,5 @@
 
-import pytest
-from footstats.betbuilder import _para_sprzeczna, Typ
+from footstats.betbuilder import _para_sprzeczna
 
 def test_same_market_conflicts():
     # Mecz 1X2

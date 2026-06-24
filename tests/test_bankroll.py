@@ -1,5 +1,4 @@
 """tests/test_bankroll.py — SQLite-backed fixture (PostgreSQL DDL mocked). TD-31."""
-import json
 import sqlite3
 
 import pytest

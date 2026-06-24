@@ -8,7 +8,6 @@ import os
 import requests
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential
-from footstats.utils.console import console
 from footstats.core.circuit_breaker import groq_circuit, ollama_circuit
 from footstats.core.exceptions import FootStatsCircuitOpenError
 

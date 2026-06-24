@@ -181,9 +181,6 @@ def fetch_team_xg(
     xga_vals: list[float] = []
 
     for m in recent:
-        h_id = str(m.get("h", {}).get("id", ""))
-        a_id = str(m.get("a", {}).get("id", ""))
-
         # Znajdź ID naszej drużyny
         # (Understat nie zwraca wprost ID szukanej drużyny w tym kontekście,
         #  więc sprawdzamy tytuły)

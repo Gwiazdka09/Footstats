@@ -1,6 +1,5 @@
 """tests/test_decision_score.py"""
-import pytest
-from footstats.core.decision_score import score_kandydat, is_go, PROG_DRAFT, PROG_FINAL
+from footstats.core.decision_score import score_kandydat, is_go, PROG_DRAFT
 
 
 def _kandydat(**kwargs) -> dict:

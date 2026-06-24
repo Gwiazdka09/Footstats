@@ -1,11 +1,9 @@
 """Tests for HTTP response caching with Cache-Control headers."""
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
-import pytest
 from fastapi import Request
-from starlette.responses import JSONResponse
 
 from footstats.core.response_cache import (
     cached_response,

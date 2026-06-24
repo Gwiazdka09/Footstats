@@ -7,7 +7,7 @@ import logging
 import os
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Generator, TypeVar
@@ -18,7 +18,7 @@ from footstats.core.exceptions import FootStatsCircuitOpenError
 logger = logging.getLogger(__name__)
 
 try:
-    from playwright.sync_api import Browser, BrowserContext, Error as PWError, Page, TimeoutError as PWTimeout, sync_playwright
+    from playwright.sync_api import Browser, Error as PWError, Page, TimeoutError as PWTimeout, sync_playwright
     PLAYWRIGHT_OK = True
 except ImportError:
     PLAYWRIGHT_OK = False

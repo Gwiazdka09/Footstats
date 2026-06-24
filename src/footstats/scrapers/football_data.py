@@ -1,14 +1,8 @@
-import time
-import requests
 import pandas as pd
 from footstats.utils.cache import _cache_get, _cache_set
 from footstats.scrapers.base import _http_get
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
-from footstats.config import ENV_FOOTBALL
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
 
 # ================================================================
 #  MODUL 4 - KLIENT API

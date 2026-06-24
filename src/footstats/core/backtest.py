@@ -16,7 +16,6 @@ import json
 import logging
 import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from footstats.utils.db import connect as _connect
 
@@ -473,7 +472,7 @@ def _cli_stats(days: int = 30):
         print(f"  Najlepsza liga:   {s['best_league']} ({s['by_league'][s['best_league']]['accuracy_pct']}%)")
 
     if s["by_market"]:
-        print(f"\n  --- Rynki ---")
+        print("\n  --- Rynki ---")
         rows = [
             (k, v["total"], v["correct"],
              f"{v['accuracy_pct']}%" if v["accuracy_pct"] is not None else "—",
@@ -487,7 +486,7 @@ def _cli_stats(days: int = 30):
                        tablefmt="simple"))
 
     if s["by_confidence_band"]:
-        print(f"\n  --- Pewność AI ---")
+        print("\n  --- Pewność AI ---")
         rows = [
             (k, v["total"], v["correct"],
              f"{v['accuracy_pct']}%" if v["accuracy_pct"] is not None else "—")
@@ -498,7 +497,7 @@ def _cli_stats(days: int = 30):
                        tablefmt="simple"))
 
     if s["by_kupon"]:
-        print(f"\n  --- Kupony ---")
+        print("\n  --- Kupony ---")
         rows = [
             (k, v["total"], v["correct"],
              f"{v['accuracy_pct']}%" if v["accuracy_pct"] is not None else "—")
@@ -531,7 +530,7 @@ def _cli_pending():
         print(tabulate(rows,
                        headers=["ID", "Data", "Mecz", "Liga", "Typ", "Pew.", "Kurs", "Kupon"],
                        tablefmt="simple"))
-        print(f"\n  Użyj: python -m footstats.core.backtest update <ID> <WYNIK>")
+        print("\n  Użyj: python -m footstats.core.backtest update <ID> <WYNIK>")
     print()
 
 

@@ -1,4 +1,3 @@
-import pytest
 from src.footstats.ai.analyzer import _analizuj_forme
 
 

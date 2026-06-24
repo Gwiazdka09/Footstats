@@ -62,7 +62,7 @@ def get_logger(name: str):
 
 # Optional: Prometheus metrics setup (stubs for now)
 try:
-    from prometheus_client import Counter, Histogram, Gauge
+    from prometheus_client import Counter, Histogram
     HAS_PROMETHEUS = True
 except ImportError:
     HAS_PROMETHEUS = False

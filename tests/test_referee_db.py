@@ -72,7 +72,6 @@ def tmp_db(tmp_path, monkeypatch):
 
 
 def test_init_creates_table(tmp_path):
-    import sqlite3 as _sq
     # fixture already ran init via monkeypatched connect
     from footstats.scrapers.referee_db import init_referee_table
     init_referee_table()  # should be idempotent

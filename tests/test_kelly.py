@@ -1,5 +1,4 @@
 """Testy core/kelly.py — Kelly Criterion i EV."""
-import pytest
 from footstats.core.kelly import kelly_stake, kelly_kupon, ev_netto
 
 

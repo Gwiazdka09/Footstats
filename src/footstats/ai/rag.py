@@ -190,7 +190,6 @@ def retrieve_relevant_lessons(query_context: str, k: int = 5, min_score: float =
         from footstats.ai.rag_embeddings import EmbeddingStore
         from footstats.core.backtest import _connect
         import logging
-        import numpy as np
 
         logger = logging.getLogger(__name__)
 

@@ -6,7 +6,6 @@ Uruchamia:
 2. Czeka na czas z next_final.txt
 3. daily_agent --faza final (automatycznie)
 """
-import os
 import sys
 import time
 import subprocess

@@ -28,7 +28,6 @@ def test_config_dixon_coles_env_off(monkeypatch):
 
 
 import pandas as pd
-import pytest
 
 
 def _df_prod():
@@ -62,7 +61,6 @@ def test_quick_picks_calls_blend_when_flag_on(monkeypatch):
 
     # Wymus jedna predykcje przez bezposrednie wywolanie sciezki Poisson:
     from footstats.core.poisson import predict_match
-    from footstats.core.ensemble import ensemble_probs
     df = _df_prod()
     pred = predict_match("Ajax", "PSV", df, use_xg=False, use_calibration=False)
     assert pred is not None

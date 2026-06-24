@@ -62,7 +62,6 @@ def create_user(
 ) -> UserResponse:
     from footstats.utils.db import connect
 
-    import psycopg2
 
     hashed = bcrypt.hashpw(req.password.encode(), bcrypt.gensalt()).decode()
     try:

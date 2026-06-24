@@ -1,7 +1,6 @@
 """Testy utils/cache.py – RAM cache + budżet API-Football."""
 import json
 import tempfile
-import pytest
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -10,7 +9,6 @@ import footstats.utils.cache as cache_mod
 from footstats.utils.cache import (
     _cache_get, _cache_set, _RAM_CACHE,
     _af_budget_load, _af_budget_save, af_budget_status,
-    AF_BUDGET_DAILY,
 )
 from footstats.config import CACHE_TTL_MIN
 

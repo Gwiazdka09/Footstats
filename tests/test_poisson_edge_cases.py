@@ -1,5 +1,4 @@
 """Testy edge case dla predykcji Poissona."""
-import functools
 
 import numpy as np
 import pandas as pd

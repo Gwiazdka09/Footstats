@@ -1,5 +1,4 @@
 """Testy core/clv_tracker.py — Closing Line Value."""
-import sqlite3
 from unittest.mock import patch, MagicMock
 
 import pytest

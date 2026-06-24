@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import patch, MagicMock
 from footstats.scrapers.lineup_scraper import get_lineup, lineup_confidence_penalty
 

@@ -8,7 +8,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from footstats.config import AGENT_BANKROLL, AGENT_KELLY_FRACTION
+from footstats.config import AGENT_BANKROLL
 from footstats.utils.db import connect as _db_connect
 
 _STATE_FILE = Path(__file__).parent.parent.parent.parent / "data" / "agent_state.json"

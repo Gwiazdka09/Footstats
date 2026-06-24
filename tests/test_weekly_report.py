@@ -1,7 +1,5 @@
 import sqlite3
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 
 class _SQLiteConn:

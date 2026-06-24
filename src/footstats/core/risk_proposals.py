@@ -5,7 +5,6 @@ i dzieli najlepsze typy na 3 koszyki ryzyka.
 """
 from __future__ import annotations
 
-import math
 
 from footstats.core.match_tips import build_tips
 

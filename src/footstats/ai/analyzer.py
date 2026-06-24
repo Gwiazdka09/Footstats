@@ -11,8 +11,6 @@ Moduły:
 import json
 import logging
 import os
-import re
-from datetime import datetime
 from pathlib import Path
 
 from langfuse import Langfuse
@@ -21,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 # Importy z pakietu footstats
 from footstats.ai.client import zapytaj_ai
-from footstats.scrapers.kursy import szukaj_kursy_meczu, scrape_betexplorer, pokaz_dostepne_ligi
 from footstats.data.context_scraper import get_match_context
 
 # ── Langfuse Initialization (lazy — unika kosztu/błędów przy każdym imporcie) ──
@@ -152,7 +149,7 @@ def _zapytaj_typera(prompt: str, max_tokens: int = 900) -> str:
             result = _kontynuuj_uciety_json(client, messages, result)
 
         return result
-    except Exception as e:  # noqa: broad-except
+    except Exception:  # noqa: broad-except
         return zapytaj_ai(prompt, max_tokens)
 
 
@@ -187,7 +184,7 @@ def _pobierz_podobne_mecze(home: str, away: str, n: int = 3) -> str:
             return ""
 
         # Format for injection into prompt
-        header = f"\nPODOBNE MECZE Z HISTORII (nauka z przeszłości):\n"
+        header = "\nPODOBNE MECZE Z HISTORII (nauka z przeszłości):\n"
         for i, lesson in enumerate(similar, 1):
             # Truncate lesson to 100 chars for readability
             header += f"{i}. {lesson[:100]}…\n"
@@ -601,8 +598,10 @@ def _buduj_opis_meczu(w: dict) -> str:
 
 from footstats.ai.analyzer_helpers import (
     _wzbogac_forme, _sygnaly_summary, _auto_zapisz_backtest, _buduj_cel_kuponow,
-    _analizuj_forme, _wyciagnij_json, _deduplikuj_kupony, _wymusz_40pct,
+    _wyciagnij_json, _deduplikuj_kupony, _wymusz_40pct,
 )
+# Re-eksport wsteczny (importowany z tego modułu przez testy/inne moduły):
+from footstats.ai.analyzer_helpers import _analizuj_forme  # noqa: F401
 
 def ai_analiza_pewniaczki(
     wyniki: list,

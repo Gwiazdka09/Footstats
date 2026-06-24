@@ -1,4 +1,3 @@
-import time
 import requests
 import pandas as pd
 from datetime import datetime
@@ -12,7 +11,6 @@ from footstats.utils.console import console
 from footstats.utils.helpers import _s
 from footstats.config import ENV_APISPORTS, _czytaj_wszystkie_klucze
 from footstats.utils.normalize import normalize_team_name
-from rich.panel import Panel
 
 # ================================================================
 #  MODUL 4b – API-FOOTBALL (api-sports.io) v2.7
@@ -349,9 +347,7 @@ class APIFootball:
                     except (ValueError, TypeError):
                         pass
 
-                    # Kursy z predykcji API (jeśli dostępne)
-                    comp = p.get("comparison", {})
-                    # Brak kursów w /predictions – zostawiamy puste
+                    # Kursy z predykcji API: brak w /predictions – zostawiamy puste
 
             # Filtruj po progu
             max_p = max(pw, pr, pp) / 100.0

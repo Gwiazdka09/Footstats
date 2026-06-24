@@ -9,9 +9,8 @@ Tests exercise real settlement logic with:
 import json
 import sqlite3
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
-from contextlib import contextmanager
+from datetime import datetime
+from unittest.mock import patch
 
 
 # ── Schema ────────────────────────────────────────────────────────────────────

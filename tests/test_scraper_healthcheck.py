@@ -6,7 +6,6 @@ Sprawdza, ze _pobierz_kandydatow() w daily_agent.py woła health-check
 i NIE woła go przy normalnych danych. Telegram zawsze zamockowany — patrz
 Bug 1 (TODO): testy nie moga wysylac na prawdziwy Telegram.
 """
-import os
 import pytest
 from unittest.mock import MagicMock, patch
 
