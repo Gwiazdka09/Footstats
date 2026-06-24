@@ -10,14 +10,16 @@ from pathlib import Path
 
 import sentry_sdk
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
+# limiter wydzielony do api.limiter (współdzielony z routerami); re-eksport tutaj,
+# bo testy/conftest robią `from footstats.api.main import limiter`.
+from footstats.api.limiter import limiter
 from starlette.middleware.base import BaseHTTPMiddleware
 
 _request_id_var: ContextVar[str] = ContextVar("request_id", default="")
@@ -98,8 +100,6 @@ from footstats.api.routes.bankroll import router as bankroll_router
 from footstats.api.routes.coupons import router as coupons_router
 from footstats.api.routes.settings import router as settings_router
 from footstats.api.routes.status import router as status_router
-
-limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 
 def _init_db() -> None:
     from footstats.utils.db import connect
@@ -221,7 +221,18 @@ try:
 except (OSError, ValueError, ImportError, RuntimeError) as _db_err:
     _logging.getLogger(__name__).error("DB init failed: %s", _db_err, exc_info=True)
 
-app = FastAPI(title="FootStats API", version="2.0")
+# BEZPIECZEŃSTWO: /docs, /redoc, /openapi.json ujawniają pełny schemat API
+# (wszystkie endpointy + modele). W produkcji (ENV=production, domyślnie) wyłączone;
+# włączone tylko w dev (ENV=dev/development/local). MCP używa app.openapi() wewnętrznie.
+_ENV = os.environ.get("ENV", "production").lower()
+_DOCS_ENABLED = _ENV in ("dev", "development", "local", "test")
+app = FastAPI(
+    title="FootStats API",
+    version="2.0",
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    redoc_url="/redoc" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
+)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -241,6 +252,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    """Nagłówki bezpieczeństwa (OWASP API8 — Security Misconfiguration).
+
+    Chroni przed MIME-sniffingiem, clickjackingiem i wyciekiem referrera.
+    HSTS wymusza HTTPS w przeglądarce (efekt tylko po HTTPS — Cloud Run/Vercel).
+    """
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+    )
+    return response
+
+
 app.include_router(auth_router)
 app.include_router(admin_users_router)
 app.include_router(status_router)
@@ -251,15 +280,18 @@ app.include_router(coupons_router)
 
 @app.api_route("/health", methods=["GET", "HEAD"], tags=["ops"])
 def health() -> dict:
+    """Publiczny liveness/readiness probe.
+
+    BEZPIECZEŃSTWO: NIE wystawia danych biznesowych (bankroll, accuracy, liczba
+    userów, daty predykcji) — to publiczny endpoint bez auth. Zwraca tylko
+    status + wersję + booleany zdrowia (DB osiągalna, agent żyje). Szczegóły
+    operacyjne (bankroll/ROI/statystyki) za autoryzacją: GET /api/status.
+    """
     from footstats import __version__
     from datetime import datetime, timedelta
 
     auth_ok: bool = False
-    auth_detail: str = "unknown"
-    last_prediction_date: str | None = None
     agent_ok: bool = False
-    bankroll: float | None = None
-    rolling_accuracy: float | None = None
 
     try:
         from footstats.utils.db import connect
@@ -269,9 +301,8 @@ def health() -> dict:
             ).fetchone()
             n = (row["n"] if row else 0) if hasattr(row, "keys") else (row[0] if row else 0)
         auth_ok = n > 0
-        auth_detail = f"{n} aktywny/ch uzytkownik/ow"
-    except Exception as _e:  # noqa: broad-except — health must never return 5xx
-        auth_detail = f"db-error: {type(_e).__name__}: {_e}"
+    except Exception:  # noqa: broad-except — health must never return 5xx
+        pass
 
     try:
         from footstats.utils.db import connect
@@ -281,40 +312,25 @@ def health() -> dict:
             ).fetchone()
             last_pred = row["last_pred"] if row else None
             if last_pred:
-                last_prediction_date = str(last_pred)
                 agent_ok = last_pred >= datetime.now() - timedelta(hours=26)
-            # Rolling accuracy last 20 settled predictions
-            row2 = _conn.execute(
-                "SELECT COUNT(*) AS cnt, SUM(CASE WHEN tip_correct=1 THEN 1 ELSE 0 END) AS won"
-                " FROM (SELECT tip_correct FROM predictions WHERE tip_correct IS NOT NULL"
-                " ORDER BY created_at DESC LIMIT 20) sub"
-            ).fetchone()
-            if row2 and row2["cnt"]:
-                rolling_accuracy = round((row2["won"] or 0) / row2["cnt"] * 100, 1)
-            # Bankroll admin user
-            row3 = _conn.execute(
-                "SELECT balance FROM bankroll_state WHERE user_id = 2"
-            ).fetchone()
-            if row3:
-                bankroll = float(row3["balance"])
     except Exception:  # noqa: broad-except — health must never return 5xx
         pass
 
     return {
         "status": "ok",
         "version": __version__,
-        "auth": {"ok": auth_ok, "detail": auth_detail},
-        "agent": {
-            "ok": agent_ok,
-            "last_prediction_date": last_prediction_date,
-        },
-        "bankroll_pln": bankroll,
-        "rolling_accuracy_pct": rolling_accuracy,
+        "auth": {"ok": auth_ok},
+        "agent": {"ok": agent_ok},
     }
 
 
 @app.get("/metrics", tags=["ops"])
-def metrics_endpoint():
+def metrics_endpoint(x_metrics_token: str = Header(default="")):
+    # BEZPIECZEŃSTWO: metryki Prometheus ujawniają wolumen ruchu/endpointy.
+    # Gdy METRICS_TOKEN ustawiony (prod) — wymagaj nagłówka; gdy brak (dev/test) — otwarte.
+    expected = os.getenv("METRICS_TOKEN", "")
+    if expected and x_metrics_token != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
         from starlette.responses import Response

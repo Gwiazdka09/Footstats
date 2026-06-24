@@ -6,10 +6,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, field_validator
+
+from footstats.api.limiter import limiter
 
 _ALGORITHM = "HS256"
 _EXPIRE_HOURS = 24
@@ -101,7 +103,9 @@ def _make_token(username: str, user_id: int, is_admin: bool = False) -> str:
 
 
 @router.post("/auth/login", response_model=TokenResponse)
-def login(req: LoginRequest) -> TokenResponse:
+@limiter.limit("10/minute")
+def login(request: Request, req: LoginRequest) -> TokenResponse:
+    # Twardy limit przeciw brute-force/credential-stuffing (OWASP API2).
     user = get_user_by_username(req.username)
     if not user and "@" in req.username:
         user = get_user_by_email(req.username)
@@ -115,7 +119,9 @@ def login(req: LoginRequest) -> TokenResponse:
 
 
 @router.post("/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register(req: RegisterRequest) -> TokenResponse:
+@limiter.limit("5/minute")
+def register(request: Request, req: RegisterRequest) -> TokenResponse:
+    # Limit przeciw masowemu zakładaniu kont / spamowi e-mail (OWASP API2/API4).
     import psycopg2
     from footstats.utils.db import connect
 

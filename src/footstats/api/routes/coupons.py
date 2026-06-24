@@ -460,6 +460,8 @@ def get_user_shared_coupons(username: str, limit: int = 20):
         for r in rows:
             d = dict(r)
             d["legs"] = json.loads(d.get("legs_json") or "[]")
+            # OWASP API3: publiczny podgląd — nie wystawiaj wewn. identyfikatora usera.
+            d.pop("user_id", None)
             result.append(d)
         return result
     except psycopg2.Error as e:
