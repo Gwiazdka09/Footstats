@@ -174,6 +174,24 @@ def _find_leg_result(
         except (OSError, ValueError, RuntimeError):
             pass
 
+    # Źródło 5: agregator multi-source (consensus) — dokłada football-data.co.uk (CSV)
+    # + cross-walidowany FlashScore, niezależne od źródeł 1-4 (AF /fixtures + football-data.org
+    # API + FlashScore cache + DB). Ostatni fallback gdy żadne twarde źródło nie pokryło meczu.
+    try:
+        from footstats.scrapers.sources.aggregator import consensus_result
+
+        for d in candidate_dates:
+            res = consensus_result(home, away, d)
+            if res:
+                if d != mdate:
+                    log.info(
+                        "Mecz %s vs %s: wynik z konsensusu multi-source na %s (kupon mial %s)",
+                        home, away, d, mdate,
+                    )
+                return res
+    except (ImportError, OSError, ValueError, RuntimeError):
+        pass
+
     return None
 
 
