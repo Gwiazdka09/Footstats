@@ -55,6 +55,20 @@ jobs:
       - name: pip-audit (dependency CVE)
         run: python -m pip_audit -r requirements.txt
 
+  secrets:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # pełna historia — gitleaks skanuje też stare commity
+
+      # gitleaks: skan sekretów (klucze/hasła) wg .gitleaks.toml
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+
   test:
     runs-on: ubuntu-latest
 

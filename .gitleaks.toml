@@ -1,0 +1,23 @@
+# gitleaks — skan sekretów (commit + historia). DevSecOps: prewencja wycieku
+# klucza/hasła do repo. Rozszerza reguły domyślne o allowlist dla fałszywych
+# sekretów testowych i artefaktów buildu (inaczej gate sypie false-positive).
+title = "FootStats gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fałszywe sekrety testowe + artefakty (nie realne poświadczenia)"
+paths = [
+  '''tests/''',
+  '''.*__pycache__.*''',
+  '''.*\.pyc$''',
+  '''src/footstats/gui/dist/''',
+  '''.*\.min\.js$''',
+]
+# Znane stałe testowe (jawnie fałszywe — bez wartości bezpieczeństwa).
+regexes = [
+  '''test-secret-key-32-chars-long''',
+  '''test-jwt-secret-32-chars-long''',
+  '''onboarding@resend\.dev''',
+]
