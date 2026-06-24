@@ -46,7 +46,7 @@ def _get_updates(offset: int | None = None) -> list[dict]:
     if offset is not None:
         params["offset"] = offset
     try:
-        r = requests.get(
+        r = requests.get(  # nosec B113 — timeout ustawiony niżej (POLL_TIMEOUT+5)
             API_BASE.format(token=_token(), method="getUpdates"),
             params=params,
             timeout=POLL_TIMEOUT + 5,

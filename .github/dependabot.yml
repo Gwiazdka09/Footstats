@@ -1,0 +1,30 @@
+# Dependabot — automatyczne PR-y na podatne/nieaktualne zależności (DevSecOps).
+# Łapie CVE w bibliotekach zanim trafią do prod (supply-chain, OWASP API10).
+version: 2
+updates:
+  # Zależności Pythona (pip) — skan tygodniowy.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "security"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Frontend GUI (npm).
+  - package-ecosystem: "npm"
+    directory: "/src/footstats/gui"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "security", "frontend"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  # GitHub Actions — wersje workflow.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["ci"]

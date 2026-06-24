@@ -47,7 +47,7 @@ def save_run(db_path: Path | str, rows: list[dict]) -> int:
     con = sqlite3.connect(Path(db_path))
     try:
         con.executemany(
-            f"INSERT INTO wf_runs ({','.join(_COLS)}) "
+            f"INSERT INTO wf_runs ({','.join(_COLS)}) "  # nosec B608 — _COLS stała lista kolumn (kod), wartości przez ? param
             f"VALUES ({','.join('?' * len(_COLS))})",
             [tuple(r.get(c) for c in _COLS) for r in rows],
         )

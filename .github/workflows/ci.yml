@@ -31,6 +31,30 @@ jobs:
       - name: Mypy type-check (scrapers/sources)
         run: python -m mypy src/footstats/scrapers/sources/
 
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install security scanners
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit pip-audit
+
+      # bandit (SAST): blokuje przy MEDIUM+ severity. False-positive oznaczone # nosec.
+      - name: Bandit SAST (src)
+        run: python -m bandit -r src/footstats -ll
+
+      # pip-audit: CVE w zależnościach FootStats (requirements.txt). Świeży install = realny zakres.
+      - name: pip-audit (dependency CVE)
+        run: python -m pip_audit -r requirements.txt
+
   test:
     runs-on: ubuntu-latest
 

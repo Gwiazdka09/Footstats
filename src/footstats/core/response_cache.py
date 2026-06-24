@@ -66,7 +66,9 @@ def cache_key_builder(request_or_name: Request | str = None, vary_by: list[str] 
                 key_parts.append(f"{k}={v}")
 
     key_str = "|".join(str(k) for k in key_parts)
-    _hash = hashlib.md5(key_str.encode()).hexdigest()
+    # MD5 wyłącznie jako klucz cache (nie kryptografia) — usedforsecurity=False
+    # uświadamia to bandit/CWE-327 i jest szybkie. Brak wartości bezpieczeństwa.
+    _hash = hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
     return _hash
 
 

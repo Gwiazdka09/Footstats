@@ -113,7 +113,7 @@ def pobierz_rag_wzorce(
             ]
             tip_clause = "AND ai_tip = ?" if tip else ""
             parts.append(
-                f"SELECT COUNT(*) AS n, COALESCE(SUM(tip_correct), 0) AS hits "
+                f"SELECT COUNT(*) AS n, COALESCE(SUM(tip_correct), 0) AS hits "  # nosec B608 — stałe klauzule + ? placeholdery, wartości w params
                 f"FROM predictions "
                 f"WHERE match_date >= ? AND tip_correct IS NOT NULL "
                 f"AND {' AND '.join(exists_parts)} {tip_clause}"
@@ -213,7 +213,7 @@ def retrieve_relevant_lessons(query_context: str, k: int = 5, min_score: float =
         placeholders = ",".join("?" * len(feedback_ids))
         with _connect() as conn:
             rows = conn.execute(
-                f"SELECT id, match_id, reason_for_failure, created_at FROM ai_feedback WHERE id IN ({placeholders})",
+                f"SELECT id, match_id, reason_for_failure, created_at FROM ai_feedback WHERE id IN ({placeholders})",  # nosec B608 — placeholders='?,?' (param), wartości w feedback_ids
                 feedback_ids,
             ).fetchall()
         for row in rows:
