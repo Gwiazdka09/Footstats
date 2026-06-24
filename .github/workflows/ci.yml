@@ -57,6 +57,9 @@ jobs:
 
   secrets:
     runs-on: ubuntu-latest
+    # Dependabot PR-y dostają read-only token bez dostępu do secrets → gitleaks-action failuje.
+    # Bumpy wersji nie dodają sekretów do źródła, więc skip jest bezpieczny.
+    if: github.actor != 'dependabot[bot]'
 
     steps:
       - uses: actions/checkout@v4
