@@ -14,8 +14,10 @@
 > (AF/football-data.co.uk/FlashScore) z cross-walidacją live + FlashScore live-leak fix +
 > brain graph szczegółowy (06-23) + consensus→settlement + CI lint/security gate +
 > hardening OWASP (live) + dekompozycja superbet + Dependabot CI fix (gitleaks skip) +
-> coverage gate (55%) + dekompozycja daily_agent (output+decision) + TheSportsDB 4. źródło (06-24/25 → `CHANGELOG.md`).
-> Suite: **1299 testów pass / 6 skip** (coverage 56.7%).
+> coverage gate (55%) + dekompozycja daily_agent (output+decision) + TheSportsDB 4. źródło +
+> dekompozycja utils/logging (exceptions+safe_http) + CRON_SECRET rotacja + ALLOWED_ORIGINS cleanup
+> + Cloud Scheduler zweryfikowany (06-24/25 → `CHANGELOG.md`).
+> Suite: **1300 testów pass / 6 skip** (coverage 56.3%).
 
 ---
 
@@ -149,11 +151,11 @@
 - [x] **`superbet.py` rozbity** (06-25, `3ad91a844`) — 1128→867, parsery → `superbet_parsing.py`, +22 testy.
 - [x] **`daily_agent.py` rozbity** (06-25, `c48ab449f`) — 1078→818, `daily_agent_output.py` (prezentacja
   rich) + `daily_agent_decision.py` (decision score), behavior-preserving + re-export.
-- [ ] **Pozostały god-moduł**: `utils/logging.py` 725 — kandydat do dekompozycji (grab-bag:
-  logging + exceptions + BezpiecznyHTTP/Cache + parse). Heavy-import — ostrożnie z re-export.
-- [ ] **PROD drobne (security):** `ALLOWED_ORIGINS` w Cloud Run nadal zawiera `localhost:5173/3000`
-  → usunąć z prod (zostaw Vercel + run.app). CRON_SECRET = plain env (działa); settlement lokalny
-  (Task Scheduler 23:00), więc Cloud Scheduler/`X-Cron-Secret` opcjonalne.
+- [x] **`utils/logging.py` rozbity** (06-25, `9bad59ac4`) — 723→539, `exceptions.py` (Blad*) +
+  `safe_http.py` (BezpiecznyHTTP/BezpiecznePobieranie), re-export (identity klas zachowana).
+- [x] **PROD security drobne** (06-25): `ALLOWED_ORIGINS` wyczyszczony (secret v3, rev 00263 — usunięto
+  `localhost:5173/3000`, został Vercel+run.app); CRON_SECRET **rotowany** (rev 00262 + headery scheduler).
+  Cloud Scheduler AKTYWNY (`footstats-settle-morning/evening` → `/api/cron/settle`, NIE opcjonalny).
 
 ---
 
