@@ -83,9 +83,14 @@
 - [ ] **Schedule-adjusted ratings** — `_oblicz_sile_wazona` liczy atak=gole/średnia bez korekty siły
   rywala (gole vs słabe obrony zawyżają). Iteracyjne ratingi mogłyby dodać ~0.5-1pp do raw. Drugorzędne vs selekcja.
 - [ ] **Kontuzje v2** — waga udziałem w golach (utrata strzelca > rezerwowy); wymaga scrape per-gracz.
-- [ ] **ImportanceIndex** (motywacja spadek/tytuł) — `football_data.tabela(kod)` daje kolumny,
-  ale brak: mapy nazwa-ligi Bzzoiro→kod football-data.org + cache standings. **Tylko końcówka
-  sezonu** ma wartość → odłożone do startu lig (teraz off-season = NORMAL).
+- [x] **ImportanceIndex — ZBADANE 06-25, ŚLEPA ULICZKA.** `core/standings.py` (rekonstrukcja tabeli
+  z wyników, no-lookahead, +13 testów) → backtest A/B na 14205 meczach z aktywnym importance:
+  OFF 47.3% vs ON 47.2% (**-0.1pp**); na high-stakes (tytuł/spadek, n=4100) jeszcze gorzej:
+  OFF 51.2 vs ON 50.6 (**-0.59pp**). Crude multiplier ±20% pogarsza (high-stakes = więcej niespodzianek).
+  **Nie wpinać.** Standings infra zostaje — pozycja/punkty = dobre CECHY do modelu ML (poniżej).
+- [ ] **Własny model ML (LightGBM/XGBoost) — pomysł B (research w toku).** 32400 meczów × 28 cech
+  (strzały/xG/rożne/kartki/kursy — większość nieużywana przez Poisson). Cel: nowe ramię ensemble.
+  Realistycznie +1-3pp (rynek efektywny). Wymaga `pip install`. Walk-forward + kalibracja + zero leakage.
 
 ---
 
