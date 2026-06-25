@@ -1,8 +1,8 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-23
+**Ostatnia aktualizacja:** 2026-06-25
 **Wersja:** v3.4-stable
-**Accuracy:** model offline 51.3% 10 lig (DC, NED 54.9%, kalibracja monotoniczna) | live 31.7% (stare, sprzed fixów Cel B — czeka na świeże)
+**Accuracy:** model offline 51.3% 10 lig (DC, NED 54.9%, kalibracja monotoniczna) | live: świeże ≥06-19 **47.8%** (23 settled, fixy Cel B działają) vs stare 31% (sprzed fixów, kontaminują monitor)
 **Cel:** M1 = 55% win rate
 
 > Ukończone: `git log` + `CHANGELOG.md`. Fazy DONE: 16-20, GUI/UX, SEO, RODO, multi-user (15.6),
@@ -13,8 +13,9 @@
 > email Resend + rynek GG2H+HT (06-22) + scrapery multi-source framework + 3 źródła
 > (AF/football-data.co.uk/FlashScore) z cross-walidacją live + FlashScore live-leak fix +
 > brain graph szczegółowy (06-23) + consensus→settlement + CI lint/security gate +
-> hardening OWASP (live) + dekompozycja superbet (06-24/25 → `CHANGELOG.md`).
-> Suite: **1283 testów pass / 6 skip**.
+> hardening OWASP (live) + dekompozycja superbet + Dependabot CI fix (gitleaks skip) +
+> coverage gate (55%) + dekompozycja daily_agent (output+decision) + TheSportsDB 4. źródło (06-24/25 → `CHANGELOG.md`).
+> Suite: **1299 testów pass / 6 skip** (coverage 56.7%).
 
 ---
 
@@ -124,8 +125,11 @@
   football-data.co.uk CSV (`6ad9899d4`), FlashScore mobi (`0383a11ff`); rejestr aggregatora
   (`d35a074b4`, `a0c22d2c6`). Live: AF 79 + FlashScore 98 meczów, **27 potwierdzonych przez
   ≥2 źródła, 0 rozjazdów**.
-- [ ] **Kolejne źródła (darmowe, do oceny per-stabilność/anti-bot):** Soccer24, Meczyki,
-  LiveScore, Transfermarkt (Sofascore już 403 — wymaga stealth, patrz TECHNICZNE).
+- [x] **4. źródło: TheSportsDB** (06-25, `3b16a64f5`) — darmowe JSON API (bez anti-bot), FT.
+  Pokrycie reprezentacji/towarzyskich/turniejów które ligowe źródła gubią (settlement orphan
+  predykcji MŚ/friendly, D1a). Graceful + cache 6h + 14 testów. Free test-key, env `THESPORTSDB_KEY`.
+- [ ] **Kolejne źródła (ocena per-stabilność/anti-bot):** Soccer24 (klon FlashScore — redundancja,
+  skip), Meczyki/LiveScore (anti-bot, scraping), Transfermarkt (raczej squad/value niż wyniki).
 - [x] **Wpięcie `aggregator.consensus_result` do settlementu** (06-24, `349fd919a`) —
   Źródło 5 w `_find_leg_result`, additive fallback po źródłach 1-4. +3 testy.
 
@@ -140,11 +144,13 @@
   sources, `e7ea3ea50`), security (`bandit`+`pip-audit`, `6afa46f6a`), secrets (`gitleaks`,
   `9a09e6beb`), test, docker. Config w `pyproject.toml` + `.pre-commit-config.yaml` + Dependabot.
   CI+CD green na main.
-- [ ] **Brak progu coverage** — `pytest-cov` jest w deps, ale CI nie wymusza min% (`--cov-fail-under`).
-  Dodać gate (np. 80% wg globalnej reguły testing).
+- [x] **Próg coverage** (06-25, `4a85f91ab`) — `ci.yml` job `test` liczy `--cov` i wymusza
+  `--cov-fail-under=55` (floor anty-regresyjny; zmierzone ~57%). Ratchet w górę do 80% z czasem.
 - [x] **`superbet.py` rozbity** (06-25, `3ad91a844`) — 1128→867, parsery → `superbet_parsing.py`, +22 testy.
-- [ ] **Pozostałe god-moduły**: `daily_agent.py` 1080, `logging.py` 725 — kandydaci do dekompozycji
-  (wzorem `cli.py`/`analyzer.py`/`superbet.py`).
+- [x] **`daily_agent.py` rozbity** (06-25, `c48ab449f`) — 1078→818, `daily_agent_output.py` (prezentacja
+  rich) + `daily_agent_decision.py` (decision score), behavior-preserving + re-export.
+- [ ] **Pozostały god-moduł**: `utils/logging.py` 725 — kandydat do dekompozycji (grab-bag:
+  logging + exceptions + BezpiecznyHTTP/Cache + parse). Heavy-import — ostrożnie z re-export.
 - [ ] **PROD drobne (security):** `ALLOWED_ORIGINS` w Cloud Run nadal zawiera `localhost:5173/3000`
   → usunąć z prod (zostaw Vercel + run.app). CRON_SECRET = plain env (działa); settlement lokalny
   (Task Scheduler 23:00), więc Cloud Scheduler/`X-Cron-Secret` opcjonalne.
