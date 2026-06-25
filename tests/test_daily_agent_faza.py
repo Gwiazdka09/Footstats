@@ -215,34 +215,14 @@ def test_enrichuj_finalna_faza_sets_fields_on_match(tmp_path):
     assert "referee_neutral" in wyniki[0]
 
 
-def test_zapisz_next_final_txt_creates_file(tmp_path):
-    """Funkcja zapisuje plik next_final.txt."""
+def test_zapisz_next_final_txt_creates_file():
+    """Funkcja zapisuje plik next_final.txt (fallback → 13:30 przy braku danych)."""
     from pathlib import Path
     import footstats.daily_agent as da
 
-    # Tymczasowo podmień DATA_DIR przez mockowanie Path
-    wyniki = []  # brak danych → fallback 13:30
+    da._zapisz_next_final_txt([])  # brak danych → fallback 13:30, nie rzuca
 
-    # Patch Path(__file__).parents[2] / "data"
-    original = da.Path
-    fake_data = tmp_path / "data"
-    fake_data.mkdir()
-
-    with patch.object(da, "Path", wraps=original) as mock_path:
-        # Nadpisz parents[2] w funkcji
-        import footstats.daily_agent as mod
-        old_parents = None
-
-        # Prostszy sposób: testuj bezpośrednio przez monkey-patch DATA_DIR w funkcji
-        src = mod._zapisz_next_final_txt.__code__
-        # Zamiast tego — sprawdź przez efekty uboczne z prawdziwą DATA_DIR
-        pass
-
-    # Fallback test: po prostu sprawdź że funkcja nie rzuca wyjątku
-    mod._zapisz_next_final_txt([])  # fallback → 13:30
-
-    # Sprawdź że plik istnieje
-    data_dir = Path(mod.__file__).parents[2] / "data"
+    data_dir = Path(da.__file__).parents[2] / "data"
     next_final = data_dir / "next_final.txt"
     assert next_final.exists()
     content = next_final.read_text().strip()

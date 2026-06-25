@@ -13,36 +13,23 @@ Użycie:
 import argparse
 import logging
 import os
-import subprocess
-import sys
 from datetime import datetime
-from pathlib import Path
 
-from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 
 from footstats.utils.normalize import normalize_team_name
 from footstats.core.checkpoint import save_predictions_batch, cleanup_old_checkpoints
+from footstats.daily_agent_output import (  # noqa: F401  re-export (ścieżki + patch-targety)
+    LOGS_DIR,
+    _blad,
+    _powiadomienie_windows,
+    _sep,
+    _wyswietl,
+    _zapisz_txt,
+    console,
+)
 
 log = logging.getLogger(__name__)
-
-console = Console()
-
-LOGS_DIR = Path(__file__).parent.parent.parent / "logs"
-LOGS_DIR.mkdir(exist_ok=True)
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _sep(tytul: str):
-    console.rule(f"[bold cyan]{tytul}[/bold cyan]")
-
-
-def _blad(msg: str):
-    console.print(f"[bold red]BŁĄD:[/bold red] {msg}")
-    sys.exit(1)
-
 
 _norm = normalize_team_name
 
@@ -340,175 +327,6 @@ def _weryfikuj_kupony(dane: dict, indeks: dict) -> dict:
     return dane
 
 
-# ── Krok 5a: Zapis do pliku TXT ──────────────────────────────────────────────
-
-def _zapisz_txt(dane: dict, stawka_a: float, stawka_b: float) -> Path:
-    """Zapisuje kupon do F:/bot/logs/kupon_YYYY-MM-DD.txt. Zwraca ścieżkę."""
-    dzis = datetime.now().strftime("%Y-%m-%d")
-    sciezka = LOGS_DIR / f"kupon_{dzis}.txt"
-
-    linie: list[str] = []
-    linie.append(f"FootStats Daily Agent — {datetime.now().strftime('%d.%m.%Y %H:%M')}")
-    linie.append("=" * 60)
-
-    for label, kupon_key, stawka in [
-        ("KUPON A", "kupon_a", stawka_a),
-        ("KUPON B", "kupon_b", stawka_b),
-        ("KUPON C", "kupon_c", stawka_a),
-        ("KUPON D", "kupon_d", stawka_a),
-    ]:
-        kupon     = dane.get(kupon_key, {})
-        zdarzenia = kupon.get("zdarzenia", [])
-        if not zdarzenia:
-            continue
-        linie.append(f"\n{label} — stawka {stawka:.0f} PLN")
-        linie.append("-" * 40)
-        for z in zdarzenia:
-            verified = "✓" if z.get("_verified") else " "
-            linie.append(
-                f"  {z.get('nr', '?')}. [{verified}] {z.get('mecz','?')}  |  "
-                f"{z.get('typ','?')}  @{z.get('kurs', 0):.2f}"
-            )
-        kurs_l = kupon.get("kurs_laczny", 0) or 0
-        wyg    = stawka * kurs_l * 0.88
-        linie.append(f"  Kurs łączny: {kurs_l:.2f}  |  Wygrana netto: {wyg:.2f} PLN")
-
-    top3 = dane.get("top3", [])
-    if top3:
-        linie.append("\nTOP 3 MECZÓW")
-        linie.append("-" * 40)
-        for i, row in enumerate(top3, 1):
-            ev = row.get("ev_netto", 0) or 0
-            linie.append(
-                f"  {i}. {row.get('mecz','?')}  {row.get('typ','?')}  "
-                f"@{row.get('kurs', 0):.2f}  EV={ev:+.1f}%"
-            )
-            uzas = row.get("uzasadnienie", "")
-            if uzas:
-                linie.append(f"     {uzas}")
-
-    if dane.get("ostrzezenia"):
-        linie.append("\nOSTRZEŻENIA")
-        linie.append(str(dane["ostrzezenia"]))
-
-    tekst = "\n".join(linie) + "\n"
-    sciezka.write_text(tekst, encoding="utf-8")
-    console.print(f"[dim]Kupon zapisany: {sciezka}[/dim]")
-    return sciezka
-
-
-# ── Krok 5b: Powiadomienie Windows ───────────────────────────────────────────
-
-def _powiadomienie_windows(tytul: str, tekst: str) -> None:
-    """Wyświetla Windows toast notification przez PowerShell (bez dodatkowych pakietów)."""
-    ps_script = f"""
-Add-Type -AssemblyName System.Windows.Forms
-$n = New-Object System.Windows.Forms.NotifyIcon
-$n.Icon = [System.Drawing.SystemIcons]::Information
-$n.Visible = $true
-$n.BalloonTipTitle = '{tytul.replace("'", "''")}'
-$n.BalloonTipText  = '{tekst.replace("'", "''")}'
-$n.BalloonTipIcon  = 'Info'
-$n.ShowBalloonTip(8000)
-Start-Sleep -Milliseconds 8500
-$n.Dispose()
-"""
-    try:
-        # fire-and-forget: OK, powiadomienie Windows (czekanie blokuje pipeline)
-        subprocess.Popen(
-            ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except OSError as e:
-        console.print(f"[dim]Powiadomienie nieudane: {e.__class__.__name__}: {e}[/dim]")
-
-
-# ── Krok 5: Wyświetl wyniki ───────────────────────────────────────────────────
-
-def _wyswietl(dane: dict, stawka_a: float, stawka_b: float):
-    if "top3" not in dane:
-        console.print("[yellow]Brak danych JSON — surowa odpowiedź Groq:[/yellow]")
-        console.print(dane.get("_raw", "brak"))
-        return
-
-    _sep("TOP 3 MECZÓW")
-    t = Table(show_header=True, header_style="bold magenta")
-    t.add_column("#", width=2)
-    t.add_column("Mecz", min_width=32)
-    t.add_column("Typ", width=8)
-    t.add_column("Kurs", width=6)
-    t.add_column("EV%", width=8)
-    t.add_column("Uzasadnienie")
-    for i, row in enumerate(dane.get("top3", []), 1):
-        ev = row.get("ev_netto", 0) or 0
-        kolor = "green" if ev > 5 else "yellow"
-        t.add_row(
-            str(i),
-            row.get("mecz", "?"),
-            row.get("typ", "?"),
-            f"{row.get('kurs', 0):.2f}",
-            f"[{kolor}]{ev:+.1f}%[/{kolor}]",
-            row.get("uzasadnienie", ""),
-        )
-    console.print(t)
-
-    for label, kupon_key, stawka in [
-        ("KUPON A", "kupon_a", stawka_a),
-        ("KUPON B", "kupon_b", stawka_b),
-        ("KUPON C", "kupon_c", stawka_a),
-        ("KUPON D", "kupon_d", stawka_a),
-    ]:
-        kupon = dane.get(kupon_key, {})
-        zdarzenia = kupon.get("zdarzenia", [])
-        if not zdarzenia:
-            continue
-
-        _sep(f"{label} — stawka {stawka:.0f} PLN")
-        t2 = Table(show_header=True, header_style="bold blue")
-        t2.add_column("#", width=2)
-        t2.add_column("Mecz", min_width=30)
-        t2.add_column("Typ", width=8)
-        t2.add_column("Kurs", width=6)
-        t2.add_column("Pewnosc", width=8)
-        t2.add_column("Kelly", width=8)
-        t2.add_column("Zrodlo", width=10)
-        for z in zdarzenia:
-            zrodlo  = "[green]Bzzoiro[/green]" if z.get("_verified") else "[dim]Groq[/dim]"
-            pct     = z.get("pewnosc_pct")
-            pct_str = f"{pct}%" if pct else "?"
-            kelly   = z.get("kelly_stake")
-            k_str   = f"[cyan]{kelly}PLN[/cyan]" if kelly else "?"
-            t2.add_row(
-                str(z.get("nr", "")),
-                z.get("mecz", "?"),
-                z.get("typ", "?"),
-                f"{z.get('kurs', 0):.2f}",
-                pct_str,
-                k_str,
-                zrodlo,
-            )
-        console.print(t2)
-
-        kurs_l  = kupon.get("kurs_laczny", 0) or 0
-        wyg     = stawka * kurs_l * 0.88
-        szansa  = kupon.get("szansa_wygranej_pct")
-        szansa_str = f"  |  Szansa: [bold {'green' if szansa and szansa >= 40 else 'yellow'}]{szansa}%[/bold {'green' if szansa and szansa >= 40 else 'yellow'}]" if szansa else ""
-        console.print(
-            f"  Kurs łączny: [bold]{kurs_l:.2f}[/bold]  |  "
-            f"Wygrana netto: [bold green]{wyg:.2f} PLN[/bold green]"
-            f"{szansa_str}"
-        )
-
-    if dane.get("ostrzezenia"):
-        console.print()
-        console.print(Panel(
-            str(dane["ostrzezenia"]),
-            title="[yellow]Ostrzeżenia[/yellow]",
-            border_style="yellow",
-        ))
-
-
 # ── Krok 1b: API-Football Ekstraklasa ───────────────────────────────────────
 
 def _pobierz_apifootball_ekstraklasa(dni: int = 3) -> list[dict]:
@@ -547,89 +365,11 @@ from footstats.core.daily_filters import (
     _pre_filtruj_kursy, _pre_filtruj_tokenow,
     _pre_filtruj_value_bet, _pre_filtruj_ligi,
 )
-
-def _ocen_zdarzenia_decision_score(dane: dict, phase: str = "draft") -> None:
-    """
-    Oblicza Decision Score dla nóg kuponu PO KROKU 3 (Groq).
-    Teraz 'pewnosc_pct' i 'ev_netto' są rzeczywiste — scoring ma sens.
-    Annotuje zdarzenia polem 'decision_score'. Nie usuwa nóg z kuponu.
-    """
-    from footstats.core.decision_score import score_kandydat, PROG_DRAFT, PROG_FINAL
-    threshold = PROG_FINAL if phase == "final" else PROG_DRAFT
-
-    _sep(f"DECISION SCORE — post-Groq [{phase.upper()}] (próg ≥ {threshold})")
-
-    for kupon_key in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
-        zdarzenia = dane.get(kupon_key, {}).get("zdarzenia", [])
-        if not zdarzenia:
-            continue
-        console.print(f"[dim]{kupon_key.upper()}:[/dim]")
-        for z in zdarzenia:
-            pct = z.get("pewnosc_pct") or 50
-            w = {
-                "ev_netto":       z.get("ev_netto", 0),
-                "pewnosc":        pct,   # score_kandydat auto-normalizuje int>1 → /100
-                "czynniki":       z.get("czynniki", []),
-                "roznica_modeli": z.get("roznica_modeli", 0.0),
-                "accuracy":       z.get("accuracy"),
-            }
-            ctx = {
-                "lineup_ok":       z.get("lineup_ok"),
-                "referee_neutral": z.get("referee_neutral", True),
-            }
-            sc, reasons = score_kandydat(w, context=ctx, phase=phase)
-            # BetBuilder leg z pozytywnym EV dostaje bonus — Poisson math potwierdza edge
-            if z.get("betbuilder") and (z.get("ev_netto") or 0) > 0:
-                sc += 5
-                reasons.append("BetBuilder leg EV>0 (+5)")
-            z["decision_score"] = sc
-            z["decision_reasons"] = reasons
-            ikona = "[green]✅[/green]" if sc >= threshold else "[yellow]⚠️ [/yellow]"
-            console.print(
-                f"  {ikona} {z.get('mecz', '?')} [{z.get('typ', '?')}] "
-                f"score={sc}/{threshold} | pewność={pct}%"
-            )
-
-
-def _decision_score_kandydat(kandydat: dict, phase: str = "draft") -> tuple[int, list[str]]:
-    """Wrapper — konwertuje kandydata Bzzoiro → format decision_score."""
-    from footstats.core.decision_score import score_kandydat
-    w = {
-        "ev_netto":       kandydat.get("ev_netto", 0),
-        "pewnosc":        kandydat.get("pewnosc", 0.5),
-        "czynniki":       kandydat.get("czynniki", []),
-        "roznica_modeli": kandydat.get("roznica_modeli", 0.0),
-        "accuracy":       kandydat.get("accuracy", 0.0),
-    }
-    context = {
-        "lineup_ok":       kandydat.get("lineup_ok", None),
-        "referee_neutral": kandydat.get("referee_neutral", True),
-    }
-    return score_kandydat(w, context=context, phase=phase)
-
-
-def _filtruj_przez_decision_score(
-    kandydaci: list[dict],
-    phase: str = "draft",
-    prog: int | None = None,
-) -> list[dict]:
-    """
-    Filtruje kandydatów przez decision_score.
-    Dodaje 'decision_score' i 'decision_reasons' do każdego kandydata.
-    Zwraca tylko kandydatów >= prog.
-    """
-    from footstats.core.decision_score import PROG_DRAFT, PROG_FINAL
-    threshold = prog if prog is not None else (PROG_FINAL if phase == "final" else PROG_DRAFT)
-
-    wynik = []
-    for k in kandydaci:
-        sc, reasons = _decision_score_kandydat(k, phase=phase)
-        k["decision_score"] = sc
-        k["decision_reasons"] = reasons
-        if sc >= threshold:
-            wynik.append(k)
-    return wynik
-
+from footstats.daily_agent_decision import (  # noqa: F401  re-export (testy + ścieżki)
+    _decision_score_kandydat,
+    _filtruj_przez_decision_score,
+    _ocen_zdarzenia_decision_score,
+)
 
 from footstats.core.daily_io import _zapisz_kupon_do_db
 

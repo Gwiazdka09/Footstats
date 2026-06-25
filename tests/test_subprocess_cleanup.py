@@ -20,6 +20,7 @@ POPEN_FILES = [
     "cli.py",
     "evening_agent.py",
     "daily_agent.py",
+    "daily_agent_output.py",
 ]
 
 
