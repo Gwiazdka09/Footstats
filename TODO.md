@@ -25,7 +25,7 @@
 
 | Milestone | Cel | Status | Warunek |
 |-----------|-----|--------|---------|
-| **M1** | 55% win rate | 🔴 W toku | świeże settled + walidacja A/B |
+| **M1** | 55% win rate | 🔴 W toku | świeże settled (~88) → selekcja 65%+ conf (offline=68%) + gating lig |
 | **M2** | 60% win rate | ⏸️ | Po M1 — tuning |
 | **M3** | 65% selected | ⏸️ | Po M2 |
 | **BETA** | Testerzy | ⏸️ | Po M1 |
@@ -63,8 +63,25 @@
 
 ## 🎯 JAKOŚĆ λ — kandydaci PO walidacji (nie wcześniej)
 
-- [ ] **Dixon-Coles opponent-adjusted** — λ skorygowane o siłę rywala (z istniejącej historii,
-  bez nowych danych). Najwyższy następny lewar.
+> **Walk-forward A/B (06-25, out-of-sample, n=7934, kalibracja OFF):**
+> poisson_only **48.8%** < baseline (ensemble+devig) **50.3%** < **dixoncoles (DC, W=0.5) 51.8%**.
+> Sweep `W_BAYESIAN`: 0.3→51.4, **0.5→51.8 (optimum)**, 0.7→51.7, 1.0→50.4 → **0.5 już optymalne, nie ruszać**.
+> Opponent-adjusted λ (atak×obrona) + DC τ + DC bayesian ramię **JUŻ w prod** (`USE_DIXON_COLES=1`).
+> **Kluczowe: kalibracja per pasmo** — 65-101% conf = **68% trafność** (robustnie, ~27% meczów),
+> 55-65% = 54.6%. Per-liga: NED 56 / SCO 55 / ITA 54 / ENG 54 ≥M1; POL 44 / ESP 49 / FRA 49 ciągną w dół.
+>
+> **WNIOSEK dla M1 (55% win rate na postawionych):** model NIE wymaga przepisania (51.8% raw, DC on,
+> W optymalne). Droga do M1 = **SELEKCJA**: model już produkuje 68%-trafny subset (65%+ conf).
+> Lewary (deploy PO walidacji): (1) **ciaśniejszy próg confidence** na budowę kuponu (65%+ → ~68%),
+> (2) **gating słabych lig** (POL/ESP/FRA out, faworyzuj NED/ITA/ENG/SCO). Zgodne z Cel B (gap=selekcja).
+
+- [x] **Dixon-Coles opponent-adjusted** — JUŻ w prod (atak×obrona w λ bazowej + DC τ rho=-0.05 +
+  bayesian ramię `blend_dixon_coles`, `W_BAYESIAN=0.5` potwierdzone optymalne walk-forwardem 06-25).
+- [ ] **Selekcja na confidence (M1 lever #1)** — podnieś próg budowy kuponu do pasma 65%+ (=68% offline).
+  Deploy PO walidacji (~88 fresh), zwaliduj na świeżych że live trzyma kalibrację.
+- [ ] **Gating słabych lig (M1 lever #2)** — POL/ESP/FRA <50% offline; faworyzuj NED/ITA/ENG/SCO/AUT.
+- [ ] **Schedule-adjusted ratings** — `_oblicz_sile_wazona` liczy atak=gole/średnia bez korekty siły
+  rywala (gole vs słabe obrony zawyżają). Iteracyjne ratingi mogłyby dodać ~0.5-1pp do raw. Drugorzędne vs selekcja.
 - [ ] **Kontuzje v2** — waga udziałem w golach (utrata strzelca > rezerwowy); wymaga scrape per-gracz.
 - [ ] **ImportanceIndex** (motywacja spadek/tytuł) — `football_data.tabela(kod)` daje kolumny,
   ale brak: mapy nazwa-ligi Bzzoiro→kod football-data.org + cache standings. **Tylko końcówka
