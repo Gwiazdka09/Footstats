@@ -11,6 +11,7 @@ from __future__ import annotations
 from footstats.scrapers.sources.af_source import APIFootballSource
 from footstats.scrapers.sources.footballdata_source import FootballDataSource
 from footstats.scrapers.sources.flashscore_source import FlashScoreSource
+from footstats.scrapers.sources.thesportsdb_source import TheSportsDBSource
 from footstats.scrapers.sources.base import MatchData, ResultsSource
 from footstats.utils.normalize import normalize_team_name
 
@@ -22,8 +23,10 @@ def get_sources() -> list[ResultsSource]:
     - api-football: szerokie pokrycie (MŚ/ligi), kursy+HT, budżet 100/dzień.
     - football-data.co.uk: CSV top-ligi EU, FT+HT, bez anti-bot — kotwica cross-walidacji.
     - flashscore: mobi (requests, bez anti-bot — live smoke 98 meczów), FT, szeroka redundancja.
+    - thesportsdb: darmowe JSON API (bez anti-bot), FT — pokrycie reprezentacji/
+      towarzyskich/turniejów, które ligowe źródła gubią (settlement orphan predykcji).
     """
-    return [APIFootballSource(), FootballDataSource(), FlashScoreSource()]
+    return [APIFootballSource(), FootballDataSource(), FlashScoreSource(), TheSportsDBSource()]
 
 
 def fetch_all(date: str) -> dict[str, list[MatchData]]:
