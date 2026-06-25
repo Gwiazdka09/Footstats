@@ -24,13 +24,11 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
 
-      - name: Download current DB from GCS
-        run: |
-          gcloud storage cp \
-            gs://${{ secrets.BUCKET_NAME }}/data/footstats_backtest.db \
-            data/footstats_backtest.db || echo "No existing DB in GCS, skipping"
+      # Prod data = Neon (PostgreSQL). pg_dump off-site do GCS (redundancja PITR Neona).
+      - name: Install postgresql-client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
-      - name: Run backup
+      - name: Run Neon backup
         env:
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
         run: bash scripts/backup_db.sh
@@ -39,7 +37,7 @@ jobs:
         run: |
           CUTOFF=$(date -u -d '30 days ago' +%Y%m%d)
           gcloud storage ls gs://${{ secrets.BUCKET_NAME }}/backups/ \
-            | grep "footstats_backtest_[0-9]" \
+            | grep -E "neon_[0-9]" \
             | while read f; do
                 FDATE=$(echo "$f" | grep -oP '\d{8}')
                 if [[ "$FDATE" < "$CUTOFF" ]]; then
