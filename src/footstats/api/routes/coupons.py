@@ -512,6 +512,24 @@ def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/cron/draft")
+def cron_draft(x_cron_secret: str = Header(default=""), days: int = 2, dry_run: bool = True):
+    """Endpoint dla Google Cloud Scheduler — lite draft System paper-trading (PC-niezależny).
+
+    Generuje predykcje System (model-only, requests: Bzzoiro → quick_picks), bez
+    Playwright/Groq/Telegram. dry_run=True (DEFAULT) = podgląd, ZERO zapisów Neon.
+    Live zbieranie danych: wywołać z dry_run=false (świadomie, po weryfikacji dry-run).
+    """
+    expected = os.getenv("CRON_SECRET", "")
+    if not expected or x_cron_secret != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    from footstats.core.cloud_draft import generuj_system_draft
+    result = generuj_system_draft(dni=days, dry_run=dry_run)
+    _log.info("cron_draft (dry_run=%s): %s", dry_run,
+              {k: v for k, v in result.items() if k != "legs"})
+    return result
+
+
 @router.post("/cron/evict-cache")
 def cron_evict_cache(x_cron_secret: str = Header(default=""), max_days: int = 30):
     """Endpoint dla Google Cloud Scheduler — usuwa stare pliki cache."""
