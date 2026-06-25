@@ -3,6 +3,17 @@
 > Archiwum ukończonych prac (przeniesione z TODO.md przez `footstats-scribe`).
 > Aktywne zadania: `TODO.md`. Pełna historia commitów: `git log`.
 
+## 2026-06-26
+
+### Cloud-draft — System paper-trading PC-niezależny (odblokowanie danych walidacyjnych)
+- **`e4da7adff`**: `/cron/draft` endpoint + `core/cloud_draft.py::generuj_system_draft`. Lite draft
+  System (model-only) samą ścieżką requests (Bzzoiro API → quick_picks → predict_match) — BEZ
+  Playwright/Groq/Telegram. **`dry_run=True` DEFAULT = zero zapisów Neon** (deploy bezpieczny/inert);
+  live = `dry_run=false` po weryfikacji. Pole `model_source` wykrywa Poisson-DC (parquet) vs fallback
+  Bzzoiro-ml. +5 testów (mock, graceful — nigdy 500). Odkrycie: `BzzoiroClient` jest requests-based
+  (NIE Playwright) → rdzeń draftu cloud-feasible; Playwright dotyczy tylko forma/Superbet (enrichment).
+  **Enablement (parquet na cloud + Cloud Scheduler) → runbook w TODO "🌙 RANO".**
+
 ## 2026-06-24 / 06-25
 
 ### Settlement — consensus multi-source

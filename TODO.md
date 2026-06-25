@@ -5,6 +5,42 @@
 **Accuracy:** model offline **51.8%** (walk-forward A/B, DC W=0.5) | live: świeże ≥06-19 **47.8%** (23 settled, fixy Cel B) vs stare 31%
 **Cel:** M1 = 55% win rate
 
+---
+
+## 🌙 RANO — włączenie cloud-draft (zbudowane w nocy, czeka na Ciebie)
+
+> **Co zrobione (noc):** `/cron/draft` endpoint + `core/cloud_draft.py` — lite draft System
+> (model-only, requests: Bzzoiro→quick_picks, bez Playwright/Groq/Telegram). **dry_run=True DEFAULT
+> = zero zapisów Neon** (deploy bezpieczny, inert). Odblokowuje bottleneck danych (draft był tylko lokalny=PC on).
+
+**Krok 1 — test dry-run na cloud** (Cloud Shell; bezpieczne, nic nie zapisuje):
+```bash
+SECRET=$(gcloud secrets versions access latest --secret=CRON_SECRET)
+curl -s -X POST "https://footstats-api-949240532526.europe-west1.run.app/api/cron/draft?dry_run=true" \
+  -H "X-Cron-Secret: $SECRET" | python3 -m json.tool
+```
+Sprawdź pole **`model_source`**:
+- `poisson-dc` → świetnie, nasz model (parquet jest). Idź do Kroku 3.
+- `bzzoiro-ml` → ⚠️ parquet nieobecny na cloud → użyłby predykcji Bzzoiro (NIE nasz model). Najpierw Krok 2.
+
+**Krok 2 (jeśli `bzzoiro-ml`) — dostarcz `full_dataset.parquet` (562KB) na cloud.** Decyzja architektoniczna:
+- (a) GCS-pull przy starcie (czysto, updatowalne) — najlepsze, ale wymaga kodu startup + bucketu.
+- (b) wgrać do obrazu (`.dockerignore` wyłącza `data/hist_cache/`; force-track w git lub COPY z buildu).
+- Off-season (dane do 2026-05) → mało pilne; do decyzji.
+
+**Krok 3 — włącz live (Cloud Scheduler, jak settle):**
+```bash
+gcloud scheduler jobs create http footstats-draft-morning --location europe-west1 \
+  --schedule "30 5 * * *" --uri "https://footstats-api-949240532526.europe-west1.run.app/api/cron/draft?dry_run=false" \
+  --http-method POST --headers "X-Cron-Secret=$SECRET" --time-zone UTC   # 07:30 CEST, przed settle 08:00
+```
+Potem monitoruj `calibration_monitor.py` — dane walidacyjne zaczną rosnąć PC-niezależnie → odblokuje M1 flipy.
+
+> ⚠️ Live (`dry_run=false`) zapisuje kupony System do prod Neon. Idempotentne (dedup per mecz/data).
+> Zanim włączysz: warto przepuścić `footstats-data-guard` (prod Neon writes / Telegram). Telegram: cloud-draft NIE wysyła.
+
+---
+
 > **Ukończone → `CHANGELOG.md` + `git log`.** Skrót ostatnich (06-24/25): hardening OWASP (live) +
 > CI lint/security/coverage gate + Dependabot fix + dekompozycja superbet/daily_agent/utils-logging +
 > TheSportsDB 4. źródło + consensus→settlement + CRON_SECRET rotacja + ALLOWED_ORIGINS cleanup +
