@@ -25,17 +25,17 @@
 
 ---
 
-## 🚀 AKTYWNE — Pomysł B: własny model ML (LightGBM) jako ramię ensemble
+## 🚀 NAJWAŻNIEJSZE — reweight ensemble ku rynkowi (GOTOWE, czeka na flip po walidacji)
 
-> Cel: nowe ramię predykcji obok Poisson-DC + kursy (nie zamiana). Research 06-25 (SOTA: CatBoost+pi-ratings
-> 55.8%/RPS 0.192): **cechy > model**. Realistycznie +1-3pp (rynek efektywny). Offline, flag-gated, deploy po walidacji.
+> **Model R&D zakończone 06-25** (4 eksperymenty, 1 win — szczegóły → CHANGELOG):
+> ImportanceIndex −0.1pp ❌ · W_BAYESIAN 0.5 już optimum ❌ · LightGBM 51.6% < rynek 53.1% ❌ ·
+> **reweight ku rynkowi +1.4pp ✅**. Wniosek: model przy praktycznym suficie, **rynek (kursy) ~53% nieprzekraczalny**.
+> Skuteczność ≠ accuracy; realna gra = **value** (model vs rynek) + **selekcja high-conf** + dane.
 
-- [ ] **Krok 1: `pip install lightgbm`** (+opcj. catboost później) — ZATWIERDZONE.
-- [ ] **Krok 2: feature-engineering** (`core/ml_features.py`) — zero leakage (tylko as-of):
-  pi-ratings/Elo (z wyników), rolling form (gole/strzały/xG/rożne ostatnie N), pozycja+punkty
-  (`core/standings.py` ✅ jest), rest-days, H2H, devig kursów (+wariant BEZ kursów = szukanie edge).
-- [ ] **Krok 3: trening + walk-forward A/B** vs 51.8% baseline, metryka RPS + accuracy, kalibracja izotoniczna.
-- [ ] **Krok 4: decyzja** — lift → ramię ensemble (flaga, OFF default, deploy po walidacji); brak → udokumentuj, koniec.
+- [ ] **FLIP po walidacji: `ENSEMBLE_MARKET_WEIGHT=0.70`** (=30/70 model/rynek). Gotowe + otestowane
+  (flaga env, **default OFF = zero zmiany prod teraz**). WF A/B: 70/30→51.8% vs 30/70→52.8% (z kursami 52.5→53.8).
+  Zostawia 30% głosu modelu na value. Przy flipie: calibration check (log-loss, bo stare 70/30 było log-loss-opt).
+- [ ] (opcj.) re-optymalizacja per-league wag ku rynkowi (`ensemble_optimizer`).
 
 ---
 
@@ -75,6 +75,9 @@
 ### Zbadane → odrzucone (nie wracać)
 - **ImportanceIndex** (crude ±20% multiplier): backtest A/B −0.1pp, high-stakes −0.59pp → ślepa uliczka
   (CHANGELOG 06-25). `core/standings.py` zostaje jako CECHY do modelu ML.
+- **LightGBM / własny model ML** (pomysł B): 51.6% (z kursami) / 50.9% (bez) < rynek 53.1% < baseline.
+  Rynek nieprzekraczalny (jak literatura). `core/ml_features.py` zostaje jako infra (pi-ratings/elo).
+  Jedyny realny owoc = reweight ensemble ku rynkowi (sekcja NAJWAŻNIEJSZE).
 
 ---
 

@@ -71,6 +71,18 @@
   high-stakes (n=4100) OFF 51.2 vs ON 50.6 (−0.59pp). Crude ±20% nie pomaga, na high-stakes szkodzi.
   NIE wpinać. Standings infra zostaje (pozycja/punkty = cechy do przyszłego modelu ML — pomysł B).
 
+### R&D — własny model ML (pomysł B) + reweight ensemble ku rynkowi (06-25, offline)
+- **`e9f1949e6`**: `core/ml_features.py` (pi-ratings Constantinou + Elo + rolling form/strzały +
+  pozycja/punkty + devig kursów, no-lookahead single-pass, +5 testów leakage-safety). Eksperyment
+  LightGBM 1X2 (train 24400→test 8000, OOS): **51.6%** (z kursami) / 50.9% (bez) — **NIE bije rynku
+  53.1% ani baseline 51.8%**. Potwierdza literaturę (rynek sharp; RPS nie do pobicia — SOTA CatBoost+pi
+  55.8%). ml_features zostaje jako infra; LightGBM NIE wpinany do prod.
+- **Reweight ensemble model↔rynek — REALNY WIN.** WF A/B (n=7934, OOS): obecne **70/30 = 51.8%**, ale
+  30/70 = 52.8 / 15/85 = 53.1 / 0/100 = 53.2 (z kursami 52.5→54.3) — monotonicznie, **model ważony 70%
+  dusił sygnał rynku (+1.4pp na stole)**. Flaga **`ENSEMBLE_MARKET_WEIGHT`** (env 0..1; **default OFF =
+  obecne 70/30, zero zmiany prod**) + 4 testy. Rekomendacja: `=0.70` (30/70 — zostawia głos modelu na
+  value/EV). **Flip PO walidacji** (~88 fresh; zmiana warstwy predykcji). Calibration check przy flipie.
+
 ## 2026-06-23
 
 ### Scrapery multi-source + cross-walidacja

@@ -1,8 +1,34 @@
+import os
+
 _DEFAULT_WEIGHTS = {"poisson": 0.70, "bzzoiro": 0.30}  # A/B 16.4: 70/30 minimalizuje log-loss (0.961 vs 1.027 przy 45/55)
 
 
+def _env_market_weight() -> dict | None:
+    """Globalny override wagi rynku przez env `ENSEMBLE_MARKET_WEIGHT` (0..1).
+
+    Walk-forward A/B 06-25 (n=7934, OOS): przeważenie ku rynkowi monotonicznie podnosi
+    trafność — 70/30→51.8%, 30/70→52.8%, 0/100→53.2% (rynek sharp, model dusił sygnał).
+    Rekomendowane `ENSEMBLE_MARKET_WEIGHT=0.70` (=30/70, zostawia głos modelu na value).
+    DEFAULT (env nieustawiony) = zachowanie obecne (per-league / 70/30) → zero zmiany prod.
+    Flip dopiero PO walidacji (~88 fresh) — zmiana warstwy predykcji.
+    """
+    raw = os.getenv("ENSEMBLE_MARKET_WEIGHT", "").strip()
+    if not raw:
+        return None
+    try:
+        wb = float(raw)
+    except ValueError:
+        return None
+    if not 0.0 <= wb <= 1.0:
+        return None
+    return {"poisson": round(1.0 - wb, 4), "bzzoiro": round(wb, 4)}
+
+
 def get_weights_for_league(liga: str | None = None) -> dict:
-    """Return optimized per-league weights, fall back to default."""
+    """Wagi ensemble (model/rynek). Kolejność: env override → per-league opt → default 70/30."""
+    override = _env_market_weight()
+    if override is not None:
+        return override
     try:
         from footstats.core.ensemble_optimizer import load_weights
         return load_weights(liga)

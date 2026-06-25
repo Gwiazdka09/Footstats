@@ -1,4 +1,6 @@
-from footstats.core.ensemble import ensemble_probs, get_roznica
+import pytest
+
+from footstats.core.ensemble import ensemble_probs, get_roznica, get_weights_for_league
 
 
 _P_POISSON = {"win": 0.55, "draw": 0.25, "loss": 0.20, "over25": 0.65}
@@ -50,3 +52,34 @@ def test_get_roznica_detects_disagreement():
 def test_get_roznica_identical_models_is_zero():
     rozn = get_roznica(_P_POISSON, _P_POISSON, _P_POISSON)
     assert rozn < 0.01
+
+
+# ── Flaga ENSEMBLE_MARKET_WEIGHT (reweight ku rynkowi, default OFF) ──────────────
+
+def test_env_market_weight_nieustawiony_zachowuje_default(monkeypatch):
+    """Brak env → zero zmiany prod (per-league / default 70/30)."""
+    monkeypatch.delenv("ENSEMBLE_MARKET_WEIGHT", raising=False)
+    w = get_weights_for_league(None)
+    assert abs(w["poisson"] - 0.70) < 1e-9 and abs(w["bzzoiro"] - 0.30) < 1e-9
+
+
+def test_env_market_weight_override(monkeypatch):
+    """ENSEMBLE_MARKET_WEIGHT=0.70 → 30/70 (model/rynek), nadrzędne nad per-league."""
+    monkeypatch.setenv("ENSEMBLE_MARKET_WEIGHT", "0.70")
+    w = get_weights_for_league("ENG-Premier League")
+    assert abs(w["bzzoiro"] - 0.70) < 1e-9 and abs(w["poisson"] - 0.30) < 1e-9
+
+
+def test_env_market_weight_zmienia_blend(monkeypatch):
+    """Override realnie przesuwa wynik ensemble ku rynkowi (bzzoiro)."""
+    monkeypatch.setenv("ENSEMBLE_MARKET_WEIGHT", "0.85")
+    r = ensemble_probs(_P_POISSON, _P_BZZ)
+    assert abs(r["win"] - _P_BZZ["win"]) < abs(r["win"] - _P_POISSON["win"])  # bliżej rynku
+
+
+@pytest.mark.parametrize("bad", ["", "abc", "1.5", "-0.2"])
+def test_env_market_weight_niepoprawny_ignorowany(monkeypatch, bad):
+    """Pusty/zły/poza [0,1] → ignorowany, fallback do default 70/30."""
+    monkeypatch.setenv("ENSEMBLE_MARKET_WEIGHT", bad)
+    w = get_weights_for_league(None)
+    assert abs(w["poisson"] - 0.70) < 1e-9 and abs(w["bzzoiro"] - 0.30) < 1e-9
