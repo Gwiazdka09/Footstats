@@ -34,6 +34,43 @@
   wydzielonych do `superbet_parsing.py` (AST-precyzyjnie, behavior-preserving). +22 testy
   (logika wcześniej 0% pokryta). Scrapery Playwright (`zaloguj`/`pobierz_*`) zostają.
 
+### CI/CD — coverage gate + Dependabot fix
+- **`4a85f91ab`**: job `test` liczy `--cov` i wymusza `--cov-fail-under=55` (floor anty-regresyjny,
+  zmierzone ~57%; ratchet do 80%). Domyka gap "brak progu coverage".
+- **`67af2d168`**: `secrets` job (gitleaks) `if: github.actor != dependabot[bot]` — Dependabot PR-y
+  dostają read-only token bez secrets → gitleaks failował na 10 PR-ach. Skip bezpieczny (bumpy wersji
+  nie dodają sekretów do źródła).
+
+### Refactor — dekompozycja god-modułów
+- **`c48ab449f`**: `daily_agent.py` 1078→818 — `daily_agent_output.py` (console/rich/zapis txt/toast) +
+  `daily_agent_decision.py` (decision score). Behavior-preserving, re-export z `# noqa` (patch-targety).
+- **`9bad59ac4`**: `utils/logging.py` 723→539 — `exceptions.py` (Blad*) + `safe_http.py`
+  (BezpiecznyHTTP/BezpiecznePobieranie). Re-export, identity klas wyjątków zachowana.
+
+### Scrapery — TheSportsDB 4. źródło
+- **`3b16a64f5`**: `thesportsdb_source.py` — darmowe JSON API (bez anti-bot), FT. Pokrycie
+  reprezentacji/towarzyskich/turniejów (settlement orphan predykcji MŚ/friendly, D1a). Graceful +
+  cache 6h + 14 testów. Rejestr aggregatora = 4 źródła.
+
+### Bezpieczeństwo — rotacja + CORS cleanup + cloud audyt + backup (06-25)
+- CRON_SECRET **rotowany** (Cloud Run rev 00262 + headery obu scheduler jobów). `ALLOWED_ORIGINS`
+  **wyczyszczony** (secret v3, rev 00263) — usunięto `localhost:5173/3000`, został Vercel+run.app.
+- Cloud Scheduler zweryfikowany AKTYWNY: `footstats-settle-morning` (06:00 UTC=08:00 CEST) +
+  `-evening` (21:30 UTC) → POST `/api/cron/settle` z `X-Cron-Secret`. Morning 06-25 potwierdzony
+  200 OK (settled 0 — brak ACTIVE, bo draft lokalny nie odpalił, PC off). DRAFT = nadal tylko lokalny.
+- **`59e0f7565`**: Daily DB Backup naprawiony — realny `pg_dump` Neona → GCS (off-site, conn z
+  Secret Manager przez WIF, gated graceful). Zastąpił obsolete SQLite-backup co padał codziennie.
+
+### R&D — walidacja modelu + ślepe uliczki (offline, zero prod, 06-25)
+- **Walk-forward A/B + sweep `W_BAYESIAN`** (n=7934, out-of-sample): dixoncoles **51.8%** > baseline
+  50.3% > poisson_only 48.8%. `W_BAYESIAN=0.5` potwierdzone optymalne (0.3→51.4/0.7→51.7/1.0→50.4).
+  Kalibracja: pasmo 65%+ = **68%** trafność. Wniosek M1: model OK (DC on, W optymalne), droga =
+  **SELEKCJA** (65%+ subset) + gating słabych lig (POL/ESP/FRA). Zero zmian λ w prod (dyscyplina walidacji).
+- **`6bfdf27dc`**: `core/standings.py` (rekonstrukcja tabeli z wyników, no-lookahead, +13 testów).
+  Backtest ImportanceIndex A/B → **ŚLEPA ULICZKA**: 14205 meczów OFF 47.3 vs ON 47.2 (−0.1pp),
+  high-stakes (n=4100) OFF 51.2 vs ON 50.6 (−0.59pp). Crude ±20% nie pomaga, na high-stakes szkodzi.
+  NIE wpinać. Standings infra zostaje (pozycja/punkty = cechy do przyszłego modelu ML — pomysł B).
+
 ## 2026-06-23
 
 ### Scrapery multi-source + cross-walidacja
