@@ -93,6 +93,8 @@
   (c) zawęź whitelist do realnych fixture'ów WC.
 - [ ] Co kilka dni: `python scripts/calibration_monitor.py` (Neon, read-only) — System vs Pipeline,
   czy accuracy ruszyła, licznik settled (D2 auto-refit przy delcie +30 od n_train).
+  **NOWE (06-26):** monitor ma per-liga + **flip-advisor** (`core/flip_advisor.py`) — sam rekomenduje
+  czy flipnąć `SELECTION_MIN_CONF` (high-conf bije ogół?) i które ligi do `LEAGUE_GATING` (<50%, n≥8).
 - [ ] Po ~88 settled → D2 auto-refit sam; gdy krzywa zdrowa → włącz `CALIBRATION_ENABLED=1`.
 - **Zbieranie:** draft lokalny (Task Scheduler 08:00) + settle cloud (06:00/21:30 UTC) + lokalny 23:00.
   ⚠️ **Draft TYLKO lokalny** — PC off = 0 nowych predykcji/dzień (bottleneck danych do walidacji).
