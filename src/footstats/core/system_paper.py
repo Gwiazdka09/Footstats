@@ -11,6 +11,7 @@ przez coupon_settlement (status ACTIVE → WON/LOST).
 from __future__ import annotations
 
 import logging
+import os
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +19,25 @@ MIN_PROB = 40.0       # p_modelu < 40% → odrzuć (Faza 17.2)
 MAX_KURS = 4.0        # kurs > 4.0 → longshot, odrzuć (Faza 17.2)
 MIN_KURS = 1.2        # kurs < 1.2 → brak wartości
 DEFAULT_STAKE = 2.0   # flat stake (decyzja: czysty sygnał ROI)
+
+
+def _min_prob() -> float:
+    """
+    Próg p_modelu selekcji typu (M1 lever #1 — selekcja high-conf).
+
+    Domyślnie `MIN_PROB` (40) = zero zmiany prod. Env `SELECTION_MIN_CONF`
+    podnosi go do pasma high-conf (offline 65%+ = 68% accuracy). Wartość poza
+    [0,100] lub nieparsowalna → fallback do `MIN_PROB`. Czytane przy każdym
+    wywołaniu (jak `ensemble._env_market_weight`) — flip bez redeploy kodu.
+    """
+    raw = os.getenv("SELECTION_MIN_CONF", "").strip()
+    if not raw:
+        return MIN_PROB
+    try:
+        v = float(raw)
+    except ValueError:
+        return MIN_PROB
+    return v if 0.0 <= v <= 100.0 else MIN_PROB
 
 # tip → klucz kursu w odds dict kandydata
 _ODDS_KEY: dict[str, str] = {
@@ -42,7 +62,8 @@ def _prob_dla_typu(w: dict, tip: str) -> float | None:
 def najlepszy_typ(w: dict) -> tuple[float, str, float] | None:
     """
     Najlepszy legalny typ dla meczu: max p_modelu wśród typów spełniających
-    filtry Fazy 17 (MIN_PROB ≤ p, MIN_KURS ≤ kurs ≤ MAX_KURS).
+    filtry Fazy 17 (`_min_prob()` ≤ p, MIN_KURS ≤ kurs ≤ MAX_KURS).
+    Próg p domyślnie MIN_PROB (40), podnoszony env `SELECTION_MIN_CONF` (M1 lever #1).
     Zwraca (prob, tip, kurs) lub None.
     """
     odds = w.get("odds") or {}
@@ -58,7 +79,7 @@ def najlepszy_typ(w: dict) -> tuple[float, str, float] | None:
         if kurs < MIN_KURS or kurs > MAX_KURS:
             continue
         p = _prob_dla_typu(w, tip)
-        if p is None or p < MIN_PROB:
+        if p is None or p < _min_prob():
             continue
         if best is None or p > best[0]:
             best = (p, tip, kurs)

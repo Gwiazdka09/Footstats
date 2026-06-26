@@ -2,6 +2,8 @@
 test_system_paper.py — FAZA 19: wybór typu do single-leg kuponów System.
 Weryfikuje filtry Fazy 17 (longshot, min prob) i wybór max prawdopodobieństwa.
 """
+import pytest
+
 from footstats.core.system_paper import najlepszy_typ, _prob_dla_typu
 
 
@@ -62,3 +64,36 @@ def test_wybiera_legalny_gdy_najlepszy_to_longshot():
     prob, tip, kurs = best
     assert tip == "Over 2.5"
     assert prob == 50
+
+
+# --- M1 lever #1: selekcja high-conf (env SELECTION_MIN_CONF, default OFF = MIN_PROB) ---
+
+def test_selection_min_conf_domyslnie_przepuszcza_50(monkeypatch):
+    """Env nieustawiony → próg = MIN_PROB (40), typ z prob 50 przechodzi (zero zmiany)."""
+    monkeypatch.delenv("SELECTION_MIN_CONF", raising=False)
+    w = _w(pw=50, odds={"home": 1.9})
+    best = najlepszy_typ(w)
+    assert best is not None and best[0] == 50
+
+
+def test_selection_min_conf_65_odrzuca_50(monkeypatch):
+    """SELECTION_MIN_CONF=65 → typ z prob 50 odrzucony (selekcja high-conf)."""
+    monkeypatch.setenv("SELECTION_MIN_CONF", "65")
+    w = _w(pw=50, odds={"home": 1.9})
+    assert najlepszy_typ(w) is None
+
+
+def test_selection_min_conf_65_przepuszcza_70(monkeypatch):
+    """SELECTION_MIN_CONF=65 → typ z prob 70 przechodzi."""
+    monkeypatch.setenv("SELECTION_MIN_CONF", "65")
+    w = _w(pw=70, odds={"home": 1.5})
+    best = najlepszy_typ(w)
+    assert best is not None and best[1] == "1" and best[0] == 70
+
+
+@pytest.mark.parametrize("bad", ["abc", "-5", "150", ""])
+def test_selection_min_conf_smieci_fallback_do_40(monkeypatch, bad):
+    """Niepoprawna wartość / poza [0,100] → fallback do MIN_PROB (40)."""
+    monkeypatch.setenv("SELECTION_MIN_CONF", bad)
+    w = _w(pw=50, odds={"home": 1.9})
+    assert najlepszy_typ(w) is not None, f"bad={bad!r} powinno spaść do 40"
