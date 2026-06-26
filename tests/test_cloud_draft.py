@@ -35,6 +35,8 @@ def _patch_pipeline(monkeypatch, build_counter=None):
     monkeypatch.setattr("footstats.core.daily_filters._pre_filtruj_ligi", lambda w: list(w))
     monkeypatch.setattr("footstats.core.system_paper.najlepszy_typ", lambda w: (60.0, "1", 1.8))
     monkeypatch.setattr(cd, "_wykryj_model_source", lambda: "poisson-dc")
+    monkeypatch.setattr(cd, "_swiezosc_danych_system",
+                        lambda: {"stale_days": 0, "stale": False})
     if build_counter is not None:
         def _fake_build(*a, **k):
             build_counter["n"] += 1
@@ -123,3 +125,48 @@ def test_wyjatek_nie_rzuca(monkeypatch):
     monkeypatch.setattr(cd, "_wykryj_model_source", lambda: "bzzoiro-ml")
     r = cd.generuj_system_draft(dry_run=True)
     assert r["ok"] is False and "API padło" in r["error"]
+
+
+# --- freshness sygnał (observability cloud-draft) ---
+
+class _ConnRow:
+    """Fake connect: execute().fetchone() → {"last": ...}."""
+    def __init__(self, last):
+        self._last = last
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def execute(self, *a, **k):
+        return self
+
+    def fetchone(self):
+        return {"last": self._last}
+
+
+def test_swiezosc_brak_kuponu_to_stale(monkeypatch):
+    monkeypatch.setattr("footstats.utils.db.connect", lambda: _ConnRow(None))
+    r = cd._swiezosc_danych_system()
+    assert r["stale"] is True and r["stale_days"] is None
+
+
+def test_swiezosc_blad_db_graceful(monkeypatch):
+    def _boom():
+        raise RuntimeError("neon down")
+    monkeypatch.setattr("footstats.utils.db.connect", _boom)
+    assert cd._swiezosc_danych_system()["stale"] is None   # graceful, nie rzuca
+
+
+def test_draft_dry_zawiera_swiezosc(monkeypatch):
+    _patch_pipeline(monkeypatch)
+    r = cd.generuj_system_draft(dry_run=True)
+    assert "stale" in r and "stale_days" in r
+
+
+def test_draft_live_zawiera_swiezosc(monkeypatch):
+    _patch_pipeline(monkeypatch, {"n": 0})
+    r = cd.generuj_system_draft(dry_run=False)
+    assert "stale" in r and r["stale"] is False

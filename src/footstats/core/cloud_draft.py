@@ -40,6 +40,26 @@ def _wykryj_model_source() -> str:
         return "bzzoiro-ml"
 
 
+def _swiezosc_danych_system() -> dict:
+    """Dni od ostatniego kuponu System (created_at) → sygnał czy zbieranie żyje.
+
+    Graceful: błąd DB nie może wywalić draftu → {"stale_days": None, "stale": None}.
+    """
+    try:
+        from footstats.utils.db import connect
+        from footstats.core.draft_health import ocena_swiezosci
+        with connect() as c:
+            row = c.execute(
+                "SELECT MAX(cu.created_at) AS last FROM coupons cu "
+                "JOIN users u ON u.id = cu.user_id WHERE u.username = 'System'"
+            ).fetchone()
+        last = row["last"] if row else None
+        return ocena_swiezosci(last)
+    except Exception as e:  # noqa: BLE001 — observability nie może wywalić draftu
+        log.warning("swiezosc danych System nieobliczalna: %s", e)
+        return {"stale_days": None, "stale": None}
+
+
 def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
     """Lite draft System (requests-only). Zwraca słownik podsumowania.
 
@@ -88,13 +108,23 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
                 "ok": True, "dry_run": True, "model_source": model_source,
                 "candidates": len(wyniki), "after_league_filter": len(kandydaci),
                 "would_create": len(viable), "legs": viable[:50],
+                **_swiezosc_danych_system(),
             }
 
         from footstats.core.system_paper import build_single_leg_coupons
         created = build_single_leg_coupons(wyniki)
+        # Sygnał świeżości PO zapisie: created>0 → stale_days=0; created=0 +
+        # brak kuponu od >=prog_dni → STALE (rozróżnia benign vs starvation).
+        fresh = _swiezosc_danych_system()
+        if fresh.get("stale"):
+            log.warning(
+                "cloud_draft STALE: %s dni od ostatniego kuponu System "
+                "(created=%d) — zbieranie danych moglo zamrzec",
+                fresh.get("stale_days"), created,
+            )
         return {
             "ok": True, "dry_run": False, "model_source": model_source,
-            "candidates": len(wyniki), "created": created,
+            "candidates": len(wyniki), "created": created, **fresh,
         }
     except Exception as e:  # noqa: BLE001 — endpoint musi być graceful (nigdy 500)
         log.error("generuj_system_draft błąd: %s", e, exc_info=True)
