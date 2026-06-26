@@ -60,7 +60,7 @@ class _RequestIDMiddleware(BaseHTTPMiddleware):
 
 
 # Endpointy wywołujące zewnętrzne API wynikowe (API-Football/FlashScore) - potrzebują więcej czasu
-_LONG_RUNNING_PATHS = {"/api/coupons/settle", "/api/cron/settle"}
+_LONG_RUNNING_PATHS = {"/api/coupons/settle", "/api/cron/settle", "/api/cron/draft"}
 _LONG_RUNNING_TIMEOUT = 120.0
 
 
