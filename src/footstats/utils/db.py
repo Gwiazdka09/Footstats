@@ -26,7 +26,7 @@ def _get_pool() -> "psycopg2.pool.ThreadedConnectionPool":
                 pass
         if not url:
             raise RuntimeError("DATABASE_URL env var not set — add Neon.tech connection string to Cloud Run")
-        # Keepalives zapobiegają zrywaniu idle connections przez Neon/firewall
+        # Keepalives zapobiegają zrywaniu idle connections przez Neon/firewall.
         _pool = _pg_pool.ThreadedConnectionPool(
             minconn=1, maxconn=10, dsn=url,
             keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
@@ -48,6 +48,13 @@ class _Conn:
                 pass
             raw = pool.getconn()
         self._raw = raw
+        # Neon pooler (PgBouncer transaction-pooling) nie gwarantuje session
+        # search_path → losowo "no schema has been selected" na unqualified
+        # CREATE TABLE/SELECT (flaky start _init_db). Startup-options są odrzucane
+        # przez pooler, więc ustawiamy per-połączenie jako SQL — w tej samej
+        # transakcji co kolejne zapytania (ten sam backend → search_path trzyma).
+        with raw.cursor() as _cur:
+            _cur.execute("SET search_path TO public")
 
     @staticmethod
     def _fix(sql: str) -> str:
