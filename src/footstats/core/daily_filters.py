@@ -4,8 +4,14 @@ Uruchamiane przed wywołaniem Groq aby oszczędzać tokeny i poprawiać jakość
 """
 
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+
+def _gating_lig_on() -> bool:
+    """M1 lever #2 — czy gating słabych lig włączony (env LEAGUE_GATING, default OFF)."""
+    return os.getenv("LEAGUE_GATING", "0").strip().lower() in ("1", "true", "yes")
 
 
 def _pre_filtruj_kursy(kandydaci: list[dict]) -> list[dict]:
@@ -70,10 +76,15 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
     (porównanie znormalizowane: akcenty, prefiks kraju, wielkość liter).
     Blacklista (friendly/CONCACAF/Afryka) odrzuca zawsze.
     """
-    from footstats.config import LIGI_WHITELIST, LIGI_BLACKLIST_KEYWORDS, LIGA_WHITELIST_ENFORCE
+    from footstats.config import (
+        LIGI_WHITELIST, LIGI_BLACKLIST_KEYWORDS, LIGA_WHITELIST_ENFORCE, LIGI_SLABE,
+    )
     whitelist_norm = {_norm_liga(l) for l in LIGI_WHITELIST}
+    gating = _gating_lig_on()
+    slabe_norm = {_norm_liga(l) for l in LIGI_SLABE} if gating else set()
     wynik = []
     odrzucone_liga = 0
+    odrzucone_slabe = 0
     for k in kandydaci:
         liga = (k.get("liga") or "").strip()
         liga_lower = liga.lower()
@@ -83,7 +94,13 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
         if liga and LIGA_WHITELIST_ENFORCE and _norm_liga(liga) not in whitelist_norm:
             odrzucone_liga += 1
             continue
+        # M1 lever #2: gating słabych lig (<50% offline) — tylko gdy LEAGUE_GATING=1.
+        if liga and gating and _norm_liga(liga) in slabe_norm:
+            odrzucone_slabe += 1
+            continue
         wynik.append(k)
     if odrzucone_liga:
         logger.info("Whitelist lig: odrzucono %d kandydatów spoza whitelist", odrzucone_liga)
+    if odrzucone_slabe:
+        logger.info("Gating słabych lig: odrzucono %d kandydatów (POL/ESP/FRA <50%%)", odrzucone_slabe)
     return wynik

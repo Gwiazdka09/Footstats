@@ -131,6 +131,16 @@ LIGI_BLACKLIST_KEYWORDS: tuple[str, ...] = (
     "SAFF",             # South Asian
 )
 
+# M1 lever #2 — gating słabych lig. Ligi z offline accuracy <50% (walk-forward A/B 06-25:
+# POL ~44%, ESP ~49%, FRA ~49-50%). Gdy LEAGUE_GATING=1 (env, default OFF) — _pre_filtruj_ligi
+# odrzuca te ligi, faworyzując NED/SCO/ITA/ENG (≥M1). Domyślnie OFF = zero zmiany prod;
+# flip po walidacji (~88 świeżych settled). Porównanie znormalizowane (akcenty/prefiks/case).
+LIGI_SLABE: frozenset[str] = frozenset({
+    "Ekstraklasa", "PKO BP Ekstraklasa",          # POL ~44%
+    "La Liga", "ESP-La Liga", "Segunda Division",  # ESP ~49-51%
+    "Ligue 1", "FRA-Ligue 1",                      # FRA ~49-50%
+})
+
 # Jeśli True, daily_agent odrzuca mecze bez danych Poissona
 LIGA_FILTER_ENABLED: bool = True
 
