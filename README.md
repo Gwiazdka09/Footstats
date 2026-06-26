@@ -13,7 +13,20 @@
 
 ## 🚀 Dla Rekrutera
 
-Projekt demonstruje zaawansowane techniki inżynierii oprogramowania:
+> **TL;DR** — Produkcyjny, autonomiczny system ML do predykcji piłkarskich: statystyka Bayesowska
+> (Poisson + Dixon-Coles) + ensemble + LLM, walidowany **walk-forward out-of-sample na 32 400 meczach**.
+> Pełny cykl bez człowieka: scraping → predykcja → kupon → rozliczenie → nauka na błędach.
+
+**🔗 Live demo:** [bot-opal-nu.vercel.app](https://bot-opal-nu.vercel.app)  ·  **API:** FastAPI @ Google Cloud Run  ·  **DB:** Neon PostgreSQL
+
+### Dlaczego warto zerknąć
+- 🧪 **1346 testów** pytest + CI (lint · security · coverage gate) + regression gate na broad-except — jakość *wymuszana*, nie deklarowana.
+- 📊 **Walidacja naukowa, nie marketing** — walk-forward no-lookahead, A/B wariantów modelu, kalibracja per-pasmo. Dixon-Coles **51.8%** out-of-sample; sufit rynku świadomie zmierzony (4 eksperymenty, 3 odrzucone jako ślepe uliczki — decyzje oparte o dane).
+- 🤖 **Pełna autonomia** — dzienny pipeline (Windows Task Scheduler + Google Cloud Scheduler), PC-niezależny; predykcja, rozliczenie i RAG-feedback bez interwencji.
+- 🔒 **Rygor produkcyjny** — OWASP API hardening (live), JWT multi-user, RODO, DevSecOps w CI (bandit · gitleaks · pip-audit), rollouty za flagami (default-OFF, walidowane przed flipem).
+- 🧩 **Architektura** — multi-source scraping z cross-walidacją (4 źródła), graceful degradation, idempotentne writery, dekompozycja god-modułów.
+
+Stos technik zwięźle:
 
 | Obszar | Implementacja |
 |--------|--------------|
@@ -121,40 +134,6 @@ tests/             # 1346 testów pytest
 scripts/           # preflight, backup_db, visualize_brain, run_operator.bat
 data/              # footstats_backtest.db, model_calibration.json
 cache/             # api_football/, understat_xg/, flashscore/, kursy/
-```
-
----
-
-## 🛠️ Instalacja i Uruchomienie
-
-```bash
-# 1. Klonowanie i środowisko
-git clone https://github.com/user/footstats.git
-cd footstats
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-pip install -e .
-playwright install chromium
-
-# 2. Konfiguracja
-cp .env.example .env
-# Uzupełnij: GROQ_API_KEY, APISPORTS_KEY, BZZOIRO_KEY, JWT_SECRET
-
-# 3. Dashboard
-streamlit run src/footstats/dashboard.py
-
-# 4. Daily Agent (ręcznie)
-python -m footstats.daily_agent --dni 3 --faza draft
-
-# 5. Evening Agent (ręcznie)
-python -m footstats.evening_agent --date 2026-05-27
-
-# 6. Kalibracja modelu Poisson
-python -m footstats.core.lambda_optimizer
-
-# 7. Second Mind Graph
-python scripts/visualize_brain.py
-# → otwórz brain_graph.html
 ```
 
 ---
