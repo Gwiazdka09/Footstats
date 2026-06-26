@@ -4,8 +4,9 @@
 **Wersja:** v3.4-stable
 **Accuracy:** model offline **51.8%** (walk-forward A/B, DC W=0.5) | live: świeże ≥06-19 **47.8%** (23 settled, fixy Cel B) vs stare 31%
 **Cel:** M1 = 55% win rate
-**Suite:** ~1346 testów pass / 6 skip
+**Suite:** ~1375 testów pass / 6 skip (coverage 57.66%, floor 57)
 **LIVE (06-26):** reweight `ENSEMBLE_MARKET_WEIGHT=0.70` (rev 00274) + quick_picks Poisson fix (default ON) + cloud-draft scheduler `footstats-draft-morning` 07:30 CEST
+**ZBUDOWANE flag-OFF (flip po walidacji):** `SELECTION_MIN_CONF` (lever #1) + `LEAGUE_GATING` (lever #2)
 
 ---
 
@@ -37,7 +38,9 @@
   WC już miało kupony System (dedup per mecz/data). System user istnieje (leaderboard total:15).
 - [ ] **`model_source=bzzoiro-ml` na cloud** (parquet nieobecny) → cloud-draft NIE używa Poisson-DC.
   Aby włączyć Poisson na cloud: dostarcz `full_dataset.parquet` (562KB) — (a) GCS-pull przy starcie
-  [najlepsze, wymaga kodu startup+bucket] lub (b) COPY do obrazu. Off-season (dane do 2026-05) → mało pilne.
+  [najlepsze, wymaga kodu startup+bucket] lub (b) COPY do obrazu (force-add binary do git).
+  **DECYZJA 06-26: ODŁOŻONE DO SIERPNIA** — off-season WC=kadry → Poisson i tak nie ruszy (dataset
+  klubowy), bzzoiro-ml OK teraz; realny zysk dopiero na restart lig klubowych. Wrócić wtedy.
 - [ ] **Monitoruj** `calibration_monitor.py` — dane walidacyjne rosną PC-niezależnie → odblokuje M1 flipy.
 
 ---
@@ -47,8 +50,9 @@
 > TheSportsDB 4. źródło + consensus→settlement + CRON_SECRET rotacja + ALLOWED_ORIGINS cleanup +
 > Cloud Scheduler audyt + Daily DB Backup (Neon pg_dump) + walk-forward A/B (DC 51.8% potwierdzone) +
 > ImportanceIndex/LightGBM zbadane→ślepa uliczka + reweight ku rynkowi (flip live) + quick_picks Poisson fix +
-> cloud-draft live. Wcześniej: Cel A/B/C, D1-D7, multi-source framework, RODO, multi-user.
-> Suite: **~1346 testów pass / 6 skip** (coverage ~57%).
+> cloud-draft live + M1 lewary #1/#2 zbudowane (flag-OFF) + schedule-adj zbadane (marginal) + coverage 57.
+> Wcześniej: Cel A/B/C, D1-D7, multi-source framework, RODO, multi-user.
+> Suite: **~1375 testów pass / 6 skip** (coverage 57.66%).
 
 ---
 
@@ -103,11 +107,12 @@
 > (robustnie). Per-liga: NED 56/SCO 55/ITA 54/ENG 54 ≥M1; POL 44/ESP 49/FRA 49 w dół.
 > **WNIOSEK M1:** model OK, droga = **SELEKCJA** (65%+ subset) + gating lig. Zgodne z Cel B (gap=selekcja).
 
-- [ ] **Selekcja na confidence (M1 lever #1)** — podnieś próg budowy kuponu do pasma 65%+ (=68% offline).
-  Deploy PO walidacji (~88 fresh), zwaliduj że live trzyma kalibrację.
-- [ ] **Gating słabych lig (M1 lever #2)** — POL/ESP/FRA <50% offline; faworyzuj NED/ITA/ENG/SCO/AUT.
-- [ ] **Schedule-adjusted ratings** — `_oblicz_sile_wazona` atak=gole/średnia bez korekty siły rywala.
-  Iteracyjne ratingi ~+0.5-1pp do raw. Drugorzędne vs selekcja (i częściowo pokryje to model ML / pi-ratings).
+- [x] **Selekcja na confidence (M1 lever #1) — ZBUDOWANE** (flaga `SELECTION_MIN_CONF`, default OFF=40).
+  Podnosi próg `najlepszy_typ` do pasma high-conf (offline 65%+=68%). Wpływa na System paper + cloud-draft.
+  **Flip po walidacji** (~88 fresh): ustaw `SELECTION_MIN_CONF=65`, zwaliduj że live trzyma kalibrację.
+- [x] **Gating słabych lig (M1 lever #2) — ZBUDOWANE** (flaga `LEAGUE_GATING`, default OFF). `LIGI_SLABE`
+  (POL/ESP/FRA <50% offline) odrzucane w `_pre_filtruj_ligi` gdy ON; faworyzuje NED/SCO/ITA/ENG.
+  **Flip po walidacji**: `LEAGUE_GATING=1`.
 - [ ] **Kontuzje v2** — waga udziałem w golach (utrata strzelca > rezerwowy); wymaga scrape per-gracz.
 
 ### Zbadane → odrzucone (nie wracać)
@@ -116,6 +121,10 @@
 - **LightGBM / własny model ML** (pomysł B): 51.6% (z kursami) / 50.9% (bez) < rynek 53.1% < baseline.
   Rynek nieprzekraczalny (jak literatura). `core/ml_features.py` zostaje jako infra (pi-ratings/elo).
   Jedyny realny owoc = reweight ensemble ku rynkowi (sekcja NAJWAŻNIEJSZE).
+- **Schedule-adjusted ratings (M1 lever #5)** (06-26): opponent-adjusted ratingi w `_oblicz_sile_wazona`
+  (flaga `SCHEDULE_ADJUSTED_RATINGS`). Offline A/B (DC, n=2976): baseline 50.97% vs adj 51.18% =
+  **+0.20pp (szum, se~0.92pp)**, poniżej hipotezy +0.5-1pp, +57% wolniej. **Flag zostaje OFF.**
+  Kod + 7 testów zostają jako infra; flip tylko gdyby pełne n potwierdziło (mało prawdopodobne).
 
 ---
 

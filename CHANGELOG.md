@@ -5,6 +5,32 @@
 
 ## 2026-06-26
 
+### M1 lewary — selekcja + gating (zbudowane, flag-gated default OFF, flip po walidacji)
+- **`bb877e85a`** selekcja high-conf (lever #1): flaga `SELECTION_MIN_CONF` w `system_paper.najlepszy_typ`
+  — domyślnie MIN_PROB (40, zero zmiany), podnosi próg do pasma high-conf (offline 65%+=68% acc).
+  Czytane przy każdym wywołaniu (flip bez redeploy), fallback do 40 poza [0,100]. +5 testów.
+- **`074a27e98`** gating słabych lig (lever #2): `LIGI_SLABE` (POL/ESP/FRA <50% offline) + flaga
+  `LEAGUE_GATING` (default OFF) w `_pre_filtruj_ligi`. Gdy ON: odrzuca słabe ligi, faworyzuje
+  NED/SCO/ITA/ENG. Porównanie znormalizowane (prefiks/akcenty/case). +6 testów.
+- Oba wpływają na System paper-trading + cloud-draft (wspólna ścieżka filtrów). Flip po ~88 świeżych settled.
+
+### Schedule-adjusted ratings (lever #5) — zbadane → ślepa uliczka (marginal)
+- **`b70dfb3c4`** opponent-adjusted ratingi w `_oblicz_sile_wazona` (flaga `SCHEDULE_ADJUSTED_RATINGS`,
+  default OFF): jedna iteracja korekty siły o trudność terminarza (atak=ważona gole/obrona_rywala).
+  **Offline A/B (walk-forward DC W=0.5, n=2976): 50.97% → 51.18% = +0.20pp (szum, se~0.92pp)**,
+  poniżej hipotezy +0.5-1pp, +57% wolniej. **Flag zostaje OFF** (jak ImportanceIndex/LightGBM).
+  Kod + 7 testów zostają jako infra/zmierzony wynik.
+
+### Coverage — ratchet floor 55→57
+- **`617414137`** testy `ai/scoring.py` (kurs_do_prob/value_bet, było 30%) + `core/confidence.py`
+  `komentarz_analityka` (string builder, było 74%) — pure-logic, +17 testów. CI `--cov-fail-under`
+  55→57 (zmierzone 57.66%). Suite ~1375 pass / 6 skip.
+
+### Parquet na cloud (cloud-draft Poisson) — DECYZJA: odłożone do sierpnia
+- Cloud-draft `model_source=bzzoiro-ml` bo parquet nieobecny w obrazie (`.dockerignore` wyłącza
+  `data/hist_cache/`, `data/` gitignored). Off-season WC=kadry → Poisson nie ruszy (dataset klubowy)
+  → bzzoiro-ml OK teraz. Wrócić na restart lig klubowych (image COPY / GCS-pull). TODO #3 pending.
+
 ### 🔴 BUGFIX — quick_picks nie używał Poissona live (schema mismatch → Bzzoiro-ML)
 - **`cc6242590`+`92dc276aa`+(flip default)**: `quick_picks` ładował `load_cached()` (schemat angielski
   home/away/hg/ag/date), ale `waliduj_df_wyniki` wymaga polskiego (gospodarz/goscie/gole_g/gole_a/data)
