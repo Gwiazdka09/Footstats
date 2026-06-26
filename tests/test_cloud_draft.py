@@ -93,6 +93,21 @@ def test_model_source_flaga_on_bez_danych_to_bzzoiro(monkeypatch):
     assert cd._wykryj_model_source() == "bzzoiro-ml"
 
 
+def test_schema_mismatch_bug_i_adapter_fix():
+    """Regresja: angielski schemat load_cached NIE przechodzi waliduj_df_wyniki (=bug,
+    Poisson pomijany), a po adapt_to_prod_schema przechodzi (=fix QUICK_PICKS_USE_POISSON_CACHE)."""
+    import pandas as pd
+    from footstats.utils.logging import waliduj_df_wyniki
+    from footstats.core.wf_harness import adapt_to_prod_schema
+
+    eng = pd.DataFrame({
+        "home": ["A", "C"], "away": ["B", "D"], "hg": [1, 2], "ag": [0, 2],
+        "date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+    })
+    assert waliduj_df_wyniki(eng, "eng") is False          # BUG: schemat angielski odrzucony
+    assert waliduj_df_wyniki(adapt_to_prod_schema(eng), "pl") is True  # FIX: po adaptacji OK
+
+
 def test_wyjatek_nie_rzuca(monkeypatch):
     monkeypatch.setenv(ENV_BZZOIRO, "fake-key")
     monkeypatch.setattr("footstats.scrapers.bzzoiro.BzzoiroClient", _ClientOK)
