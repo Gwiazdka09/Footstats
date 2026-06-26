@@ -1,9 +1,11 @@
 # FootStats TODO — Czerwiec / Lipiec 2026
 
-**Ostatnia aktualizacja:** 2026-06-25
+**Ostatnia aktualizacja:** 2026-06-26
 **Wersja:** v3.4-stable
 **Accuracy:** model offline **51.8%** (walk-forward A/B, DC W=0.5) | live: świeże ≥06-19 **47.8%** (23 settled, fixy Cel B) vs stare 31%
 **Cel:** M1 = 55% win rate
+**Suite:** ~1346 testów pass / 6 skip
+**LIVE (06-26):** reweight `ENSEMBLE_MARKET_WEIGHT=0.70` (rev 00274) + quick_picks Poisson fix (default ON) + cloud-draft scheduler `footstats-draft-morning` 07:30 CEST
 
 ---
 
@@ -24,37 +26,19 @@
 
 ---
 
-## 🌙 RANO — włączenie cloud-draft (zbudowane w nocy, czeka na Ciebie)
+## ✅ Cloud-draft WŁĄCZONY LIVE (06-26) — System paper-trading PC-niezależny
 
-> **Co zrobione (noc):** `/cron/draft` endpoint + `core/cloud_draft.py` — lite draft System
-> (model-only, requests: Bzzoiro→quick_picks, bez Playwright/Groq/Telegram). **dry_run=True DEFAULT
-> = zero zapisów Neon** (deploy bezpieczny, inert). Odblokowuje bottleneck danych (draft był tylko lokalny=PC on).
+> `/cron/draft` + `core/cloud_draft.py` (lite draft, requests-only: Bzzoiro→quick_picks, bez
+> Playwright/Groq/Telegram). **WDROŻONE LIVE** — Cloud Scheduler `footstats-draft-morning`
+> (07:30 CEST, `dry_run=false`) przed settle 08:00. Auth via `X-Cron-Secret` (Cloud Run env, nie Secret Manager).
+> `/api/cron/draft` w `_LONG_RUNNING_PATHS` (120s). Odblokowany bottleneck — draft był tylko lokalny (PC on).
 
-**Krok 1 — test dry-run na cloud** (Cloud Shell; bezpieczne, nic nie zapisuje):
-```bash
-SECRET=$(gcloud secrets versions access latest --secret=CRON_SECRET)
-curl -s -X POST "https://footstats-api-949240532526.europe-west1.run.app/api/cron/draft?dry_run=true" \
-  -H "X-Cron-Secret: $SECRET" | python3 -m json.tool
-```
-Sprawdź pole **`model_source`**:
-- `poisson-dc` → świetnie, nasz model (parquet jest). Idź do Kroku 3.
-- `bzzoiro-ml` → ⚠️ parquet nieobecny na cloud → użyłby predykcji Bzzoiro (NIE nasz model). Najpierw Krok 2.
-
-**Krok 2 (jeśli `bzzoiro-ml`) — dostarcz `full_dataset.parquet` (562KB) na cloud.** Decyzja architektoniczna:
-- (a) GCS-pull przy starcie (czysto, updatowalne) — najlepsze, ale wymaga kodu startup + bucketu.
-- (b) wgrać do obrazu (`.dockerignore` wyłącza `data/hist_cache/`; force-track w git lub COPY z buildu).
-- Off-season (dane do 2026-05) → mało pilne; do decyzji.
-
-**Krok 3 — włącz live (Cloud Scheduler, jak settle):**
-```bash
-gcloud scheduler jobs create http footstats-draft-morning --location europe-west1 \
-  --schedule "30 5 * * *" --uri "https://footstats-api-949240532526.europe-west1.run.app/api/cron/draft?dry_run=false" \
-  --http-method POST --headers "X-Cron-Secret=$SECRET" --time-zone UTC   # 07:30 CEST, przed settle 08:00
-```
-Potem monitoruj `calibration_monitor.py` — dane walidacyjne zaczną rosnąć PC-niezależnie → odblokuje M1 flipy.
-
-> ⚠️ Live (`dry_run=false`) zapisuje kupony System do prod Neon. Idempotentne (dedup per mecz/data).
-> Zanim włączysz: warto przepuścić `footstats-data-guard` (prod Neon writes / Telegram). Telegram: cloud-draft NIE wysyła.
+- [x] **Endpoint + scheduler LIVE** — pierwszy live run created:0 = **BENIGN (idempotencja)**: 12 kandydatów
+  WC już miało kupony System (dedup per mecz/data). System user istnieje (leaderboard total:15).
+- [ ] **`model_source=bzzoiro-ml` na cloud** (parquet nieobecny) → cloud-draft NIE używa Poisson-DC.
+  Aby włączyć Poisson na cloud: dostarcz `full_dataset.parquet` (562KB) — (a) GCS-pull przy starcie
+  [najlepsze, wymaga kodu startup+bucket] lub (b) COPY do obrazu. Off-season (dane do 2026-05) → mało pilne.
+- [ ] **Monitoruj** `calibration_monitor.py` — dane walidacyjne rosną PC-niezależnie → odblokuje M1 flipy.
 
 ---
 
@@ -62,8 +46,9 @@ Potem monitoruj `calibration_monitor.py` — dane walidacyjne zaczną rosnąć P
 > CI lint/security/coverage gate + Dependabot fix + dekompozycja superbet/daily_agent/utils-logging +
 > TheSportsDB 4. źródło + consensus→settlement + CRON_SECRET rotacja + ALLOWED_ORIGINS cleanup +
 > Cloud Scheduler audyt + Daily DB Backup (Neon pg_dump) + walk-forward A/B (DC 51.8% potwierdzone) +
-> ImportanceIndex zbadane→ślepa uliczka. Wcześniej: Cel A/B/C, D1-D7, multi-source framework, RODO, multi-user.
-> Suite: **~1313 testów pass / 6 skip** (coverage ~56%).
+> ImportanceIndex/LightGBM zbadane→ślepa uliczka + reweight ku rynkowi (flip live) + quick_picks Poisson fix +
+> cloud-draft live. Wcześniej: Cel A/B/C, D1-D7, multi-source framework, RODO, multi-user.
+> Suite: **~1346 testów pass / 6 skip** (coverage ~57%).
 
 ---
 
@@ -78,16 +63,16 @@ Potem monitoruj `calibration_monitor.py` — dane walidacyjne zaczną rosnąć P
 
 ---
 
-## 🚀 NAJWAŻNIEJSZE — reweight ensemble ku rynkowi (GOTOWE, czeka na flip po walidacji)
+## 🚀 NAJWAŻNIEJSZE — reweight ensemble ku rynkowi (FLIP WDROŻONY LIVE 06-26)
 
 > **Model R&D zakończone 06-25** (4 eksperymenty, 1 win — szczegóły → CHANGELOG):
 > ImportanceIndex −0.1pp ❌ · W_BAYESIAN 0.5 już optimum ❌ · LightGBM 51.6% < rynek 53.1% ❌ ·
 > **reweight ku rynkowi +1.4pp ✅**. Wniosek: model przy praktycznym suficie, **rynek (kursy) ~53% nieprzekraczalny**.
 > Skuteczność ≠ accuracy; realna gra = **value** (model vs rynek) + **selekcja high-conf** + dane.
 
-- [ ] **FLIP po walidacji: `ENSEMBLE_MARKET_WEIGHT=0.70`** (=30/70 model/rynek). Gotowe + otestowane
-  (flaga env, **default OFF = zero zmiany prod teraz**). WF A/B: 70/30→51.8% vs 30/70→52.8% (z kursami 52.5→53.8).
-  Zostawia 30% głosu modelu na value. Przy flipie: calibration check (log-loss, bo stare 70/30 było log-loss-opt).
+- [x] **FLIP WDROŻONY: `ENSEMBLE_MARKET_WEIGHT=0.70`** (=30/70 model/rynek) — Cloud Run **rev 00274 LIVE**.
+  WF A/B: 70/30→51.8% vs 30/70→52.8% (z kursami 52.5→53.8). Zostawia 30% głosu modelu na value.
+  Escape-hatch: usuń env / ustaw inną wartość. **Monitoruj** calibration check (log-loss) na świeżych settled.
 - [ ] (opcj.) re-optymalizacja per-league wag ku rynkowi (`ensemble_optimizer`).
 
 ---
@@ -154,7 +139,9 @@ Potem monitoruj `calibration_monitor.py` — dane walidacyjne zaczną rosnąć P
 
 ## 📋 Następne kroki
 
-1. **Pomysł B (ML LightGBM)** — sekcja AKTYWNE wyżej (w toku).
-2. **Pasywne:** zbieraj świeże settled (draft musi lecieć — pilnuj PC/Scheduler). Budżet AF 100/dzień.
+1. **Pasywne (PRIORYTET):** zbieraj świeże settled — draft leci **PC-niezależnie** (cloud-draft scheduler 07:30 CEST
+   + lokalny). Co kilka dni `calibration_monitor.py`: czy reweight 30/70 + Poisson ruszyły accuracy. Budżet AF 100/dzień.
+2. **Sierpień (restart lig klubowych):** zweryfikuj że quick_picks-fix → Poisson live (51.8%) zamiast Bzzoiro-ML.
 3. **Po walidacji (~88 settled):** D2 auto-refit sam → `CALIBRATION_ENABLED=1`; D3 decyzja; selekcja 65%+ + gating lig.
-4. **Sam koniec (D8):** JDG/prawnik (wstrzymane). Email/płatności po walidacji.
+4. **Opcjonalne:** parquet na cloud (→ cloud-draft używa Poisson zamiast bzzoiro-ml).
+5. **Sam koniec (D8):** JDG/prawnik (wstrzymane). Email/płatności po walidacji.

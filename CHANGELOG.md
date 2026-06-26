@@ -21,7 +21,22 @@
   live = `dry_run=false` po weryfikacji. Pole `model_source` wykrywa Poisson-DC (parquet) vs fallback
   Bzzoiro-ml. +5 testów (mock, graceful — nigdy 500). Odkrycie: `BzzoiroClient` jest requests-based
   (NIE Playwright) → rdzeń draftu cloud-feasible; Playwright dotyczy tylko forma/Superbet (enrichment).
-  **Enablement (parquet na cloud + Cloud Scheduler) → runbook w TODO "🌙 RANO".**
+- **`fbbe3793c`**: `/api/cron/draft` w `_LONG_RUNNING_PATHS` (120s zamiast 10s timeout).
+- **WŁĄCZONY LIVE (06-26):** Cloud Scheduler `footstats-draft-morning` (07:30 CEST, `dry_run=false`,
+  header `X-Cron-Secret` z Cloud Run env). Pierwszy run created:0 = **idempotencja** (12 kandydatów WC
+  już miało kupony System — dedup per mecz/data; System user istnieje, leaderboard total:15). `model_source=bzzoiro-ml`
+  na cloud (parquet nieobecny — Poisson po dostarczeniu `full_dataset.parquet`).
+
+### Ensemble — reweight ku rynkowi WDROŻONY LIVE
+- **`589e1aa6a`** (flaga) + **flip env**: `ENSEMBLE_MARKET_WEIGHT=0.70` (=30/70 model/rynek) na Cloud Run
+  **rev 00274 LIVE**. WF A/B: 70/30→51.8% vs 30/70→52.8% (z kursami 52.5→53.8). Model przy praktycznym
+  suficie, rynek (kursy) ~53% nieprzekraczalny. Zostawia 30% głosu modelu na value. Escape-hatch: usuń env.
+
+### Infra ML + coverage
+- **`6bfdf27dc`** `core/standings.py` (rekonstrukcja tabeli ligowej no-lookahead) + **`e9f1949e6`**
+  `core/ml_features.py` (pi-ratings/elo/form/standings/odds). ImportanceIndex/LightGBM zbadane → ślepa
+  uliczka (< rynek), moduły zostają jako infra cech. +18 testów.
+- **`bc793c0e3`** test pokrycia prod `/cron/evict-cache` (było 0%, +5 testów). Suite ~1346 pass / 6 skip.
 
 ## 2026-06-24 / 06-25
 
