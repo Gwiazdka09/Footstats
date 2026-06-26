@@ -62,6 +62,19 @@ def raport_kalibracji() -> None:
     else:
         print("\n  Za mało danych (pasma n>=5) na werdykt — czekaj na więcej settled.")
 
+    # FLIP SELECTION_MIN_CONF (lever #1): czy pasmo high-conf bije ogół?
+    from footstats.core.flip_advisor import werdykt_selekcja
+    w = werdykt_selekcja(pasma)
+    print("\n  FLIP SELECTION_MIN_CONF (lever #1):")
+    if w["status"] == "gotowe":
+        znak = "✅ FLIP TERAZ" if w["flip"] else "⏸️  jeszcze nie warto"
+        print(f"    {znak}: high-conf {w['acc_high']}% vs ogół {w['acc_all']}% "
+              f"(Δ{w['delta']:+}pp, n={w['n_high']})")
+        if w["flip"]:
+            print("    → ustaw SELECTION_MIN_CONF=65 (działa na System paper + cloud-draft)")
+    else:
+        print(f"    ⏳ {w['msg']}")
+
 
 def raport_per_typ() -> None:
     _sep("TRAFNOŚĆ per typ")
@@ -73,6 +86,41 @@ def raport_per_typ() -> None:
         ).fetchall()
     for r in rows:
         print(f"  {(r['ai_tip'] or '?'):<14} n={r['n']:<3} trafność={_pct(r['won'] or 0, r['n'])}")
+
+
+def raport_per_liga() -> None:
+    """Trafność per liga (settled) + werdykt gatingu słabych lig (lever #2)."""
+    from footstats.core.flip_advisor import werdykt_gating
+    _sep("TRAFNOŚĆ per liga — gating (lever #2)")
+    with connect() as c:
+        rows = c.execute(
+            "SELECT league, COUNT(*) AS n, "
+            "SUM(CASE WHEN tip_correct=1 THEN 1 ELSE 0 END) AS won "
+            "FROM predictions WHERE tip_correct IS NOT NULL "
+            "AND league IS NOT NULL AND league <> '' "
+            "GROUP BY league ORDER BY n DESC"
+        ).fetchall()
+
+    per = []
+    for r in rows:
+        n, won = r["n"], r["won"] or 0
+        acc = won / n * 100 if n else 0
+        per.append((r["league"], n, won, acc))
+        print(f"  {(r['league'] or '?'):<22} n={n:<3} trafność={_pct(won, n)}")
+    if not per:
+        print("  Brak settled z ligą — czekaj na dane.")
+        return
+
+    w = werdykt_gating(per)
+    print("\n  FLIP LEAGUE_GATING (lever #2):")
+    if w["slabe"]:
+        ligi = ", ".join(f"{lg} ({acc:.0f}%, n={n})" for lg, n, acc in w["slabe"])
+        print(f"    🔴 Słabe (<50%, n>=8): {ligi}")
+        print("    → kandydaci do config.LIGI_SLABE; rozważ LEAGUE_GATING=1")
+    else:
+        print("    ⏳ brak lig z n>=8 poniżej 50% — za mało danych lub wszystkie OK")
+    if w["mocne"]:
+        print(f"    ✅ Mocne (>=50%): {', '.join(lg for lg, _, _ in w['mocne'])}")
 
 
 def raport_system_paper() -> None:
@@ -167,6 +215,7 @@ def main() -> None:
     print("FootStats — monitor kalibracji (Neon prod, read-only)")
     raport_kalibracji()
     raport_per_typ()
+    raport_per_liga()
     raport_system_paper()
     raport_system_vs_groq()
     print()
