@@ -94,12 +94,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev,api,ai]"
 
-      # --cov-fail-under: floor anty-regresyjny (obecnie ~57%). Ratchet w górę
+      # --cov-fail-under: floor anty-regresyjny (zmierzone ~58%). Ratchet w górę
       # z czasem aż do globalnego celu 80% (jak zakres mypy w jobie lint).
       - name: Run tests + coverage gate
         run: >
           python -m pytest tests/ --tb=short
-          --cov=src/footstats --cov-report=term-missing --cov-fail-under=55
+          --cov=src/footstats --cov-report=term-missing --cov-fail-under=57
 
       - name: Check imports
         run: python -c "import footstats; print('Import OK')"
