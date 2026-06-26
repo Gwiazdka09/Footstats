@@ -7,6 +7,23 @@
 
 ---
 
+## 🔴🔴 KRYTYCZNE ODKRYCIE (noc 06-26) — live prawdopodobnie NIE używa naszego modelu!
+
+> Podczas weryfikacji cloud-draftu wyszło: `quick_picks` ładuje `load_cached()` (schemat **angielski**
+> home/away/hg/ag/date), ale waliduje **polski** (gospodarz/goscie/gole_g/gole_a/data) →
+> `waliduj_df_wyniki` FAIL → `df_mecze=None` → **Poisson CICHO pomijany → fallback Bzzoiro-ML.**
+> Czyli live quick_picks/System (i prawdopodobnie live 47.8%) = **Bzzoiro-ML, NIE nasz Poisson-DC (51.8% offline)**.
+> To może być DUŻY element luki Cel B (live≪offline) — model nigdy nie działał live w tej ścieżce.
+
+- [ ] **DECYZJA: włączyć fix `QUICK_PICKS_USE_POISSON_CACHE=1`** (Cloud Run env). Adapter renamuje schemat
+  → Poisson rusza live. **Flaga default OFF = zero zmiany prod teraz** (commit `<ten>`, +testy, zweryfikowane
+  lokalnie: OFF→bzzoiro-ml, ON→poisson-dc). ⚠️ Zmienia live predykcje (Bzzoiro-ML→Poisson). Potencjalnie
+  podnosi live 47.8→~51.8% (offline Poisson). **Ale zmierz najpierw** (A/B Bzzoiro-ML vs Poisson) lub włącz
+  świadomie i monitoruj świeże settled. Najpierw jednak: czy Bzzoiro-ML nie jest przypadkiem lepsze live?
+- [ ] (powiązane) gdy włączysz flagę → re-rozważ całą strategię walidacji (dotąd zbierałeś dane Bzzoiro-ML, nie modelu).
+
+---
+
 ## 🌙 RANO — włączenie cloud-draft (zbudowane w nocy, czeka na Ciebie)
 
 > **Co zrobione (noc):** `/cron/draft` endpoint + `core/cloud_draft.py` — lite draft System

@@ -73,6 +73,26 @@ def test_bzzoiro_down_graceful(monkeypatch):
     assert r["ok"] is False and "niedost" in r["error"].lower()
 
 
+def test_model_source_flaga_off_to_bzzoiro(monkeypatch):
+    """Default (flaga OFF) → quick_picks pomija Poisson (schema mismatch) → bzzoiro-ml."""
+    monkeypatch.delenv("QUICK_PICKS_USE_POISSON_CACHE", raising=False)
+    assert cd._wykryj_model_source() == "bzzoiro-ml"
+
+
+def test_model_source_flaga_on_z_danymi_to_poisson(monkeypatch):
+    import pandas as pd
+    monkeypatch.setenv("QUICK_PICKS_USE_POISSON_CACHE", "1")
+    monkeypatch.setattr("footstats.data.historical_loader.load_cached",
+                        lambda: pd.DataFrame({"home": ["A"], "away": ["B"], "hg": [1], "ag": [0]}))
+    assert cd._wykryj_model_source() == "poisson-dc"
+
+
+def test_model_source_flaga_on_bez_danych_to_bzzoiro(monkeypatch):
+    monkeypatch.setenv("QUICK_PICKS_USE_POISSON_CACHE", "1")
+    monkeypatch.setattr("footstats.data.historical_loader.load_cached", lambda: None)
+    assert cd._wykryj_model_source() == "bzzoiro-ml"
+
+
 def test_wyjatek_nie_rzuca(monkeypatch):
     monkeypatch.setenv(ENV_BZZOIRO, "fake-key")
     monkeypatch.setattr("footstats.scrapers.bzzoiro.BzzoiroClient", _ClientOK)

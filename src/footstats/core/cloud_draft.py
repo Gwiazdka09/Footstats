@@ -24,7 +24,15 @@ log = logging.getLogger(__name__)
 
 
 def _wykryj_model_source() -> str:
-    """Czy dostępna jest historia (nasz Poisson-DC) czy fallback Bzzoiro-ML."""
+    """Czy quick_picks REALNIE użyje Poisson-DC, czy fallback Bzzoiro-ML.
+
+    quick_picks używa Poissona tylko gdy flaga `QUICK_PICKS_USE_POISSON_CACHE` jest ON
+    (wtedy adaptuje schemat `load_cached` → przechodzi walidację). Default OFF → schemat
+    angielski nie przechodzi `waliduj_df_wyniki` → Poisson pomijany → Bzzoiro-ML.
+    """
+    use_poisson = os.getenv("QUICK_PICKS_USE_POISSON_CACHE", "").strip()
+    if use_poisson in ("", "0", "false", "False"):
+        return "bzzoiro-ml"  # flaga OFF → quick_picks pomija Poisson (schema mismatch)
     try:
         from footstats.data.historical_loader import load_cached
         df = load_cached()
