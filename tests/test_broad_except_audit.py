@@ -31,7 +31,7 @@ BASELINE: dict[str, int] = {
     "core/calibration.py": 3,
     "core/checkpoint.py": 4,
     "core/circuit_breaker.py": 1,
-    "core/cloud_draft.py": 1,  # endpoint /cron/draft musi być graceful (nigdy 500)
+    "core/cloud_draft.py": 2,  # /cron/draft graceful (nigdy 500) + freshness guard (observability nie wywala draftu)
     "core/clv_tracker.py": 1,
     "core/coupon_settlement.py": 4,
     "core/coupon_tracker.py": 0,
