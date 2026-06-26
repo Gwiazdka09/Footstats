@@ -64,13 +64,14 @@ def szybkie_pewniaczki_2dni(
         try:
             from footstats.data.historical_loader import load_cached
             df_mecze = load_cached()
-            # BUG (flag-gated fix): load_cached zwraca schemat angielski (home/away/hg/ag/date),
-            # który NIE przechodzi waliduj_df_wyniki (oczekuje gospodarz/goscie/gole_g/gole_a/data)
+            # BUGFIX (06-26): load_cached zwraca schemat angielski (home/away/hg/ag/date),
+            # który NIE przechodził waliduj_df_wyniki (oczekuje gospodarz/goscie/gole_g/gole_a/data)
             # → Poisson był CICHO pomijany, fallback na Bzzoiro-ML (nasz model nie działał live!).
-            # Adapter (gdy flaga ON) renamuje schemat → Poisson rusza. Flaga
-            # `QUICK_PICKS_USE_POISSON_CACHE` default OFF = obecne zachowanie (zero zmiany prod).
-            _use_poisson = os.getenv("QUICK_PICKS_USE_POISSON_CACHE", "").strip()
-            if df_mecze is not None and _use_poisson not in ("", "0", "false", "False"):
+            # Adapter renamuje schemat → Poisson rusza. DEFAULT ON (po de-risk 06-26: na meczach
+            # reprezentacji identyczne typy bo brak historii klubowej; realna poprawa na ligach klubowych
+            # = Poisson 51.8% offline zamiast Bzzoiro-ML). Escape-hatch: `QUICK_PICKS_USE_POISSON_CACHE=0`.
+            _use_poisson = os.getenv("QUICK_PICKS_USE_POISSON_CACHE", "1").strip()
+            if df_mecze is not None and _use_poisson not in ("0", "false", "False"):
                 from footstats.core.wf_harness import adapt_to_prod_schema
                 df_mecze = adapt_to_prod_schema(df_mecze)
         except (FileNotFoundError, ImportError, OSError, ValueError):

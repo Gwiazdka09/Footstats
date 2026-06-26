@@ -5,6 +5,15 @@
 
 ## 2026-06-26
 
+### 🔴 BUGFIX — quick_picks nie używał Poissona live (schema mismatch → Bzzoiro-ML)
+- **`cc6242590`+`92dc276aa`+(flip default)**: `quick_picks` ładował `load_cached()` (schemat angielski
+  home/away/hg/ag/date), ale `waliduj_df_wyniki` wymaga polskiego (gospodarz/goscie/gole_g/gole_a/data)
+  → `df_mecze=None` → **Poisson CICHO pomijany → fallback Bzzoiro-ML**. Live (47.8%) używał Bzzoiro-ML,
+  NIE naszego Poisson-DC (51.8% offline) — prawdopodobnie duży element luki Cel B (live≪offline).
+  Fix: adapter `adapt_to_prod_schema` w quick_picks, **default ON** (escape-hatch `QUICK_PICKS_USE_POISSON_CACHE=0`).
+  De-risk: na reprezentacjach (WC) typy identyczne (brak historii kadr w dataset klubowym) → zero zmiany
+  teraz; realna poprawa na restart lig klubowych. +regression test, suite 1340 pass. cloud_draft `model_source` raportuje stan.
+
 ### Cloud-draft — System paper-trading PC-niezależny (odblokowanie danych walidacyjnych)
 - **`e4da7adff`**: `/cron/draft` endpoint + `core/cloud_draft.py::generuj_system_draft`. Lite draft
   System (model-only) samą ścieżką requests (Bzzoiro API → quick_picks → predict_match) — BEZ
