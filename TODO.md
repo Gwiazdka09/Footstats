@@ -36,6 +36,8 @@
 
 - [x] **Endpoint + scheduler LIVE** — pierwszy live run created:0 = **BENIGN (idempotencja)**: 12 kandydatów
   WC już miało kupony System (dedup per mecz/data). System user istnieje (leaderboard total:15).
+- [x] **Data-freshness guard (06-26)** — `/cron/draft` zwraca `{stale_days, stale}` + `log.warning` gdy
+  ≥3 dni bez kuponu System → rozróżnia BENIGN-0 od STARVATION-0 (`core/draft_health.py`). Alert w Cloud Logging.
 - [ ] **`model_source=bzzoiro-ml` na cloud** (parquet nieobecny) → cloud-draft NIE używa Poisson-DC.
   Aby włączyć Poisson na cloud: dostarcz `full_dataset.parquet` (562KB) — (a) GCS-pull przy starcie
   [najlepsze, wymaga kodu startup+bucket] lub (b) COPY do obrazu (force-add binary do git).

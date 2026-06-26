@@ -5,6 +5,16 @@
 
 ## 2026-06-26
 
+### Observability — cloud-draft data-freshness guard + flip-advisor
+- **`748364933`** `core/draft_health.py::ocena_swiezosci` — dni od ostatniego kuponu System
+  (`created_at`). cloud_draft dokleja `{stale_days, stale}` do `/cron/draft` + `log.warning` gdy STALE
+  (≥3 dni). **Rozróżnia BENIGN-0 (PC pokrył, dedup) od STARVATION-0 (zbieranie zamarło)** — wcześniej
+  HTTP 200 = ślepota. Surface w Cloud Logging (log-based alert). Graceful. +15 testów.
+- **`b862ef85f`** `core/flip_advisor.py` — pure werdykty flipu lewarów M1: `werdykt_selekcja` (high-conf
+  band vs ogół → `SELECTION_MIN_CONF`) + `werdykt_gating` (ligi <50% n≥8 → `LEAGUE_GATING`/`LIGI_SLABE`).
+  Wpięte w `calibration_monitor` (raport per-liga + sekcja flip). +7 testów.
+- **`74160501e`** testy `system_paper.build_single_leg_coupons` (writer danych System, pętla DB) — +5.
+
 ### M1 lewary — selekcja + gating (zbudowane, flag-gated default OFF, flip po walidacji)
 - **`bb877e85a`** selekcja high-conf (lever #1): flaga `SELECTION_MIN_CONF` w `system_paper.najlepszy_typ`
   — domyślnie MIN_PROB (40, zero zmiany), podnosi próg do pasma high-conf (offline 65%+=68% acc).
