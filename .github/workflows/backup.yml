@@ -25,8 +25,17 @@ jobs:
         uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
 
       # Prod data = Neon (PostgreSQL). pg_dump off-site do GCS (redundancja PITR Neona).
-      - name: Install postgresql-client
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      # Neon = PG17; apt-default daje pg_dump 16 → "server version mismatch". Instaluj
+      # postgresql-client-17 z oficjalnego repo pgdg (wrapper /usr/bin/pg_dump bierze najnowszy).
+      - name: Install postgresql-client 17 (Neon = PG17)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
 
       - name: Run Neon backup
         env:
