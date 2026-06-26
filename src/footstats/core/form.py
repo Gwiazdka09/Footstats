@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
@@ -84,7 +86,67 @@ def _oblicz_sile_wazona(df_mecze: pd.DataFrame) -> tuple:
             "forma_pkt": round(forma_pkt, 2),
         }
 
+    # M1 lever #5 — schedule-adjusted ratings (opponent-adjusted, jedna iteracja).
+    # Default OFF (env SCHEDULE_ADJUSTED_RATINGS) = zero zmiany prod. Flip dopiero po
+    # walidacji offline (walk-forward A/B). Drużyna strzelająca silnym obronom dostaje
+    # wyższy atak; tracąca słabym atakom — gorszą obronę.
+    if _schedule_adj_on():
+        sily = _opponent_adjust(df_mecze, sily, srednia)
+
     return sily, srednia
+
+
+def _schedule_adj_on() -> bool:
+    """Czy schedule-adjusted ratings włączone (env SCHEDULE_ADJUSTED_RATINGS, default OFF)."""
+    return os.getenv("SCHEDULE_ADJUSTED_RATINGS", "0").strip().lower() in ("1", "true", "yes")
+
+
+def _opponent_adjust(df_mecze: pd.DataFrame, sily: dict, srednia: float) -> dict:
+    """
+    Jedna iteracja korekty siły o trudność terminarza (opponent-adjusted ratings).
+
+    Dla każdej drużyny przelicza atak/obronę ważąc gole siłą rywala z `sily` (raw):
+      atak    = ważona średnia (gole_strzelone / obrona_rywala) / średnia,
+      obrona  = ważona średnia (gole_stracone  / atak_rywala)   / średnia.
+    Rywale spoza `sily` → neutralne 1.0. Zwraca NOWY dict (bez mutacji wejścia).
+    """
+    raw = sily
+    out = {d: dict(v) for d, v in sily.items()}
+
+    for d in raw:
+        scored_vals: list[float] = []
+        scored_w:    list[float] = []
+        conc_vals:   list[float] = []
+        conc_w:      list[float] = []
+
+        dom = df_mecze[df_mecze["gospodarz"] == d]
+        if not dom.empty:
+            wd = _wagi_mecze(dom).to_numpy()
+            for r, w in zip(dom.to_dict("records"), wd):
+                opp = raw.get(r["goscie"], {})
+                opp_obr = opp.get("obrona", 1.0) or 1.0
+                opp_atk = opp.get("atak", 1.0) or 1.0
+                scored_vals.append(r["gole_g"] / opp_obr); scored_w.append(w)
+                conc_vals.append(r["gole_a"] / opp_atk);   conc_w.append(w)
+
+        wyj = df_mecze[df_mecze["goscie"] == d]
+        if not wyj.empty:
+            ww = _wagi_mecze(wyj).to_numpy()
+            for r, w in zip(wyj.to_dict("records"), ww):
+                opp = raw.get(r["gospodarz"], {})
+                opp_obr = opp.get("obrona", 1.0) or 1.0
+                opp_atk = opp.get("atak", 1.0) or 1.0
+                scored_vals.append(r["gole_a"] / opp_obr); scored_w.append(w)
+                conc_vals.append(r["gole_g"] / opp_atk);   conc_w.append(w)
+
+        if scored_w and sum(scored_w) > 0:
+            out[d]["atak"] = (sum(v * w for v, w in zip(scored_vals, scored_w))
+                              / sum(scored_w)) / srednia
+        if conc_w and sum(conc_w) > 0:
+            out[d]["obrona"] = (sum(v * w for v, w in zip(conc_vals, conc_w))
+                                / sum(conc_w)) / srednia
+
+    return out
 
 
 # ================================================================
