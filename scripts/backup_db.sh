@@ -27,14 +27,19 @@ if [[ -z "$DB_URL" ]]; then
   exit 0
 fi
 
-if ! command -v pg_dump >/dev/null 2>&1; then
+# Neon = PG17. pg_wrapper (/usr/bin/pg_dump) bywa zawodny i bierze starszą wersję
+# (server version mismatch). Wybierz NAJNOWSZY zainstalowany binarny pg_dump wprost.
+PG_DUMP=$(ls -1 /usr/lib/postgresql/*/bin/pg_dump 2>/dev/null | sort -V | tail -1)
+PG_DUMP="${PG_DUMP:-$(command -v pg_dump || true)}"
+if [[ -z "$PG_DUMP" ]]; then
   echo "::warning::pg_dump niedostępny w runnerze — pomijam backup. Dodaj krok instalacji postgresql-client."
   exit 0
 fi
+echo "Using pg_dump: $PG_DUMP ($("$PG_DUMP" --version))"
 
 echo "Backing up Neon -> $DEST"
 # --no-owner/--no-privileges: zrzut przenośny (restore na dowolne konto/rolę).
-if pg_dump "$DB_URL" --no-owner --no-privileges | gzip | gcloud storage cp - "$DEST"; then
+if "$PG_DUMP" "$DB_URL" --no-owner --no-privileges | gzip | gcloud storage cp - "$DEST"; then
   gcloud storage cp "$DEST" "$LATEST"
   echo "Backup complete: $DEST"
 else
