@@ -361,6 +361,40 @@ def _wyciagnij_json(tekst: str) -> dict:
         return {"typ": "brak", "pewnosc": 0, "uzasadnienie": tekst[:300], "value_bet": False}
 
 
+def _nadpisz_pewnosc_modelem(dane: dict, wyniki: list) -> None:
+    """Cel B: nadpisz pewnosc_pct każdej nogi prawdopodobieństwem MODELU.
+
+    Wywoływane PRZED _deduplikuj_kupony/_wymusz_40pct, żeby bramki 40%/75% oraz
+    kotwice (>=75%) działały na prob modelu (pewnosc_z_modelu), nie na self-
+    reported Groq pewnosc_pct. Regresja Cel B: Groq zawyżał pewność → słabe nogi
+    przechodziły gate albo stawały się "kotwicą". Fallback: gdy brak pred modelu
+    (mecz spoza coverage) → zostaje Groq pewnosc_pct (pewnosc_z_modelu sam robi
+    fallback). In-place na dane (top3 + kupon_a..d).
+    """
+    def _pred_dla(mecz_str: str) -> dict:
+        ms = (mecz_str or "").lower()
+        for w in wyniki:
+            g = (w.get("gospodarz") or "").lower()
+            a = (w.get("goscie") or "").lower()
+            if (g and g in ms) or (a and a in ms):
+                return w.get("pred") or {}
+        return {}
+
+    def _enrich(legs: list) -> None:
+        for z in legs:
+            pred = _pred_dla(z.get("mecz", ""))
+            z["pewnosc_pct"] = pewnosc_z_modelu(
+                z.get("typ", ""), pred, z.get("pewnosc_pct")
+            )
+
+    if dane.get("top3"):
+        _enrich(dane["top3"])
+    for kkey in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
+        legs = (dane.get(kkey) or {}).get("zdarzenia")
+        if legs:
+            _enrich(legs)
+
+
 def _deduplikuj_kupony(dane: dict, min_wspolna_pewnosc: int = 75) -> None:
     """
     Usuwa z kupon_b nogi współdzielone z kupon_a gdy pewnosc_pct < min_wspolna_pewnosc.
