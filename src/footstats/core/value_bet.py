@@ -41,17 +41,25 @@ def filter_value_bets(
     """
     wynik = []
     for k in kandydaci:
-        conf = k.get("pewnosc_kalibrowana") or (k.get("pewnosc_pct") or 50) / 100.0
+        # Explicit None-check: calibrated=0.0 (lub pct=0) to realna wartość, NIE
+        # sygnał "brak" — wcześniej `or` mylił 0.0 z brakiem i fabrykował 50%.
+        conf_kal = k.get("pewnosc_kalibrowana")
+        if conf_kal is not None:
+            conf = float(conf_kal)
+        else:
+            pct = k.get("pewnosc_pct")
+            conf = (float(pct) if pct is not None else 50.0) / 100.0
         odds = _get_best_odds(k)
         if odds is None:
             wynik.append(k)  # no odds data — keep
             continue
-        ev = calculate_ev(float(conf), float(odds))
-        kf = kelly_fraction(float(conf), float(odds)) * 100.0  # as %
-        k["ev_value_pct"] = round(ev, 2)
-        k["kelly_fraction_pct"] = round(kf, 3)
+        ev = calculate_ev(conf, float(odds))
+        kf = kelly_fraction(conf, float(odds)) * 100.0  # as %
+        # Bez mutacji wejścia — nowy dict (immutability; brak side-effectu na
+        # współdzielonych dict-ach predykcji, w tym odrzuconych kandydatach).
         if ev >= min_ev_pct and kf >= min_kelly_pct:
-            wynik.append(k)
+            wynik.append({**k, "ev_value_pct": round(ev, 2),
+                          "kelly_fraction_pct": round(kf, 3)})
     return wynik
 
 

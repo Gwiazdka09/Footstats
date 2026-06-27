@@ -25,15 +25,19 @@ def _env_market_weight() -> dict | None:
 
 
 def get_weights_for_league(liga: str | None = None) -> dict:
-    """Wagi ensemble (model/rynek). Kolejność: env override → per-league opt → default 70/30."""
+    """Wagi ensemble (model/rynek). Kolejność: env override → default 70/30.
+
+    NIE ładujemy już ensemble_optimizer.load_weights (ensemble_weights.json):
+    optymalizator liczył wagi na FABRYKOWANYCH probach (p_poisson=conf*0.9,
+    p_bzzoiro=conf*1.1 — nie realne wyjścia modeli), a wynik trafiał do live
+    predykcji. Do czasu przeliczenia na realnych probach prod używa zwalidowanego
+    A/B default 70/30 (lub env override). `liga` zostaje w sygnaturze — per-league
+    wróci po realnej kalibracji. Moduł ensemble_optimizer zostaje (offline).
+    """
     override = _env_market_weight()
     if override is not None:
         return override
-    try:
-        from footstats.core.ensemble_optimizer import load_weights
-        return load_weights(liga)
-    except (ImportError, ValueError, KeyError):
-        return _DEFAULT_WEIGHTS
+    return _DEFAULT_WEIGHTS
 
 
 def ensemble_probs(
