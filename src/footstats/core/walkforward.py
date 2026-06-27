@@ -12,25 +12,40 @@ Użycie:
     python -m footstats.core.walkforward --all --top 5
 """
 
+import sqlite3
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
 
-from footstats.utils.db import connect as _connect
 MIN_HIST = 5   # min meczów drużyny w historii żeby liczyć lambdę
+
+# Backtest pisze do LOKALNEGO SQLite, NIE do prod Neon (footstats.utils.db).
+# Wcześniej run_walkforward zanieczyszczał produkcję (CREATE TABLE + INSERT
+# do Neon). Spójnie z core/wf_db.py i wf_harness.py — backtest jest offline.
+WF_DB_PATH = Path(__file__).resolve().parents[3] / "data" / "walkforward.db"
 
 
 # ── DB ────────────────────────────────────────────────────────────────────
 
-# _connect imported from footstats.utils.db
+@contextmanager
+def _connect():
+    """Lokalny SQLite (data/walkforward.db) — offline, bez dotykania Neon."""
+    WF_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(WF_DB_PATH)
+    try:
+        with con:  # commit on success / rollback on exception (sqlite3 CM)
+            yield con
+    finally:
+        con.close()
 
 
 def _init_wf_table() -> None:
     with _connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS wf_results (
-                id         SERIAL PRIMARY KEY,
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 league     TEXT NOT NULL,
                 match_date TEXT NOT NULL,

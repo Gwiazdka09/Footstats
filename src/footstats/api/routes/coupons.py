@@ -105,6 +105,7 @@ class PlaceCouponRequest(BaseModel):
     total_odds: float | None = None
     stake_pln: float | None = None
     match_date: Optional[str] = None
+    validate_only: bool = False  # waliduj bez zapisu (smoke/dry-run) — ZERO writes
 
 
 class SettleRequest(BaseModel):
@@ -346,6 +347,11 @@ def place_coupon(req: PlaceCouponRequest, user_id: int = Depends(require_auth)):
         balance = float(row["balance"]) if row else 0.0
         if req.stake_pln > balance:
             raise HTTPException(status_code=400, detail=f"Niewystarczający bankroll ({balance:.2f} PLN)")
+        if req.validate_only:
+            # Walidacja przeszła (stawka>=2, bankroll OK) — BEZ zapisu do DB.
+            # Używane przez operator smoke: wcześniej smoke realnie INSERT-ował
+            # kupon do prod Neon + zjadał bankroll (martwe ACTIVE z datą 2099).
+            return {"ok": True, "validated": True, "stake_pln": req.stake_pln}
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         legs_json = json.dumps(
             [{"home": s.home, "away": s.away, "tip": s.tip, "odds": s.odds, "decision_score": int(s.win_prob)}

@@ -123,6 +123,8 @@ def run_api_check(check: str, cap_id: str, timeout_s: int = 60) -> RunResult:
             )
             ok = r.status_code == 200 and "stake_pln" in r.json()
         elif check == "coupon_place_validate":
+            # validate_only=True → endpoint waliduje i zwraca BEZ zapisu do Neon.
+            # Wcześniej smoke realnie tworzył kupon w prod + zjadał bankroll.
             r = client.post(
                 "/api/coupon/place",
                 headers=h,
@@ -138,9 +140,12 @@ def run_api_check(check: str, cap_id: str, timeout_s: int = 60) -> RunResult:
                     "total_odds": 1.5,
                     "stake_pln": 2.0,
                     "match_date": "2099-01-01",
+                    "validate_only": True,
                 },
             )
-            ok = r.status_code in (200, 400)
+            # 200 = walidacja OK (validated), 400 = walidacja odrzuciła (np. brak
+            # bankrollu) — oba bez zapisu. Sukces tylko gdy faktycznie nie zapisano.
+            ok = (r.status_code == 200 and r.json().get("validated") is True) or r.status_code == 400
         else:
             ok = False
 
