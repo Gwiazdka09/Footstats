@@ -102,9 +102,9 @@ def analiza_kolejki(
             heur_g = heurystyka_eng.analiza(g, data_full)
             heur_a = heurystyka_eng.analiza(a, data_full)
             # H2H z sleep – ochrona limitu 10 req/min
-            h2h_g  = h2h_sys.analiza(g, a)
+            h2h_g  = h2h_sys.analiza(g, a, data_full)
             time.sleep(SLEEP_KOLEJKA)
-            h2h_a  = h2h_sys.analiza(a, g)
+            h2h_a  = h2h_sys.analiza(a, g, data_full)
             fort_g = fortress_sys.analiza(g)
 
             wynik = predict_match(

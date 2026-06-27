@@ -1,5 +1,5 @@
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 from footstats.config import (
     H2H_OKNO_DNI, H2H_MIN_MECZE, PATENT_BONUS,
     ZEMSTA_MIN_GOLE, ZEMSTA_BONUS, CONFIDENCE_H2H_MAX, OSTATNIE_N,
@@ -42,15 +42,18 @@ class AnalizaH2H:
         if not self.df.empty and "data" in self.df.columns:
             self.df["_dt"] = pd.to_datetime(self.df["data"], errors="coerce")
 
-    def _filtruj_h2h(self, druzyna1: str, druzyna2: str) -> pd.DataFrame:
+    def _filtruj_h2h(self, druzyna1: str, druzyna2: str, anchor=None) -> pd.DataFrame:
         """
         Pobiera mecze H2H z ostatnich 24 miesiecy miedzy dwoma druzyna.
-        Odrzuca wszystkie mecze starsze niz H2H_OKNO_DNI dni.
+        Odrzuca mecze starsze niz H2H_OKNO_DNI dni ORAZ mecz analizowany i
+        przyszle (anchor = data meczu; anty-lookahead w backtescie). Brak
+        anchor → now() (tryb live: brak przyszlych wynikow w df → bez zmian).
         """
         if self.df.empty:
             return pd.DataFrame()
 
-        prog_cut = datetime.now() - timedelta(days=H2H_OKNO_DNI)
+        anchor_ts = pd.Timestamp(anchor) if anchor is not None else pd.Timestamp(datetime.now())
+        prog_cut = anchor_ts - pd.Timedelta(days=H2H_OKNO_DNI)
 
         maska = (
             (
@@ -61,13 +64,13 @@ class AnalizaH2H:
         )
         h2h = self.df[maska].copy()
 
-        # Filtr czasowy: tylko 24 miesiace wstecz
+        # Okno [anchor-730d, anchor): swieze H2H, bez meczu analizowanego i przyszlych.
         if "_dt" in h2h.columns:
-            h2h = h2h[h2h["_dt"] >= pd.Timestamp(prog_cut)]
+            h2h = h2h[(h2h["_dt"] >= prog_cut) & (h2h["_dt"] < anchor_ts)]
 
         return h2h.sort_values("data")
 
-    def analiza(self, druzyna: str, przeciwnik: str) -> dict:
+    def analiza(self, druzyna: str, przeciwnik: str, data_meczu: str | None = None) -> dict:
         """
         Zwraca kompletny wynik analizy H2H dla pary druzyn.
 
@@ -94,7 +97,10 @@ class AnalizaH2H:
             "h2h_df":        pd.DataFrame(),
         }
 
-        h2h = self._filtruj_h2h(druzyna, przeciwnik)
+        anchor = pd.to_datetime(data_meczu, errors="coerce") if data_meczu else None
+        if anchor is not None and pd.isna(anchor):
+            anchor = None  # niepoprawna data → fallback now() (live)
+        h2h = self._filtruj_h2h(druzyna, przeciwnik, anchor)
         wynik["h2h_df"] = h2h
         wynik["n_h2h"]  = len(h2h)
 
