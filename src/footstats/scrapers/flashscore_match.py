@@ -37,52 +37,54 @@ def scrape_flashscore_match_details(match_id: str) -> Dict:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page(user_agent=_UA)
-            page.goto(url, wait_until="networkidle", timeout=20000)
-            time.sleep(3)
+            try:
+                page = browser.new_page(user_agent=_UA)
+                page.goto(url, wait_until="networkidle", timeout=20000)
+                time.sleep(3)
             
-            # Pobierz Składy (tam są absencje) - klikamy dla pewności
-            try: page.get_by_text("SKŁADY", exact=True).click(); time.sleep(2)
-            except (PWTimeout, RuntimeError, AttributeError) as e: logger.warning(f"Klik SKŁADY: {e}")
+                # Pobierz Składy (tam są absencje) - klikamy dla pewności
+                try: page.get_by_text("SKŁADY", exact=True).click(); time.sleep(2)
+                except (PWTimeout, RuntimeError, AttributeError) as e: logger.warning(f"Klik SKŁADY: {e}")
             
-            content = page.content()
+                content = page.content()
             
-            # REGEX dla Sędziego: "Sędzia:</span><span.*?>([^<]+)</span>"
-            # Flashscore ma specyficzną strukturę, szukajmy po prostu 'Sędzia'
-            ref_match = re.search(r"Sędzia:.*?>(.*?)<", content, re.IGNORECASE | re.DOTALL)
-            if ref_match: result["referee"] = ref_match.group(1).split("(")[0].strip()
+                # REGEX dla Sędziego: "Sędzia:</span><span.*?>([^<]+)</span>"
+                # Flashscore ma specyficzną strukturę, szukajmy po prostu 'Sędzia'
+                ref_match = re.search(r"Sędzia:.*?>(.*?)<", content, re.IGNORECASE | re.DOTALL)
+                if ref_match: result["referee"] = ref_match.group(1).split("(")[0].strip()
             
-            # REGEX dla Stadionu
-            stad_match = re.search(r"Stadion:.*?>(.*?)<", content, re.IGNORECASE | re.DOTALL)
-            if stad_match: result["stadium"] = stad_match.group(1).split("(")[0].strip()
+                # REGEX dla Stadionu
+                stad_match = re.search(r"Stadion:.*?>(.*?)<", content, re.IGNORECASE | re.DOTALL)
+                if stad_match: result["stadium"] = stad_match.group(1).split("(")[0].strip()
             
-            # Absencje są trudniejsze regexem ze względu na listę, ale spróbujmy:
-            # Szukamy sekcji 'Nie zagra' i parsujemy bloki
-            missing_part = re.split(r"Nie zagra", content, flags=re.IGNORECASE)
-            if len(missing_part) > 1:
-                # To bardzo uproszczone, ale może zadziałać na tekstach
-                # Lepiej użyć innerText() z body
-                raw_text = page.inner_text("body")
-                if "NIE ZAGRA" in raw_text.upper():
-                    # Szukaj nazwisk po 'NIE ZAGRA'
-                    parts = raw_text.upper().split("NIE ZAGRA")
-                    if len(parts) > 1:
-                        # Logika uproszczona: wszystko po tym słowie to absencje
-                        # (Wersja interaktywna z Turn 60 była lepsza jeśli DOM działa)
-                        pass
+                # Absencje są trudniejsze regexem ze względu na listę, ale spróbujmy:
+                # Szukamy sekcji 'Nie zagra' i parsujemy bloki
+                missing_part = re.split(r"Nie zagra", content, flags=re.IGNORECASE)
+                if len(missing_part) > 1:
+                    # To bardzo uproszczone, ale może zadziałać na tekstach
+                    # Lepiej użyć innerText() z body
+                    raw_text = page.inner_text("body")
+                    if "NIE ZAGRA" in raw_text.upper():
+                        # Szukaj nazwisk po 'NIE ZAGRA'
+                        parts = raw_text.upper().split("NIE ZAGRA")
+                        if len(parts) > 1:
+                            # Logika uproszczona: wszystko po tym słowie to absencje
+                            # (Wersja interaktywna z Turn 60 była lepsza jeśli DOM działa)
+                            pass
             
-            # Jeśli Regex zawiódł, użyjmy prostej pętli po elementach
-            if not result["referee"]:
-                labels = page.locator(".wcl-infoLabel_grawU").all()
-                values = page.locator(".wcl-infoValue_grawU").all()
-                for i, l in enumerate(labels):
-                    if "SĘDZIA" in l.inner_text().upper() and i < len(values):
-                        result["referee"] = values[i].inner_text().split("(")[0].strip()
-                    if "STADION" in l.inner_text().upper() and i < len(values):
-                        result["stadium"] = values[i].inner_text().split("(")[0].strip()
+                # Jeśli Regex zawiódł, użyjmy prostej pętli po elementach
+                if not result["referee"]:
+                    labels = page.locator(".wcl-infoLabel_grawU").all()
+                    values = page.locator(".wcl-infoValue_grawU").all()
+                    for i, l in enumerate(labels):
+                        if "SĘDZIA" in l.inner_text().upper() and i < len(values):
+                            result["referee"] = values[i].inner_text().split("(")[0].strip()
+                        if "STADION" in l.inner_text().upper() and i < len(values):
+                            result["stadium"] = values[i].inner_text().split("(")[0].strip()
 
-            result["success"] = True
-            browser.close()
+                result["success"] = True
+            finally:
+                browser.close()  # zawsze (anty-leak; with i tak ubija driver)
     except (PWTimeout, RuntimeError, AttributeError, TypeError) as e:
         logger.error(f"Error: {e}")
     return result
@@ -111,9 +113,11 @@ def scrape_match_with_search(h, a):
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page(user_agent=_UA)
-            mid = search_flashscore_match_id(page, h, a)
-            browser.close()
+            try:
+                page = browser.new_page(user_agent=_UA)
+                mid = search_flashscore_match_id(page, h, a)
+            finally:
+                browser.close()  # zawsze, nawet przy wyjatku (anty-leak)
             if mid: return scrape_flashscore_match_details(mid)
     except (PWTimeout, RuntimeError, AttributeError, TypeError) as e: logger.error(f"scrape_match_with_search({h}, {a}): {e}")
     return {"success": False}

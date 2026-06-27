@@ -103,26 +103,34 @@ def _sofa_session():
     if not PLAYWRIGHT_OK:
         return None
     p = sync_playwright().start()
-    browser = p.chromium.launch(
-        headless=True,
-        args=["--disable-blink-features=AutomationControlled"],
-    )
-    ctx = browser.new_context(
-        user_agent=_UA,
-        locale="en-US",
-        extra_http_headers={
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://www.sofascore.com/",
-        },
-    )
-    # Ukryj navigator.webdriver i typowe markery headless przed JS strony.
-    ctx.add_init_script(
-        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
-        "Object.defineProperty(navigator, 'languages', {get: () => ['en-US','en']});"
-        "Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});"
-    )
-    page = ctx.new_page()
-    return p, browser, page
+    ok = False
+    try:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
+        ctx = browser.new_context(
+            user_agent=_UA,
+            locale="en-US",
+            extra_http_headers={
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.sofascore.com/",
+            },
+        )
+        # Ukryj navigator.webdriver i typowe markery headless przed JS strony.
+        ctx.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+            "Object.defineProperty(navigator, 'languages', {get: () => ['en-US','en']});"
+            "Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});"
+        )
+        page = ctx.new_page()
+        ok = True
+        return p, browser, page
+    finally:
+        # Wyjatek przy launch/new_context → driver wystartowany ale nieoddany
+        # callerowi → bez stop() wycieka proces node. Sprzataj sami.
+        if not ok:
+            p.stop()
 
 
 def find_team_id(team_name: str, page=None) -> Optional[int]:
