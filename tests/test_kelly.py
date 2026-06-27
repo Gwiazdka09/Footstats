@@ -12,10 +12,11 @@ class TestKellyStake:
         stake = kelly_stake(0.60, 2.0, bankroll=200, fraction=3)
         assert stake > 0.0
 
-    def test_min_stake(self):
-        # Bardzo mały edge → raw < min_stake=2.0, zwraca min_stake
+    def test_maly_edge_ponizej_min_zwraca_zero(self):
+        # raw < min_stake → 0.0 (nie podłoga). Kelly: nie stawiaj gdy optymalna
+        # stawka < minimum (p=0.52,odds=2.0 → f*=0.04 → raw=0.4 PLN).
         stake = kelly_stake(0.52, 2.0, bankroll=100, fraction=10, min_stake=2.0)
-        assert stake >= 2.0
+        assert stake == 0.0
 
     def test_max_stake_ogranicza(self):
         # Duży edge i duży bankroll → ograniczone przez max_stake

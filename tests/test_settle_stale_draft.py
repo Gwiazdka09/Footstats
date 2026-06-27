@@ -49,7 +49,8 @@ CREATE TABLE coupons (
     stake_pln        REAL,
     payout_pln       REAL,
     roi_pct          REAL,
-    match_date_first TEXT
+    match_date_first TEXT,
+    user_id          INTEGER DEFAULT 1
 )
 """
 

@@ -47,7 +47,13 @@ def kelly_stake(
         return 0.0
 
     raw = bankroll * f_star / fraction
-    return round(max(min_stake, min(raw, max_stake)), 1)
+    stake = min(raw, max_stake)
+    # raw poniżej min_stake = edge zbyt mały, żeby stawiać → 0.0 (NIE podłoga
+    # 2 PLN). Wcześniej max(min_stake, ...) stawiał płaskie 2 PLN na ~zerowym
+    # edge (np. raw=0.4) → ~28x overstake i łamanie growth-optimal Kelly.
+    if stake < min_stake:
+        return 0.0
+    return round(stake, 1)
 
 
 def kelly_kupon(

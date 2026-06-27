@@ -410,6 +410,7 @@ class TestRunEveningAgentIntegration:
             "id": 1,
             "stake_pln": 10.0,
             "total_odds": 1.85,
+            "user_id": 7,
             "legs": fake_legs,
         }
 
@@ -438,7 +439,7 @@ class TestRunEveningAgentIntegration:
             patch("footstats.evening_agent.get_active_coupons", return_value=[fake_coupon]),
             patch("footstats.evening_agent.get_coupon_legs", return_value=fake_leg_db),
             patch("footstats.evening_agent.update_coupon_status") as mock_update,
-            patch("footstats.evening_agent.process_win") as mock_win,
+            patch("footstats.evening_agent.credit_win") as mock_win,
             patch("footstats.evening_agent.init_coupon_tables"),
             patch("footstats.evening_agent.init_db"),
             patch("footstats.evening_agent._save_coupon_legs"),
@@ -454,6 +455,9 @@ class TestRunEveningAgentIntegration:
         new_status = call_args.args[1] if len(call_args.args) > 1 else call_args.kwargs.get("new_status", "WON")
         assert new_status == "WON"
         mock_win.assert_called_once()
+        # Wygrana BRUTTO (stake*odds, bez ×0.88) do WŁAŚCICIELA (user_id=7)
+        assert mock_win.call_args.args[0] == pytest.approx(18.5)  # 10 * 1.85
+        assert mock_win.call_args.args[1] == 7
 
     def test_run_evening_agent_lose_no_bankroll_update(self, tmp_path, monkeypatch):
         """LOSE coupon does not trigger process_win."""
@@ -476,7 +480,7 @@ class TestRunEveningAgentIntegration:
             patch("footstats.evening_agent.get_active_coupons", return_value=[fake_coupon]),
             patch("footstats.evening_agent.get_coupon_legs", return_value=fake_leg_db),
             patch("footstats.evening_agent.update_coupon_status") as mock_update,
-            patch("footstats.evening_agent.process_win") as mock_win,
+            patch("footstats.evening_agent.credit_win") as mock_win,
             patch("footstats.evening_agent.init_coupon_tables"),
             patch("footstats.evening_agent.init_db"),
             patch("footstats.evening_agent._save_coupon_legs"),

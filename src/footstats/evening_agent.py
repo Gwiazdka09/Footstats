@@ -30,7 +30,7 @@ from footstats.core.coupon_tracker import (
 )
 from footstats.core.backtest import init_db, update_result
 from footstats.utils.betting import oblicz_tip_correct
-from footstats.core.bankroll import process_win
+from footstats.core.bankroll import credit_win
 
 import logging
 log = logging.getLogger(__name__)
@@ -315,9 +315,14 @@ def run_evening_agent(date_str: str | None = None) -> dict:
             if nowy_status == "WON":
                 stake = kupon["stake_pln"] or 10.0
                 odds  = kupon["total_odds"] or 1.0
-                payout = round(stake * odds * 0.88, 2)  # podatek 12%
+                payout = round(stake * odds, 2)  # brutto, przed podatkiem
             if nowy_status == "WON" and payout:
-                process_win(payout, f"Wygrana kuponu ID={kupon['id']}")
+                # kupon bywa sqlite3.Row (brak .get) albo dict — row-safe odczyt.
+                uid = kupon["user_id"] if "user_id" in kupon.keys() else None
+                if uid is not None:
+                    # Pełna wygrana brutto do WŁAŚCICIELA (nie phantom user_id=1,
+                    # nie ×0.88) — spójnie z coupon_settlement.
+                    credit_win(payout, uid, f"Wygrana kuponu ID={kupon['id']}")
 
             update_coupon_status(kupon["id"], nowy_status, payout_pln=payout)
             key = nowy_status.lower()

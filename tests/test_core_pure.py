@@ -15,10 +15,11 @@ class TestKellyStake:
         stake = kelly_stake(p=0.60, odds=2.10, bankroll=200, fraction=3)
         assert stake > 0
 
-    def test_stake_bounded_by_min(self):
-        # p=0.70, odds=2.10 has edge but tiny bankroll → raw stake < 2.0 → clamped to min
+    def test_tiny_raw_below_min_returns_zero(self):
+        # p=0.70, odds=2.10 has edge but tiny bankroll → raw stake < 2.0 → 0.0
+        # (nie podłoga min_stake — podłoga łamałaby Kelly stawiając na marginesie)
         stake = kelly_stake(p=0.70, odds=2.10, bankroll=5, fraction=10)
-        assert stake >= 2.0
+        assert stake == 0.0
 
     def test_stake_bounded_by_max(self):
         stake = kelly_stake(p=0.99, odds=5.0, bankroll=10000, fraction=1)

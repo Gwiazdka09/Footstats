@@ -255,7 +255,7 @@ def settle_active_coupons(
 
     with _connect() as conn:
         rows = conn.execute(
-            """SELECT id, legs_json, total_odds, stake_pln, match_date_first
+            """SELECT id, legs_json, total_odds, stake_pln, match_date_first, user_id
                FROM coupons
                WHERE status = 'ACTIVE' AND match_date_first <= ?""",
             (today.isoformat(),),
@@ -278,6 +278,7 @@ def settle_active_coupons(
 
     for row in rows:
         coupon_id = row["id"]
+        owner_uid = row["user_id"]
         legs = json.loads(row["legs_json"])
         total_odds = row["total_odds"]
         stake = row["stake_pln"]
@@ -377,27 +378,30 @@ def settle_active_coupons(
                     )
                     log.info("Kupon #%s → %s | payout=%.2f | roi=%.1f%%", coupon_id, new_status, payout, roi)
 
-                    if all_correct and payout > 0:
+                    if all_correct and payout > 0 and owner_uid is not None:
+                        # Kredytuj WŁAŚCICIELA kuponu (nie MAX(id)!), brutto/przed
+                        # podatkiem, 100% — spójnie z evening_agent.credit_win.
                         cur_balance = conn.execute(
-                            "SELECT balance FROM bankroll_state ORDER BY id DESC LIMIT 1"
+                            "SELECT balance FROM bankroll_state WHERE user_id=?",
+                            (owner_uid,),
                         ).fetchone()
                         if cur_balance:
                             new_balance = round(cur_balance["balance"] + payout, 2)
                             conn.execute(
-                                "UPDATE bankroll_state SET balance=?, updated_at=? "
-                                "WHERE id=(SELECT MAX(id) FROM bankroll_state)",
-                                (new_balance, datetime.now().isoformat()),
+                                "UPDATE bankroll_state SET balance=?, updated_at=? WHERE user_id=?",
+                                (new_balance, datetime.now().isoformat(), owner_uid),
                             )
                             conn.execute(
                                 "INSERT INTO bankroll_history "
-                                "(timestamp, change_pln, new_balance, type, description) "
-                                "VALUES (?,?,?,?,?)",
+                                "(timestamp, change_pln, new_balance, type, description, user_id) "
+                                "VALUES (?,?,?,?,?,?)",
                                 (
                                     datetime.now().isoformat(),
                                     payout,
                                     new_balance,
                                     "WIN",
                                     f"Kupon #{coupon_id} WON",
+                                    owner_uid,
                                 ),
                             )
 

@@ -66,11 +66,28 @@ def process_bet(stake: float, description: str = "", user_id: int = 1) -> float:
 
 
 def process_win(payout: float, description: str = "", user_id: int = 1) -> float:
-    """Dodaje 50% wygranej do bankrolla (reinwestycja)."""
+    """Dodaje 50% wygranej do bankrolla (reinwestycja). DEPRECATED dla rozliczeń —
+    użyj credit_win (spójna matematyka brutto/100% w obu silnikach)."""
     reinvest_amount = round(payout * 0.5, 2)
     return update_bankroll(
         reinvest_amount, "WIN",
         f"Wypłata {payout} PLN (50% reinwestycji): {description}",
+        user_id,
+    )
+
+
+def credit_win(payout: float, user_id: int, description: str = "") -> float:
+    """Dopisuje PEŁNĄ wygraną BRUTTO (przed podatkiem) do bankrolla WŁAŚCICIELA.
+
+    Wypłata brutto = stawka * kurs. Podatek zależy od bukmachera (STS pobiera
+    12%, Superbet bierze na siebie) → bankroll trzymamy spójnie PRZED podatkiem.
+    Jednolita ścieżka dla obu silników rozliczeń (coupon_settlement + evening_
+    agent) — koniec rozjazdu (0% vs 12% podatku, 100% vs 50% reinwest) i koniec
+    kredytowania phantom user_id=1.
+    """
+    return update_bankroll(
+        payout, "WIN",
+        f"Wygrana brutto {payout} PLN (przed podatkiem): {description}",
         user_id,
     )
 
