@@ -27,6 +27,44 @@ def _patch_auth_db_when_no_database_url(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _block_network(monkeypatch):
+    """Siatka bezpieczeństwa: w trybie unit (brak DATABASE_URL) blokuj REALNE
+    połączenia sieciowe (poza localhost). Wymusza mockowanie zewnętrznych usług
+    (Neon/Groq/API-Football/FlashScore) i chroni przed przypadkowym zapisem do
+    prod / wywołaniem płatnego API. Gdy DATABASE_URL ustawiony → testy
+    integracyjne celowo łączą się z bazą, więc guard wyłączony.
+    """
+    if os.environ.get("DATABASE_URL"):
+        yield
+        return
+
+    import socket
+    _LOCAL = {"127.0.0.1", "localhost", "::1", "0.0.0.0", ""}
+    _real_connect = socket.socket.connect
+    _real_connect_ex = socket.socket.connect_ex
+
+    def _host(address):
+        return address[0] if isinstance(address, (tuple, list)) else address
+
+    def _guard(self, address, *a, **k):
+        if _host(address) in _LOCAL:
+            return _real_connect(self, address, *a, **k)
+        raise RuntimeError(
+            f"Test próbował połączyć się z siecią: {address!r}. Zamockuj zewnętrzną "
+            "usługę (albo ustaw DATABASE_URL dla testu integracyjnego)."
+        )
+
+    def _guard_ex(self, address, *a, **k):
+        if _host(address) in _LOCAL:
+            return _real_connect_ex(self, address, *a, **k)
+        raise RuntimeError(f"Test próbował połączyć się z siecią (connect_ex): {address!r}.")
+
+    monkeypatch.setattr(socket.socket, "connect", _guard)
+    monkeypatch.setattr(socket.socket, "connect_ex", _guard_ex)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def reset_rate_limiter():
     """Reset slowapi in-memory limiter before each test to prevent cross-test contamination."""
     try:
