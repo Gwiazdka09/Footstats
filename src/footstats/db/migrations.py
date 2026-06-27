@@ -3,9 +3,41 @@ from __future__ import annotations
 
 import logging
 import os
+import sqlite3
 from typing import Literal
 
 _log = logging.getLogger(__name__)
+
+# Błędy DDL traktowane jako idempotentne (np. kolumna/tabela już istnieje przy
+# re-runie). psycopg2.Error KRYTYCZNY: bez niego PostgreSQL crashował startup.
+try:
+    import psycopg2
+    _DB_ERRORS: tuple = (RuntimeError, ValueError, KeyError, sqlite3.Error, psycopg2.Error)
+except ImportError:  # psycopg2 opcjonalny w dev-SQLite
+    _DB_ERRORS = (RuntimeError, ValueError, KeyError, sqlite3.Error)
+
+
+def _exec_statements(conn, statements: list[str], dialect: str) -> None:
+    """Wykonuje DDL statement-po-statemencie z SAVEPOINT.
+
+    Na PostgreSQL błędny statement (idempotentny re-run: kolumna już istnieje)
+    abortuje CAŁĄ transakcję → kolejny INSERT do schema_migrations by padł →
+    crash startupu. SAVEPOINT izoluje błąd do jednego statementu; po błędzie
+    ROLLBACK TO przywraca transakcję i migracja kontynuuje. Błędy spoza
+    _DB_ERRORS propagują (nie połykamy nieoczekiwanych).
+    """
+    for sql in statements:
+        s = sql.strip()
+        if not s or s.startswith("--"):
+            continue
+        conn.execute("SAVEPOINT mig_stmt")
+        try:
+            conn.execute(sql)
+            conn.execute("RELEASE SAVEPOINT mig_stmt")
+        except _DB_ERRORS as e:
+            conn.execute("ROLLBACK TO SAVEPOINT mig_stmt")
+            conn.execute("RELEASE SAVEPOINT mig_stmt")
+            _log.warning("SQL ignored in %s (idempotent): %s", dialect, e)
 
 
 def _detect_dialect(conn) -> Literal["sqlite", "postgresql"]:
@@ -235,12 +267,7 @@ def run_migrations() -> None:
             continue
         _log.info("Migration %d (%s): %s", version, dialect, description)
         with connect() as conn:
-            for sql in statements:
-                if sql.strip() and not sql.strip().startswith("--"):
-                    try:
-                        conn.execute(sql)
-                    except (RuntimeError, ValueError, KeyError) as e:
-                        _log.warning("SQL ignored in %s (idempotent): %s", dialect, e)
+            _exec_statements(conn, statements, dialect)
             conn.execute(
                 "INSERT INTO schema_migrations (version, description) VALUES (?, ?)",
                 (version, description),
