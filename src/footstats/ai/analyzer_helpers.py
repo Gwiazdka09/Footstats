@@ -222,9 +222,10 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
                 faktory = wyciagnij_faktory(w.get("pred") or {})
             except (ImportError, KeyError, AttributeError):
                 faktory = []
-            # D3: prob modelu 1X2 (do zapisu + guard selekcji). quick_picks daje pw/pr/pp top-level.
+            # D3: prob modelu 1X2 do zapisu. quick_picks daje pw/pr/pp top-level.
+            # C2: override tipu NIE tutaj — robi go _nadpisz_tip_modelem na realnym
+            # dane (gated GROQ_TIP_OVERRIDE) PRZED tym zapisem → backtest = live.
             pw = w.get("pw"); pr = w.get("pr"); pp = w.get("pp")
-            tip, _override = koryguj_tip_wg_modelu(tip, pw, pr, pp)
             try:
                 save_prediction(
                     match_date=w.get("data", today),
@@ -393,6 +394,42 @@ def _nadpisz_pewnosc_modelem(dane: dict, wyniki: list) -> None:
         legs = (dane.get(kkey) or {}).get("zdarzenia")
         if legs:
             _enrich(legs)
+
+
+def _nadpisz_tip_modelem(dane: dict, wyniki: list) -> None:
+    """C2 / Cel B bug 2 — override REALNEGO tipu Groq argmaxem modelu.
+
+    Gdy Groq wybrał wynik 1X2 którego model daje prob < 15% (skrajny rozjazd) →
+    podmień na argmax modelu (koryguj_tip_wg_modelu, konserwatywny: tylko 1X2,
+    brak prob → no-op). Wołane PRZED _nadpisz_pewnosc_modelem, żeby pewność i
+    bramki 40%/75% liczyły się na FINALNYM tipie. In-place na dane (top3 +
+    kupon_a..d). Gated flagą GROQ_TIP_OVERRIDE przez callera. Po włączeniu zapis
+    backtest (_auto_zapisz_backtest) bierze ten sam tip → zgodność shadow↔live.
+    """
+    def _w_dla(mecz_str: str) -> dict:
+        ms = (mecz_str or "").lower()
+        for w in wyniki:
+            g = (w.get("gospodarz") or "").lower()
+            a = (w.get("goscie") or "").lower()
+            if (g and g in ms) or (a and a in ms):
+                return w
+        return {}
+
+    def _popraw(legs: list) -> None:
+        for z in legs:
+            w = _w_dla(z.get("mecz", ""))
+            nowy, override = koryguj_tip_wg_modelu(
+                z.get("typ", ""), w.get("pw"), w.get("pr"), w.get("pp")
+            )
+            if override:
+                z["typ"] = nowy
+
+    if dane.get("top3"):
+        _popraw(dane["top3"])
+    for kkey in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
+        legs = (dane.get(kkey) or {}).get("zdarzenia")
+        if legs:
+            _popraw(legs)
 
 
 def _deduplikuj_kupony(dane: dict, min_wspolna_pewnosc: int = 75) -> None:

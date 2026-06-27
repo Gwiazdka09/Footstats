@@ -58,6 +58,12 @@ AGENT_KELLY_FRACTION = 4    # bezpieczny fractional Kelly: f*/4 (bardziej konser
 USE_DIXON_COLES = os.getenv("USE_DIXON_COLES", "1").strip() not in ("0", "false", "False", "")
 W_BAYESIAN      = float(os.getenv("W_BAYESIAN", "0.5"))   # waga ramienia DC (0=classic, 1=pelny DC)
 
+# ── C2 / Cel B bug 2: override REALNEGO tipu Groq argmaxem modelu ──
+# Gdy Groq wybierze 1X2 o prob modelu <15% → podmiana na argmax (konserwatywny).
+# Domyslnie OFF: najpierw walidacja na ~20 swiezych settled (prob teraz zapisywane),
+# potem flip flagi bez redeploya. OFF → backtest zapisuje tip Groq = zgodny z live.
+GROQ_TIP_OVERRIDE = os.getenv("GROQ_TIP_OVERRIDE", "0").strip() in ("1", "true", "True")
+
 # Konto docelowe: daily_agent, operator_agent, zapis kuponów systemowych
 OPERATOR_ADMIN_USERNAME = os.getenv("OPERATOR_ADMIN_USERNAME", "Admin_JG").strip() or "Admin_JG"
 OPERATOR_STAWKA_A = float(os.getenv("OPERATOR_STAWKA_A", "10"))

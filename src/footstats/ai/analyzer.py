@@ -599,6 +599,7 @@ def _buduj_opis_meczu(w: dict) -> str:
 from footstats.ai.analyzer_helpers import (
     _wzbogac_forme, _sygnaly_summary, _auto_zapisz_backtest, _buduj_cel_kuponow,
     _wyciagnij_json, _deduplikuj_kupony, _wymusz_40pct, _nadpisz_pewnosc_modelem,
+    _nadpisz_tip_modelem,
 )
 # Re-eksport wsteczny (importowany z tego modułu przez testy/inne moduły):
 from footstats.ai.analyzer_helpers import _analizuj_forme  # noqa: F401
@@ -693,6 +694,11 @@ def ai_analiza_pewniaczki(
     if "top3" not in dane:
         dane["_raw"] = tekst
     else:
+        # C2: override realnego tipu argmaxem modelu (gated GROQ_TIP_OVERRIDE,
+        # default OFF). PRZED pewnością/bramkami → liczą się na finalnym tipie.
+        from footstats import config as _cfg
+        if _cfg.GROQ_TIP_OVERRIDE:
+            _nadpisz_tip_modelem(dane, wyniki)
         # Cel B: pewnosc_pct nóg = prob modelu (fallback Groq) PRZED bramkami,
         # żeby dedup/40%/kotwice działały na modelu, nie na self-reported Groq.
         _nadpisz_pewnosc_modelem(dane, wyniki)
