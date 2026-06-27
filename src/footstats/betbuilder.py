@@ -29,8 +29,9 @@ class Typ:
 @dataclass(frozen=True)
 class Kombinacja:
     typy: tuple["Typ", ...]
-    kurs_laczny: float
-    ev: float | None  # None gdy brak kurs_rynkowy
+    kurs_laczny: float        # iloczyn kursów — zakłada NIEZALEŻNOŚĆ nóg (patrz niżej)
+    ev: float | None          # NAIWNE EV (niezależność); zawyżone dla skorelowanych
+                              # nóg. None gdy brak kurs_rynkowy.
 
 
 # ── Conflict detection ────────────────────────────────────────────────────────
@@ -180,13 +181,24 @@ def generuj_kombinacje(
     """
     Generuje niesprzeczne kombinacje z filtrami kurs i EV.
 
+    UWAGA (korelacja): kurs_laczny = iloczyn kursów standalone, co zakłada
+    NIEZALEŻNOŚĆ nóg. Dla skorelowanych typów (np. "Mecz: 1" + "Liczba goli:
+    powyżej 2.5", albo "1" + "BTTS") wspólne prawdopodobieństwo jest WYŻSZE niż
+    iloczyn → realny fair-kurs combo jest NIŻSZY → naiwne EV (kurs_laczny/
+    kurs_rynkowy) jest ZAWYŻONE i może przepuścić przegrywające combo.
+    Do decyzji o wartości używaj skorelowanego silnika
+    `core/betbuilder_rules.szansa_combo(wybrane, macierz_poissona)` (joint-prob
+    z macierzy), nie EV z tej funkcji. Tu EV traktuj jako górne ograniczenie.
+    Produkcyjnie (daily_phases) wołane bez kurs_rynkowy → kurs_laczny służy
+    tylko jako orientacyjny kurs combo do wyświetlenia.
+
     Args:
         typy:          Lista Typ do kombinowania.
         kurs_rynkowy:  Benchmark (np. exchange); jeśli None, EV nie jest liczony.
         min_typy:      Minimalna liczba nóg w kombinacji.
         max_typy:      Maksymalna liczba nóg (cap zapobiega wykładniczemu hangowi).
         min_kurs:      Minimalny kurs łączny.
-        min_ev:        Minimalny EV (ignorowany jeśli kurs_rynkowy=None).
+        min_ev:        Minimalny NAIWNY EV (ignorowany jeśli kurs_rynkowy=None).
     """
     if not typy:
         return []
