@@ -560,14 +560,15 @@ def main():
                 console.print()
 
                 # Oblicz predykcję FootStats
-                imp_g  = imp.analiza(g, df_tabela, n_druzyn, kod_ligi, datetime.now())
-                imp_a  = imp.analiza(a, df_tabela, n_druzyn, kod_ligi, datetime.now())
-                heur_g = heur.analiza(g, df_wyniki)
-                heur_a = heur.analiza(a, df_wyniki)
+                data_now = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+                imp_g  = imp.analiza(g)
+                imp_a  = imp.analiza(a)
+                heur_g = heur.analiza(g, data_now)
+                heur_a = heur.analiza(a, data_now)
                 h2h_g  = h2h.analiza(g, a)
                 h2h_a  = h2h.analiza(a, g)
                 fort_g = fort.analiza(g)
-                klas_m = klas.klasyfikuj(g, a, "REGULAR_SEASON", datetime.now(), None, None)
+                klas_m = klas.klasyfikuj(g, a, "REGULAR_SEASON", data_now, None, None)
 
                 with Progress(SpinnerColumn(style="yellow"),
                               TextColumn("[yellow]Obliczam Poissona...[/yellow]"),

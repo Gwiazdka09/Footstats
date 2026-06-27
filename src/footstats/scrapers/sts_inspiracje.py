@@ -342,10 +342,18 @@ def main() -> None:
     logger.info("[Inspiracje] Zapisano %d sygnalow: %s", len(wyniki), plik)
 
     for w in wyniki:
+        # BRAK_MODELU → implied/model_p/total_odds bywają None; %.2f/%.1f na None
+        # rzuca TypeError i wywala cały job po udanym scrape. Formatuj None-safe.
+        odds = w["ticket"].get("total_odds")
+        implied = w.get("implied")
+        model_p = w.get("model_p")
         logger.info(
-            "%s - %s: typy=%s kurs=%.2f implied=%.1f%% model=%s -> %s",
-            w["gosp"], w["gosc"], w["ticket"]["typy"], w["ticket"]["total_odds"],
-            w["implied"], w["model_p"], w["signal"],
+            "%s - %s: typy=%s kurs=%s implied=%s model=%s -> %s",
+            w["gosp"], w["gosc"], w["ticket"]["typy"],
+            f"{odds:.2f}" if isinstance(odds, (int, float)) else "?",
+            f"{implied:.1f}%" if isinstance(implied, (int, float)) else "?",
+            model_p if model_p is not None else "?",
+            w["signal"],
         )
 
 

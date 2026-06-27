@@ -16,6 +16,7 @@ Użycie:
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 
 from footstats.utils.db import connect as _connect
 
@@ -100,6 +101,10 @@ def get_clv_report(
     """
     _ensure_clv_column()
 
+    # date('now', ...) jest SQLite-only → na Neon/Postgres (prod) rzucało błąd
+    # i CLV report był martwy. Liczymy próg w Pythonie i porównujemy stringowo
+    # (match_date to ISO 'YYYY-MM-DD...' → leksykograficzne >= działa na obu DB).
+    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     with _connect() as conn:
         rows = conn.execute(
             """
@@ -109,9 +114,9 @@ def get_clv_report(
               AND odds IS NOT NULL
               AND odds > 1.0
               AND clv_closing_odds > 1.0
-              AND match_date >= date('now', ? || ' days')
+              AND match_date >= ?
             """,
-            (f"-{days}",),
+            (cutoff,),
         ).fetchall()
 
     if not rows:

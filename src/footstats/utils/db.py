@@ -38,6 +38,7 @@ class _Conn:
     """sqlite3-compatible psycopg2 connection wrapper."""
 
     def __init__(self) -> None:
+        import psycopg2
         pool = _get_pool()
         raw = pool.getconn()
         if raw.closed:
@@ -53,8 +54,17 @@ class _Conn:
         # CREATE TABLE/SELECT (flaky start _init_db). Startup-options są odrzucane
         # przez pooler, więc ustawiamy per-połączenie jako SQL — w tej samej
         # transakcji co kolejne zapytania (ten sam backend → search_path trzyma).
-        with raw.cursor() as _cur:
-            _cur.execute("SET search_path TO public")
+        try:
+            with raw.cursor() as _cur:
+                _cur.execute("SET search_path TO public")
+        except psycopg2.Error:
+            # SET padło (na wpół-martwa conn z poolera) — oddaj ZAMKNIĘTĄ do puli,
+            # inaczej conn nigdy nie wraca → wyciek → wyczerpanie puli (maxconn=10).
+            try:
+                pool.putconn(raw, close=True)
+            except psycopg2.Error:
+                pass
+            raise
 
     @staticmethod
     def _fix(sql: str) -> str:

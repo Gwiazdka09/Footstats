@@ -328,8 +328,9 @@ def health() -> dict:
 def metrics_endpoint(x_metrics_token: str = Header(default="")):
     # BEZPIECZEŃSTWO: metryki Prometheus ujawniają wolumen ruchu/endpointy.
     # Gdy METRICS_TOKEN ustawiony (prod) — wymagaj nagłówka; gdy brak (dev/test) — otwarte.
+    import hmac
     expected = os.getenv("METRICS_TOKEN", "")
-    if expected and x_metrics_token != expected:
+    if expected and not hmac.compare_digest(x_metrics_token, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         from prometheus_client import generate_latest, CONTENT_TYPE_LATEST

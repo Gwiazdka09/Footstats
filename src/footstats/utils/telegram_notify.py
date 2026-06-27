@@ -220,7 +220,9 @@ def send_kupon(dane: dict, stawka_a: float = 10.0, stawka_b: float = 5.0) -> boo
 def send_wynik_update(match_id: int, mecz: str, ai_tip: str,
                       actual_result: str, tip_correct: int | None) -> bool:
     """Powiadomienie o wpisaniu wyniku do backtestu."""
-    status = {1: "TRAFIONY ✅", 0: "PUDLO ❌", None: "? (nieznany)"}[tip_correct]
+    status = {1: "TRAFIONY ✅", 0: "PUDLO ❌", None: "? (nieznany)"}.get(
+        tip_correct, "? (nieznany)"
+    )
     msg = (
         f"<b>FootStats – wynik meczu</b>\n"
         f"{mecz}\n"

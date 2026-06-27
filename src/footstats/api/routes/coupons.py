@@ -1,4 +1,5 @@
 """Coupon, match, kelly, and stats endpoints."""
+import hmac
 import json
 import logging
 import os
@@ -10,7 +11,7 @@ import psycopg2
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
-from footstats.api.auth import require_auth
+from footstats.api.auth import require_admin, require_auth
 from footstats.core.response_cache import cached_response
 from footstats.utils.db import connect as _connect
 
@@ -470,7 +471,10 @@ def get_user_shared_coupons(username: str, limit: int = 20):
 
 
 @router.post("/coupons/settle")
-def settle_coupons(req: SettleRequest, user_id: int = Depends(require_auth)):
+def settle_coupons(req: SettleRequest, user_id: int = Depends(require_admin)):
+    # AUTHZ: settle_active_coupons rozlicza kupony WSZYSTKICH userów (brak filtra
+    # user_id) → tylko admin. Wcześniej require_auth = każdy zalogowany mógł
+    # wymusić rozliczenie/VOID cudzych kuponów (+ wektor DoS na FlashScore/AF).
     try:
         from footstats.core.coupon_settlement import settle_active_coupons
         stats = settle_active_coupons(days_back=req.days_back or 3, dry_run=req.dry_run or False, verbose=True)
@@ -493,7 +497,7 @@ def settle_coupons(req: SettleRequest, user_id: int = Depends(require_auth)):
 def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
     """Endpoint dla Google Cloud Scheduler — rozlicza ACTIVE kupony."""
     expected = os.getenv("CRON_SECRET", "")
-    if not expected or x_cron_secret != expected:
+    if not expected or not hmac.compare_digest(x_cron_secret, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         from footstats.core.coupon_settlement import settle_active_coupons
@@ -521,7 +525,7 @@ def cron_draft(x_cron_secret: str = Header(default=""), days: int = 2, dry_run: 
     Live zbieranie danych: wywołać z dry_run=false (świadomie, po weryfikacji dry-run).
     """
     expected = os.getenv("CRON_SECRET", "")
-    if not expected or x_cron_secret != expected:
+    if not expected or not hmac.compare_digest(x_cron_secret, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
     from footstats.core.cloud_draft import generuj_system_draft
     result = generuj_system_draft(dni=days, dry_run=dry_run)
@@ -534,7 +538,7 @@ def cron_draft(x_cron_secret: str = Header(default=""), days: int = 2, dry_run: 
 def cron_evict_cache(x_cron_secret: str = Header(default=""), max_days: int = 30):
     """Endpoint dla Google Cloud Scheduler — usuwa stare pliki cache."""
     expected = os.getenv("CRON_SECRET", "")
-    if not expected or x_cron_secret != expected:
+    if not expected or not hmac.compare_digest(x_cron_secret, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         from footstats.utils.cache_evict import evict_old_cache
