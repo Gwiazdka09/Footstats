@@ -216,7 +216,8 @@ def settle_active_coupons(
     init_db()
 
     today = datetime.now().date()
-    cutoff = today - timedelta(days=days_back)
+    # days_back zostaje w sygnaturze (API/callers); okno "za stary" liczymy per
+    # kupon przez VOID_AFTER_DAYS (patrz too_old niżej).
 
     # Cleanup stale-DRAFT: kupony DRAFT z przeszla data meczu nigdy nie zostaly
     # awansowane do ACTIVE (np. final phase nie pykl) -> nigdy by nie settlowaly
@@ -235,23 +236,11 @@ def settle_active_coupons(
     if verbose and stale_voided:
         print(f"[CouponSettlement] Stale-DRAFT → VOID: {stale_voided}")
 
-    # Cleanup stale-ACTIVE: kupony ACTIVE które po VOID_AFTER_DAYS wciąż mają nierozliczalne
-    # nogi (mecze spoza coverage API-Football — ligi/towarzyskie poza modelem, np. #175 z
-    # Veikkausliiga + Uruguay-Cabo Verde) → nigdy się nie rozliczą, wiszą ACTIVE w nieskończoność.
-    # Po 10 dniach mecze dawno rozegrane → VOID (nie liczą się do accuracy/M1). Wcześniej VOID
-    # był TYLKO dla DRAFT (gap settlement).
-    stale_active = 0
-    if not dry_run:
-        with _connect() as conn:
-            cur = conn.execute(
-                """UPDATE coupons SET status='VOID'
-                   WHERE status='ACTIVE' AND substr(match_date_first,1,10) < ?""",
-                (void_cutoff,),
-            )
-            stale_active = cur.rowcount or 0
-    if verbose and stale_active:
-        print(f"[CouponSettlement] Stale-ACTIVE → VOID: {stale_active}")
-    stale_voided += stale_active
+    # UWAGA: NIE robimy bulk-VOID stale-ACTIVE. Wcześniej kupon ACTIVE >10d był
+    # VOID-owany ZANIM spróbowaliśmy pobrać wynik → kupony których wynik dopiero
+    # dochodził z wolnych źródeł (FlashScore ~7d, football-data) znikały jako VOID
+    # zamiast się rozliczyć (tracone wygrane/przegrane, zwł. System paper single-leg).
+    # Teraz VOID dla stale-ACTIVE zapada DOPIERO po nieudanej próbie rozliczenia (niżej).
 
     with _connect() as conn:
         rows = conn.execute(
@@ -285,26 +274,13 @@ def settle_active_coupons(
         match_date = row["match_date_first"]
         mdate = match_date[:10]
 
-        # Sprawdź czy data nie za stara
+        # Wiek kuponu — decyzja VOID zapada PO nieudanej próbie rozliczenia (nie przed),
+        # żeby kupon z dopiero-dostępnym wynikiem zdążył się rozliczyć zamiast zniknąć.
         try:
             leg_date = datetime.fromisoformat(match_date).date()
-            if leg_date < cutoff:
-                if (today - leg_date).days >= VOID_AFTER_DAYS:
-                    if not dry_run:
-                        with _connect() as conn:
-                            conn.execute(
-                                "UPDATE coupons SET status='VOID' WHERE id=?",
-                                (coupon_id,),
-                            )
-                    stats["voided"] += 1
-                    if verbose:
-                        print(f"  [VOID] Kupon #{coupon_id} — brak wyniku po {VOID_AFTER_DAYS}d, oznaczony VOID")
-                    continue
-                if verbose:
-                    print(f"  [SKIP] Kupon #{coupon_id} — data {match_date} za stara (>{days_back}d)")
-                continue
+            too_old = (today - leg_date).days >= VOID_AFTER_DAYS
         except (ValueError, TypeError):
-            pass
+            too_old = False
 
         leg_results: list[int | None] = []
         any_leg_lost = False
@@ -341,9 +317,21 @@ def settle_active_coupons(
             if correct == 0:
                 any_leg_lost = True
 
-        # PARTIAL: nie wszystkie wyniki znane
-        if None in leg_results and not any_leg_lost:
-            # Zapisz tymczasowo znane per-leg wyniki (partial update)
+        # Nierozliczalne: brak nóg lub brakujące wyniki (i nic dotąd nie przegrane)
+        if (not leg_results or None in leg_results) and not any_leg_lost:
+            if too_old:
+                # >= VOID_AFTER_DAYS i wciąż nierozliczalne (mecz dawno rozegrany,
+                # brak wyniku w żadnym źródle) → VOID. Nie wisi ACTIVE w nieskończoność.
+                if not dry_run:
+                    with _connect() as conn:
+                        conn.execute(
+                            "UPDATE coupons SET status='VOID' WHERE id=?", (coupon_id,)
+                        )
+                stats["voided"] += 1
+                if verbose:
+                    print(f"  [VOID] Kupon #{coupon_id} — brak wyniku po {VOID_AFTER_DAYS}d → VOID\n")
+                continue
+            # W oknie → zapisz znane per-leg wyniki (partial update) i czekaj
             if not dry_run:
                 try:
                     with _connect() as conn:

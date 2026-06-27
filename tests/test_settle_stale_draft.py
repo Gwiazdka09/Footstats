@@ -3,6 +3,7 @@
 DRAFT z przeszla data meczu nigdy nie awansowal do ACTIVE -> nigdy by sie nie
 rozliczyl. Po VOID_AFTER_DAYS musi byc oznaczony VOID (nie zywy zaklad).
 """
+import json
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -51,7 +52,22 @@ CREATE TABLE coupons (
     roi_pct          REAL,
     match_date_first TEXT,
     user_id          INTEGER DEFAULT 1
-)
+);
+CREATE TABLE bankroll_state (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    balance    REAL,
+    updated_at TEXT,
+    user_id    INTEGER DEFAULT 1 UNIQUE
+);
+CREATE TABLE bankroll_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp   TEXT,
+    change_pln  REAL,
+    new_balance REAL,
+    type        TEXT,
+    description TEXT,
+    user_id     INTEGER DEFAULT 1
+);
 """
 
 
@@ -122,6 +138,35 @@ def test_stale_active_voided_po_oknie(wired):
     st = _statuses(wired)
     assert st[4] == "VOID"          # stary ACTIVE poza oknem 10d → VOID (stale-cleanup)
     assert stats["voided"] >= 2     # stale DRAFT (#1) + stale ACTIVE (#4)
+
+
+def test_stale_active_z_dostepnym_wynikiem_rozlicza_sie(wired, monkeypatch):
+    # Regresja #2 (code-review): stary ACTIVE (>10d) którego wynik DOPIERO stał się
+    # dostępny musi się ROZLICZYĆ (WON/LOST), nie zostać VOID-owany przedwcześnie.
+    import footstats.core.coupon_settlement as cs
+    old = (datetime.now().date() - timedelta(days=30)).isoformat()
+    conn = sqlite3.connect(wired)
+    conn.execute(
+        "INSERT INTO coupons (status, match_date_first, legs_json, total_odds, stake_pln, user_id) "
+        "VALUES ('ACTIVE', ?, ?, 2.0, 10.0, 1)",
+        (old, json.dumps([{"home": "PSG", "away": "Lyon", "tip": "1"}])),
+    )
+    conn.execute("INSERT INTO bankroll_state (balance, user_id) VALUES (100.0, 1)")
+    conn.commit(); conn.close()
+
+    # Wynik dostępny dopiero teraz (wolne źródło) → gospodarz wygrał.
+    monkeypatch.setattr(cs, "_find_leg_result", lambda *a, **k: "2-1")
+
+    from footstats.core.coupon_settlement import settle_active_coupons
+    settle_active_coupons(days_back=3, dry_run=False, verbose=False)
+
+    conn = sqlite3.connect(wired)
+    conn.row_factory = sqlite3.Row
+    status = conn.execute("SELECT status FROM coupons WHERE id=4").fetchone()["status"]
+    bal = conn.execute("SELECT balance FROM bankroll_state WHERE user_id=1").fetchone()["balance"]
+    conn.close()
+    assert status == "WON"          # rozliczony, NIE VOID
+    assert bal == pytest.approx(120.0)  # 100 + 10*2.0 brutto do właściciela
 
 
 def test_dry_run_nie_zmienia_statusow(wired):
