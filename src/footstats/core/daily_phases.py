@@ -625,13 +625,22 @@ def _zapisz_next_final_txt(wyniki: list) -> None:
     DATA_DIR.mkdir(exist_ok=True)
 
     czasy = []
+    # (format, ile znaków wartości). Wcześniej fmt[:len(val[:16])] ucinał format
+    # (np. ISO "%Y-%m-%dT%H:%M:%S"→"...%H:%M:%" z gołym %) → kickoff ISO 'T'
+    # NIGDY się nie parsował → faza final spadała na fallback 13:30 (zły -70min).
+    _FORMATY = (
+        ("%Y-%m-%dT%H:%M:%S", 19),
+        ("%Y-%m-%d %H:%M:%S", 19),
+        ("%Y-%m-%d %H:%M", 16),
+        ("%H:%M", 5),
+    )
     for k in wyniki:
         for pole in ("kickoff", "godzina", "datetime", "data", "time", "date"):
             val = k.get(pole)
             if val and isinstance(val, str):
-                for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%H:%M"):
+                for fmt, n in _FORMATY:
                     try:
-                        t = _dt.strptime(val[:16], fmt[:len(val[:16])])
+                        t = _dt.strptime(val[:n], fmt)
                         if t.hour > 0:  # ignoruj daty bez godziny
                             czasy.append(t)
                         break
