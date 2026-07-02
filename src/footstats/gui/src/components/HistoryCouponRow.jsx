@@ -97,6 +97,9 @@ const HistoryCouponRow = ({ c, apiFetch }) => {
                 </div>
                 <span className="font-semibold text-slate-200 flex-1 truncate">{leg.home} - {leg.away}</span>
                 <span className="text-slate-400 shrink-0">Typ: <span className="font-bold text-slate-200">{leg.tip}</span></span>
+                {leg.prob != null && (
+                  <span className="text-xs text-slate-500 shrink-0" title="Pewność modelu">{Math.round(leg.prob)}%</span>
+                )}
                 {leg.result != null && (
                   <span className={`font-bold shrink-0 ml-2 ${won === true ? 'text-emerald-400' : won === false ? 'text-rose-400' : 'text-slate-400'}`}>{leg.result}</span>
                 )}
