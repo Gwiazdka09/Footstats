@@ -1,4 +1,5 @@
 """JWT authentication for FootStats API — DB-backed multi-user."""
+import logging
 import os
 import re
 import secrets
@@ -19,6 +20,7 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _bearer = HTTPBearer(auto_error=False)
 
 router = APIRouter(prefix="/api", tags=["auth"])
+log = logging.getLogger(__name__)
 
 
 class LoginRequest(BaseModel):
@@ -215,6 +217,86 @@ def change_password(req: ChangePasswordRequest, user_id: int = Depends(require_a
     with connect() as conn:
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
     return {"ok": True, "message": "Hasło zmienione"}
+
+
+# ── Reset hasła (forgot / reset) — token JWT purpose=reset, 1h ──────────────
+_RESET_EXPIRE_MINUTES = 60
+_GENERIC_RESET_MSG = "Jeśli konto istnieje, wysłaliśmy link resetu na podany e-mail."
+
+
+def _make_reset_token(user_id: int) -> str:
+    """Krótki JWT (1h) do resetu hasła — claim purpose=reset odróżnia go od login-tokenu."""
+    exp = datetime.now(timezone.utc) + timedelta(minutes=_RESET_EXPIRE_MINUTES)
+    return jwt.encode(
+        {"uid": user_id, "purpose": "reset", "exp": exp}, _secret(), algorithm=_ALGORITHM
+    )
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+    @field_validator("email")
+    @classmethod
+    def email_valid(cls, v: str) -> str:
+        if not _EMAIL_RE.match(v):
+            raise ValueError("Nieprawidłowy e-mail")
+        return v
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strong(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Hasło musi mieć min. 8 znaków")
+        return v
+
+
+@router.post("/auth/forgot-password", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
+def forgot_password(request: Request, req: ForgotPasswordRequest):
+    """Wysyła link resetu jeśli e-mail istnieje. ZAWSZE 200 + generyczny komunikat
+    (brak enumeracji kont). Błąd DB/mailera nie może wyciec — graceful."""
+    generic = {"message": _GENERIC_RESET_MSG}
+    try:
+        user = get_user_by_email(req.email)
+    except (OSError, RuntimeError, ValueError) as e:  # DB-guard/offline → nie wyciekaj
+        log.warning("forgot-password: lookup e-maila nieudany (graceful): %s", e)
+        return generic
+    if not user:
+        return generic
+    token = _make_reset_token(user["id"])
+    base = os.getenv("FRONTEND_URL", "").rstrip("/")
+    link = f"{base}/reset-password?token={token}"
+    try:
+        from footstats.utils.mailer import send_password_reset_email
+        send_password_reset_email(req.email, link)
+    except (OSError, RuntimeError) as e:
+        log.warning("forgot-password: wysyłka maila nieudana (graceful): %s", e)
+    return generic
+
+
+@router.post("/auth/reset-password", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
+def reset_password(request: Request, req: ResetPasswordRequest):
+    """Ustawia nowe hasło na podstawie tokenu resetu (purpose=reset, ≤1h)."""
+    try:
+        payload = jwt.decode(req.token, _secret(), algorithms=[_ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Nieprawidłowy lub wygasły token")
+    if payload.get("purpose") != "reset" or not payload.get("uid"):
+        raise HTTPException(status_code=400, detail="Nieprawidłowy token resetu")
+    new_hash = bcrypt.hashpw(req.new_password.encode(), bcrypt.gensalt()).decode()
+    from footstats.utils.db import connect
+    with connect() as conn:
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ? AND is_active = TRUE",
+            (new_hash, payload["uid"]),
+        )
+    return {"ok": True, "message": "Hasło zmienione. Możesz się zalogować."}
 
 
 class DeleteAccountRequest(BaseModel):

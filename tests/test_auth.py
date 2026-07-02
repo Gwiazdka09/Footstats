@@ -225,3 +225,44 @@ def test_cannot_deactivate_own_account(client, admin_token):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert resp.status_code == 400
+
+
+# --- password reset flow (forgot / reset) ---
+
+def _reset_token(uid: int, purpose: "str | None" = "reset", minutes: int = 60) -> str:
+    from datetime import datetime, timedelta, timezone
+    from jose import jwt as _jwt
+    claims = {"uid": uid, "exp": datetime.now(timezone.utc) + timedelta(minutes=minutes)}
+    if purpose is not None:
+        claims["purpose"] = purpose
+    return _jwt.encode(claims, os.environ["JWT_SECRET"], algorithm="HS256")
+
+
+def test_forgot_password_generic_200(client):
+    # Zawsze 200 + generyczny komunikat (brak enumeracji e-maili); DB-guard w unit → graceful.
+    resp = client.post("/api/auth/forgot-password", json={"email": "nikt@example.com"})
+    assert resp.status_code == 200
+    assert "message" in resp.json()
+
+
+def test_forgot_password_invalid_email_422(client):
+    resp = client.post("/api/auth/forgot-password", json={"email": "not-an-email"})
+    assert resp.status_code == 422
+
+
+def test_reset_password_invalid_token(client):
+    resp = client.post("/api/auth/reset-password", json={"token": "garbage", "new_password": "newpass123"})
+    assert resp.status_code == 400
+
+
+def test_reset_password_wrong_purpose_rejected(client):
+    # token bez purpose=reset (np. zwykły login token) → odrzucony
+    tok = _reset_token(999, purpose=None)
+    resp = client.post("/api/auth/reset-password", json={"token": tok, "new_password": "newpass123"})
+    assert resp.status_code == 400
+
+
+def test_reset_password_short_password_422(client):
+    tok = _reset_token(999)
+    resp = client.post("/api/auth/reset-password", json={"token": tok, "new_password": "short"})
+    assert resp.status_code == 422
