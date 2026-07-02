@@ -19,6 +19,11 @@ _CALIBRATION_PATH = Path(__file__).parents[3] / "data" / "calibration.json"
 # (daily_filters). Identity aż do re-fit na czystych, post-Cel-B danych. Włącz: CALIBRATION_ENABLED=1.
 _CALIBRATION_ENABLED = os.getenv("CALIBRATION_ENABLED", "0") == "1"
 
+# Runtime health-gate: krzywa o rozpiętości y < tego progu jest płaska/zdegenerowana
+# (np. fit na 104 Neon-próbkach → span 0.049) i niszczy sygnał — traktuj jak identity
+# nawet przy CALIBRATION_ENABLED=1. Zgodne z progiem diagnostyki w maybe_refit_calibration.
+_MIN_CURVE_SPAN = 0.10
+
 # Fallback lookup: predicted_band → calibrated_prob (from empirical data 2026-05-26)
 _FALLBACK_TABLE: dict[int, float] = {
     50: 0.171,
@@ -139,6 +144,14 @@ def calibrate_confidence(confidence_pct: float) -> float:
     """
     if not _CALIBRATION_ENABLED:
         return confidence_pct / 100.0
+    # Health-gate: płaska krzywa (rozpiętość y < _MIN_CURVE_SPAN) → identity zamiast
+    # spłaszczać każdą pewność do ~base-rate. Chroni przed footgunem zdegenerowanego
+    # calibration.json, gdy ktoś ustawi CALIBRATION_ENABLED=1 przedwcześnie.
+    curve = _load_calibration_curve()
+    if curve is not None:
+        ys = curve[1]
+        if ys and (max(ys) - min(ys)) < _MIN_CURVE_SPAN:
+            return confidence_pct / 100.0
     return _calibrate_raw(confidence_pct)
 
 

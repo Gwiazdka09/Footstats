@@ -79,6 +79,19 @@ def test_gate_on_uzywa_krzywej():
         assert calibrate_confidence(60.0) == pytest.approx(0.4)
 
 
+def test_gate_on_plaska_krzywa_zwraca_identity():
+    # Health-gate: nawet z CALIBRATION_ENABLED=1, płaska/zdegenerowana krzywa
+    # (rozpiętość y < próg) → identity, NIE niszcz sygnału (obrona przed footgunem
+    # zdegenerowanego calibration.json, np. fit na 104 próbkach → span 0.049).
+    from footstats.core.probability_calibrator import calibrate_confidence
+    xs = [0.40, 0.65, 0.95]
+    ys = [0.357, 0.38, 0.406]  # rozpiętość 0.049 < 0.10 → płaska
+    with patch("footstats.core.probability_calibrator._CALIBRATION_ENABLED", True), \
+         patch("footstats.core.probability_calibrator._load_calibration_curve", return_value=(xs, ys)):
+        assert calibrate_confidence(72.0) == pytest.approx(0.72)  # identity, nie ~0.38
+        assert calibrate_confidence(50.0) == pytest.approx(0.50)
+
+
 # ── calibrate_candidates (przechodzi przez gate) ─────────────────────────
 def test_calibrate_candidates_adds_field():
     from footstats.core.probability_calibrator import calibrate_candidates
