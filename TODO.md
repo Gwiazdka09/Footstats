@@ -45,6 +45,17 @@
   klubowy), bzzoiro-ml OK teraz; realny zysk dopiero na restart lig klubowych. Wrócić wtedy.
 - [ ] **Monitoruj** `calibration_monitor.py` — dane walidacyjne rosną PC-niezależnie → odblokuje M1 flipy.
 
+### 🌙 JUTRO (07-03) — przenieść PEŁNY pipeline na cloud (całkowite PC-off)
+> **Powód:** user nie chce, by PC chodził nocą. Stan: System paper-draft JUŻ cloud
+> (`footstats-draft-morning` 07:30 CEST) + settlement cloud (06:00/21:30 UTC). LOKALNIE zostaje
+> (Task Scheduler, wymaga PC on): `daily_agent --faza final` 11:00 (kupony Groq A-D + Telegram) +
+> `evening_agent` 23:00 (**nocny — główny powód migracji**). **Decyzja: cloud, nie Raspberry Pi** —
+> infra już stoi (Cloud Run + Neon + /cron/draft działa); Pi = port ARM (torch/playwright) + dubel + dom-net.
+- [ ] Migracja pełnego pipeline → **Cloud Run Jobs** (nie request-timeout-bound; Playwright+Groq OK).
+  Etapy: (1) obraz z Playwright/chromium, (2) Job `final` 11:00 CEST + Job `evening` 23:00 CEST przez Cloud Scheduler,
+  (3) sekrety Groq/Telegram w Cloud Run env, (4) potwierdź parytet z lokalnym runem, (5) wyłącz lokalne
+  taski (`FootStats-DailyAgentFinal`, `FootStats-EveningAgent`, `FootStats-DailyAgentDraft`). Koszt ~$0-5/mc.
+
 ---
 
 > **Ukończone → `CHANGELOG.md` + `git log`.** Skrót ostatnich (06-24/25): hardening OWASP (live) +

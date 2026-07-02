@@ -149,22 +149,40 @@ _POZ_OBRONA = ("D", "G")  # nieobecność → więcej tracimy (wyżej λ RYWALA)
 _KARA_ATAK = 0.05         # -5% OWN λ za brakującego napastnika/pomocnika
 _LEAK_OBRONA = 0.05       # +5% λ rywala za brakującego obrońcy/bramkarza
 _CAP = 0.20               # twardy limit ±20%
+_SCALE_GOAL_SHARE = 0.5   # v2: kara napastnika = goal_share * scale (share 0.10 ≈ flat 5%)
 
 
-def injury_lambda_factors(injuries: list[dict]) -> tuple[float, float]:
+def injury_lambda_factors(
+    injuries: list[dict], goal_shares: dict[str, float] | None = None
+) -> tuple[float, float]:
     """
     Z listy kontuzji zwraca (atak_factor, obrona_leak_factor):
       atak_factor      — mnożnik WŁASNEGO λ (≤1.0; spada za brakujących F/M)
       obrona_leak_factor — mnożnik λ RYWALA (≥1.0; rośnie za brakujących D/G)
 
     Football logic: brak napastnika = mniej strzelamy; brak obrońcy = rywal strzela więcej.
-    Bez wagi udziału w golach (dane per-gracz osobno) — flat per pozycja, cap ±20%.
+
+    v2 (goal_shares): gdy podany mapping {nazwa_gracza: udział_w_golach 0-1}, kara za
+    brakującego napastnika = `udział * _SCALE_GOAL_SHARE` (utrata topowego strzelca boli
+    mocniej niż rezerwowy). Gracz spoza mappingu → fallback flat `_KARA_ATAK`. goal_shares
+    dotyczy tylko ataku (obrońcy nie strzelają → leak zostaje flat). goal_shares=None →
+    zachowanie v1 (flat per pozycja). Cap ±20% w obu trybach.
     """
     if not injuries:
         return 1.0, 1.0
-    n_atak = sum(1 for i in injuries if (i.get("position") or "").upper() in _POZ_ATAK)
+
+    def _kara_atak(inj: dict) -> float:
+        if goal_shares is not None:
+            share = goal_shares.get(inj.get("name") or "")
+            if share is not None:
+                return share * _SCALE_GOAL_SHARE
+        return _KARA_ATAK
+
+    kara_atak = sum(
+        _kara_atak(i) for i in injuries if (i.get("position") or "").upper() in _POZ_ATAK
+    )
     n_obrona = sum(1 for i in injuries if (i.get("position") or "").upper() in _POZ_OBRONA)
-    atak = max(1.0 - _CAP, 1.0 - n_atak * _KARA_ATAK)
+    atak = max(1.0 - _CAP, 1.0 - kara_atak)
     obrona_leak = min(1.0 + _CAP, 1.0 + n_obrona * _LEAK_OBRONA)
     return round(atak, 4), round(obrona_leak, 4)
 

@@ -6,6 +6,7 @@ import math
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from footstats.core.bet_builder import (
     _poisson_prob, _dixon_coles_tau, probability_matrix,
@@ -182,6 +183,53 @@ def test_factors_cap_20_procent():
     atak, leak = injury_lambda_factors([{"position": "F"}] * 20 + [{"position": "D"}] * 20)
     assert atak == 0.80     # cap -20%
     assert leak == 1.20     # cap +20%
+
+
+# ── Kontuzje v2 — waga udziałem w golach (goal_shares) ────────────────────
+
+def test_v2_strzelec_boli_bardziej_niz_rezerwowy():
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    inj = [{"name": "Star", "position": "F"}]
+    bench = [{"name": "Bench", "position": "F"}]
+    atak_star, _ = injury_lambda_factors(inj, goal_shares={"Star": 0.40})
+    atak_bench, _ = injury_lambda_factors(bench, goal_shares={"Bench": 0.05})
+    assert atak_star < atak_bench          # utrata topowego strzelca boli mocniej
+
+
+def test_v2_anchor_share_010_rowna_v1_flat():
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    # goal_share 0.10 * scale 0.5 = 0.05 = stara flat kara → atak 0.95
+    atak, _ = injury_lambda_factors([{"name": "X", "position": "F"}], goal_shares={"X": 0.10})
+    assert atak == pytest.approx(0.95)
+
+
+def test_v2_nieznany_gracz_fallback_flat():
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    # gracz spoza goal_shares → flat _KARA_ATAK (0.05) → atak 0.95
+    atak, _ = injury_lambda_factors([{"name": "Ktos", "position": "F"}], goal_shares={"Inny": 0.30})
+    assert atak == pytest.approx(0.95)
+
+
+def test_v2_cap_trzyma_przy_topowym_strzelcu():
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    # share 0.60 * 0.5 = 0.30 > cap 0.20 → uciete do 0.80
+    atak, _ = injury_lambda_factors([{"name": "Mega", "position": "F"}], goal_shares={"Mega": 0.60})
+    assert atak == 0.80
+
+
+def test_v2_obronca_ignoruje_goal_shares():
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    # obrońcy nie strzelają → leak flat, goal_shares bez wpływu
+    atak, leak = injury_lambda_factors([{"name": "Def", "position": "D"}], goal_shares={"Def": 0.40})
+    assert atak == 1.0
+    assert leak == pytest.approx(1.05)   # flat _LEAK_OBRONA
+
+
+def test_v2_brak_goal_shares_zachowuje_v1():
+    from footstats.core.lambda_optimizer import injury_lambda_factors
+    # goal_shares=None → identyczne z v1 (wsteczna zgodność)
+    atak, leak = injury_lambda_factors([{"name": "X", "position": "F"}])
+    assert atak == pytest.approx(0.95)
 
 
 # ── ImportanceIndex.analiza ───────────────────────────────────────────────
