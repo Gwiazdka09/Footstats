@@ -1,0 +1,30 @@
+# Dockerfile.jobs — obraz Cloud Run Jobs dla PEŁNEGO pipeline (Playwright + Groq).
+# Odróżnia się od Dockerfile.api (ten jest lekki, bez Playwright, serwuje FastAPI).
+# Cel: uruchamiać `daily_agent --faza final` (11:00 CEST) + `evening_agent` (23:00 CEST)
+# PC-niezależnie przez Cloud Scheduler → Cloud Run Jobs. Faza wybierana przez JOB_PHASE.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src \
+    JOB_PHASE=final
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+COPY pyproject.toml ./
+COPY src ./src
+
+# Zależności projektu + Playwright chromium z systemowymi bibliotekami (--with-deps).
+RUN uv pip install --system ".[api]" playwright \
+    && playwright install --with-deps chromium \
+    && mkdir -p /app/data
+
+# Entrypoint dispatchuje na JOB_PHASE:
+#   final   → python -m footstats.daily_agent --faza final
+#   evening → python -m footstats.evening_agent
+COPY scripts/run_job.sh /app/run_job.sh
+RUN chmod +x /app/run_job.sh
+
+CMD ["/app/run_job.sh"]
