@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Users, Trash2, UserPlus } from 'lucide-react';
+import { ShieldCheck, Users, Trash2, UserPlus, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const AdminPanelView = ({ apiFetch, onSettled }) => {
   const [settling, setSettling] = useState(false);
   const [settleMsg, setSettleMsg] = useState('');
+  const [modelStats, setModelStats] = useState(null);
+  const [msError, setMsError] = useState('');
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [usersError, setUsersError] = useState('');
@@ -27,8 +29,19 @@ const AdminPanelView = ({ apiFetch, onSettled }) => {
     }
   };
 
+  const loadModelStats = async () => {
+    setMsError('');
+    try {
+      const data = await apiFetch('/admin/model-vs-live');
+      setModelStats(data);
+    } catch (err) {
+      setMsError(err.message);
+    }
+  };
+
   useEffect(() => {
     loadUsers();
+    loadModelStats();
   }, []);
 
   const handleSettle = async () => {
@@ -88,6 +101,72 @@ const AdminPanelView = ({ apiFetch, onSettled }) => {
         <h1 className="text-4xl font-bold mb-2">Panel administratora</h1>
         <p className="text-slate-400">Zarządzanie kontami i rozliczanie kuponów.</p>
       </div>
+
+      <div className="glass-card p-8 mb-8">
+        <h3 className="text-lg font-bold mb-6 flex items-center gap-2"><Activity size={18} /> Model vs Live</h3>
+        {msError ? (
+          <p className="text-rose-400 text-sm">{msError}</p>
+        ) : !modelStats ? (
+          <p className="text-slate-500 text-sm">Wczytywanie...</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div>
+                <p className="text-xs uppercase text-slate-500 mb-1">Trafność live</p>
+                <p className="text-2xl font-bold">{modelStats.live_acc ?? '—'}%</p>
+                <p className="text-xs text-slate-500">{modelStats.n_settled} rozliczonych</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-slate-500 mb-1">ROI kuponów</p>
+                <p className={`text-2xl font-bold ${(modelStats.coupons.roi_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {modelStats.coupons.roi_pct >= 0 ? '+' : ''}{modelStats.coupons.roi_pct ?? '—'}%
+                </p>
+                <p className="text-xs text-slate-500">{modelStats.coupons.profit_pln >= 0 ? '+' : ''}{modelStats.coupons.profit_pln} / {modelStats.coupons.stake_pln} PLN</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-slate-500 mb-1">Tip = argmax modelu</p>
+                <p className="text-2xl font-bold text-emerald-400">{modelStats.selection.argmax_acc ?? '—'}%</p>
+                <p className="text-xs text-slate-500">n={modelStats.selection.argmax_n}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-slate-500 mb-1">Tip ≠ argmax (override)</p>
+                <p className="text-2xl font-bold text-rose-400">{modelStats.selection.override_acc ?? '—'}%</p>
+                <p className="text-xs text-slate-500">n={modelStats.selection.override_n}</p>
+              </div>
+            </div>
+            {modelStats.reliability.length > 0 && (
+              <div className="overflow-x-auto">
+                <p className="text-xs uppercase text-slate-500 mb-3">Kalibracja pewności (pewność → realna trafność)</p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-500 uppercase text-xs border-b border-white/5">
+                      <th className="py-2 pr-4">Pasmo</th>
+                      <th className="py-2 pr-4">n</th>
+                      <th className="py-2 pr-4">Śr. pewność</th>
+                      <th className="py-2 pr-4">Realna</th>
+                      <th className="py-2 pr-4">Rozjazd</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelStats.reliability.map((b) => (
+                      <tr key={b.band} className="border-b border-white/5">
+                        <td className="py-2 pr-4 font-semibold">{b.band}</td>
+                        <td className="py-2 pr-4 text-slate-500">{b.n}</td>
+                        <td className="py-2 pr-4">{b.avg_conf}%</td>
+                        <td className="py-2 pr-4">{b.real_acc}%</td>
+                        <td className={`py-2 pr-4 ${b.gap > 15 ? 'text-rose-400' : b.gap > 5 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                          {b.gap > 0 ? '+' : ''}{b.gap}pp
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         <div className="glass-card p-8">
           <h3 className="text-lg font-bold mb-2 flex items-center gap-2"><ShieldCheck size={18} /> Sprawdzanie wyników</h3>
