@@ -115,7 +115,11 @@ const App = () => {
     }
   }, [token]);
 
-  if (!token) {
+  // Link resetu hasła (z maila) musi dotrzeć do LoginView nawet gdy w localStorage jest
+  // stary token — inaczej App renderuje Dashboard i reset jest nieosiągalny.
+  const isResetRoute = typeof window !== 'undefined' && window.location.pathname.includes('reset-password');
+
+  if (!token || isResetRoute) {
     return <LoginView setToken={(t) => { localStorage.setItem('fs_token', t); setToken(t); }} setUser={(u) => { localStorage.setItem('fs_user', u); setUser(u); }} />;
   }
 
