@@ -263,7 +263,7 @@ def forgot_password(request: Request, req: ForgotPasswordRequest):
     generic = {"message": _GENERIC_RESET_MSG}
     try:
         user = get_user_by_email(req.email)
-    except (OSError, RuntimeError, ValueError) as e:  # DB-guard/offline → nie wyciekaj
+    except Exception as e:  # noqa: BLE001 — DB/psycopg2/offline: ZAWSZE 200, nie wyciekaj enumeracji
         log.warning("forgot-password: lookup e-maila nieudany (graceful): %s", e)
         return generic
     if not user:
@@ -274,7 +274,7 @@ def forgot_password(request: Request, req: ForgotPasswordRequest):
     try:
         from footstats.utils.mailer import send_password_reset_email
         send_password_reset_email(req.email, link)
-    except (OSError, RuntimeError) as e:
+    except Exception as e:  # noqa: BLE001 — mailer/HTTP: nie blokuj i nie wyciekaj
         log.warning("forgot-password: wysyłka maila nieudana (graceful): %s", e)
     return generic
 

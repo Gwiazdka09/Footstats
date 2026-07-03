@@ -40,7 +40,7 @@ def model_vs_live(_admin: int = Depends(require_admin)):
                 "SELECT status, stake_pln, payout_pln FROM coupons "
                 "WHERE status IN ('WON','WIN','LOST','LOSE')"
             ).fetchall()
-    except (OSError, RuntimeError, ValueError) as e:
+    except Exception as e:  # noqa: BLE001 — DB/psycopg2: zwróć 503, nie 500
         log.warning("model-vs-live: odczyt DB nieudany: %s", e)
         raise HTTPException(status_code=503, detail="Dane niedostępne")
 
