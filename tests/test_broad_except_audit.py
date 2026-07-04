@@ -22,8 +22,10 @@ BASELINE: dict[str, int] = {
     "ai/rag.py": 2,
     "ai/rag_embeddings.py": 3,
     "ai/trainer.py": 3,
+    "api/auth.py": 2,  # forgot-password: DB lookup + mailer graceful → ZAWSZE 200 (anty-enumeracja kont)
     "api/main.py": 3,  # startup DB init + health endpoint (5xx-proof) + Sentry init guard
     "api/routes/bankroll.py": 1,
+    "api/routes/model_stats.py": 1,  # /admin/model-vs-live: błąd DB → 503 nie 500
     "api/routes/coupons.py": 3,
     "api/routes/status.py": 2,
     "core/async_utils.py": 1,
