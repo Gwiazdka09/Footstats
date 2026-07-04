@@ -25,6 +25,8 @@ RUN uv pip install --system ".[api]" playwright \
 #   final   → python -m footstats.daily_agent --faza final
 #   evening → python -m footstats.evening_agent
 COPY scripts/run_job.sh /app/run_job.sh
-RUN chmod +x /app/run_job.sh
+# Strip CR (Windows CRLF → LF): host checkout na Windows daje \r\n, co w Linuxie
+# psuje shebang (`env: bash\r` → exit 127) i case-blok. sed gwarantuje LF w obrazie.
+RUN sed -i 's/\r$//' /app/run_job.sh && chmod +x /app/run_job.sh
 
-CMD ["/app/run_job.sh"]
+CMD ["bash", "/app/run_job.sh"]

@@ -1,0 +1,3 @@
+# Skrypty powłoki ZAWSZE LF — inaczej Windows CRLF psuje shebang w Linux/Docker
+# (`env: bash\r` → exit 127). Dotyczy m.in. scripts/run_job.sh (Cloud Run Jobs).
+*.sh text eol=lf
