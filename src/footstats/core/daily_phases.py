@@ -36,7 +36,8 @@ def _goal_shares_for(team: str, side: str | None = None) -> dict[str, float]:
     try:
         from footstats.core.player_db import team_goal_shares
         return team_goal_shares(team, _current_season())
-    except Exception as e:  # noqa: BLE001 — reference data nie może wywalić pipeline
+    except (ImportError, AttributeError, TypeError, KeyError, ValueError) as e:
+        # reference data nie może wywalić pipeline (team_goal_shares łapie sqlite3.Error sam)
         log.debug("goal_shares fallback (%s): %s", team, e)
         return {}
 
@@ -540,6 +541,9 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
     from footstats.scrapers.lineup_scraper import get_lineup
     from footstats.scrapers.referee_db import referee_signal, get_referee
     from footstats.scrapers.flashscore_match import scrape_match_with_search
+    from footstats.core.lineup_strength import (
+        lineup_confidence_penalty_v2, lineup_offensive_strength,
+    )
 
     dzis = date.today().isoformat()
     try:
@@ -588,6 +592,15 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
                 and not lineup.get("home", {}).get("missing_key_players", True)
                 and not lineup.get("away", {}).get("missing_key_players", True)
             )
+            # Faza 2: siła składu wg goal_share (brak topowego strzelca w XI → kara)
+            if lineup is not None:
+                gs_h = _goal_shares_for(k.get("gospodarz") or "", "home")
+                gs_a = _goal_shares_for(k.get("goscie") or "", "away")
+                k["lineup_star_penalty"] = lineup_confidence_penalty_v2(lineup, gs_h, gs_a)
+                k["lineup_strength_home"] = round(
+                    lineup_offensive_strength((lineup.get("home", {}) or {}).get("startXI", []), gs_h), 3)
+                k["lineup_strength_away"] = round(
+                    lineup_offensive_strength((lineup.get("away", {}) or {}).get("startXI", []), gs_a), 3)
         else:
             k["lineup_ok"] = None
 

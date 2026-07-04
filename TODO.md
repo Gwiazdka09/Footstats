@@ -50,7 +50,8 @@
 
 - [ ] **Verify quick_picks-fix → Poisson live** (51.8%) zamiast Bzzoiro-ML gdy wrócą ligi klubowe. Monitor `calibration_monitor.py`. Gdyby Poisson gorszy → escape-hatch `QUICK_PICKS_USE_POISSON_CACHE=0`.
 - [ ] **Parquet na cloud** → cloud-draft użyje Poisson-DC zamiast `bzzoiro-ml` (cloud nie ma `full_dataset.parquet` 562KB). Opcje: (a) GCS-pull przy starcie [najlepsze] lub (b) COPY do obrazu. **Odłożone do sierpnia** (off-season → Poisson i tak nie ruszy).
-- [ ] **Kontuzje v2 — scrape per-gracz** goal_share (waga udziałem w golach: utrata strzelca > rezerwowy). Rdzeń `injury_lambda_factors` ZBUDOWANY (07-03) — czeka na multi-source scraper udziałów.
+- [x] **Kontuzje v2 — baza graczy + goal_share** (07-05): `core/player_db.py` (SQLite) + `scrapers/player_stats.py` (API-Football `/players/topscorers`, `refresh_tracked_leagues` 16 lig). Wpięte w `_apply_injury_corrections` → kara napastnika ∝ udziałowi w golach. **Operacyjne TODO:** wywołać `refresh_tracked_leagues(APISPORTS_KEY)` gdy wrócą ligi klubowe (off-season baza pusta → flat fallback).
+- [x] **Faza 2 — siła składu XI** (07-05): `core/lineup_strength.py` — brak topowego strzelca w startXI → λ ataku ↓ (`lineup_lambda_factor`) + kara decision_score (`lineup_confidence_penalty_v2`, zastępuje crude len<11). Wpięte w `_enrichuj_finalna_faza`.
 
 ---
 

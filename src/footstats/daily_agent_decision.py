@@ -35,8 +35,9 @@ def _ocen_zdarzenia_decision_score(dane: dict, phase: str = "draft") -> None:
                 "accuracy":       z.get("accuracy"),
             }
             ctx = {
-                "lineup_ok":       z.get("lineup_ok"),
-                "referee_neutral": z.get("referee_neutral", True),
+                "lineup_ok":            z.get("lineup_ok"),
+                "referee_neutral":      z.get("referee_neutral", True),
+                "lineup_star_penalty":  z.get("lineup_star_penalty", 0),
             }
             sc, reasons = score_kandydat(w, context=ctx, phase=phase)
             # BetBuilder leg z pozytywnym EV dostaje bonus — Poisson math potwierdza edge
@@ -63,8 +64,9 @@ def _decision_score_kandydat(kandydat: dict, phase: str = "draft") -> tuple[int,
         "accuracy":       kandydat.get("accuracy", 0.0),
     }
     context = {
-        "lineup_ok":       kandydat.get("lineup_ok", None),
-        "referee_neutral": kandydat.get("referee_neutral", True),
+        "lineup_ok":            kandydat.get("lineup_ok", None),
+        "referee_neutral":      kandydat.get("referee_neutral", True),
+        "lineup_star_penalty":  kandydat.get("lineup_star_penalty", 0),
     }
     return score_kandydat(w, context=context, phase=phase)
 

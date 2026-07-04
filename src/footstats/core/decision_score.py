@@ -102,6 +102,12 @@ def score_kandydat(
         else:
             powody.append("Skład: brak danych lub kluczowy gracz absent (0)")
 
+        # Faza 2: kara za brak topowego strzelca w startXI (goal_share, ≤0)
+        star_pen = context.get("lineup_star_penalty") or 0
+        if star_pen < 0:
+            score += star_pen
+            powody.append(f"Brak topowego strzelca w składzie ({star_pen})")
+
         if context.get("referee_neutral", False):
             score += 10
             powody.append("Sędzia neutralny (+10)")
