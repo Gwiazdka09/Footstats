@@ -15,6 +15,7 @@ ENV/
 # ── Klucze API i sekrety
 .env
 .env.*
+!.env.example
 
 # ── Dane (DB backtest)
 data/

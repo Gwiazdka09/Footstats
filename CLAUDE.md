@@ -27,7 +27,7 @@ Ja = orchestrator. Workflow feature: subagent-driven-development (planner→code
 - Structure: See `PROJECT_STRUCTURE.md`
 - Core: `src/footstats/` (AI, Core, Scrapers)
 - DB: `data/footstats_backtest.db` (SQLite)
-- Pipeline: `run_daily.bat` (8-step autonomous loop)
+- Pipeline: Cloud Run Jobs (`footstats-final` 11:00 + `footstats-evening` 23:00, Cloud Scheduler). Lokalny `run_daily.bat` wyłączony — patrz `docs/cloud_migration.md`.
 
 ## Tech Stack
 - Backend: FastAPI, Playwright (Scraping), Groq SDK (Llama 3.1 8B).
