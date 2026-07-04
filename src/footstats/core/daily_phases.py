@@ -34,8 +34,8 @@ def _goal_shares_for(team: str, side: str | None = None) -> dict[str, float]:
     dowolny błąd / brak danych → {} (injury model użyje flat kary). side: tylko log.
     """
     try:
-        from footstats.core.player_db import team_goal_shares
-        return team_goal_shares(team, _current_season())
+        from footstats.core.player_db import team_goal_shares_recent
+        return team_goal_shares_recent(team, _current_season(), lookback=2)
     except (ImportError, AttributeError, TypeError, KeyError, ValueError) as e:
         # reference data nie może wywalić pipeline (team_goal_shares łapie sqlite3.Error sam)
         log.debug("goal_shares fallback (%s): %s", team, e)

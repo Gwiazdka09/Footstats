@@ -62,6 +62,31 @@ def test_unknown_team_empty(tmp_path):
     assert player_db.team_goal_shares("Real Madrid", 2025, db_path=db) == {}
 
 
+def test_recent_walks_back_to_season_with_data(tmp_path):
+    db = tmp_path / "t.db"
+    player_db.upsert_players(_rows(2024), db_path=db)  # dane tylko 2024
+    # zapytanie o 2026 (pusty) → walk-back 2025(pusty)→2024(dane)
+    shares = player_db.team_goal_shares_recent("Manchester City", 2026, lookback=2, db_path=db)
+    assert abs(shares["Haaland"] - 20 / 30) < 1e-6
+
+
+def test_recent_lookback_zero_only_current(tmp_path):
+    db = tmp_path / "t.db"
+    player_db.upsert_players(_rows(2024), db_path=db)
+    assert player_db.team_goal_shares_recent("Manchester City", 2026, lookback=0, db_path=db) == {}
+
+
+def test_recent_returns_first_season_with_data(tmp_path):
+    db = tmp_path / "t.db"
+    player_db.upsert_players(_rows(2026), db_path=db)  # dane bieżące
+    player_db.upsert_players(
+        [{"name": "Old", "team": "Manchester City", "league": "PL", "season": 2024,
+          "goals": 9, "assists": 0, "minutes": 900}], db_path=db)
+    shares = player_db.team_goal_shares_recent("Manchester City", 2026, lookback=2, db_path=db)
+    assert "Old" not in shares          # bieżący sezon ma dane → nie schodzi niżej
+    assert "Haaland" in shares
+
+
 def test_season_isolation(tmp_path):
     db = tmp_path / "t.db"
     player_db.upsert_players(_rows(2025), db_path=db)

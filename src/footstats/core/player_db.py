@@ -113,3 +113,18 @@ def team_goal_shares(
     if total <= 0:
         return {}
     return {r["name"]: int(r["goals"] or 0) / total for r in rows if r["goals"]}
+
+
+def team_goal_shares_recent(
+    team: str, season: int, lookback: int = 2, db_path: Path | str = DB_PATH
+) -> dict[str, float]:
+    """
+    goal_shares dla drużyny z najświeższego dostępnego sezonu: próbuje `season`,
+    potem season-1 ... season-lookback. Zwraca pierwszy niepusty (off-season /
+    przerwa międzysezonowa → używa poprzedniej kampanii). {} gdy brak w oknie.
+    """
+    for s in range(int(season), int(season) - lookback - 1, -1):
+        shares = team_goal_shares(team, s, db_path=db_path)
+        if shares:
+            return shares
+    return {}
