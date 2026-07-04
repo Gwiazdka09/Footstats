@@ -21,6 +21,26 @@ _norm = normalize_team_name
 
 # ── Krok 1b: Injury Lambda Correction ──────────────────────────────────────
 
+def _current_season() -> int:
+    """Sezon piłkarski: rok bieżący gdy >czerwiec, inaczej poprzedni (jak API-Football)."""
+    from datetime import datetime
+    now = datetime.now()
+    return now.year if now.month > 6 else now.year - 1
+
+
+def _goal_shares_for(team: str, side: str | None = None) -> dict[str, float]:
+    """
+    Udziały w golach graczy drużyny z player_db (Kontuzje v2). Bezpieczny fallback:
+    dowolny błąd / brak danych → {} (injury model użyje flat kary). side: tylko log.
+    """
+    try:
+        from footstats.core.player_db import team_goal_shares
+        return team_goal_shares(team, _current_season())
+    except Exception as e:  # noqa: BLE001 — reference data nie może wywalić pipeline
+        log.debug("goal_shares fallback (%s): %s", team, e)
+        return {}
+
+
 def _apply_injury_corrections(wyniki: list) -> None:
     """
     Koryguje λ i PRAWDOPODOBIEŃSTWA kandydata za kontuzje (dwustronnie):
@@ -39,8 +59,10 @@ def _apply_injury_corrections(wyniki: list) -> None:
             if not inj_h and not inj_a:
                 continue
 
-            h_atak, h_leak = injury_lambda_factors(inj_h)
-            a_atak, a_leak = injury_lambda_factors(inj_a)
+            gs_h = _goal_shares_for(w.get("gospodarz") or "", "home") or None
+            gs_a = _goal_shares_for(w.get("goscie") or "", "away") or None
+            h_atak, h_leak = injury_lambda_factors(inj_h, goal_shares=gs_h)
+            a_atak, a_leak = injury_lambda_factors(inj_a, goal_shares=gs_a)
             if (h_atak, h_leak, a_atak, a_leak) == (1.0, 1.0, 1.0, 1.0):
                 continue
 
