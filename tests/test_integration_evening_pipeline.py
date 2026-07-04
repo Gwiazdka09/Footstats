@@ -257,9 +257,15 @@ class TestSettleActiveCoupons:
         legs = [{"home": "Arsenal", "away": "Chelsea", "tip": "1", "odds": 1.85}]
         cid = _insert_active_coupon(conn_factory, legs, total_odds=1.85, stake=10.0, match_date=today)
 
+        # Wszystkie źródła wyników puste → kupon zostaje PARTIAL. Trzeba zamockować
+        # KOMPLET źródeł sieciowych (inne testy zwracają matching fixture ze źródła 1 →
+        # nie spadają niżej). Bez tego consensus/football-data biją realną sieć → na CI
+        # (bez DATABASE_URL) network-guard → RuntimeError.
         with (
             patch("footstats.core.coupon_settlement._get_fixtures_api", return_value=[]),
+            patch("footstats.core.coupon_settlement._get_matches_fdb", return_value=[]),
             patch("footstats.scrapers.flashscore_results.get_match_result", return_value=None),
+            patch("footstats.scrapers.sources.aggregator.consensus_result", return_value=None),
         ):
             from footstats.core.coupon_settlement import settle_active_coupons
             stats = settle_active_coupons(days_back=3, dry_run=False, verbose=False)
