@@ -45,14 +45,13 @@
   klubowy), bzzoiro-ml OK teraz; realny zysk dopiero na restart lig klubowych. Wrócić wtedy.
 - [ ] **Monitoruj** `calibration_monitor.py` — dane walidacyjne rosną PC-niezależnie → odblokuje M1 flipy.
 
-### 🌙 Cloud migration — pełny pipeline PC-off (Cloud Run Jobs) — W TOKU (07-03)
-> Config+deploy w CHANGELOG 07-03. Zrobione: obraz `footstats-jobs` w Artifact Registry, Cloud Run Jobs
-> `footstats-final`+`footstats-evening` (sekrety z Secret Manager, SA compute). Fixy: CRLF `run_job.sh`, bs4/groq deps.
-- [x] Obraz + Jobs utworzone (`Dockerfile.jobs`, `run_job.sh`, `docs/cloud_migration.md`).
-- [ ] **Test-run `footstats-final` zielony** (iteracja depsów w toku) → potem:
-- [ ] Cloud Scheduler triggery `final` 11:00 + `evening` 23:00 CEST.
-- [ ] **Wyłącz lokalne taski** (`FootStats-DailyAgentFinal/EveningAgent/DailyAgentDraft`) — DOPIERO po parytecie.
-- [ ] (opcj.) `API_FOOTBALL_KEY` do Secret Manager — cloud settlement daje 403 (non-fatal, degraduje do innych źródeł).
+### ✅ Cloud migration — pełny pipeline PC-off (Cloud Run Jobs) — UKOŃCZONE (07-04)
+> Cały pipeline w chmurze PC-niezależnie. Szczegóły → CHANGELOG 07-04 + `docs/cloud_migration.md`.
+- [x] Obraz `footstats-jobs` w Artifact Registry (`Dockerfile.jobs` Playwright, `run_job.sh` dispatch `JOB_PHASE`).
+- [x] Cloud Run Jobs `footstats-final` + `footstats-evening` (sekrety Secret Manager, SA compute) — test-run zielony.
+- [x] Cloud Scheduler `footstats-final-trigger` 11:00 + `footstats-evening-trigger` 23:00 CEST — ENABLED.
+- [x] Lokalne taski `FootStats-DailyAgentFinal/EveningAgent/DailyAgentDraft` — **Disabled** (PC może być off).
+- [x] Sekrety `APISPORTS_KEY` + `FOOTBALL_API_KEY` dodane do Secret Manager (naprawia 403 settlement).
 
 ---
 

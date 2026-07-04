@@ -32,8 +32,11 @@
   `docs/cloud_migration.md` (runbook gcloud). **Decyzja: cloud, nie Raspberry Pi.**
 - **`b8e042208`** fix CRLF: `run_job.sh` z Windows CRLF psuł Job (`env: bash\r` → exit 127) — sed strip w Dockerfile + `.gitattributes`.
 - **fix deps**: `beautifulsoup4` niezadeklarowane w pyproject (bs4 crashował Job) + obraz instaluje `.[api,ai,scraper]` (groq też brakował).
-- **Deploy LIVE (footstats-495009):** obraz w Artifact Registry, Cloud Run Jobs `footstats-final`+`footstats-evening`
-  (sekrety z Secret Manager, SA compute, 2Gi/Playwright). Scheduler 11:00/23:00 CEST + wyłączenie lokalnych tasków — w toku.
+- **Deploy UKOŃCZONY (footstats-495009):** obraz w Artifact Registry, Cloud Run Jobs `footstats-final`+`footstats-evening`
+  (sekrety Secret Manager, SA compute, 2Gi/Playwright), test-run zielony. Cloud Scheduler `footstats-final-trigger` 11:00
+  + `footstats-evening-trigger` 23:00 CEST (ENABLED). **Lokalne taski Disabled** → PC-off OK. Sekrety `APISPORTS_KEY`+`FOOTBALL_API_KEY` dodane.
+- **fix CI**: `test_missing_results_stays_partial` bił realną sieć (consensus/football-data niezmockowane) — lokalnie ukryte
+  (`.env`→DATABASE_URL→guard OFF), na CI RuntimeError. Domockowane. + audyt broad-except (auth/model-stats do BASELINE).
 
 ### Kupony
 - 10 kuponów Admin_JG (#391-400, 5 zł, model best-picks śr prob 84%/EV 1.15). Na 2026-07-03: **3/3 rozliczone = WON** (+6.2 zł).
