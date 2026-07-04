@@ -3,6 +3,44 @@
 > Archiwum ukończonych prac (przeniesione z TODO.md przez `footstats-scribe`).
 > Aktywne zadania: `TODO.md`. Pełna historia commitów: `git log`.
 
+## 2026-07-03
+
+### Kalibracja + model — obrona i Kontuzje v2
+- **`1ef84381c`** `probability_calibrator` runtime **health-gate**: płaska krzywa (rozpiętość y<0.10) →
+  identity nawet przy `CALIBRATION_ENABLED=1`. Obrona przed footgunem — PROD Neon ma 104 settled →
+  isotonic daje span 0.049 (płaska). +1 test. **Źródło prawdy = Neon (`_db.connect()`), NIE legacy sqlite.**
+- **`880640223`** **Kontuzje v2 (rdzeń)**: `injury_lambda_factors(injuries, goal_shares=)` — kara napastnika
+  = `goal_share*0.5` (utrata topowego strzelca boli mocniej niż rezerwowy). Wstecznie zgodne (None→v1). +6 testów.
+  Scraper multi-source goal_shares (decyzja usera: kilka źródeł + cross-check) = osobny slice na sierpień.
+
+### Auth — reset hasła
+- **`b935a25ab`** `/api/auth/forgot-password` (zawsze 200, anty-enumeracja, graceful) + `/api/auth/reset-password`
+  (JWT `purpose=reset` ≤1h) + LoginView tryby forgot/reset. Rate-limit 5/min. Reuse `send_password_reset_email`. +5 testów.
+- **`ccd52f3c5`** review-fix: szersze łapanie wyjątków (psycopg2/HTTP) — gwarancja 200.
+- **`5d8ca1712`** reset-password osiągalny mimo tokenu w localStorage (App.jsx wymusza LoginView na `/reset-password`).
+  **Złapane wizualną weryfikacją Playwright.** Wymaga env `FRONTEND_URL`.
+
+### Admin — panel Model vs Live
+- **`2bdbc514e`** `/api/admin/model-vs-live` (require_admin) + sekcja w AdminPanelView: reliability
+  (pewność→realna trafność), ROI kuponów, selekcja tip==argmax vs override. Diagnostyka sesji → stały monitoring. +2 testy.
+
+### UI
+- **`2efc10b43`** badge pewności modelu (`leg.prob`) na nodze kuponu (warunkowy).
+
+### Cloud migration — pełny pipeline PC-off (Cloud Run Jobs)
+- **`c2ba63a12`** config deploy-ready: `Dockerfile.jobs` (Playwright), `scripts/run_job.sh` (dispatch `JOB_PHASE`),
+  `docs/cloud_migration.md` (runbook gcloud). **Decyzja: cloud, nie Raspberry Pi.**
+- **`b8e042208`** fix CRLF: `run_job.sh` z Windows CRLF psuł Job (`env: bash\r` → exit 127) — sed strip w Dockerfile + `.gitattributes`.
+- **fix deps**: `beautifulsoup4` niezadeklarowane w pyproject (bs4 crashował Job) + obraz instaluje `.[api,ai,scraper]` (groq też brakował).
+- **Deploy LIVE (footstats-495009):** obraz w Artifact Registry, Cloud Run Jobs `footstats-final`+`footstats-evening`
+  (sekrety z Secret Manager, SA compute, 2Gi/Playwright). Scheduler 11:00/23:00 CEST + wyłączenie lokalnych tasków — w toku.
+
+### Kupony
+- 10 kuponów Admin_JG (#391-400, 5 zł, model best-picks śr prob 84%/EV 1.15). Na 2026-07-03: **3/3 rozliczone = WON** (+6.2 zł).
+
+### Testy
+- Suite: **1448 passed / 8 skip** (pełny regres, zero regresji).
+
 ## 2026-06-26
 
 ### Observability — cloud-draft data-freshness guard + flip-advisor

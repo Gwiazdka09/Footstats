@@ -16,8 +16,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 COPY pyproject.toml ./
 COPY src ./src
 
-# Zależności projektu + Playwright chromium z systemowymi bibliotekami (--with-deps).
-RUN uv pip install --system ".[api]" playwright \
+# Zależności: api (sentry/psycopg2) + ai (groq/langfuse) + scraper (playwright/bs4).
+# NIE tylko [api] — daily_agent/evening potrzebują groq (Groq) i bs4 (scraper sędziów).
+RUN uv pip install --system ".[api,ai,scraper]" \
     && playwright install --with-deps chromium \
     && mkdir -p /app/data
 

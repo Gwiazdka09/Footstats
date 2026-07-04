@@ -1,8 +1,10 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-06-26
+**Last Updated:** 2026-07-03
 **Current Version:** v3.4-stable
-**System State:** FUNCTIONAL — PRODUCTION (hardening OWASP live + reweight 30/70 live + cloud-draft live)
+**System State:** FUNCTIONAL — PRODUCTION (hardening OWASP + reweight 30/70 + cloud-draft live; **pełny pipeline → Cloud Run Jobs w toku**)
+**Suite:** 1448 passed / 8 skip
+**Nowe (07-03):** reset hasła (auth) + panel Model vs Live (admin) + Kontuzje v2 rdzeń + kalibracja health-gate + cloud-jobs deploy (final/evening PC-off)
 
 ---
 

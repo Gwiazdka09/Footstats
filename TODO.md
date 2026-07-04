@@ -45,16 +45,14 @@
   klubowy), bzzoiro-ml OK teraz; realny zysk dopiero na restart lig klubowych. Wrócić wtedy.
 - [ ] **Monitoruj** `calibration_monitor.py` — dane walidacyjne rosną PC-niezależnie → odblokuje M1 flipy.
 
-### 🌙 JUTRO (07-03) — przenieść PEŁNY pipeline na cloud (całkowite PC-off)
-> **Powód:** user nie chce, by PC chodził nocą. Stan: System paper-draft JUŻ cloud
-> (`footstats-draft-morning` 07:30 CEST) + settlement cloud (06:00/21:30 UTC). LOKALNIE zostaje
-> (Task Scheduler, wymaga PC on): `daily_agent --faza final` 11:00 (kupony Groq A-D + Telegram) +
-> `evening_agent` 23:00 (**nocny — główny powód migracji**). **Decyzja: cloud, nie Raspberry Pi** —
-> infra już stoi (Cloud Run + Neon + /cron/draft działa); Pi = port ARM (torch/playwright) + dubel + dom-net.
-- [ ] Migracja pełnego pipeline → **Cloud Run Jobs** (nie request-timeout-bound; Playwright+Groq OK).
-  Etapy: (1) obraz z Playwright/chromium, (2) Job `final` 11:00 CEST + Job `evening` 23:00 CEST przez Cloud Scheduler,
-  (3) sekrety Groq/Telegram w Cloud Run env, (4) potwierdź parytet z lokalnym runem, (5) wyłącz lokalne
-  taski (`FootStats-DailyAgentFinal`, `FootStats-EveningAgent`, `FootStats-DailyAgentDraft`). Koszt ~$0-5/mc.
+### 🌙 Cloud migration — pełny pipeline PC-off (Cloud Run Jobs) — W TOKU (07-03)
+> Config+deploy w CHANGELOG 07-03. Zrobione: obraz `footstats-jobs` w Artifact Registry, Cloud Run Jobs
+> `footstats-final`+`footstats-evening` (sekrety z Secret Manager, SA compute). Fixy: CRLF `run_job.sh`, bs4/groq deps.
+- [x] Obraz + Jobs utworzone (`Dockerfile.jobs`, `run_job.sh`, `docs/cloud_migration.md`).
+- [ ] **Test-run `footstats-final` zielony** (iteracja depsów w toku) → potem:
+- [ ] Cloud Scheduler triggery `final` 11:00 + `evening` 23:00 CEST.
+- [ ] **Wyłącz lokalne taski** (`FootStats-DailyAgentFinal/EveningAgent/DailyAgentDraft`) — DOPIERO po parytecie.
+- [ ] (opcj.) `API_FOOTBALL_KEY` do Secret Manager — cloud settlement daje 403 (non-fatal, degraduje do innych źródeł).
 
 ---
 
@@ -147,7 +145,7 @@
 
 - [ ] **D8 — prawnik (ToS bukmacherów) + JDG (CEIDG)** — WSTRZYMANE (koszt/ryzyko). Wrócić po walidacji.
 - [ ] Resend FROM: `onboarding@resend.dev` (test) → zweryfikowana domena przed prod. (Resend wpięty ✅ → CHANGELOG.)
-- [ ] Reset hasła — flow tokenów (`send_password_reset_email` jest) + endpoint.
+- [x] Reset hasła — forgot/reset endpointy (JWT purpose=reset) + UI ✅ 07-03 (CHANGELOG). Wymaga env `FRONTEND_URL`.
 - [ ] Płatności (Lemon Squeezy/Paddle, po JDG): cennik+auto-renewal, webhooks, email potwierdzenie/faktura, upgrade/proration.
 - [ ] Faktura (po płatnościach). Custom domain (opcjonalne).
 

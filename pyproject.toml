@@ -36,6 +36,7 @@ ai = [
 ]
 scraper = [
     "playwright>=1.40",
+    "beautifulsoup4>=4.12",
 ]
 dev = [
     "pytest>=7.4",
