@@ -98,6 +98,42 @@ def _apply_injury_corrections(wyniki: list) -> None:
             log.debug(f"Injury correction error: {e}")
 
 
+# ── Krok 1c: Poisson λ dla reprezentacji (kadry) ──────────────────────────────
+
+_NATIONAL_BLEND = 0.5  # waga Poissona kadr vs Bzzoiro-ML (0.5 = pół na pół)
+
+
+def _apply_national_lambda(wyniki: list) -> None:
+    """
+    Dla meczów reprezentacji (obie drużyny w `team_stats`): liczy Poisson λ z realnych
+    statów turnieju i BLENDUJE pw/pr/pp/o25/bt z Bzzoiro-ML (waga `_NATIONAL_BLEND`).
+    Model bazowy nie ma historii kadr → to wypełnia lukę (mundial). Gated: kluby bez
+    team_stats → bez zmian (backtest klubowy niezmieniony).
+    """
+    try:
+        from footstats.core.player_db import team_attack_defense
+        from footstats.core.national_lambda import national_team_probs
+    except ImportError:
+        return
+
+    season = _current_season()
+    for w in wyniki:
+        try:
+            ad_h = team_attack_defense(w.get("gospodarz") or "", season)
+            ad_a = team_attack_defense(w.get("goscie") or "", season)
+            if not ad_h or not ad_a:
+                continue
+            nat = national_team_probs(ad_h[0], ad_h[1], ad_a[0], ad_a[1])
+            bz_sum = (w.get("pw") or 0) + (w.get("pr") or 0) + (w.get("pp") or 0)
+            wt = _NATIONAL_BLEND if bz_sum > 1 else 1.0
+            for key in ("pw", "pr", "pp", "o25", "bt"):
+                w[key] = round(wt * nat[key] + (1 - wt) * (w.get(key) or 0), 1)
+            w["lambda_h"], w["lambda_a"] = nat["lambda_h"], nat["lambda_a"]
+            w["national_lambda"] = True
+        except (KeyError, TypeError, ValueError) as e:
+            log.debug("national_lambda skip (%s): %s", w.get("gospodarz"), e)
+
+
 # ── Krok 2: Forma SofaScore ───────────────────────────────────────────────────
 
 def _wzbogac_forme_top(wyniki: list, top_n: int = 6) -> None:

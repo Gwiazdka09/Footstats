@@ -353,6 +353,7 @@ from footstats.core.daily_phases import _dodaj_kelly, _waliduj_kupon_groq
 
 # ── Ensemble + faza final + decision score helpers (core/daily_phases.py) ──
 from footstats.core.daily_phases import (
+    _apply_national_lambda,
     _oblicz_roznica_modeli,
     _enrichuj_finalna_faza,
     _zapisz_next_final_txt,
@@ -549,6 +550,10 @@ def main():
 
     if not wyniki:
         _blad("Bzzoiro nie zwrocilo zadnych kandydatow.")
+
+    # Kadry: Poisson λ z team_stats (mundial — model nie ma historii reprezentacji).
+    # Gated: kluby bez team_stats bez zmian. Przed roznica_modeli (używa pw/pp/o25).
+    _apply_national_lambda(wyniki)
 
     # Ensemble: oblicz roznica_modeli (Poisson vs Bzzoiro) dla każdego kandydata
     _oblicz_roznica_modeli(wyniki)
