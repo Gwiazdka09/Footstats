@@ -100,13 +100,17 @@ def _apply_injury_corrections(wyniki: list) -> None:
 
 # ── Krok 1c: Poisson λ dla reprezentacji (kadry) ──────────────────────────────
 
-_NATIONAL_BLEND = 0.5  # waga Poissona kadr vs Bzzoiro-ML (0.5 = pół na pół)
+_NATIONAL_BLEND = 0.6   # waga Poissona kadr vs Bzzoiro-ML (Bzzoiro-ML słaby na kadrach)
+_HOST_BOOST = 1.12      # przewaga gospodarza WC 2026 (tłum) — tylko realni hostowie
+_WC_HOSTS = {normalize_team_name(t) for t in ("USA", "Mexico", "Canada",
+                                              "United States", "Meksyk", "Kanada")}
 
 
 def _apply_national_lambda(wyniki: list) -> None:
     """
     Dla meczów reprezentacji (obie drużyny w `team_stats`): liczy Poisson λ z realnych
     statów turnieju i BLENDUJE pw/pr/pp/o25/bt z Bzzoiro-ML (waga `_NATIONAL_BLEND`).
+    Gospodarze WC (USA/Meksyk/Kanada) grający u siebie → boost λ (`_HOST_BOOST`).
     Model bazowy nie ma historii kadr → to wypełnia lukę (mundial). Gated: kluby bez
     team_stats → bez zmian (backtest klubowy niezmieniony).
     """
@@ -123,7 +127,8 @@ def _apply_national_lambda(wyniki: list) -> None:
             ad_a = team_attack_defense(w.get("goscie") or "", season)
             if not ad_h or not ad_a:
                 continue
-            nat = national_team_probs(ad_h[0], ad_h[1], ad_a[0], ad_a[1])
+            boost = _HOST_BOOST if normalize_team_name(w.get("gospodarz") or "") in _WC_HOSTS else 1.0
+            nat = national_team_probs(ad_h[0], ad_h[1], ad_a[0], ad_a[1], home_boost=boost)
             bz_sum = (w.get("pw") or 0) + (w.get("pr") or 0) + (w.get("pp") or 0)
             wt = _NATIONAL_BLEND if bz_sum > 1 else 1.0
             for key in ("pw", "pr", "pp", "o25", "bt"):

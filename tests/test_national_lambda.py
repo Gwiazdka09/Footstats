@@ -34,3 +34,11 @@ def test_lambda_floor_no_zero():
     p = national_team_probs(0.0, 0.0, 0.0, 0.0)
     assert p["lambda_h"] >= 0.2 and p["lambda_a"] >= 0.2
     assert abs((p["pw"] + p["pr"] + p["pp"]) - 100.0) < 1.0
+
+
+def test_home_boost_raises_home():
+    base = national_team_probs(2.0, 1.0, 2.0, 1.0)
+    boosted = national_team_probs(2.0, 1.0, 2.0, 1.0, home_boost=1.12)
+    assert boosted["lambda_h"] > base["lambda_h"]
+    assert boosted["pw"] > base["pw"]          # gospodarz-host faworyzowany
+    assert boosted["lambda_a"] == base["lambda_a"]  # gość bez zmian

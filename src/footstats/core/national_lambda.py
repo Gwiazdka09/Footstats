@@ -14,13 +14,16 @@ _LAMBDA_FLOOR = 0.2
 
 
 def national_team_probs(
-    atk_home: float, def_home: float, atk_away: float, def_away: float
+    atk_home: float, def_home: float, atk_away: float, def_away: float,
+    home_boost: float = 1.0,
 ) -> dict:
     """
     Zwraca {pw, pr, pp, o25, bt (procenty), lambda_h, lambda_a} z Poissona kadr.
     atk_* = gole/mecz, def_* = tracone/mecz (z team_attack_defense).
+    home_boost: mnożnik λ_gosp dla realnych gospodarzy WC (USA/Meksyk/Kanada);
+    boiska neutralne → 1.0 (domyślnie).
     """
-    lh = max((atk_home + def_away) / 2.0, _LAMBDA_FLOOR)
+    lh = max((atk_home + def_away) / 2.0 * home_boost, _LAMBDA_FLOOR)
     la = max((atk_away + def_home) / 2.0, _LAMBDA_FLOOR)
 
     mat = probability_matrix(lh, la)
