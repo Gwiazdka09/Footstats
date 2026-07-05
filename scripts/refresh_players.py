@@ -62,18 +62,42 @@ def _kolejnosc(only: str | None) -> list[int]:
     return [i for i in _PRIORYTET if i in _APISPORTS_LIGI] + reszta
 
 
+def _sanity(sezon_ref: int) -> None:
+    """Wypis goal_share topowych zespołów (lookup jak pipeline: fallback sezonowy)."""
+    print("\nSanity goal_share:")
+    for team in ("Real Madrid", "Liverpool", "Bayern Munich", "Paris Saint Germain", "Inter"):
+        sh = team_goal_shares_recent(team, sezon_ref, lookback=2)
+        if sh:
+            top = sorted(sh.items(), key=lambda kv: kv[1], reverse=True)[:3]
+            print(f"  {team:<20} {len(sh):>2} graczy | " + ", ".join(f"{n} {s:.0%}" for n, s in top))
+        else:
+            print(f"  {team:<20} BRAK")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Populacja bazy graczy (goal_share) z API-Football.")
     ap.add_argument("--season", type=int, default=None, help="sezon (domyślnie bieżący)")
     ap.add_argument("--only", type=str, default=None, help="lista api_id po przecinku")
+    ap.add_argument("--understat", action="store_true",
+                    help="scraper Understat TOP5 (pełen skład, bez klucza/budżetu) zamiast API-Football")
     args = ap.parse_args()
+
+    sezon = args.season if args.season is not None else _sezon_biezacy()
+
+    # Tryb scraper Understat — pełne składy TOP5, prawdziwy denominator goal_share
+    if args.understat:
+        from footstats.scrapers.player_stats import refresh_understat_leagues
+        only = [x.strip() for x in args.only.split(",")] if args.only else None
+        print(f"Sezon {sezon} | Understat scraper TOP5 | DB {DB_PATH}\n")
+        n = refresh_understat_leagues(sezon, only=only)
+        print(f"\nRazem (Understat): {n} graczy")
+        _sanity(sezon)
+        return 0
 
     key = (os.environ.get(ENV_APISPORTS) or "").strip()
     if not key:
         print(f"BŁĄD: brak {ENV_APISPORTS} w środowisku.", file=sys.stderr)
         return 1
-
-    sezon = args.season if args.season is not None else _sezon_biezacy()
     ligi = _kolejnosc(args.only)
     print(f"Sezon {sezon} | DB {DB_PATH} | ligi: {len(ligi)} (priorytet: Liga Mistrzów pierwsza)\n")
 
@@ -92,16 +116,7 @@ def main() -> int:
             print(f"  · {etykieta:<34} 0 (pusto / 429 / brak sezonu)")
 
     print(f"\nRazem: {total} graczy | {ok} lig OK, {puste} pustych")
-
-    # Sanity: goal_share dla topowych zespołów (lookup jak pipeline: fallback sezonowy)
-    print("\nSanity goal_share:")
-    for team in ("Real Madrid", "Liverpool", "Bayern Munich", "Paris Saint Germain", "Inter"):
-        sh = team_goal_shares_recent(team, _sezon_biezacy(), lookback=2)
-        if sh:
-            top = sorted(sh.items(), key=lambda kv: kv[1], reverse=True)[:3]
-            print(f"  {team:<20} {len(sh):>2} graczy | " + ", ".join(f"{n} {s:.0%}" for n, s in top))
-        else:
-            print(f"  {team:<20} BRAK")
+    _sanity(_sezon_biezacy())
     return 0
 
 

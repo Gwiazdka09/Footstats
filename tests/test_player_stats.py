@@ -81,6 +81,26 @@ def test_refresh_tracked_leagues_no_key(tmp_path):
     assert player_stats.refresh_tracked_leagues("", db_path=tmp_path / "t.db") == 0
 
 
+def test_refresh_understat_leagues_upserts(tmp_path, monkeypatch):
+    db = tmp_path / "t.db"
+    from footstats.scrapers import understat_xg
+
+    def fake_fetch(ukey, season):
+        if ukey != "EPL":
+            return []
+        return [
+            {"name": "Salah", "team": "Liverpool", "goals": 20, "assists": 5, "minutes": 3000, "xg": 18.0},
+            {"name": "Núñez", "team": "Liverpool", "goals": 10, "assists": 3, "minutes": 2000, "xg": 11.0},
+        ]
+
+    monkeypatch.setattr(understat_xg, "fetch_league_players_understat", fake_fetch)
+    n = player_stats.refresh_understat_leagues(2024, db_path=db, only=["PL"])
+    assert n == 2
+    shares = player_db.team_goal_shares("Liverpool", 2024, db_path=db)
+    # pełen skład: Salah 20/(20+10)=0.667 (nie 1.0 jak z pojedynczego topscorera)
+    assert abs(shares["Salah"] - 20 / 30) < 1e-6
+
+
 def test_refresh_league_players_upserts(tmp_path, monkeypatch):
     db = tmp_path / "t.db"
     monkeypatch.setattr(player_stats, "fetch_league_players",

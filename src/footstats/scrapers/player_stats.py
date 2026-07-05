@@ -102,3 +102,32 @@ def refresh_tracked_leagues(
             api_id, season, api_key, db_path=db_path, league_code=info.get("kod")
         )
     return total
+
+
+def refresh_understat_leagues(
+    season: int,
+    db_path: Path | str = DB_PATH,
+    only: list[str] | None = None,
+) -> int:
+    """
+    Zbiera pełne składy TOP5 z Understat (scraper, bez klucza/budżetu API) → upsert
+    do player_db. Pełen skład = prawdziwy denominator goal_share (bez zawyżenia
+    z topscorers). Nadpisuje wpisy API-Football tym samym kluczem (name,team,season).
+    only: lista kodów wewn. (np. ["PL","PD"]) — domyślnie wszystkie z UNDERSTAT_LIGI.
+    """
+    from footstats.scrapers.understat_xg import (
+        UNDERSTAT_LIGI, fetch_league_players_understat,
+    )
+
+    total = 0
+    for kod, ukey in UNDERSTAT_LIGI.items():
+        if only and kod not in only:
+            continue
+        rows = fetch_league_players_understat(ukey, season)
+        if not rows:
+            continue
+        for r in rows:
+            r["season"] = season
+            r["league"] = kod
+        total += player_db.upsert_players(rows, db_path=db_path)
+    return total

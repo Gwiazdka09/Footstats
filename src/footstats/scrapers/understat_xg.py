@@ -122,6 +122,91 @@ def _parse_matches_json(html: str) -> list[dict] | None:
         return None
 
 
+def _parse_players_json(html: str) -> list[dict] | None:
+    """Wyciąga playersData JSON (pełen skład ligi) z HTML Understat."""
+    match = re.search(r"var\s+playersData\s*=\s*JSON\.parse\('(.+?)'\)", html)
+    if not match:
+        return None
+    try:
+        raw = match.group(1).encode("utf-8").decode("unicode_escape")
+        return json.loads(raw)
+    except (ValueError, KeyError) as e:
+        _log.debug("Błąd parsowania playersData: %s", e)
+        return None
+
+
+def parse_understat_players(html: str) -> list[dict]:
+    """
+    Parsuje playersData → [{name, team, goals, assists, minutes, xg}].
+    Pomija wpisy bez nazwiska/drużyny. Gole/asysty/minuty None → 0.
+    """
+    data = _parse_players_json(html)
+    if not data:
+        return []
+    out: list[dict] = []
+    for p in data:
+        name = (p.get("player_name") or "").strip()
+        team = (p.get("team_title") or "").strip()
+        if not name or not team:
+            continue
+
+        def _i(v: object) -> int:
+            try:
+                return int(float(v)) if v not in (None, "") else 0
+            except (ValueError, TypeError):
+                return 0
+
+        def _f(v: object) -> float | None:
+            try:
+                return round(float(v), 2) if v not in (None, "") else None
+            except (ValueError, TypeError):
+                return None
+
+        out.append({
+            "name": name,
+            "team": team,
+            "goals": _i(p.get("goals")),
+            "assists": _i(p.get("assists")),
+            "minutes": _i(p.get("time")),
+            "xg": _f(p.get("xG")),
+        })
+    return out
+
+
+# Klucze lig Understat (URL) — pokrywa TOP5 + rosyjska. MLS/Saudi/LigaMX poza zasięgiem.
+UNDERSTAT_LIGI: dict[str, str] = {
+    "PL": "EPL",
+    "PD": "La_liga",
+    "SA": "Serie_A",
+    "BL1": "Bundesliga",
+    "FL1": "Ligue_1",
+}
+
+
+def fetch_league_players_understat(league_key: str, season: int) -> list[dict]:
+    """
+    Parsuje pełen skład ligi z Understat (per-gracz gole/asysty/xG).
+    league_key: URL Understat (np. 'EPL','La_liga'). Zwraca [] gdy brak/HTTP błąd.
+
+    UWAGA: od ~2026 Understat NIE osadza już `playersData` w HTML dla prostych
+    klientów (zwraca 18KB shell) — dane renderują się po stronie JS. Ten plain-HTTP
+    fetch zwróci [] (loguje warning). Kolekcja wymaga przeglądarki z JS (odczyt
+    `window.playersData`); `parse_understat_players` działa na wyrenderowanym HTML.
+    """
+    url = f"https://understat.com/league/{league_key}/{season}"
+    _log.info("[Understat] GET %s", url)
+    try:
+        time.sleep(1.0)  # grzeczny scraper
+        resp = _SESSION.get(url, timeout=20)
+        if resp.status_code != 200:
+            _log.warning("[Understat] HTTP %d dla %s", resp.status_code, url)
+            return []
+        return parse_understat_players(resp.text)
+    except (requests.RequestException, ValueError, KeyError) as e:
+        _log.error("[Understat] Błąd HTTP: %s", e)
+        return []
+
+
 def fetch_team_xg(
     team_name: str,
     season: int | None = None,
