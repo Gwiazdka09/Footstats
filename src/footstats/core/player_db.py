@@ -38,6 +38,25 @@ CREATE TABLE IF NOT EXISTS player_stats (
 _OPTIONAL_COLS = {"rating": "REAL", "xg": "REAL"}
 
 
+_DDL_TEAM = """
+CREATE TABLE IF NOT EXISTS team_stats (
+    team_norm      TEXT    NOT NULL,
+    team_display   TEXT,
+    league         TEXT    NOT NULL,
+    season         INTEGER NOT NULL,
+    matches        INTEGER DEFAULT 0,
+    goals_for      INTEGER DEFAULT 0,
+    goals_against  INTEGER DEFAULT 0,
+    avg_rating     REAL,
+    possession     REAL,
+    clean_sheets   INTEGER,
+    big_chances    INTEGER,
+    updated_at     TEXT,
+    PRIMARY KEY (team_norm, league, season)
+)
+"""
+
+
 def _connect(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
     con = sqlite3.connect(str(db_path))
     con.row_factory = sqlite3.Row
@@ -167,3 +186,107 @@ def team_goal_shares_recent(
         if shares:
             return shares
     return {}
+
+
+# ── team_stats: siła drużyn (kadr MŚ → Poisson λ, model nie ma historii kadr) ──
+
+def init_team_table(db_path: Path | str = DB_PATH) -> None:
+    """Tworzy tabelę team_stats jeśli nie istnieje."""
+    with _connect(db_path) as con:
+        con.execute(_DDL_TEAM)
+
+
+def upsert_team_stats(rows: list[dict], db_path: Path | str = DB_PATH) -> int:
+    """
+    Wstawia/aktualizuje statystyki drużyn (kadr). Klucz (team_norm, league, season).
+    row: {team, league, season, matches, goals_for, goals_against, avg_rating,
+          possession, clean_sheets, big_chances}. Zwraca liczbę wierszy.
+    """
+    init_team_table(db_path)
+    now = datetime.now().isoformat()
+    n = 0
+    with _connect(db_path) as con:
+        for r in rows:
+            team = (r.get("team") or "").strip()
+            league = (r.get("league") or "").strip()
+            if not team or not league:
+                continue
+            con.execute(
+                """
+                INSERT INTO team_stats
+                    (team_norm, team_display, league, season, matches, goals_for,
+                     goals_against, avg_rating, possession, clean_sheets, big_chances, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(team_norm, league, season) DO UPDATE SET
+                    team_display  = excluded.team_display,
+                    matches       = excluded.matches,
+                    goals_for     = excluded.goals_for,
+                    goals_against = excluded.goals_against,
+                    avg_rating    = COALESCE(excluded.avg_rating, team_stats.avg_rating),
+                    possession    = COALESCE(excluded.possession, team_stats.possession),
+                    clean_sheets  = COALESCE(excluded.clean_sheets, team_stats.clean_sheets),
+                    big_chances   = COALESCE(excluded.big_chances, team_stats.big_chances),
+                    updated_at    = excluded.updated_at
+                """,
+                (
+                    normalize_team_name(team), team, league, int(r.get("season") or 0),
+                    int(r.get("matches") or 0), int(r.get("goals_for") or 0),
+                    int(r.get("goals_against") or 0),
+                    _optional_float(r.get("avg_rating")),
+                    _optional_float(r.get("possession")),
+                    _optional_int(r.get("clean_sheets")),
+                    _optional_int(r.get("big_chances")),
+                    now,
+                ),
+            )
+            n += 1
+    return n
+
+
+def get_team_stats(
+    team: str, season: int, db_path: Path | str = DB_PATH
+) -> dict | None:
+    """Statystyki drużyny (najświeższy wpis dla sezonu). None gdy brak."""
+    if not team:
+        return None
+    tn = normalize_team_name(team)
+    try:
+        with _connect(db_path) as con:
+            row = con.execute(
+                "SELECT * FROM team_stats WHERE team_norm = ? AND season = ? "
+                "ORDER BY matches DESC LIMIT 1",
+                (tn, int(season)),
+            ).fetchone()
+    except sqlite3.Error:
+        return None
+    return dict(row) if row else None
+
+
+def team_attack_defense(
+    team: str, season: int, db_path: Path | str = DB_PATH
+) -> tuple[float, float] | None:
+    """
+    (λ_atak, λ_obrona) = (gole/mecz, tracone/mecz) — wejście Poissona dla kadr.
+    None gdy brak drużyny lub matches=0.
+    """
+    st = get_team_stats(team, season, db_path=db_path)
+    if not st:
+        return None
+    m = int(st.get("matches") or 0)
+    if m <= 0:
+        return None
+    return (int(st.get("goals_for") or 0) / m, int(st.get("goals_against") or 0) / m)
+
+
+def _optional_float(v: object) -> float | None:
+    try:
+        return float(v) if v is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _optional_int(v: object) -> int | None:
+    try:
+        return int(float(v)) if v is not None else None
+    except (ValueError, TypeError):
+        return None
