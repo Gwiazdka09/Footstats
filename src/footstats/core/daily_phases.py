@@ -7,6 +7,7 @@ redukcji god-module daily_agent.py (dług techniczny #3), behavior-preserving.
 """
 
 import logging
+import os
 
 from rich.console import Console
 
@@ -535,6 +536,17 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
     if not api_key:
         console.print("[dim]APISPORTS_KEY niedostępny — pomijam enrichment składów/sędziego[/dim]")
         return
+
+    # Faza 1: opcjonalny auto-refresh bazy graczy (goal_share). Domyślnie OFF —
+    # in-season włącz FOOTSTATS_REFRESH_PLAYERS=1 (16 req, cache 24h). W cloud job
+    # populuje in-container SQLite dla tego samego procesu (enrichment czyta niżej).
+    if os.getenv("FOOTSTATS_REFRESH_PLAYERS") == "1":
+        try:
+            from footstats.scrapers.player_stats import refresh_tracked_leagues
+            n_pl = refresh_tracked_leagues(api_key)
+            log.info("player_db auto-refresh: %d graczy", n_pl)
+        except (ImportError, OSError, ValueError, KeyError) as e:
+            log.debug("player auto-refresh skip: %s", e)
 
     import requests as _req
     from datetime import date
