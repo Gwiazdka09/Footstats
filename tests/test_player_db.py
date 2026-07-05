@@ -62,6 +62,50 @@ def test_unknown_team_empty(tmp_path):
     assert player_db.team_goal_shares("Real Madrid", 2025, db_path=db) == {}
 
 
+def test_upsert_stores_rating_and_xg(tmp_path):
+    db = tmp_path / "t.db"
+    player_db.upsert_players(
+        [{"name": "Messi", "team": "Argentina", "league": "WC", "season": 2026,
+          "goals": 7, "assists": 0, "minutes": 600, "rating": 9.18, "xg": 3.99}],
+        db_path=db,
+    )
+    rows = player_db.get_team_players("Argentina", 2026, db_path=db)
+    assert rows[0]["name"] == "Messi"
+    assert abs(rows[0]["rating"] - 9.18) < 1e-6
+    assert abs(rows[0]["xg"] - 3.99) < 1e-6
+
+
+def test_rating_xg_optional_default_none(tmp_path):
+    db = tmp_path / "t.db"
+    player_db.upsert_players(
+        [{"name": "X", "team": "Y", "league": "PL", "season": 2025, "goals": 3}],
+        db_path=db,
+    )
+    rows = player_db.get_team_players("Y", 2025, db_path=db)
+    assert rows[0]["rating"] is None and rows[0]["xg"] is None
+
+
+def test_migration_adds_columns_to_old_table(tmp_path):
+    # stara tabela bez rating/xg → init dokłada kolumny (ALTER), upsert działa
+    import sqlite3
+    db = tmp_path / "t.db"
+    con = sqlite3.connect(str(db))
+    con.execute(
+        "CREATE TABLE player_stats (name TEXT NOT NULL, team_norm TEXT NOT NULL, "
+        "team_display TEXT, league TEXT, season INTEGER NOT NULL, goals INTEGER, "
+        "assists INTEGER, minutes INTEGER, updated_at TEXT, "
+        "PRIMARY KEY (name, team_norm, season))"
+    )
+    con.commit(); con.close()
+    player_db.upsert_players(
+        [{"name": "Kane", "team": "England", "league": "WC", "season": 2026,
+          "goals": 5, "rating": 7.78}],
+        db_path=db,
+    )
+    rows = player_db.get_team_players("England", 2026, db_path=db)
+    assert abs(rows[0]["rating"] - 7.78) < 1e-6
+
+
 def test_recent_walks_back_to_season_with_data(tmp_path):
     db = tmp_path / "t.db"
     player_db.upsert_players(_rows(2024), db_path=db)  # dane tylko 2024

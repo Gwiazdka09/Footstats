@@ -27,10 +27,15 @@ CREATE TABLE IF NOT EXISTS player_stats (
     goals        INTEGER DEFAULT 0,
     assists      INTEGER DEFAULT 0,
     minutes      INTEGER DEFAULT 0,
+    rating       REAL,
+    xg           REAL,
     updated_at   TEXT,
     PRIMARY KEY (name, team_norm, season)
 )
 """
+
+# Kolumny dokładane migracyjnie do istniejących tabel (ALTER ADD COLUMN)
+_OPTIONAL_COLS = {"rating": "REAL", "xg": "REAL"}
 
 
 def _connect(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
@@ -40,9 +45,13 @@ def _connect(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
 
 
 def init_player_table(db_path: Path | str = DB_PATH) -> None:
-    """Tworzy tabelę player_stats jeśli nie istnieje."""
+    """Tworzy tabelę player_stats + dokłada brakujące kolumny (migracja rating/xg)."""
     with _connect(db_path) as con:
         con.execute(_DDL)
+        existing = {r["name"] for r in con.execute("PRAGMA table_info(player_stats)")}
+        for col, typ in _OPTIONAL_COLS.items():
+            if col not in existing:
+                con.execute(f"ALTER TABLE player_stats ADD COLUMN {col} {typ}")
 
 
 def upsert_players(rows: list[dict], db_path: Path | str = DB_PATH) -> int:
@@ -61,17 +70,22 @@ def upsert_players(rows: list[dict], db_path: Path | str = DB_PATH) -> int:
             team = (r.get("team") or "").strip()
             if not name or not team:
                 continue
+            rating = r.get("rating")
+            xg = r.get("xg")
             con.execute(
                 """
                 INSERT INTO player_stats
-                    (name, team_norm, team_display, league, season, goals, assists, minutes, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (name, team_norm, team_display, league, season, goals, assists,
+                     minutes, rating, xg, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(name, team_norm, season) DO UPDATE SET
                     team_display = excluded.team_display,
                     league       = excluded.league,
                     goals        = excluded.goals,
                     assists      = excluded.assists,
                     minutes      = excluded.minutes,
+                    rating       = COALESCE(excluded.rating, player_stats.rating),
+                    xg           = COALESCE(excluded.xg, player_stats.xg),
                     updated_at   = excluded.updated_at
                 """,
                 (
@@ -83,6 +97,8 @@ def upsert_players(rows: list[dict], db_path: Path | str = DB_PATH) -> int:
                     int(r.get("goals") or 0),
                     int(r.get("assists") or 0),
                     int(r.get("minutes") or 0),
+                    float(rating) if rating is not None else None,
+                    float(xg) if xg is not None else None,
                     now,
                 ),
             )
@@ -113,6 +129,29 @@ def team_goal_shares(
     if total <= 0:
         return {}
     return {r["name"]: int(r["goals"] or 0) / total for r in rows if r["goals"]}
+
+
+def get_team_players(
+    team: str, season: int, db_path: Path | str = DB_PATH
+) -> list[dict]:
+    """
+    Pełne wiersze graczy drużyny w sezonie (name, goals, assists, minutes, rating, xg),
+    posortowane malejąco po golach. Pusta lista gdy brak/błąd. Rating = ocena 1-10
+    (Sofascore, gdy dostępna), xg = expected goals.
+    """
+    if not team:
+        return []
+    tn = normalize_team_name(team)
+    try:
+        with _connect(db_path) as con:
+            rows = con.execute(
+                "SELECT name, goals, assists, minutes, rating, xg FROM player_stats "
+                "WHERE team_norm = ? AND season = ? ORDER BY goals DESC",
+                (tn, int(season)),
+            ).fetchall()
+    except sqlite3.Error:
+        return []
+    return [dict(r) for r in rows]
 
 
 def team_goal_shares_recent(
