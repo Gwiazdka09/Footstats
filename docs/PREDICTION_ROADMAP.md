@@ -81,6 +81,26 @@ Skoro ROI-vs-rynek jest niedostępne publicznymi danymi, celem = **kalibracja i 
 
 Static fair-value value-betting (#1, #4) = **ślepa uliczka** (empirycznie). Harness `goals_value`+backtest zostaje jako **infra do testowania czy NOWY sygnał bije rynek** (dołóż xG/player-delta → uruchom ten sam backtest).
 
+## 📊 ŚCIEŻKA A — kalibracja (2026-07-06, backtest historyczny)
+
+`scripts/backtest_calibration.py` (25 660 meczów, model rolling-λ vs rynek devig):
+
+| Metryka (niżej=lepiej) | MODEL | RYNEK | luka |
+|------------------------|-------|-------|------|
+| log-loss 1X2 | 1.014 | 0.962 | +5.4% |
+| log-loss O/U | 0.704 | 0.671 | +4.9% |
+| Brier O/U | 0.253 | 0.239 | +5.9% |
+
+**Model ~5% gorszy od rynku, ale systematycznie OVERCONFIDENT** (krzywa kalibracji O/U): predykcja 90-100% → realnie 74%; predykcja 0-10% → realnie 41%. Prawdopodobieństwa za skrajne.
+
+**Fix = shrinkage ku środkowi** (`--shrink`): 0.5 → log-loss O/U 0.704→**0.683**, luka do rynku ścięta ~65%. → **Włączyć istniejący system kalibracji** (`core/calibration.py`, `CALIBRATION_ENABLED` — był OFF czekając na dane; teraz jest dowód). To realny, mierzalny lever ścieżki A. `core/calibration_metrics.py` = log-loss/Brier/devig (metryki north-star).
+
+## 📡 ŚCIEŻKA B — edge z absencji (primitive gotowy, forward-only)
+
+`core/availability_edge.py`: `over_edge_from_absences(λh,λa,out_home,out_away,market_p)`
+→ skorygowane λ (goal_share nieobecnych) → P(Over) → **edge vs rynek zanim wchłonie news**.
+Reuse `injury_lambda_factors`/bazy graczy. **Nie backtestowalne** (brak historycznych składów) → walidacja logiki (unit), ROI dopiero forward + CLV.
+
 ## Rekomendowana kolejność (po wynikach)
 
 1. ~~Silnik goli-value + ROI backtest~~ ✅ ZROBIONE → OBALIŁO static value betting (patrz wyżej). Harness zostaje jako infra.
