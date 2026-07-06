@@ -41,3 +41,13 @@ def test_remis_skrajny_tez_override():
     # Groq tip=X przy remis 9% i dom 60% → override na "1".
     tip, ov = koryguj_tip_wg_modelu("X", pw=60.0, pr=9.0, pp=31.0)
     assert tip == "1" and ov is True
+
+
+def test_default_prog_33_lapie_umiarkowany_rozjazd():
+    # Audyt 07-06: default 33 (nie 15) łapie umiarkowane rozjazdy. Groq tip=2 przy
+    # wyjazd 25% (25<33), dom 45% → override na "1". Przy starym 15 NIE ruszał.
+    tip, ov = koryguj_tip_wg_modelu("2", pw=45.0, pr=30.0, pp=25.0)
+    assert tip == "1" and ov is True
+    # a przy prog_min=15 (stare) — bez zmian
+    tip2, ov2 = koryguj_tip_wg_modelu("2", pw=45.0, pr=30.0, pp=25.0, prog_min=15.0)
+    assert tip2 == "2" and ov2 is False

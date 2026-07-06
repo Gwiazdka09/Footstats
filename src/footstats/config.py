@@ -60,9 +60,14 @@ W_BAYESIAN      = float(os.getenv("W_BAYESIAN", "0.5"))   # waga ramienia DC (0=
 
 # ── C2 / Cel B bug 2: override REALNEGO tipu Groq argmaxem modelu ──
 # Gdy Groq wybierze 1X2 o prob modelu <15% → podmiana na argmax (konserwatywny).
-# Domyslnie OFF: najpierw walidacja na ~20 swiezych settled (prob teraz zapisywane),
-# potem flip flagi bez redeploya. OFF → backtest zapisuje tip Groq = zgodny z live.
-GROQ_TIP_OVERRIDE = os.getenv("GROQ_TIP_OVERRIDE", "0").strip() in ("1", "true", "True")
+# FLIP ON 2026-07-06: walidacja zebrana (104 settled) — model argmax 60% vs Groq 48%
+# na 1X2 z modelem (+12pp), guard@33 łapie pełny zysk. Groq (llama-3.1-8b) demonstracyjnie
+# gorszy od kalibrowanego modelu w wyborze 1X2. Odwracalne: GROQ_TIP_OVERRIDE=0.
+GROQ_TIP_OVERRIDE = os.getenv("GROQ_TIP_OVERRIDE", "1").strip() in ("1", "true", "True")
+# Próg guardu: Groq tip przetrwa tylko gdy model daje mu >= prog%; inaczej → argmax.
+# Audyt 07-06 (104 settled): model argmax 60% vs Groq 48%; guard@15 bezużyteczny
+# (48%=48%), guard@33 łapie pełny +12pp (plateau). Default 33 (env-tunable).
+GROQ_TIP_OVERRIDE_THRESHOLD = float(os.getenv("GROQ_TIP_OVERRIDE_THRESHOLD", "33"))
 
 # Konto docelowe: daily_agent, operator_agent, zapis kuponów systemowych
 OPERATOR_ADMIN_USERNAME = os.getenv("OPERATOR_ADMIN_USERNAME", "Admin_JG").strip() or "Admin_JG"

@@ -157,14 +157,16 @@ def _sygnaly_summary(wyniki: list) -> str:
     return "\n".join(linie)
 
 
-def koryguj_tip_wg_modelu(tip: str, pw, pr, pp, prog_min: float = 15.0) -> "tuple[str, bool]":
+def koryguj_tip_wg_modelu(tip: str, pw, pr, pp, prog_min: float = 33.0) -> "tuple[str, bool]":
     """D3 / Cel B bug 2 — guard selekcji Groq.
 
     Groq systematycznie wybierał wyjazdy/remisy (tip 2/X) przeciw faworytom-gospodarzom
     → 12.5% trafność tip=2. Gdy Groq wybrał wynik 1X2 którego model daje prob < prog_min
-    (skrajny rozjazd) → override na argmax modelu (najbardziej prawdopodobny 1X2).
-    KONSERWATYWNY: tylko 1X2, tylko skrajne (<15%). Brak prob modelu → nie rusza.
-    Zwraca (tip, czy_override). Walidacja na danych po ~20 świeżych settled (prob teraz zapisywane).
+    → override na argmax modelu (najbardziej prawdopodobny 1X2). Tylko 1X2, brak prob → nie rusza.
+
+    prog_min=33 (audyt 07-06, 104 settled): model argmax 60% vs Groq 48%; prog_min=15 był
+    BEZUŻYTECZNY (48%=48%), prog_min=33 łapie pełny +12pp (plateau powyżej). Env-tunable
+    przez GROQ_TIP_OVERRIDE_THRESHOLD. Zwraca (tip, czy_override).
     """
     if tip not in ("1", "X", "2"):
         return tip, False
@@ -415,11 +417,14 @@ def _nadpisz_tip_modelem(dane: dict, wyniki: list) -> None:
                 return w
         return {}
 
+    from footstats.config import GROQ_TIP_OVERRIDE_THRESHOLD
+
     def _popraw(legs: list) -> None:
         for z in legs:
             w = _w_dla(z.get("mecz", ""))
             nowy, override = koryguj_tip_wg_modelu(
-                z.get("typ", ""), w.get("pw"), w.get("pr"), w.get("pp")
+                z.get("typ", ""), w.get("pw"), w.get("pr"), w.get("pp"),
+                prog_min=GROQ_TIP_OVERRIDE_THRESHOLD,
             )
             if override:
                 z["typ"] = nowy
