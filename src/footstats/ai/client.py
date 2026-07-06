@@ -21,6 +21,41 @@ OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_TAGS_URL = OLLAMA_URL.rsplit("/api/", 1)[0] + "/api/tags"
 AI_PREFER_LOCAL = os.getenv("AI_PREFER_LOCAL", "0").strip() in ("1", "true", "True", "yes")
 
+# ── Limity Groq free tier (2026-07, z nagłówków x-ratelimit-*) ──────────────────
+#   Model                       req/dzień   tok/min   typ
+#   llama-3.1-8b-instant          14400      6000     szybki
+#   llama-3.3-70b-versatile        1000     12000     mocny, non-reasoning
+#   openai/gpt-oss-120b            1000      8000     REASONING (myśli→tokeny)
+#   qwen/qwen3-32b                 1000      ~         REASONING (wycieka <think>)
+# Pipeline: ~10-20 callów/dzień → req/dzień z ogromnym zapasem. tok/min ciasny ale
+# calle rozłożone + retry/circuit-breaker obsługują 429.
+#
+# Modele REASONING zużywają tokeny na "myślenie" PRZED treścią → przy niskim
+# max_tokens zwracają pusto/urwane. effective_max_tokens() auto-skaluje: reasoning
+# model → base × AI_REASONING_FACTOR, cap na ~75% tok/min (bezpieczny sufit per call).
+# Działa niezależnie od wybranego GROQ_MODEL.
+_REASONING_HINTS = ("gpt-oss", "deepseek-r1", "-r1", "qwen3", "o1", "o3",
+                    "reasoning", "think", "compound")
+AI_TPM_LIMIT     = int(os.getenv("AI_TPM_LIMIT", "8000"))
+AI_REASONING_FACTOR = float(os.getenv("AI_REASONING_FACTOR", "2.5"))
+
+
+def _is_reasoning_model(model: str) -> bool:
+    m = (model or "").lower()
+    return any(h in m for h in _REASONING_HINTS)
+
+
+def effective_max_tokens(base: int, model: str | None = None) -> int:
+    """
+    Auto-skaluje max_tokens do wybranego modelu. Reasoning (gpt-oss/qwen3/r1...) →
+    base × AI_REASONING_FACTOR (miejsce na myślenie + treść). Sufit ~75% tok/min
+    (jeden call nie zjada całego limitu). Non-reasoning → base bez zmian.
+    """
+    m = model or GROQ_MODEL
+    val = int(base * AI_REASONING_FACTOR) if _is_reasoning_model(m) else base
+    ceiling = int(AI_TPM_LIMIT * 0.75)   # ~75% limitu tok/min = bezpieczny sufit
+    return max(base, min(val, ceiling))
+
 
 def _ollama_available() -> bool:
     """Sprawdza czy Ollama running + model OLLAMA_MODEL dostępny."""
@@ -123,18 +158,19 @@ def zapytaj_ai(prompt: str, max_tokens: int = 600) -> str:
       domyślnie         → Groq → Ollama fallback
     Rzuca RuntimeError jeśli oba zawodzą.
     """
+    groq_tokens = effective_max_tokens(max_tokens)  # auto-skala pod wybrany model
     if AI_PREFER_LOCAL and _ollama_available():
         odpowiedz = _ollama(prompt)
         if odpowiedz:
             logger.info("[AI] Źródło: Ollama (%s) [PREFER_LOCAL]", OLLAMA_MODEL)
             return odpowiedz
         # Fallback Groq jeśli Ollama padło
-        odpowiedz = _groq(prompt, max_tokens)
+        odpowiedz = _groq(prompt, groq_tokens)
         if odpowiedz:
             logger.info("[AI] Źródło: Groq fallback (%s)", GROQ_MODEL)
             return odpowiedz
     else:
-        odpowiedz = _groq(prompt, max_tokens)
+        odpowiedz = _groq(prompt, groq_tokens)
         if odpowiedz:
             logger.info("[AI] Źródło: Groq (%s)", GROQ_MODEL)
             return odpowiedz
