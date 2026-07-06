@@ -5,8 +5,16 @@ log-loss + Brier = north-star zamiast ROI. devig = implikowane prob rynku (bez m
 import math
 
 from footstats.core.calibration_metrics import (
-    log_loss, brier_multi, brier_binary, devig_two_way,
+    log_loss, brier_multi, brier_binary, devig_two_way, shrink_prob,
 )
+
+
+def test_shrink_prob():
+    assert shrink_prob(0.9, 1.0) == 0.9              # k=1 bez zmian
+    assert abs(shrink_prob(0.9, 0.5) - 0.7) < 1e-9   # 0.5+(0.4)*0.5
+    assert abs(shrink_prob(0.1, 0.5) - 0.3) < 1e-9   # skrajne ku środkowi
+    assert shrink_prob(0.5, 0.3) == 0.5              # środek niezmienny
+    assert 0.0 <= shrink_prob(0.99, 2.0) <= 1.0      # clamp
 
 
 def test_log_loss_perfect_zero():

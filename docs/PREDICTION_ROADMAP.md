@@ -93,7 +93,17 @@ Static fair-value value-betting (#1, #4) = **ślepa uliczka** (empirycznie). Har
 
 **Model ~5% gorszy od rynku, ale systematycznie OVERCONFIDENT** (krzywa kalibracji O/U): predykcja 90-100% → realnie 74%; predykcja 0-10% → realnie 41%. Prawdopodobieństwa za skrajne.
 
-**Fix = shrinkage ku środkowi** (`--shrink`): 0.5 → log-loss O/U 0.704→**0.683**, luka do rynku ścięta ~65%. → **Włączyć istniejący system kalibracji** (`core/calibration.py`, `CALIBRATION_ENABLED` — był OFF czekając na dane; teraz jest dowód). To realny, mierzalny lever ścieżki A. `core/calibration_metrics.py` = log-loss/Brier/devig (metryki north-star).
+**Fix = shrinkage ku środkowi** (`shrink_prob`, `core/calibration_metrics.py`). **Walidacja OUT-OF-SAMPLE** (`scripts/validate_calibration_oos.py`, k fitnięte na train 60% → test 40%):
+
+| TEST (OOS, ostatnie 40%) | log-loss O/U |
+|--------------------------|--------------|
+| model bez kalibracji | 0.7066 |
+| model + shrink k=0.45 | **0.6840** (+3.2%) |
+| rynek (benchmark) | 0.6692 |
+
+**Luka do rynku ścięta 61% OOS** — lever REALNY, nie in-sample overfit. Model stabilnie overconfident.
+
+⚠️ **Uwaga do wpięcia:** backtest = czysty rolling-Poisson. Live pipeline już blenduje ku rynkowi (`ENSEMBLE_MARKET_WEIGHT=0.70`) → częściowo tłumi overconfidence. Wpięcie: **shrink Poissona PRZED ensemble** (kalibrowany Poisson + blend rynku > overconfident Poisson + blend), nie na wyjściu ensemble (ryzyko double-shrink). Wymaga zmierzenia kalibracji samego ensemble (brak historycznych prob Bzzoiro → osobno).
 
 ## 📡 ŚCIEŻKA B — edge z absencji (primitive gotowy, forward-only)
 

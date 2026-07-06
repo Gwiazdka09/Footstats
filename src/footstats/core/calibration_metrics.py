@@ -17,6 +17,14 @@ def log_loss(p_actual: float) -> float:
     return -math.log(min(max(p_actual, _EPS), 1.0))
 
 
+def shrink_prob(p: float, k: float, center: float = 0.5) -> float:
+    """
+    Kalibracja przez shrinkage ku środkowi: p' = center + (p − center)·k.
+    k<1 ściąga skrajne (leczy overconfidence), k=1 bez zmian. Clamp [0,1].
+    """
+    return min(max(center + (p - center) * k, 0.0), 1.0)
+
+
 def brier_multi(probs: list[float], actual_idx: int) -> float:
     """Brier wieloklasowy: Σ_i (p_i − 1{i=actual})². 0 = idealny."""
     return sum((p - (1.0 if i == actual_idx else 0.0)) ** 2 for i, p in enumerate(probs))
