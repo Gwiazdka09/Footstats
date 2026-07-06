@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, ChevronRight, ShieldCheck, Trophy, X
+  LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, ChevronRight, ShieldCheck, Trophy, Swords, X
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
@@ -13,6 +13,7 @@ import HistoryView from './components/HistoryView';
 import LeaderboardView from './components/LeaderboardView';
 import SettingsView from './components/SettingsView';
 import AdminPanelView from './components/AdminPanelView';
+import MatchAnalysisView from './components/MatchAnalysisView';
 
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('fs_token'));
@@ -32,6 +33,7 @@ const App = () => {
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { key: 'wizard', label: 'Stwórz Kupon', icon: <PlusCircle size={20} /> },
+    { key: 'analizy', label: 'Analizy meczów', icon: <Swords size={20} /> },
     { key: 'history', label: 'Historia', icon: <History size={20} /> },
     { key: 'settings', label: 'Ustawienia', icon: <Settings size={20} /> },
     { key: 'leaderboard', label: 'Najlepsi typerzy', icon: <Trophy size={20} /> },
@@ -262,6 +264,9 @@ const App = () => {
                 apiFetch={apiFetch}
                 onSave={() => fetchData()}
               />
+            )}
+            {view === 'analizy' && (
+              <MatchAnalysisView key="analizy" />
             )}
             {view === 'leaderboard' && (
               <LeaderboardView
