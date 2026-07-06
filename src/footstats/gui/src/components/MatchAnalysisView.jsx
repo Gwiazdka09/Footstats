@@ -41,6 +41,17 @@ function TeamCol({ stats, align }) {
   );
 }
 
+function TopScorers({ list, align }) {
+  if (!list?.length) return null;
+  return (
+    <div className={`text-xs mt-2 ${align === 'right' ? 'text-right' : ''}`}
+      style={{ color: 'var(--text-muted)' }}>
+      <span style={{ color: 'var(--accent-primary)' }}>⚽ </span>
+      {list.map(s => `${s.name} ${Math.round(s.goal_share * 100)}%`).join(' · ')}
+    </div>
+  );
+}
+
 function Injuries({ list, align }) {
   if (!list?.length) return null;
   return (
@@ -103,6 +114,13 @@ function MatchCard({ card }) {
         <span className="inline-flex items-center gap-1"><Activity size={16} />Over 2.5: {m.o25 != null ? `${Math.round(m.o25)}%` : '—'}</span>
         <span>BTTS: {m.bt != null ? `${Math.round(m.bt)}%` : '—'}</span>
       </div>
+
+      {(card.top_scorers_home?.length > 0 || card.top_scorers_away?.length > 0) && (
+        <div className="grid grid-cols-2 gap-3 mt-1">
+          <TopScorers list={card.top_scorers_home} align="left" />
+          <TopScorers list={card.top_scorers_away} align="right" />
+        </div>
+      )}
 
       {(card.injuries_home?.length > 0 || card.injuries_away?.length > 0) && (
         <div className="grid grid-cols-2 gap-3 mt-2">

@@ -3,7 +3,10 @@ test_match_analysis.py — rdzeń zakładki Analizy meczowe: agregacja karty mec
 (gole/mecz, kontuzje z goal_share, model, gospodarz) + prompt LLM + data-hash do
 cache (regen tylko gdy dane się zmienią, nie na każdy request).
 """
-from footstats.core.match_analysis import build_match_card, analysis_prompt, card_data_hash
+from footstats.core.match_analysis import (
+    build_match_card, analysis_prompt, card_data_hash,
+    get_cached_analysis, set_cached_analysis,
+)
 
 _MATCH = {"gospodarz": "France", "goscie": "Egypt", "liga": "World Cup 2026",
           "data": "2026-07-08", "pw": 56.0, "pr": 24.0, "pp": 20.0, "o25": 54.0, "bt": 54.0}
@@ -44,6 +47,29 @@ def test_prompt_zawiera_dane():
     p = analysis_prompt(c)
     assert "France" in p and "Egypt" in p
     assert "NIE wybierasz" in p or "nie wybieraj" in p.lower()  # rola: analiza nie pick
+
+
+def test_top_scorers_top3_wg_share():
+    c = build_match_card(
+        _MATCH, gs_home={"A": 0.5, "B": 0.3, "C": 0.1, "D": 0.05})
+    ts = c["top_scorers_home"]
+    assert [s["name"] for s in ts] == ["A", "B", "C"]     # top 3, sort malejąco
+    assert ts[0]["goal_share"] == 0.5
+    assert c["top_scorers_away"] == []                    # brak danych
+
+
+def test_prompt_zawiera_top_scorers():
+    c = build_match_card(_MATCH, gs_home={"Mbappé": 0.54})
+    assert "Mbappé" in analysis_prompt(c)
+
+
+def test_cache_persist(tmp_path):
+    db = tmp_path / "t.db"
+    assert get_cached_analysis("h1", db_path=db) is None   # miss
+    set_cached_analysis("h1", "analiza X", db_path=db)
+    assert get_cached_analysis("h1", db_path=db) == "analiza X"
+    set_cached_analysis("h1", "analiza Y", db_path=db)      # upsert
+    assert get_cached_analysis("h1", db_path=db) == "analiza Y"
 
 
 def test_data_hash_stabilny_i_zmienny():

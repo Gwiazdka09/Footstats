@@ -12,7 +12,10 @@ import os
 
 from fastapi import APIRouter, Body
 
-from footstats.core.match_analysis import build_match_card, analysis_prompt, card_data_hash
+from footstats.core.match_analysis import (
+    build_match_card, analysis_prompt, card_data_hash,
+    get_cached_analysis, set_cached_analysis,
+)
 from footstats.core.player_db import team_goal_shares_recent, get_team_stats
 
 router = APIRouter(prefix="/api", tags=["analyses"])
@@ -24,7 +27,6 @@ _WAZNE = (
     "ligue 1", "world cup", "mistrzostwa", "euro 20", "euro 2028", "european championship",
     "ekstraklasa", "pko bp",
 )
-_LLM_CACHE: dict[str, str] = {}   # data-hash → analiza (regen tylko na zmianę danych)
 _SEASON = 2026
 
 
@@ -83,13 +85,15 @@ def analyses_matches():
 def analyses_llm(card: dict = Body(...)):
     """Analiza LLM on-demand dla jednej karty. Cache po data-hash (raz generuje)."""
     h = card_data_hash(card)
-    if h in _LLM_CACHE:
-        return {"analysis": _LLM_CACHE[h], "cached": True}
+    cached = get_cached_analysis(h)
+    if cached is not None:
+        return {"analysis": cached, "cached": True}
     try:
         from footstats.ai.client import zapytaj_ai
         text = zapytaj_ai(analysis_prompt(card), max_tokens=500)
     except (ImportError, RuntimeError, OSError, ValueError, KeyError) as e:
         log.warning("analyses_llm: %s", e)   # LLM/sieć nie może wywalić endpointu
         return {"analysis": None, "error": "LLM niedostępny"}
-    _LLM_CACHE[h] = text
+    if text:
+        set_cached_analysis(h, text)
     return {"analysis": text, "cached": False}

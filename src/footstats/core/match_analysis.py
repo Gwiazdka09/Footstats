@@ -12,6 +12,27 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
+from datetime import datetime
+from pathlib import Path
+
+from footstats.config import DB_PATH
+
+_CACHE_DDL = """
+CREATE TABLE IF NOT EXISTS analysis_cache (
+    data_hash  TEXT PRIMARY KEY,
+    analysis   TEXT,
+    updated_at TEXT
+)
+"""
+
+
+def _top_scorers(gs: dict | None, n: int = 3) -> list[dict]:
+    """Top strzelcy drużyny wg goal_share ({name, goal_share})."""
+    if not gs:
+        return []
+    top = sorted(gs.items(), key=lambda kv: kv[1], reverse=True)[:n]
+    return [{"name": nm, "goal_share": round(s, 3)} for nm, s in top]
 
 
 def _team_block(ts: dict | None, name: str) -> dict:
@@ -70,6 +91,8 @@ def build_match_card(
         "away_stats": _team_block(ts_away, match.get("goscie")),
         "injuries_home": _inj_block(inj_home, gs_home),
         "injuries_away": _inj_block(inj_away, gs_away),
+        "top_scorers_home": _top_scorers(gs_home),
+        "top_scorers_away": _top_scorers(gs_away),
         "lineups": lineups or None,
     }
 
@@ -87,6 +110,11 @@ def analysis_prompt(card: dict) -> str:
             for i in injs
         )
 
+    def scorers_txt(ts):
+        if not ts:
+            return "brak danych"
+        return ", ".join(f"{s['name']} ({s['goal_share']*100:.0f}%)" for s in ts)
+
     return (
         f"Przeanalizuj mecz. Model statystyczny już podał typy — Twoja rola to ZWIĘZŁA "
         f"analiza (kluczowe czynniki + ryzyko), NIE wybierasz typu.\n\n"
@@ -95,6 +123,8 @@ def analysis_prompt(card: dict) -> str:
         f"Gole/mecz — {card['home']}: {hs['gf_pg']} strzelone / {hs['ga_pg']} stracone "
         f"(rating {hs['rating']}); {card['away']}: {as_['gf_pg']} / {as_['ga_pg']} "
         f"(rating {as_['rating']})\n"
+        f"Top strzelcy {card['home']}: {scorers_txt(card.get('top_scorers_home'))}; "
+        f"{card['away']}: {scorers_txt(card.get('top_scorers_away'))}\n"
         f"Model: 1={m['pw']}% X={m['pr']}% 2={m['pp']}% | Over2.5={m['o25']}% | BTTS={m['bt']}%\n"
         f"Kontuzje {card['home']}: {inj_txt(card['injuries_home'])}\n"
         f"Kontuzje {card['away']}: {inj_txt(card['injuries_away'])}\n\n"
@@ -116,3 +146,35 @@ def card_data_hash(card: dict) -> str:
     }
     raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+# ── Cache analiz LLM (persistent SQLite) — raz generujesz, regen tylko na nowy hash ──
+
+def get_cached_analysis(data_hash: str, db_path: Path | str = DB_PATH) -> str | None:
+    """Zwraca zapisaną analizę dla data-hash lub None."""
+    try:
+        con = sqlite3.connect(str(db_path))
+        con.execute(_CACHE_DDL)
+        row = con.execute(
+            "SELECT analysis FROM analysis_cache WHERE data_hash = ?", (data_hash,)
+        ).fetchone()
+        con.close()
+    except sqlite3.Error:
+        return None
+    return row[0] if row else None
+
+
+def set_cached_analysis(data_hash: str, text: str, db_path: Path | str = DB_PATH) -> None:
+    """Zapisuje analizę pod data-hash (upsert)."""
+    try:
+        con = sqlite3.connect(str(db_path))
+        con.execute(_CACHE_DDL)
+        con.execute(
+            "INSERT INTO analysis_cache (data_hash, analysis, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(data_hash) DO UPDATE SET analysis=excluded.analysis, updated_at=excluded.updated_at",
+            (data_hash, text, datetime.now().isoformat()),
+        )
+        con.commit()
+        con.close()
+    except sqlite3.Error:
+        pass
