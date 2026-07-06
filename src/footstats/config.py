@@ -68,6 +68,9 @@ GROQ_TIP_OVERRIDE = os.getenv("GROQ_TIP_OVERRIDE", "1").strip() in ("1", "true",
 # Audyt 07-06 (104 settled): model argmax 60% vs Groq 48%; guard@15 bezużyteczny
 # (48%=48%), guard@33 łapie pełny +12pp (plateau). Default 33 (env-tunable).
 GROQ_TIP_OVERRIDE_THRESHOLD = float(os.getenv("GROQ_TIP_OVERRIDE_THRESHOLD", "33"))
+# Rynki 2-way (Over/Under, BTTS): flip na stronę modelu gdy prob picku Groq < prog.
+# LLM odsunięty od wszystkich picków — tylko analiza/podsumowania. Audyt: BTTS 14%.
+GROQ_TIP_OVERRIDE_2WAY = float(os.getenv("GROQ_TIP_OVERRIDE_2WAY", "45"))
 
 # Konto docelowe: daily_agent, operator_agent, zapis kuponów systemowych
 OPERATOR_ADMIN_USERNAME = os.getenv("OPERATOR_ADMIN_USERNAME", "Admin_JG").strip() or "Admin_JG"

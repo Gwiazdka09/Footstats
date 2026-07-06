@@ -183,6 +183,29 @@ def koryguj_tip_wg_modelu(tip: str, pw, pr, pp, prog_min: float = 33.0) -> "tupl
     return argmax, True
 
 
+_OVER_TIPS = ("over 2.5", "over 2,5", "over")
+_UNDER_TIPS = ("under 2.5", "under 2,5", "under")
+_BTTS_YES = ("btts", "btts yes", "gg")
+_BTTS_NO = ("btts no", "no btts", "btts nie", "nie btts", "ng")
+
+
+def koryguj_tip_ou_btts(tip: str, o25, bt, prog_2way: float = 45.0) -> "tuple[str, bool]":
+    """Guard selekcji Groq dla rynków 2-way (Over/Under, BTTS) — LLM tylko analizuje,
+    model wybiera. Gdy model daje pickowi Groq prob < prog_2way → flip na stronę modelu.
+    o25/bt = prob modelu 0-100 (P(Over), P(BTTS)). Brak prob → no-op.
+    """
+    t = (tip or "").strip().lower()
+    if t in _OVER_TIPS:
+        return ("Under 2.5", True) if (o25 is not None and o25 < prog_2way) else (tip, False)
+    if t in _UNDER_TIPS:
+        return ("Over 2.5", True) if (o25 is not None and (100 - o25) < prog_2way) else (tip, False)
+    if t in _BTTS_YES:
+        return ("BTTS NO", True) if (bt is not None and bt < prog_2way) else (tip, False)
+    if t in _BTTS_NO:
+        return ("BTTS", True) if (bt is not None and (100 - bt) < prog_2way) else (tip, False)
+    return tip, False
+
+
 def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
     """
     Zapisuje typy AI (top3 + kupony) do bazy backtest po każdej analizie.
@@ -417,17 +440,26 @@ def _nadpisz_tip_modelem(dane: dict, wyniki: list) -> None:
                 return w
         return {}
 
-    from footstats.config import GROQ_TIP_OVERRIDE_THRESHOLD
+    from footstats.config import GROQ_TIP_OVERRIDE_THRESHOLD, GROQ_TIP_OVERRIDE_2WAY
 
     def _popraw(legs: list) -> None:
         for z in legs:
             w = _w_dla(z.get("mecz", ""))
+            typ = z.get("typ", "")
+            # 1X2 (3-way) — model argmax
             nowy, override = koryguj_tip_wg_modelu(
-                z.get("typ", ""), w.get("pw"), w.get("pr"), w.get("pp"),
+                typ, w.get("pw"), w.get("pr"), w.get("pp"),
                 prog_min=GROQ_TIP_OVERRIDE_THRESHOLD,
             )
             if override:
                 z["typ"] = nowy
+                continue
+            # Over/Under + BTTS (2-way) — model wybiera stronę
+            nowy2, ov2 = koryguj_tip_ou_btts(
+                typ, w.get("o25"), w.get("bt"), prog_2way=GROQ_TIP_OVERRIDE_2WAY,
+            )
+            if ov2:
+                z["typ"] = nowy2
 
     if dane.get("top3"):
         _popraw(dane["top3"])
