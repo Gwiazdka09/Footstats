@@ -101,7 +101,8 @@ def _apply_injury_corrections(wyniki: list) -> None:
 # ── Krok 1c: Poisson λ dla reprezentacji (kadry) ──────────────────────────────
 
 _NATIONAL_BLEND = 0.6   # waga Poissona kadr vs Bzzoiro-ML (Bzzoiro-ML słaby na kadrach)
-_HOST_BOOST = 1.12      # przewaga gospodarza WC 2026 (tłum) — tylko realni hostowie
+_HOST_BOOST = 1.0       # NEUTRAL: host-boost 2× przeszacował gospodarzy (Mexico 2× LOST),
+                        # boiska WC efektywnie neutralne. Reaktywacja gdy dane pokażą edge.
 _WC_HOSTS = {normalize_team_name(t) for t in ("USA", "Mexico", "Canada",
                                               "United States", "Meksyk", "Kanada")}
 
