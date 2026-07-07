@@ -22,6 +22,11 @@ Ja = orchestrator. Workflow feature: subagent-driven-development (planner→code
 - `footstats-model-analyst` (opus) — walk-forward, kalibracja, A/B, λ (Poisson/Dixon-Coles).
 - `footstats-explorer` (haiku) — read-only lokalizator kodu (tani, oszczędza kontekst).
 - `footstats-debugger` (opus) — root-cause hunt (np. live≪offline: Groq/settlement).
+- `footstats-scribe` (sonnet) — kronikarz sesji: TODO→CHANGELOG, STATUS refresh, commit docs.
+- `footstats-gui-verifier` (sonnet) — screenshot Playwright po zmianie GUI (desktop+mobile), checklist design-system.
+- `footstats-test-medic` (sonnet) — pytest triage: naprawia testy (nie kod prod), zgłasza bugi prod.
+- `footstats-calibration-reporter` (sonnet) — co 2-3 dni: calibration_monitor + flip-advisor, licznik settled → progi 20/88.
+- `footstats-ops-monitor` (sonnet) — daily: Cloud Run Jobs/Scheduler health (gcloud read-only), GREEN/AMBER/RED.
 
 ## Architecture (Pointers)
 - Structure: See `PROJECT_STRUCTURE.md`
