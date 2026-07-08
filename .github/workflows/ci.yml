@@ -52,8 +52,11 @@ jobs:
         run: python -m bandit -r src/footstats -ll
 
       # pip-audit: CVE w zależnościach FootStats (requirements.txt). Świeży install = realny zakres.
+      # PYSEC-2026-1325 (ecdsa): zależność przechodnia python-jose[cryptography]; auth używa
+      # wyłącznie HS256 (HMAC) — kod ECDSA nie działa w runtime, a upstream nie wydał fix version.
+      # Zdjąć ignore przy migracji python-jose → PyJWT (TODO po 19.07).
       - name: pip-audit (dependency CVE)
-        run: python -m pip_audit -r requirements.txt
+        run: python -m pip_audit -r requirements.txt --ignore-vuln PYSEC-2026-1325
 
   secrets:
     runs-on: ubuntu-latest
