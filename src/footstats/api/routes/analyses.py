@@ -10,7 +10,8 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter
+from pydantic import BaseModel
 
 from footstats.core.match_analysis import (
     build_match_card, analysis_prompt, card_data_hash,
@@ -81,9 +82,32 @@ def analyses_matches():
     return {"matches": _build_cards(events)}
 
 
+class MatchCardIn(BaseModel):
+    """Karta meczu z GUI — walidacja na granicy systemu (audyt 07-07 M1).
+
+    Wymagane: pola używane przez card_data_hash/analysis_prompt. Kształt
+    zagnieżdżeń luźny (dict/list) — walidujemy obecność i typ kontenera,
+    nie głęboką strukturę. Pola nadmiarowe (np. odds z GUI) są ignorowane.
+    """
+    home: str
+    away: str
+    model: dict
+    home_stats: dict
+    away_stats: dict
+    data: str | None = None
+    injuries_home: list = []
+    injuries_away: list = []
+    lineups: dict | None = None
+    liga: str | None = None
+    host: str | None = None
+    top_scorers_home: list = []
+    top_scorers_away: list = []
+
+
 @router.post("/analyses/llm")
-def analyses_llm(card: dict = Body(...)):
+def analyses_llm(card_in: MatchCardIn):
     """Analiza LLM on-demand dla jednej karty. Cache po data-hash (raz generuje)."""
+    card = card_in.model_dump()
     h = card_data_hash(card)
     cached = get_cached_analysis(h)
     if cached is not None:
