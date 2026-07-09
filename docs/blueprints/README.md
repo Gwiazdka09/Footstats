@@ -30,3 +30,4 @@ Blueprint = plan pisany tak, żeby **mniejszy model** (sonnet/haiku, np. `footst
 | [BP-01](BP-01-analizy-hardening.md) | Hardening zakładki „Analizy" (auth, walidacja, prod-data) | HIGH | Audyt 2026-07-07 H1,H2,M1-M4,L1,L3,L5 |
 | [BP-02](BP-02-kalibracja-m1.md) | Proces kalibracji → flip M1 (monitoring, progi 20/88) | P0 | TODO P0/P1 |
 | [BP-03](BP-03-decyzje-czerwcowe.md) | Otwarte HIGH-e z audytu 06-27 (wymagają decyzji usera) | HIGH-latent | Audyt 06-27 + 07-07 H3-H5,M5 |
+| [BP-04](BP-04-jadro-predykcji.md) | Jądro predykcji: money/math (D1-D12) — **PO POWROCIE** (zmienia selekcję) | HIGH | Deep-dive 2026-07-09 |
