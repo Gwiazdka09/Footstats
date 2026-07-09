@@ -178,3 +178,70 @@ def test_dry_run_nie_zmienia_statusow(wired):
     assert st[1] == "DRAFT"   # dry_run nie mutuje
     assert st[2] == "DRAFT"
     assert st[3] == "DRAFT"
+
+
+def _wstaw_active_won_kandydata(path):
+    """Kupon ACTIVE (odds 2.0, stake 10, user 1) + bankroll 100."""
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "INSERT INTO coupons (status, match_date_first, legs_json, total_odds, stake_pln, user_id) "
+        "VALUES ('ACTIVE', ?, ?, 2.0, 10.0, 1)",
+        ((datetime.now().date() - timedelta(days=2)).isoformat(),
+         json.dumps([{"home": "PSG", "away": "Lyon", "tip": "1"}])),
+    )
+    conn.execute("INSERT INTO bankroll_state (balance, user_id) VALUES (100.0, 1)")
+    conn.commit(); conn.close()
+
+
+def test_rownolegle_settle_kredytuje_raz(wired, monkeypatch):
+    # D3 (audyt 09-07): dwa procesy settle widzą ten sam kupon jako ACTIVE
+    # (Scheduler 06:00/21:30 + evening). Drugi zapis NIE może skredytować
+    # bankrollu drugi raz — UPDATE musi być CAS (WHERE ... AND status='ACTIVE').
+    import footstats.core.coupon_settlement as cs
+    _wstaw_active_won_kandydata(wired)
+
+    def _wynik_i_konkurencyjny_settle(*a, **k):
+        # Symulacja wyścigu: "drugi proces" rozlicza kupon i kredytuje bankroll
+        # między naszym SELECT (ACTIVE) a naszym UPDATE.
+        conn = sqlite3.connect(wired)
+        conn.execute("UPDATE coupons SET status='WON', payout_pln=20.0 WHERE id=4")
+        conn.execute("UPDATE bankroll_state SET balance=120.0 WHERE user_id=1")
+        conn.commit(); conn.close()
+        return "2-1"
+
+    monkeypatch.setattr(cs, "_find_leg_result", _wynik_i_konkurencyjny_settle)
+    cs.settle_active_coupons(days_back=3, dry_run=False, verbose=False)
+
+    conn = sqlite3.connect(wired)
+    conn.row_factory = sqlite3.Row
+    bal = conn.execute("SELECT balance FROM bankroll_state WHERE user_id=1").fetchone()["balance"]
+    status = conn.execute("SELECT status FROM coupons WHERE id=4").fetchone()["status"]
+    conn.close()
+    assert status == "WON"
+    assert bal == pytest.approx(120.0)   # kredyt RAZ, nie 140 (podwójny)
+
+
+def test_won_bez_bankroll_state_loguje_warning(wired, monkeypatch, caplog):
+    # D7 (audyt 09-07): WON właściciela bez wiersza bankroll_state nie może
+    # przejść w ciszy — wymagany log.warning (kredyt pominięty świadomie).
+    import logging
+    import footstats.core.coupon_settlement as cs
+    conn = sqlite3.connect(wired)
+    conn.execute(
+        "INSERT INTO coupons (status, match_date_first, legs_json, total_odds, stake_pln, user_id) "
+        "VALUES ('ACTIVE', ?, ?, 2.0, 10.0, 77)",   # user 77 bez bankroll_state
+        ((datetime.now().date() - timedelta(days=2)).isoformat(),
+         json.dumps([{"home": "PSG", "away": "Lyon", "tip": "1"}])),
+    )
+    conn.commit(); conn.close()
+    monkeypatch.setattr(cs, "_find_leg_result", lambda *a, **k: "2-1")
+
+    with caplog.at_level(logging.WARNING, logger="footstats.core.coupon_settlement"):
+        cs.settle_active_coupons(days_back=3, dry_run=False, verbose=False)
+
+    conn = sqlite3.connect(wired)
+    conn.row_factory = sqlite3.Row
+    status = conn.execute("SELECT status FROM coupons WHERE id=4").fetchone()["status"]
+    conn.close()
+    assert status == "WON"
+    assert any("bankroll_state" in r.message for r in caplog.records)

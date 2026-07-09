@@ -316,15 +316,28 @@ def run_evening_agent(date_str: str | None = None) -> dict:
                 stake = kupon["stake_pln"] or 10.0
                 odds  = kupon["total_odds"] or 1.0
                 payout = round(stake * odds, 2)  # brutto, przed podatkiem
-            if nowy_status == "WON" and payout:
+
+            # CAS (D3): NAJPIERW status (tylko z odczytanego stanu), POTEM kredyt.
+            # Kolejność zamyka: (a) wyścig z settle_active_coupons (drugi proces nie
+            # przejdzie CAS → zero podwójnego kredytu), (b) re-kredyt po crashu
+            # (retry nie zobaczy już ACTIVE/DRAFT). Pętla rozlicza DRAFT i ACTIVE,
+            # więc guard = status z odczytu, nie sztywne ACTIVE.
+            stary_status = kupon["status"] if "status" in kupon.keys() else STATUS_ACTIVE
+            zmienione = update_coupon_status(
+                kupon["id"], nowy_status, payout_pln=payout,
+                expected_status=stary_status,
+            )
+            if not zmienione:
+                console.print(
+                    f"[yellow]Kupon ID={kupon['id']} rozliczony równolegle — pomijam kredyt[/yellow]"
+                )
+            elif nowy_status == "WON" and payout:
                 # kupon bywa sqlite3.Row (brak .get) albo dict — row-safe odczyt.
                 uid = kupon["user_id"] if "user_id" in kupon.keys() else None
                 if uid is not None:
                     # Pełna wygrana brutto do WŁAŚCICIELA (nie phantom user_id=1,
                     # nie ×0.88) — spójnie z coupon_settlement.
                     credit_win(payout, uid, f"Wygrana kuponu ID={kupon['id']}")
-
-            update_coupon_status(kupon["id"], nowy_status, payout_pln=payout)
             key = nowy_status.lower()
             summary[key] = summary.get(key, 0) + 1
         else:

@@ -465,6 +465,46 @@ class TestRunEveningAgentIntegration:
         assert mock_win.call_args.args[0] == pytest.approx(18.5)  # 10 * 1.85
         assert mock_win.call_args.args[1] == 7
 
+    def test_run_evening_agent_cas_przegrany_bez_kredytu(self, tmp_path, monkeypatch):
+        """D3: gdy CAS w update_coupon_status zwraca False (kupon rozliczony
+        równolegle przez settle_active_coupons), credit_win NIE może być wywołany
+        — inaczej podwójny kredyt bankrollu."""
+        monkeypatch.setenv("APISPORTS_KEY", "fake-key")
+
+        fake_coupon = {
+            "id": 1, "stake_pln": 10.0, "total_odds": 1.85, "user_id": 7,
+            "legs": [{"gospodarz": "Arsenal", "goscie": "Chelsea", "typ": "1"}],
+        }
+        api_fixtures = [
+            {
+                "fixture": {"id": 111, "status": {"short": "FT"}},
+                "teams": {"home": {"name": "Arsenal"}, "away": {"name": "Chelsea"}},
+                "goals": {"home": 2, "away": 0},
+            }
+        ]
+        fake_leg_db = [
+            {"gospodarz": "Arsenal", "goscie": "Chelsea", "typ": "1",
+             "home": "Arsenal", "away": "Chelsea", "ai_tip": "1", "prediction_id": None}
+        ]
+
+        with (
+            patch("footstats.evening_agent._fetch_results_today", return_value=api_fixtures),
+            patch("footstats.evening_agent.get_active_coupons", return_value=[fake_coupon]),
+            patch("footstats.evening_agent.get_coupon_legs", return_value=fake_leg_db),
+            patch("footstats.evening_agent.update_coupon_status", return_value=False) as mock_update,
+            patch("footstats.evening_agent.credit_win") as mock_win,
+            patch("footstats.evening_agent.init_coupon_tables"),
+            patch("footstats.evening_agent.init_db"),
+            patch("footstats.evening_agent._save_coupon_legs"),
+            patch("footstats.evening_agent._send_telegram_summary"),
+            patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
+        ):
+            from footstats.evening_agent import run_evening_agent
+            run_evening_agent("2026-06-05")
+
+        mock_update.assert_called_once()
+        mock_win.assert_not_called()   # przegrany CAS = zero kredytu
+
     def test_run_evening_agent_lose_no_bankroll_update(self, tmp_path, monkeypatch):
         """LOSE coupon does not trigger process_win."""
         monkeypatch.setenv("APISPORTS_KEY", "fake-key")

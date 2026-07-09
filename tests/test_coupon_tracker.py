@@ -123,6 +123,41 @@ def test_get_active_coupons_user_none_zwraca_wszystkich():
     assert any(c["id"] == cid for c in get_active_coupons(user_id=None))
 
 
+def _status_kuponu_z_db(db_path: str, cid: int) -> str:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    st = conn.execute("SELECT status FROM coupons WHERE id=?", (cid,)).fetchone()["status"]
+    conn.close()
+    return st
+
+
+def test_update_coupon_status_cas_zgodny_zmienia(tmp_db):
+    cid = save_coupon("final", "A", [], stake_pln=10.0)
+    update_coupon_status(cid, "ACTIVE")
+    zmienione = update_coupon_status(cid, "WON", payout_pln=20.0, expected_status="ACTIVE")
+    assert zmienione is True
+    assert _status_kuponu_z_db(tmp_db, cid) == "WON"
+
+
+def test_update_coupon_status_cas_niezgodny_nie_zmienia(tmp_db):
+    # D3 (audyt 09-07): drugi proces settle (evening vs settle_active_coupons)
+    # nie może nadpisać już rozliczonego kuponu — CAS zwraca False, caller
+    # pomija kredyt bankrollu (zero podwójnej wypłaty).
+    cid = save_coupon("final", "A", [], stake_pln=10.0)
+    update_coupon_status(cid, "ACTIVE")
+    update_coupon_status(cid, "WON", payout_pln=20.0)   # pierwszy settle wygrał wyścig
+    zmienione = update_coupon_status(cid, "LOST", expected_status="ACTIVE")
+    assert zmienione is False
+    assert _status_kuponu_z_db(tmp_db, cid) == "WON"    # nietknięty przez drugi proces
+
+
+def test_update_coupon_status_bez_cas_dziala_jak_dotad(tmp_db):
+    # Wsteczna kompatybilność: bez expected_status UPDATE bezwarunkowy.
+    cid = save_coupon("final", "A", [], stake_pln=10.0)
+    assert update_coupon_status(cid, "ACTIVE") is True
+    assert _status_kuponu_z_db(tmp_db, cid) == "ACTIVE"
+
+
 def test_won_coupon_roi_calculated():
     cid = save_coupon("final", "A", [], stake_pln=10.0)
     update_coupon_status(cid, "WON", payout_pln=110.0)

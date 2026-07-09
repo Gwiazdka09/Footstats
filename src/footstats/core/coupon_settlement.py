@@ -359,14 +359,25 @@ def settle_active_coupons(
         if not dry_run:
             try:
                 with _connect() as conn:
-                    conn.execute(
-                        "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, legs_json=? WHERE id=?",
+                    # CAS-guard (D3): UPDATE tylko gdy kupon WCIĄŻ ACTIVE. Równoległe
+                    # settle (Scheduler 06:00/21:30 + evening) mogą oba wybrać ten sam
+                    # kupon — bez guardu drugi proces kredytowałby bankroll drugi raz.
+                    cur = conn.execute(
+                        "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, legs_json=? "
+                        "WHERE id=? AND status='ACTIVE'",
                         (new_status, payout, roi,
                          json.dumps(updated_legs, ensure_ascii=False), coupon_id),
                     )
-                    log.info("Kupon #%s → %s | payout=%.2f | roi=%.1f%%", coupon_id, new_status, payout, roi)
+                    settled_now = (cur.rowcount or 0) == 1
+                    if not settled_now:
+                        log.warning(
+                            "Kupon #%s nie jest już ACTIVE — rozliczony równolegle, pomijam kredyt/RAG",
+                            coupon_id,
+                        )
+                    else:
+                        log.info("Kupon #%s → %s | payout=%.2f | roi=%.1f%%", coupon_id, new_status, payout, roi)
 
-                    if all_correct and payout > 0 and owner_uid is not None:
+                    if settled_now and all_correct and payout > 0 and owner_uid is not None:
                         # Kredytuj WŁAŚCICIELA kuponu (nie MAX(id)!), brutto/przed
                         # podatkiem, 100% — spójnie z evening_agent.credit_win.
                         cur_balance = conn.execute(
@@ -392,8 +403,14 @@ def settle_active_coupons(
                                     owner_uid,
                                 ),
                             )
+                        else:
+                            # D7: WON bez wiersza bankroll_state — nie może przejść w ciszy
+                            log.warning(
+                                "Kupon #%s WON, brak bankroll_state dla user_id=%s — kredyt pominięty",
+                                coupon_id, owner_uid,
+                            )
 
-                if not all_correct:
+                if settled_now and not all_correct:
                     failed_legs = [lg for lg in updated_legs if lg.get("leg_won") is False]
                     parts = [
                         f"Leg #{i+1}: {lg.get('home','?')} vs {lg.get('away','?')} "
@@ -406,7 +423,8 @@ def settle_active_coupons(
                     )
                     _send_to_rag_feedback(coupon_id, updated_legs, mdate, lose_reason, verbose=verbose)
 
-                stats["settled"] += 1
+                if settled_now:
+                    stats["settled"] += 1
             except (KeyError, TypeError, ValueError, OSError) as e:
                 log.error("Błąd rozliczania kuponu ID=%s: %s", coupon_id, e)
                 stats["errors"] += 1

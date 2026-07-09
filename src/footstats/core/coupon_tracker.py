@@ -91,11 +91,16 @@ def update_coupon_status(
     coupon_id: int,
     status: str,
     payout_pln: float | None = None,
-) -> None:
+    expected_status: str | None = None,
+) -> bool:
     """
     Aktualizuje status kuponu. Jeśli payout_pln podany — oblicza roi_pct.
 
     status: 'DRAFT' | 'ACTIVE' | 'WON' | 'LOST' | 'PARTIAL' | 'VOID'
+    expected_status: CAS-guard (D3) — UPDATE tylko gdy kupon MA ten status
+    (np. 'ACTIVE'); chroni przed podwójnym rozliczeniem przy równoległych
+    ścieżkach settle (evening_agent vs settle_active_coupons).
+    Zwraca True gdy wiersz faktycznie zmieniony.
     """
     init_coupon_tables()
     if status not in VALID_STATUSES:
@@ -111,11 +116,19 @@ def update_coupon_status(
                 roi_pct = round(
                     (payout_pln - row["stake_pln"]) / row["stake_pln"] * 100, 1
                 )
-        conn.execute(
-            "UPDATE coupons SET status=?, payout_pln=?, roi_pct=? WHERE id=?",
-            (status, payout_pln, roi_pct, coupon_id),
-        )
-    _exec(_fn)
+        if expected_status is not None:
+            cur = conn.execute(
+                "UPDATE coupons SET status=?, payout_pln=?, roi_pct=? "
+                "WHERE id=? AND status=?",
+                (status, payout_pln, roi_pct, coupon_id, expected_status),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE coupons SET status=?, payout_pln=?, roi_pct=? WHERE id=?",
+                (status, payout_pln, roi_pct, coupon_id),
+            )
+        return (cur.rowcount or 0) == 1
+    return bool(_exec(_fn))
 
 
 def get_active_coupons(user_id: "int | None" = 1) -> list:
