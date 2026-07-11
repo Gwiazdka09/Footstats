@@ -1,18 +1,43 @@
-"""test_analyses_endpoint.py — walidacja wejścia POST /api/analyses/llm (BP-01/T1, audyt M1).
+"""test_analyses_endpoint.py — walidacja wejścia + auth POST/GET /api/analyses/* (BP-01/T1+T2).
 
-Body spoza schematu = 422 (Pydantic na granicy systemu), nie 500 (KeyError
-w card_data_hash). Bez sieci/LLM — cache zamockowany.
+T1 (audyt M1): body spoza schematu = 422 (Pydantic na granicy systemu), nie 500 (KeyError).
+T2 (audyt H1): oba endpointy wymagają JWT — bez tokenu 401/403, zero palenia tokenów Groq
+przez anonimów. Bez sieci/LLM — cache zamockowany, auth przez dependency_overrides.
 """
 import pytest
 from fastapi.testclient import TestClient
 
+from footstats.api.auth import require_auth
 from footstats.api.main import app
 
 
 @pytest.fixture
 def client():
+    """Klient ZALOGOWANY — require_auth podmienione na stałego usera 1."""
+    app.dependency_overrides[require_auth] = lambda: 1
+    yield TestClient(app)
+    app.dependency_overrides.pop(require_auth, None)
+
+
+@pytest.fixture
+def anon_client():
+    """Klient BEZ tokenu — realny require_auth."""
     return TestClient(app)
 
+
+# ── T2: auth (H1) ──────────────────────────────────────────────────────────────
+
+def test_analyses_matches_wymaga_auth(anon_client):
+    r = anon_client.get("/api/analyses/matches")
+    assert r.status_code in (401, 403)   # HTTPBearer bez nagłówka → 403/401
+
+
+def test_analyses_llm_wymaga_auth(anon_client):
+    r = anon_client.post("/api/analyses/llm", json={"foo": 1})
+    assert r.status_code in (401, 403)   # auth PRZED walidacją body
+
+
+# ── T1: walidacja wejścia (M1) ─────────────────────────────────────────────────
 
 def test_analyses_llm_odrzuca_body_bez_home(client):
     # M1: {"foo": 1} nie ma wymaganych pól karty → 422, nie KeyError/500

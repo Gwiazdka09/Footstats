@@ -10,9 +10,10 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from footstats.api.auth import require_auth
 from footstats.core.match_analysis import (
     build_match_card, analysis_prompt, card_data_hash,
     get_cached_analysis, set_cached_analysis,
@@ -68,7 +69,7 @@ def _build_cards(events: list[dict]) -> list[dict]:
 
 
 @router.get("/analyses/matches")
-def analyses_matches():
+def analyses_matches(user_id: int = Depends(require_auth)):
     """Karty ważnych meczów (dane, bez LLM). Źródło: Bzzoiro predykcje_tygodnia."""
     try:
         from footstats.scrapers.bzzoiro import BzzoiroClient
@@ -105,7 +106,7 @@ class MatchCardIn(BaseModel):
 
 
 @router.post("/analyses/llm")
-def analyses_llm(card_in: MatchCardIn):
+def analyses_llm(card_in: MatchCardIn, user_id: int = Depends(require_auth)):
     """Analiza LLM on-demand dla jednej karty. Cache po data-hash (raz generuje)."""
     card = card_in.model_dump()
     h = card_data_hash(card)
