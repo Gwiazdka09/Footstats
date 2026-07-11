@@ -374,3 +374,20 @@ class TestDailyPipelineFlow:
         assert "decision_score" in result[0]
         assert "decision_reasons" in result[0]
         assert isinstance(result[0]["decision_score"], int)
+
+
+# ── Regresja: crash final 09.07 (prod) — kupon=None w _weryfikuj_kupony ───────
+
+class TestWeryfikujKuponyNone:
+    def test_kupon_none_nie_crashuje(self):
+        # Cloud Run final-9hkn2 (09.07): dane z kupon_X=None (dzień bez kuponu)
+        # wywalały całą fazę final — AttributeError: 'NoneType' has no attribute 'get'.
+        # None w kluczu obchodzi default dane.get(key, {}).
+        from footstats.daily_agent import _weryfikuj_kupony
+
+        dane = {"top3": [], "kupon_a": None, "kupon_b": {},
+                "kupon_c": {"zdarzenia": []}}
+        wynik = _weryfikuj_kupony(dane, indeks={})
+
+        assert wynik["kupon_a"] is None      # nietknięty, bez crasha
+        assert wynik["kupon_b"] == {}

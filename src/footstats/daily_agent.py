@@ -294,7 +294,9 @@ def _weryfikuj_kupony(dane: dict, indeks: dict) -> dict:
         dane["top3"] = zweryfikowane_top3
 
     for kupon_key in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
-        kupon = dane.get(kupon_key, {})
+        # `or {}` — klucz bywa obecny z wartością None (dzień bez kuponu),
+        # co obchodzi default .get() (crash final-9hkn2 na prod, 09.07).
+        kupon = dane.get(kupon_key) or {}
         zdarzenia = kupon.get("zdarzenia", [])
         if not zdarzenia:
             continue
