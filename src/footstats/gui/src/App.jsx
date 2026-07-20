@@ -266,7 +266,7 @@ const App = () => {
               />
             )}
             {view === 'analizy' && (
-              <MatchAnalysisView key="analizy" />
+              <MatchAnalysisView key="analizy" apiFetch={apiFetch} />
             )}
             {view === 'leaderboard' && (
               <LeaderboardView

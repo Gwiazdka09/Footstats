@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { API_BASE } from '../lib/api';
 import { Swords, Sparkles, Shield, Target, Activity, Loader2 } from 'lucide-react';
 
 // Pasek 1X2 (indigo dom / muted remis / pink wyjazd) — jedno accent-pairing
@@ -68,22 +67,21 @@ function Injuries({ list, align }) {
   );
 }
 
-function MatchCard({ card }) {
+function MatchCard({ card, apiFetch }) {
   const [ai, setAi] = useState(null);
   const [loading, setLoading] = useState(false);
   const m = card.model || {};
 
+  // apiFetch (App.jsx) dokłada Bearer token — endpointy analiz wymagają auth (BP-01/T2)
   const analizuj = async () => {
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/analyses/llm`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(card),
+      const d = await apiFetch('/analyses/llm', {
+        method: 'POST', body: JSON.stringify(card),
       });
-      const d = await r.json();
       setAi(d.analysis || d.error || 'Brak analizy');
-    } catch {
-      setAi('Błąd połączenia');
+    } catch (e) {
+      setAi(e.message || 'Błąd połączenia');
     } finally {
       setLoading(false);
     }
@@ -142,15 +140,15 @@ function MatchCard({ card }) {
   );
 }
 
-export default function MatchAnalysisView() {
+export default function MatchAnalysisView({ apiFetch }) {
   const [cards, setCards] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/analyses/matches`)
-      .then(r => r.json())
+    apiFetch('/analyses/matches')
       .then(d => { setCards(d.matches || []); if (d.error) setErr(d.error); })
-      .catch(() => setErr('Błąd połączenia'));
+      .catch(e => setErr(e.message || 'Błąd połączenia'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -167,7 +165,7 @@ export default function MatchAnalysisView() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {cards?.map((c, i) => <MatchCard key={i} card={c} />)}
+        {cards?.map((c, i) => <MatchCard key={i} card={c} apiFetch={apiFetch} />)}
       </div>
     </div>
   );
