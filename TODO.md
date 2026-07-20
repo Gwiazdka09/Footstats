@@ -4,10 +4,11 @@
 >
 > **🔧 NAPRAWIONE 07-06 (największy lever):** audyt 104 settled — Groq nadpisywał model i psuł (1X2 model argmax 60% vs Groq 48%, +12pp). Fix: `GROQ_TIP_OVERRIDE` flip ON + threshold 33 (1X2) + 45 (O/U/BTTS `koryguj_tip_ou_btts`). **LLM (llama-3.1-8b) odsunięty od WSZYSTKICH picków → tylko analiza/podsumowania.** Model wybiera. TODO: zakładka GUI "analiza LLM"; rozważyć GROQ_MODEL=70b (reasoning). Inne dławiki: 65% predykcji bez modelu (off-season egzotyka/WC → LEAGUE_GATING celuje w złe ligi), confidence odwrócony (80%+→19%, nie włączać selekcji).
 
-**Aktualizacja:** 2026-07-06 · v3.4-stable
+**Aktualizacja:** 2026-07-20 · v3.4-stable
 **Accuracy:** offline **51.8%** (WF A/B, DC W=0.5) | live świeże ≥06-19 **47.8%** (23 settled, fixy Cel B) vs stare 31%
-**Cel M1:** 55% win rate · **Suite:** ~1436 pass (coverage 57)
+**Cel M1:** 55% win rate · **Suite:** ~1539 pass unit-mode (coverage 57)
 **LIVE:** pipeline **PC-off w chmurze** — Cloud Run Jobs (final 11:00 + evening 23:00) + Scheduler (draft 07:30, settle 06:00/21:30). Szczegóły → `docs/cloud_migration.md`.
+**⚠️ INCYDENT 14-20.07 (naprawiony 07-20):** potrójna awaria — Neon quota-block → **DB = Supabase free** (session pooler); image jobów bez `footstats.data` (`.gcloudignore` fix); kupon=None crash. **Luka w danych 14-20.07** (zero predykcji/settled). Dane 1-17.07 uwięzione w Neonie do **1.08**. Szczegóły → `CHANGELOG.md` 07-20.
 **Zbudowane flag-OFF (flip po walidacji):** `SELECTION_MIN_CONF` (#1) · `LEAGUE_GATING` (#2). Już LIVE: `ENSEMBLE_MARKET_WEIGHT=0.70` (reweight ku rynkowi).
 
 ---
@@ -29,10 +30,12 @@
 > STOP na nowe λ aż zbierzemy świeże settled — zmiana teraz zaciemnia czy fixy działają.
 > **Zbieranie leci PC-niezależnie** (cloud draft 07:30 + settle) — brak wąskiego gardła danych.
 
-- [ ] **Co kilka dni:** `python scripts/calibration_monitor.py` (Neon, read-only) — System vs Pipeline, czy accuracy ruszyła, licznik settled. Ma per-liga + **flip-advisor** (`core/flip_advisor.py`): rekomenduje czy flipnąć `SELECTION_MIN_CONF` i które ligi do `LEAGUE_GATING` (<50%, n≥8).
+- [ ] **🆕 1.08 (twarda data — reset quota Neon):** backfill Neon → Supabase (`pg_dump`: predictions/coupons/bankroll/**users z hasłami**) + **rotacja hasła Neon** (wisiało plaintext w env Cloud Run) + decyzja czy Neon kasować. Bez backfillu licznik settled i konta userów = od zera.
+- [ ] **Co kilka dni:** `python scripts/calibration_monitor.py` (DB read-only) — System vs Pipeline, czy accuracy ruszyła, licznik settled. Ma per-liga + **flip-advisor** (`core/flip_advisor.py`): rekomenduje czy flipnąć `SELECTION_MIN_CONF` i które ligi do `LEAGUE_GATING` (<50%, n≥8). *(Sensowne dopiero po backfillu 1.08 — świeży Supabase ma 0 settled.)*
 - [ ] **D3 — pełna decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled z zapisanym prob. Zwaliduj że guard pomaga, dostrój próg. (D3 cz.1+2 prob+guard ZROBIONE 06-22.)
 - [ ] **Po ~88 settled → D2 auto-refit sam** (delta +30 od n_train); gdy krzywa zdrowa → włącz `CALIBRATION_ENABLED=1`.
-- [ ] **DECYZJA (nie bug):** Bzzoiro etykietuje towarzyskie kadr jako "World Cup 2026" → whitelist MŚ (D1a). Opcje: (a) zostaw MŚ [domyślnie], (b) wyklucz kadry z kuponów Groq, (c) zawęź whitelist do realnych fixture'ów WC.
+- [x] ~~**DECYZJA (nie bug):** Bzzoiro etykietuje towarzyskie kadr jako "World Cup 2026" → whitelist MŚ (D1a).~~ **Wygasło 07-20** — MŚ zakończone 19.07; wraca ewentualnie przy Euro/kadrach.
+- [ ] **🆕 Dług testowy:** lokalna pełna suita wymaga żywej DB — `config.py` robi `load_dotenv(override=True)` → 23 testy integracyjne biją w `DATABASE_URL` z `.env` (= martwy Neon). Fix krótki: podmienić `DATABASE_URL` w `.env` na Supabase (wymaga zgody usera). Fix docelowy: testy integracyjne za markerem `@pytest.mark.integration` + oddzielny test-DB.
 
 ---
 

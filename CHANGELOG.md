@@ -3,6 +3,24 @@
 > Archiwum ukończonych prac (przeniesione z TODO.md przez `footstats-scribe`).
 > Aktywne zadania: `TODO.md`. Pełna historia commitów: `git log`.
 
+## 2026-07-20
+
+### Incydent po wyjeździe — potrójna awaria pipeline (14-20.07) + migracja DB
+- **Neon quota-block (od 18.07):** pool (`minconn=1` + keepalives 30 s) trzymał endpoint obudzonym
+  ~24/7 → free tier spalony w 17 dni, twardy blok connect do 1.08. **Prod DB → Supabase free**
+  (session pooler eu-west-1): schemat + migracje + seed + RLS na 11 tabelach; secret `DATABASE_URL` v2;
+  API rev 00305 (wcześniej URL Neona hardkodem w env serwisu). **Backfill z Neona po 1.08.**
+- **`74c13d638`** image `footstats-jobs` bez pakietu `footstats.data` → `final` padał 14-20.07.
+  Root cause: `gcloud builds submit` bez `.gcloudignore` generuje ignore z `.gitignore`, a
+  niezakotwiczone `data/` wycinało `src/footstats/data/` z tarballa. Fix: `.gcloudignore` + `/data/`.
+- **`9e74c59c2`** `kupon=None`/`zdarzenia=None` od Groq → crash `_dodaj_kelly` (daily_phases:491).
+  None-guardy `(x or {})` w całej ścieżce final + 2 testy TDD. Po fixie: **pierwszy zielony
+  `footstats-final` od 13.07** (3 predykcje 21-23.07 w Supabase).
+- **`3c6bac670`** db-resilience: `psycopg2.Error` w catch `admin_user` (fallback zamiast crashu
+  daily_agent) + init DB w `api/main.py` (import przeżywa martwą DB — kolekcja pytest, start kontenera).
+- **`0e81aee9a`** merge BP-01 T1+T2 (routine z wyjazdu): walidacja Pydantic `POST /analyses/llm`
+  (audyt M1) + auth JWT na endpointach analiz + GUI `apiFetch` (audyt H1 zamknięty).
+
 ## 2026-07-03
 
 ### Kalibracja + model — obrona i Kontuzje v2
