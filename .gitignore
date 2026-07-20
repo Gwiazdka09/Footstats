@@ -18,7 +18,7 @@ ENV/
 !.env.example
 
 # ── Dane (DB backtest)
-data/
+/data/
 
 # ── Logi i pliki tymczasowe
 logs/

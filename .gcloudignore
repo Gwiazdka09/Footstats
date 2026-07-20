@@ -1,0 +1,24 @@
+# Jawny .gcloudignore — bez niego `gcloud builds submit` generuje ignore
+# z .gitignore, a wzorzec `data/` wycinał też pakiet src/footstats/data
+# (incydent 13-20.07: image footstats-jobs bez modułu → ModuleNotFoundError).
+.git/
+.github/
+.gcloudignore
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+ENV/
+.env
+.env.*
+logs/
+/data/
+tests/
+scratch/
+*.pdf
+.vscode/
+.gemini/
+.aider*
+node_modules/
+src/footstats/gui/node_modules/
+src/footstats/gui/dist/
