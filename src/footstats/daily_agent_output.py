@@ -66,7 +66,7 @@ def _zapisz_txt(dane: dict, stawka_a: float, stawka_b: float) -> Path:
         wyg    = stawka * kurs_l * 0.88
         linie.append(f"  Kurs łączny: {kurs_l:.2f}  |  Wygrana netto: {wyg:.2f} PLN")
 
-    top3 = dane.get("top3", [])
+    top3 = dane.get("top3") or []
     if top3:
         linie.append("\nTOP 3 MECZÓW")
         linie.append("-" * 40)
@@ -133,7 +133,7 @@ def _wyswietl(dane: dict, stawka_a: float, stawka_b: float):
     t.add_column("Kurs", width=6)
     t.add_column("EV%", width=8)
     t.add_column("Uzasadnienie")
-    for i, row in enumerate(dane.get("top3", []), 1):
+    for i, row in enumerate(dane.get("top3") or [], 1):
         ev = row.get("ev_netto", 0) or 0
         kolor = "green" if ev > 5 else "yellow"
         t.add_row(

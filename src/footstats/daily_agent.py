@@ -286,7 +286,7 @@ def _weryfikuj_kupony(dane: dict, indeks: dict) -> dict:
     usuniete: list[str] = []
 
     # FAZA 17.3: top3 też weryfikowane (wcześniej halucynacje wchodziły do predictions)
-    top3 = dane.get("top3", [])
+    top3 = dane.get("top3") or []
     if top3:
         zweryfikowane_top3 = [
             z for z in (_weryfikuj_noge(row, indeks, usuniete) for row in top3) if z is not None
@@ -692,8 +692,8 @@ def main():
     draft_legs = []
     draft_odds = 1.0
     if args.faza and not args.dry_run:
-        kupon_a_db = dane.get("kupon_a", {})
-        zdarzenia_db = kupon_a_db.get("zdarzenia", [])
+        kupon_a_db = dane.get("kupon_a") or {}
+        zdarzenia_db = kupon_a_db.get("zdarzenia") or []
         kurs_db = kupon_a_db.get("kurs_laczny", 1.0) or 1.0
         if zdarzenia_db:
             # Sprawdzenie decision_score PRZED zapisem

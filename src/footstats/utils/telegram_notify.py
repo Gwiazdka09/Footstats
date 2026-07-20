@@ -197,7 +197,7 @@ def send_kupon(dane: dict, stawka_a: float = 10.0, stawka_b: float = 5.0) -> boo
             f"  Kurs: <b>{kurs_l:.2f}</b> | Wygrana: <b>{wyg:.2f} PLN</b>"
         )
 
-    top3 = dane.get("top3", [])
+    top3 = dane.get("top3") or []
     if top3:
         linie.append("\n<b>TOP 3 typy:</b>")
         for row in top3[:3]:

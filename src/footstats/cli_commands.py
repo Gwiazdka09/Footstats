@@ -48,7 +48,7 @@ def _wyswietl_ai_pewniaczki(dane: dict, stawka: float = 5.0):
     tbl.add_column("EV netto", justify="right", width=10)
     tbl.add_column("Uzasadnienie", style="dim")
 
-    for t in dane.get("top3", []):
+    for t in dane.get("top3") or []:
         ev = t.get("ev_netto")
         try:
             ev_str = f"[green]+{float(ev):.1f}%[/green]" if ev is not None and float(ev) > 0 else f"[red]{float(ev):.1f}%[/red]"
@@ -67,7 +67,7 @@ def _wyswietl_ai_pewniaczki(dane: dict, stawka: float = 5.0):
         if not kupon:
             return
         lines = []
-        for z in kupon.get("zdarzenia", []):
+        for z in kupon.get("zdarzenia") or []:
             lines.append(f"  {z.get('nr', '?')}. {z.get('mecz', '?')}  [bold]{z.get('typ', '?')}[/bold] @ {z.get('kurs', '?')}")
         kl = kupon.get("kurs_laczny", "?")
         wn = kupon.get("wygrana_netto", "?")

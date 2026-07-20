@@ -487,8 +487,9 @@ def _dodaj_kelly(dane: dict, bankroll: float) -> None:
     except ImportError:
         calibrate_confidence = lambda pct: pct / 100.0  # noqa: E731
 
+    # (x or {}) — Groq potrafi zwrócić kupon=None / zdarzenia=None (crash prod 20.07)
     for kupon_key in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
-        for z in dane.get(kupon_key, {}).get("zdarzenia", []):
+        for z in (dane.get(kupon_key) or {}).get("zdarzenia") or []:
             p    = calibrate_confidence(z.get("pewnosc_pct") or 50)
             odds = z.get("kurs") or 1.0
             try:
@@ -496,7 +497,7 @@ def _dodaj_kelly(dane: dict, bankroll: float) -> None:
             except (TypeError, ZeroDivisionError):
                 z["kelly_stake"] = 1.0
 
-    for row in dane.get("top3", []):
+    for row in dane.get("top3") or []:
         p    = calibrate_confidence(row.get("pewnosc_pct") or 50)
         odds = row.get("kurs") or 1.0
         try:
@@ -510,8 +511,8 @@ def _dodaj_kelly(dane: dict, bankroll: float) -> None:
 def _waliduj_kupon_groq(dane: dict, stawka: float, kupon_key: str = "kupon_a") -> None:
     from footstats.ai.analyzer import ai_sprawdz_kupon
 
-    kupon     = dane.get(kupon_key, {})
-    zdarzenia = kupon.get("zdarzenia", [])
+    kupon     = dane.get(kupon_key) or {}
+    zdarzenia = kupon.get("zdarzenia") or []
     if not zdarzenia:
         return
 

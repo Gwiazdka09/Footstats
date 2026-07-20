@@ -51,6 +51,27 @@ def test_dodaj_kelly_brak_kuponow_nie_crashuje(monkeypatch):
     assert dane == {}
 
 
+def test_dodaj_kelly_kupon_none_nie_crashuje(monkeypatch):
+    """Groq może zwrócić kupon=None (klucz istnieje, wartość None) — crash prod 20.07.
+
+    dane.get(key, {}) NIE chroni przed jawnym None w słowniku."""
+    _no_calibration(monkeypatch)
+    dane = {
+        "kupon_a": None,
+        "kupon_b": {"zdarzenia": [{"pewnosc_pct": 65, "kurs": 2.0}]},
+        "top3": None,
+    }
+    _dodaj_kelly(dane, bankroll=200.0)
+    assert "kelly_stake" in dane["kupon_b"]["zdarzenia"][0]
+
+
+def test_dodaj_kelly_zdarzenia_none_nie_crashuje(monkeypatch):
+    """Kupon istnieje, ale zdarzenia=None — ta sama rodzina co crash 20.07."""
+    _no_calibration(monkeypatch)
+    dane = {"kupon_a": {"zdarzenia": None}}
+    _dodaj_kelly(dane, bankroll=200.0)  # nie powinno rzucić
+
+
 # ── _wzbogac_o_kursy_fallback (D6/D1b — SofaScore fallback kursów) ────────────
 
 def _mock_sofa_session(monkeypatch):
