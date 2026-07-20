@@ -215,12 +215,17 @@ def _init_db() -> None:
         """)
 
 import logging as _logging
+
+import psycopg2 as _psycopg2
+
 try:
     _init_db()
     from footstats.db.migrations import run_migrations, seed_admin_user
     run_migrations()
     seed_admin_user()
-except (OSError, ValueError, ImportError, RuntimeError) as _db_err:
+except (OSError, ValueError, ImportError, RuntimeError, _psycopg2.Error) as _db_err:
+    # psycopg2.Error: martwa/niedostępna DB (Neon quota-block 18-20.07) nie może
+    # wywalać importu — init jest best-effort, endpointy zgłoszą błąd per-request.
     _logging.getLogger(__name__).error("DB init failed: %s", _db_err, exc_info=True)
 
 # BEZPIECZEŃSTWO: /docs, /redoc, /openapi.json ujawniają pełny schemat API

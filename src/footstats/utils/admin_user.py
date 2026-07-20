@@ -6,6 +6,8 @@ import logging
 import os
 from functools import lru_cache
 
+import psycopg2
+
 log = logging.getLogger(__name__)
 
 
@@ -36,7 +38,8 @@ def resolve_admin_user_id(fallback: int = 1) -> int:
             username,
             fallback,
         )
-    except (OSError, ValueError, RuntimeError) as exc:
+    except (OSError, ValueError, RuntimeError, psycopg2.Error) as exc:
+        # psycopg2.Error: martwa DB (np. quota-block 18-20.07) nie może wywalać agenta
         log.warning("resolve_admin_user_id: %s - fallback user_id=%s", exc, fallback)
     return fallback
 
@@ -62,7 +65,7 @@ def resolve_system_user_id() -> int | None:
         if row:
             return int(row["id"])
         log.warning("Konto 'System' nie znalezione w DB - propozycje dnia nie będą udostępnione")
-    except (OSError, ValueError, RuntimeError) as exc:
+    except (OSError, ValueError, RuntimeError, psycopg2.Error) as exc:
         log.warning("resolve_system_user_id: %s", exc)
     return None
 
