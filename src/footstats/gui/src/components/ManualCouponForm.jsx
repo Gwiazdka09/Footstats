@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { X, PlusCircle, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Sparkles, X, PlusCircle, Trash2 } from 'lucide-react';
 
 const EMPTY_LEG = { home: '', away: '', tip: '', odds: '' };
 const BOOKMAKERS = ['STS', 'Fortuna', 'Superbet', 'Betclic', 'Fuksiarz', 'Bzzoiro'];
+const PREVIEW_DEBOUNCE_MS = 400;
 
 // Dziennik kuponów (J4b): formularz ręcznego wpisu kuponu obstawionego u innego
 // bukmachera. Walidacja klienta jest lustrem walidacji backendu (_validate_manual_coupon),
@@ -14,6 +15,31 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
   const [matchDate, setMatchDate] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // J6 (Etap B): podgląd naszego sygnału (typ/pewność/prob) — index-aligned z `legs`.
+  const [signals, setSignals] = useState([]);
+
+  // Podgląd sygnału: debounce po każdej zmianie nóg/daty, tylko gdy przynajmniej
+  // jedna noga ma wypełnione home+away. Błąd sieci/API → cicho (brak sygnału),
+  // nie blokuje ani nie psuje formularza (nie dotyka `error`/submitu).
+  useEffect(() => {
+    const majaczaCosWypelnione = legs.some(l => l.home.trim() && l.away.trim());
+    if (!majaczaCosWypelnione) {
+      setSignals([]);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      apiFetch('/coupon/preview-signal', {
+        method: 'POST',
+        body: JSON.stringify({
+          legs: legs.map(l => ({ home: l.home.trim(), away: l.away.trim(), tip: l.tip.trim() })),
+          match_date: matchDate || null,
+        }),
+      })
+        .then(setSignals)
+        .catch(() => setSignals([]));
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [legs, matchDate, apiFetch]);
 
   const addLeg = () => setLegs(prev => [...prev, { ...EMPTY_LEG }]);
 
@@ -107,14 +133,27 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
                 maxLength={120}
                 className="min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
               />
-              <input
-                type="text"
-                placeholder="Typ (np. 1)"
-                value={leg.tip}
-                onChange={(e) => updateLeg(i, 'tip', e.target.value)}
-                maxLength={120}
-                className="min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-              />
+              <div className="min-w-0 flex flex-col gap-1">
+                <input
+                  type="text"
+                  placeholder="Typ (np. 1)"
+                  value={leg.tip}
+                  onChange={(e) => updateLeg(i, 'tip', e.target.value)}
+                  maxLength={120}
+                  className="min-w-0 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+                {signals[i]?.matched && (
+                  <div
+                    className="flex items-center gap-1 text-xs px-1"
+                    style={{ color: signals[i].agrees ? 'var(--accent-primary)' : 'var(--accent-secondary)' }}
+                  >
+                    <Sparkles size={16} />
+                    <span>
+                      Nasz typ: <strong>{signals[i].our_tip}</strong> @{signals[i].our_confidence_pct}%
+                    </span>
+                  </div>
+                )}
+              </div>
               <input
                 type="number"
                 step="0.01"
