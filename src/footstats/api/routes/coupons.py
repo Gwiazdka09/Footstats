@@ -13,7 +13,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from footstats.api.auth import require_admin, require_auth
+from footstats.core import match_linker
 from footstats.core.coupon_tracker import STATUS_ACTIVE, save_coupon, update_coupon_status
+from footstats.core.probability_calibrator import calibrate_confidence
 from footstats.core.response_cache import cached_response
 from footstats.utils.db import connect as _connect
 
@@ -137,8 +139,20 @@ class CouponResultRequest(BaseModel):
     result: str  # "WON" | "LOST" | "VOID"
 
 
+class PreviewLeg(BaseModel):
+    home: str
+    away: str
+    tip: str
+
+
+class PreviewSignalRequest(BaseModel):
+    legs: List[PreviewLeg]
+    match_date: Optional[str] = None
+
+
 _MAX_TEXT_LEN = 120
 _MAX_BOOKMAKER_LEN = 60
+_MAX_PREVIEW_LEGS = 30
 
 
 def _validate_manual_coupon(req: ManualCouponRequest) -> None:
@@ -463,6 +477,50 @@ def manual_coupon(req: ManualCouponRequest, user_id: int = Depends(require_auth)
     from footstats.core.response_cache import clear_response_cache
     clear_response_cache()
     return {"ok": True, "coupon_id": coupon_id, "total_odds": total_odds, "status": STATUS_ACTIVE}
+
+
+def _empty_signal() -> dict:
+    """Sygnał dla nogi bez dopasowania — same nulle (front nic nie renderuje)."""
+    return {
+        "matched": False, "our_tip": None, "our_confidence_pct": None,
+        "prob_home": None, "prob_draw": None, "prob_away": None, "agrees": None,
+    }
+
+
+@router.post("/coupon/preview-signal")
+def preview_signal(req: PreviewSignalRequest, user_id: int = Depends(require_auth)) -> list:
+    """
+    Dziennik kuponów (J6, Etap B): podgląd NASZEGO sygnału (typ, pewność,
+    prawdopodobieństwa 1X2) obok wyboru użytkownika — dla każdej nogi
+    formularza ręcznego kuponu, przed zapisem.
+
+    READ-ONLY: cała logika dopasowania delegowana do `match_linker.link_leg`
+    (wyłącznie SELECT z predictions) — endpoint sam nie dotyka DB, zero
+    zewnętrznych API. Auth wymagane, żeby nie wyciekać predykcji anonimom.
+    """
+    if len(req.legs) > _MAX_PREVIEW_LEGS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maksymalnie {_MAX_PREVIEW_LEGS} nóg na podgląd sygnału",
+        )
+    result = []
+    for leg in req.legs:
+        link = match_linker.link_leg(leg.home, leg.away, req.match_date)
+        if not link.matched or link.prediction is None:
+            result.append(_empty_signal())
+            continue
+        pred = link.prediction
+        our_tip = pred["ai_tip"]
+        result.append({
+            "matched": True,
+            "our_tip": our_tip,
+            "our_confidence_pct": round(calibrate_confidence(pred["ai_confidence"]) * 100),
+            "prob_home": pred["prob_home"],
+            "prob_draw": pred["prob_draw"],
+            "prob_away": pred["prob_away"],
+            "agrees": leg.tip.strip().upper() == our_tip.strip().upper(),
+        })
+    return result
 
 
 @router.patch("/coupon/{coupon_id}/result")
