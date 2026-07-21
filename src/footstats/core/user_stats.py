@@ -15,6 +15,7 @@ schematu legów u źródła — dlatego POMINIĘTE w tej wersji.
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from footstats.core.coupon_tracker import STATUS_LOST, STATUS_WON
 
@@ -27,6 +28,16 @@ class CouponResult:
 
     coupon_id: int
     profit_units: float
+
+
+@dataclass(frozen=True)
+class ProgressPoint:
+    """Jeden punkt krzywej postępu (J3) — stan kumulatywny po N-tym rozliczonym kuponie."""
+
+    date: str
+    cumulative_profit: float
+    running_win_rate: float
+    settled_count: int
 
 
 @dataclass(frozen=True)
@@ -58,6 +69,13 @@ def _profit_units(status: str, stake: float | None, odds: float | None) -> float
             return 0.0
         return stake_val * (odds - 1.0)
     return -stake_val
+
+
+def _row_date(value: object) -> str:
+    """created_at (str TIMESTAMP z SQLite / datetime z Postgresa) -> 'YYYY-MM-DD'."""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    return str(value)[:10]
 
 
 def _calc_streak(rows: list) -> int:
@@ -127,3 +145,46 @@ def get_user_stats(user_id: int) -> UserStats:
         best_coupon=max(results, key=lambda r: r.profit_units) if results else None,
         worst_coupon=min(results, key=lambda r: r.profit_units) if results else None,
     )
+
+
+def get_progress_series(user_id: int) -> list[ProgressPoint]:
+    """Krzywa postępu w czasie (J3) — kumulatywny profit i win-rate po kolejnych
+    rozliczonych kuponach usera (SELECT-only, brak zapisu).
+
+    Uwaga o dacie: schemat `coupons` (init_coupon_tables w coupon_tracker.py) NIE
+    ma osobnej kolumny daty rozliczenia (brak settled_at/updated_at) — użyto więc
+    `created_at`, tak samo jak streak w J1 (`get_user_stats`/`_calc_streak`).
+
+    Sortowanie chronologiczne (created_at ASC, id ASC jako tiebreaker przy
+    identycznym znaczniku czasu — kupony rozliczane w tej samej sekundzie zachowują
+    kolejność wstawienia). Pusty user -> [] bez wyjątku.
+    """
+    from footstats.core.coupon_tracker import _connect
+
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, status, stake_pln, total_odds, created_at
+            FROM coupons
+            WHERE user_id = ? AND status IN (?, ?)
+            ORDER BY created_at ASC, id ASC
+            """,
+            (user_id, *SETTLED_STATUSES),
+        ).fetchall()
+
+    points: list[ProgressPoint] = []
+    cumulative_profit = 0.0
+    wins = 0
+    for settled_count, row in enumerate(rows, start=1):
+        cumulative_profit += _profit_units(row["status"], row["stake_pln"], row["total_odds"])
+        if row["status"] == STATUS_WON:
+            wins += 1
+        points.append(
+            ProgressPoint(
+                date=_row_date(row["created_at"]),
+                cumulative_profit=cumulative_profit,
+                running_win_rate=wins / settled_count,
+                settled_count=settled_count,
+            )
+        )
+    return points

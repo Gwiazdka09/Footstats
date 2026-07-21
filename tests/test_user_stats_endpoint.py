@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from footstats.api.auth import require_auth
 from footstats.api.main import app
-from footstats.core.user_stats import CouponResult, UserStats
+from footstats.core.user_stats import CouponResult, ProgressPoint, UserStats
 
 
 @pytest.fixture
@@ -90,4 +90,56 @@ def test_stats_me_blad_db_zwraca_503(client, monkeypatch):
     monkeypatch.setattr(us, "get_user_stats", _boom)
 
     r = client.get("/api/stats/me")
+    assert r.status_code == 503
+
+
+# ── GET /api/stats/progress (J3) ─────────────────────────────────────────────
+
+
+def test_stats_progress_wymaga_auth(anon_client):
+    r = anon_client.get("/api/stats/progress")
+    assert r.status_code in (401, 403)   # HTTPBearer bez nagłówka → 403/401
+
+
+def test_stats_progress_zwraca_ksztalt_listy_punktow(client, monkeypatch):
+    import footstats.api.routes.user_stats as us
+
+    series = [
+        ProgressPoint(date="2026-07-01", cumulative_profit=10.0, running_win_rate=1.0, settled_count=1),
+        ProgressPoint(date="2026-07-02", cumulative_profit=20.0, running_win_rate=1.0, settled_count=2),
+        ProgressPoint(date="2026-07-03", cumulative_profit=10.0, running_win_rate=2 / 3, settled_count=3),
+    ]
+    monkeypatch.setattr(us, "get_progress_series", lambda user_id: series)
+
+    r = client.get("/api/stats/progress")
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body, list)
+    assert len(body) == 3
+    assert body[0] == {
+        "date": "2026-07-01", "cumulative_profit": 10.0,
+        "running_win_rate": 1.0, "settled_count": 1,
+    }
+    assert body[2]["running_win_rate"] == pytest.approx(2 / 3)
+
+
+def test_stats_progress_pusta_lista_bez_crasha(client, monkeypatch):
+    import footstats.api.routes.user_stats as us
+
+    monkeypatch.setattr(us, "get_progress_series", lambda user_id: [])
+
+    r = client.get("/api/stats/progress")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_stats_progress_blad_db_zwraca_503(client, monkeypatch):
+    import footstats.api.routes.user_stats as us
+
+    def _boom(user_id: int):
+        raise RuntimeError("DB down")
+
+    monkeypatch.setattr(us, "get_progress_series", _boom)
+
+    r = client.get("/api/stats/progress")
     assert r.status_code == 503

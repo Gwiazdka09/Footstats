@@ -86,7 +86,7 @@ def tmp_db(tmp_path, monkeypatch):
 
 
 from footstats.core.coupon_tracker import save_coupon, update_coupon_status
-from footstats.core.user_stats import get_user_stats
+from footstats.core.user_stats import get_progress_series, get_user_stats
 
 
 def _make_settled(status: str, stake: float, odds: float, user_id: int = 1) -> int:
@@ -202,3 +202,49 @@ def test_void_and_partial_do_not_count_towards_settled():
     assert stats.profit_units == pytest.approx(10.0)  # tylko WON, VOID/PARTIAL pominięte
     assert stats.roi == pytest.approx(1.0)             # 10 / 10 (staked tylko z WON)
     assert stats.current_streak == 1
+
+
+# ── get_progress_series (J3) ─────────────────────────────────────────────────
+
+
+def test_progress_series_empty_user_returns_empty_list():
+    assert get_progress_series(user_id=999) == []
+
+
+def test_progress_series_three_coupons_cumulative_and_win_rate():
+    _make_settled("WON", stake=10.0, odds=2.0)   # +10
+    _make_settled("WON", stake=10.0, odds=2.0)   # +10
+    _make_settled("LOST", stake=10.0, odds=2.0)  # -10
+
+    series = get_progress_series(user_id=1)
+
+    assert len(series) == 3
+    assert all(isinstance(p.date, str) and p.date for p in series)
+
+    assert series[0].settled_count == 1
+    assert series[0].cumulative_profit == pytest.approx(10.0)
+    assert series[0].running_win_rate == pytest.approx(1.0)
+
+    assert series[1].settled_count == 2
+    assert series[1].cumulative_profit == pytest.approx(20.0)
+    assert series[1].running_win_rate == pytest.approx(1.0)
+
+    assert series[2].settled_count == 3
+    assert series[2].cumulative_profit == pytest.approx(10.0)  # +10 +10 -10
+    assert series[2].running_win_rate == pytest.approx(2 / 3)
+
+
+def test_progress_series_pending_coupons_ignored_and_sorted_chronologically():
+    save_coupon("draft", "A", [], stake_pln=10.0, user_id=1)  # DRAFT, pomijany
+    _make_settled("LOST", stake=10.0, odds=2.0)               # -10
+    _make_settled("WON", stake=10.0, odds=3.0)                # +20
+
+    series = get_progress_series(user_id=1)
+
+    assert len(series) == 2
+    assert series[0].settled_count == 1
+    assert series[0].cumulative_profit == pytest.approx(-10.0)
+    assert series[0].running_win_rate == pytest.approx(0.0)
+    assert series[1].settled_count == 2
+    assert series[1].cumulative_profit == pytest.approx(10.0)  # -10 + 20
+    assert series[1].running_win_rate == pytest.approx(0.5)
