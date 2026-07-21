@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, ChevronRight, ShieldCheck, Trophy, Swords, X
+  LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, ChevronRight, ShieldCheck, Trophy, Swords, X, BarChart3
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
@@ -10,6 +10,7 @@ import LoginView from './components/LoginView';
 import DashboardHome from './components/DashboardHome';
 import CouponWizard from './components/Wizard/CouponWizard';
 import HistoryView from './components/HistoryView';
+import StatsView from './components/StatsView';
 import LeaderboardView from './components/LeaderboardView';
 import SettingsView from './components/SettingsView';
 import AdminPanelView from './components/AdminPanelView';
@@ -24,7 +25,7 @@ const App = () => {
   const [config, setConfig] = useState(null);
   const [calibration, setCalibration] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('dashboard'); // 'dashboard', 'history', 'settings', 'wizard'
+  const [view, setView] = useState('dashboard'); // 'dashboard', 'history', 'stats', 'settings', 'wizard'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [proposalToCopy, setProposalToCopy] = useState(null);
@@ -35,6 +36,7 @@ const App = () => {
     { key: 'wizard', label: 'Stwórz Kupon', icon: <PlusCircle size={20} /> },
     { key: 'analizy', label: 'Analizy meczów', icon: <Swords size={20} /> },
     { key: 'history', label: 'Historia', icon: <History size={20} /> },
+    { key: 'stats', label: 'Statystyki', icon: <BarChart3 size={20} /> },
     { key: 'settings', label: 'Ustawienia', icon: <Settings size={20} /> },
     { key: 'leaderboard', label: 'Najlepsi typerzy', icon: <Trophy size={20} /> },
     ...(isAdmin ? [{ key: 'admin', label: 'Panel', icon: <ShieldCheck size={20} /> }] : []),
@@ -251,6 +253,9 @@ const App = () => {
                 key="hist"
                 apiFetch={apiFetch}
               />
+            )}
+            {view === 'stats' && (
+              <StatsView key="stats" apiFetch={apiFetch} />
             )}
             {view === 'settings' && (
               <SettingsView
