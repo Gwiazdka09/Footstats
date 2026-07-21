@@ -4,12 +4,41 @@
 >
 > **🔧 NAPRAWIONE 07-06 (największy lever):** audyt 104 settled — Groq nadpisywał model i psuł (1X2 model argmax 60% vs Groq 48%, +12pp). Fix: `GROQ_TIP_OVERRIDE` flip ON + threshold 33 (1X2) + 45 (O/U/BTTS `koryguj_tip_ou_btts`). **LLM (llama-3.1-8b) odsunięty od WSZYSTKICH picków → tylko analiza/podsumowania.** Model wybiera. TODO: zakładka GUI "analiza LLM"; rozważyć GROQ_MODEL=70b (reasoning). Inne dławiki: 65% predykcji bez modelu (off-season egzotyka/WC → LEAGUE_GATING celuje w złe ligi), confidence odwrócony (80%+→19%, nie włączać selekcji).
 
-**Aktualizacja:** 2026-07-20 · v3.4-stable
+> **🎯 KIERUNEK 2026-07-21:** produkt = **dziennik kuponów + śledzenie postępu ludzi** (nie tylko surowa predykcja). NIE bukmacher, **zero obsługi pieniędzy** (jednostki, nie PLN przez nas). Predykcja = sygnał zaufania w dzienniku, nie sprzedawany edge. Plan → sekcja `📓 DZIENNIK KUPONÓW` niżej. Omija KILL rady ROAST (dziennik ≠ konkurent devigu rynku).
+
+**Aktualizacja:** 2026-07-21 · v3.4-stable
 **Accuracy:** offline **51.8%** (WF A/B, DC W=0.5) | live świeże ≥06-19 **47.8%** (23 settled, fixy Cel B) vs stare 31%
 **Cel M1:** 55% win rate · **Suite:** ~1539 pass unit-mode (coverage 57)
 **LIVE:** pipeline **PC-off w chmurze** — Cloud Run Jobs (final 11:00 + evening 23:00) + Scheduler (draft 07:30, settle 06:00/21:30). Szczegóły → `docs/cloud_migration.md`.
 **⚠️ INCYDENT 14-20.07 (naprawiony 07-20):** potrójna awaria — Neon quota-block → **DB = Supabase free** (session pooler); image jobów bez `footstats.data` (`.gcloudignore` fix); kupon=None crash. **Luka w danych 14-20.07** (zero predykcji/settled). Dane 1-17.07 uwięzione w Neonie do **1.08**. Szczegóły → `CHANGELOG.md` 07-20.
 **Zbudowane flag-OFF (flip po walidacji):** `SELECTION_MIN_CONF` (#1) · `LEAGUE_GATING` (#2). Już LIVE: `ENSEMBLE_MARKET_WEIGHT=0.70` (reweight ku rynkowi).
+
+---
+
+## 📓 DZIENNIK KUPONÓW + POSTĘP LUDZI (kierunek 2026-07-21)
+
+> **Cel:** produkt = miejsce gdzie ludzie zapisują swoje kupony (obstawione GDZIE INDZIEJ), a system podsumowuje zysk/stratę i śledzi postęp w czasie. Predykcja modelu = sygnał obok wyboru usera. **Zero obsługi pieniędzy, nie bukmacher.**
+> **Dlaczego to żyje (a "best predyktor" nie):** dziennik NIE ściga się z devigiem rynku — wartość = rekord, dyscyplina, accountability, ranking grupy. Rada ROAST zabiła "predyktor jako produkt", nie "dziennik z predykcją jako feature".
+
+### Fundament (JUŻ istnieje — nie budować od zera)
+- `core/coupon_tracker.py` — CRUD kuponów per `user_id` (`save_coupon`/`update_coupon_status`/`get_active_coupons`/`get_coupon_legs`/`promote_to_active`).
+- `core/coupon_settlement.py` — auto-rozliczanie po wyniku meczu · `core/bankroll.py` — saldo jednostek · `core/system_coupons.py` · `core/clv_tracker.py`.
+- GUI: `HistoryView`+`HistoryCouponRow` (historia), `LeaderboardView` (ranking ludzi), `DashboardHome`, `LoginView`/multi-user, `AdminPanelView`, `SettingsView`.
+- Dowód działania: 10 kuponów Admin_JG rozliczone (CHANGELOG 07-03/04).
+
+### Luki do domknięcia (bite-size, TDD + design-system, w tej kolejności)
+- [ ] **J1 — Agregat statystyk usera** (`core/user_stats.py`, read-only na coupons/bankroll): ROI, win-rate, liczba kuponów, zysk/strata w jednostkach, aktualny streak, best/worst kupon, rozbicie per-liga. TDD, zero prod-write.
+- [ ] **J2 — GUI Profil/Statystyki**: karta metryk usera (glass-card, tokeny `index.css`, accent indigo+pink, ikony 16/20px). Weryfikacja Playwright desktop+mobile.
+- [ ] **J3 — Krzywa postępu w czasie**: endpoint szeregu (saldo jednostek / ROI po dacie) + wykres w GUI (trend hit-rate + bankroll). Źródło = historia `bankroll.py`.
+- [ ] **J4 — Ręczny wpis kuponu**: formularz "Dodaj kupon" (mecze, typ, kurs, stawka-jednostki, bukmacher) → `save_coupon`; auto-settle po wyniku. User zapisuje kupon obstawiony u siebie.
+- [ ] **J5 — Leaderboard v2**: ranking ludzi po ROI/units/hit-rate + filtry (okno czasu, liga, sezon). Rozbudowa istniejącego `LeaderboardView`.
+- [ ] **J6 — Predykcja jako sygnał w dzienniku**: przy dodawaniu/podglądzie kuponu pokaż predykcję modelu + **kalibrowaną pewność** (uczciwe 65%=65%) obok wyboru usera → user widzi zgodność swojego typu z modelem. Zależy od jakości sygnału (P0/P1).
+
+### Silnik sygnału (dotychczasowa praca = wartość dziennika)
+Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **feature zaufania w dzienniku**: uczciwa pewność, której blind-tipster nie da. P0 walidacja dalej ważna, ale jako **jakość sygnału**, nie jako "bicie rynku".
+
+### Non-goals (twarde — blok scope-creep)
+- ❌ Płatności / wypłaty / realny PLN przez nas — tylko **jednostki**. ❌ Przyjmowanie zakładów (nie bukmacher). ❌ Sprzedawanie edge / ściganie rynku jako produkt.
 
 ---
 
