@@ -78,9 +78,19 @@ def link_leg(
 
     Returns:
         LinkResult z flagą `matched`, poziomem pewności i (opcjonalnie) predykcją.
+
+    Uwaga (v1, świadome ograniczenie): STRICT `_norm_ascii` nie dekomponuje
+    polskiego „ł” (np. „Łódź” → „odz”, litera znika zamiast zamienić się na
+    „l”), co może dać false-negative dla nazw z tą literą — bezpieczniejsze niż
+    false-positive, user oznaczy dopasowanie ręcznie.
     """
     if not home or not away or not date:
         return LinkResult(False, "none", None, "Brak nazw drużyn lub daty meczu")
+
+    norm_home = _norm_ascii(home)
+    norm_away = _norm_ascii(away)
+    if not norm_home or not norm_away:
+        return LinkResult(False, "none", None, "Nazwa drużyny pusta po normalizacji")
 
     try:
         window = _date_window(date, day_tolerance)
@@ -96,9 +106,6 @@ def link_leg(
                 WHERE substr(match_date, 1, 10) IN ({placeholders})""",
             tuple(window),
         ).fetchall()
-
-    norm_home = _norm_ascii(home)
-    norm_away = _norm_ascii(away)
 
     candidates = [
         row for row in rows

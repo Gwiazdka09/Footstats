@@ -199,6 +199,16 @@ def test_diakrytyki_matchuja(tmp_db):
     assert result.match_confidence == "exact"
 
 
+def test_pusta_normalizacja_nie_matchuje(tmp_db):
+    # Stringi samej interpunkcji/spacji normalizują się do "" — bez guardu
+    # takie zapytanie zmatchowałoby dowolny wiersz, którego drużyny też
+    # normalizują się do "" (false-positive, np. puste/śmieciowe rekordy).
+    _insert_prediction(tmp_db, "Legia", "Lech", _TODAY.isoformat())
+    result = match_linker.link_leg("   ", "---", _TODAY.isoformat())
+    assert result.matched is False
+    assert result.match_confidence == "none"
+
+
 def test_read_only_zero_writes(tmp_db):
     _insert_prediction(tmp_db, "Legia", "Lech", _TODAY.isoformat())
     before = _row_counts(tmp_db)
