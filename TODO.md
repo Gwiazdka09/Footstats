@@ -27,11 +27,11 @@
 - Dowód działania: 10 kuponów Admin_JG rozliczone (CHANGELOG 07-03/04).
 
 ### Luki do domknięcia (bite-size, TDD + design-system, w tej kolejności)
-- [ ] **J1 — Agregat statystyk usera** (`core/user_stats.py`, read-only na coupons/bankroll): ROI, win-rate, liczba kuponów, zysk/strata w jednostkach, aktualny streak, best/worst kupon, rozbicie per-liga. TDD, zero prod-write.
-- [ ] **J2 — GUI Profil/Statystyki**: karta metryk usera (glass-card, tokeny `index.css`, accent indigo+pink, ikony 16/20px). Weryfikacja Playwright desktop+mobile.
-- [ ] **J3 — Krzywa postępu w czasie**: endpoint szeregu (saldo jednostek / ROI po dacie) + wykres w GUI (trend hit-rate + bankroll). Źródło = historia `bankroll.py`.
-- [ ] **J4 — Ręczny wpis kuponu**: formularz "Dodaj kupon" (mecze, typ, kurs, stawka-jednostki, bukmacher) → `save_coupon`; auto-settle po wyniku. User zapisuje kupon obstawiony u siebie.
-- [ ] **J5 — Leaderboard v2**: ranking ludzi po ROI/units/hit-rate + filtry (okno czasu, liga, sezon). Rozbudowa istniejącego `LeaderboardView`.
+- [x] **J1 — Agregat statystyk usera** ✅ `core/user_stats.py` read-only (ROI/win-rate/profit-PLN/streak/best-worst). 25 testów. `get_user_stats`+`get_progress_series`. (per-liga POMINIĘTE — legi niespójne między źródłami.)
+- [x] **J2 — GUI Profil/Statystyki** ✅ `GET /api/stats/me` + `StatsView.jsx` (win-rate/ROI/profit/streak/best-worst). Etykiety PLN + disclaimer "papierowy bankroll, nie prawdziwe pieniądze". Playwright PASS.
+- [x] **J3 — Krzywa postępu** ✅ `get_progress_series` + `GET /api/stats/progress` + `ProgressChart.jsx` (recharts, profit indigo / win-rate pink). Data = `created_at` (schemat bez `settled_at`). Playwright PASS.
+- [x] **J4 — Ręczny wpis kuponu** ✅ kolumna `bookmaker` (migracja 9→Supabase deploy) + `POST /api/coupon/manual` (free-form, ACTIVE, bankroll-neutral) + `PATCH /api/coupon/{id}/result` (owner-check, CAS, guard `kupon_type=='manual'`) + `ManualCouponForm.jsx` + WON/LOST/VOID w `HistoryCouponRow`. **Manual WYKLUCZONY z auto-settle** (hybryda: co mamy=my, reszta=user ręcznie). Playwright PASS.
+- [ ] **J5 — Leaderboard v2**: ranking ludzi po ROI/units/hit-rate + filtry (okno czasu, liga, sezon). Rozbudowa istniejącego `LeaderboardView` + `GET /leaderboard`.
 - [ ] **J6 — Predykcja jako sygnał w dzienniku**: przy dodawaniu/podglądzie kuponu pokaż predykcję modelu + **kalibrowaną pewność** (uczciwe 65%=65%) obok wyboru usera → user widzi zgodność swojego typu z modelem. Zależy od jakości sygnału (P0/P1).
 
 ### Silnik sygnału (dotychczasowa praca = wartość dziennika)
@@ -39,6 +39,11 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ### Non-goals (twarde — blok scope-creep)
 - ❌ Płatności / wypłaty / realny PLN przez nas — tylko **jednostki**. ❌ Przyjmowanie zakładów (nie bukmacher). ❌ Sprzedawanie edge / ściganie rynku jako produkt.
+
+### 🐞 Znalezione przy J1-J4 (osobne taski, NIE blokują dziennika)
+- **CSS cascade-layer bug (app-wide):** `gui/src/index.css` `button {color:inherit;background:transparent}` jest POZA `@layer` → w Tailwind v4 bije utility-klasy, więc `text-*`/`bg-*` na KAŻDYM `<button>` się nie stosują (przyciski bezbarwne). Obejście w dzienniku: inline `style var()`. Fix globalny = owinąć reset w `@layer base` + pełna regresja wizualna przycisków.
+- **Auto-settle hybryda „co mamy — my":** manual kupony na razie TYLKO ręczne rozliczenie. Follow-up J4c: best-effort auto-match ręcznych nóg do naszych wyników (fuzzy nazwa+data) → link match_id → istniejący settle. Ostrożnie (settlement correctness, data-guard) — osobny task.
+- **Testy dotykają prod Neon:** import `api/routes/coupons` przy zbiórce testów próbuje realnego połączenia do martwego Neona (`config.py` `load_dotenv override` → `DATABASE_URL` z `.env`). Pre-existing. Fix: marker `@pytest.mark.integration` + test-DB (patrz P0 dług testowy).
 
 ---
 
