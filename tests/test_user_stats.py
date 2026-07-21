@@ -176,3 +176,29 @@ def test_pending_coupons_do_not_count_towards_settled():
     assert stats.total_coupons == 2
     assert stats.settled_count == 0
     assert stats.win_rate == 0.0
+
+
+def test_void_and_partial_do_not_count_towards_settled():
+    # Regresja review LOW-2: VOID (terminarz/brak wyniku po VOID_AFTER_DAYS) i
+    # PARTIAL (kupon czeka na częściowe wyniki, zob. coupon_settlement.py) nie są
+    # "żywym" rozliczonym zakładem — nie mogą wpaść do settled/win_rate/roi/streak.
+    _make_settled("WON", stake=10.0, odds=2.0)  # jedyny realnie rozliczony
+
+    cid_void = save_coupon("final", "A", [], stake_pln=10.0, total_odds=2.0, user_id=1)
+    update_coupon_status(cid_void, "ACTIVE")
+    update_coupon_status(cid_void, "VOID")
+
+    cid_partial = save_coupon("final", "A", [], stake_pln=10.0, total_odds=2.0, user_id=1)
+    update_coupon_status(cid_partial, "ACTIVE")
+    update_coupon_status(cid_partial, "PARTIAL")
+
+    stats = get_user_stats(user_id=1)
+
+    assert stats.total_coupons == 3
+    assert stats.settled_count == 1
+    assert stats.wins == 1
+    assert stats.losses == 0
+    assert stats.win_rate == pytest.approx(1.0)
+    assert stats.profit_units == pytest.approx(10.0)  # tylko WON, VOID/PARTIAL pominięte
+    assert stats.roi == pytest.approx(1.0)             # 10 / 10 (staked tylko z WON)
+    assert stats.current_streak == 1

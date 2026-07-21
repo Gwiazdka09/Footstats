@@ -7,9 +7,11 @@ rozliczonym wynikiem, więc żadne z nich nie wchodzą do win-rate/streak (spec 
 
 Żadnych INSERT/UPDATE/DELETE — tylko SELECT.
 
-Uwaga o per_league: schemat legów kuponu (zob. core/daily_io.py, klucze
-home/away/tip/odds/decision_score/mecz) NIE zawiera ligi meczu, więc agregacja
-per_league jest POMINIĘTA (brak kolumny do grupowania bez zmiany schematu).
+Uwaga o per_league: schemat legów kuponu jest NIESPÓJNY między źródłami kuponów
+— risk_proposals.py/system_coupons.py dopisują klucz "liga" do legów, ale
+daily_io.py/system_paper.py go nie mają (home/away/tip/odds/decision_score/mecz).
+Grupowanie per_league byłoby więc zawodne (część kuponów bez ligi) bez ujednolicenia
+schematu legów u źródła — dlatego POMINIĘTE w tej wersji.
 """
 
 from dataclasses import dataclass
@@ -45,10 +47,16 @@ class UserStats:
 
 
 def _profit_units(status: str, stake: float | None, odds: float | None) -> float:
-    """Zysk-jednostki jednego kuponu: wygrana +stake*(kurs-1), przegrana -stake."""
+    """Zysk-jednostki jednego kuponu: wygrana +stake*(kurs-1), przegrana -stake.
+
+    WON bez kursu (odds brak/None/0) → 0.0, nie -stake — brak danych o kursie
+    nie może zamienić wygranej w (fałszywą) stratę.
+    """
     stake_val = stake or 0.0
     if status == STATUS_WON:
-        return stake_val * ((odds or 0.0) - 1.0)
+        if not odds:
+            return 0.0
+        return stake_val * (odds - 1.0)
     return -stake_val
 
 
