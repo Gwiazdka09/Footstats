@@ -31,7 +31,7 @@
 - [x] **J2 — GUI Profil/Statystyki** ✅ `GET /api/stats/me` + `StatsView.jsx` (win-rate/ROI/profit/streak/best-worst). Etykiety PLN + disclaimer "papierowy bankroll, nie prawdziwe pieniądze". Playwright PASS.
 - [x] **J3 — Krzywa postępu** ✅ `get_progress_series` + `GET /api/stats/progress` + `ProgressChart.jsx` (recharts, profit indigo / win-rate pink). Data = `created_at` (schemat bez `settled_at`). Playwright PASS.
 - [x] **J4 — Ręczny wpis kuponu** ✅ kolumna `bookmaker` (migracja 9→Supabase deploy) + `POST /api/coupon/manual` (free-form, ACTIVE, bankroll-neutral) + `PATCH /api/coupon/{id}/result` (owner-check, CAS, guard `kupon_type=='manual'`) + `ManualCouponForm.jsx` + WON/LOST/VOID w `HistoryCouponRow`. **Manual WYKLUCZONY z auto-settle** (hybryda: co mamy=my, reszta=user ręcznie). Playwright PASS.
-- [ ] **J5 — Leaderboard v2**: ranking ludzi po ROI/units/hit-rate + filtry (okno czasu, liga, sezon). Rozbudowa istniejącego `LeaderboardView` + `GET /leaderboard`.
+- [x] **J5 — Leaderboard v2** ✅ `GET /leaderboard` + ROI/profit/win-rate + `sort` (win_rate/roi/profit, nieznany→400) + filtr czasu `days` (cache vary_by) + `LeaderboardView` v2 (selektory, design-system inline-token, disclaimer PLN). Liga/sezon POMINIĘTE (legi niespójne). **Ranking = shared-only (opt-in); statystyki osobiste = WSZYSTKIE kupony (decyzja 2026-07-21).** Playwright PASS.
 - [ ] **J6 — Predykcja jako sygnał w dzienniku**: przy dodawaniu/podglądzie kuponu pokaż predykcję modelu + **kalibrowaną pewność** (uczciwe 65%=65%) obok wyboru usera → user widzi zgodność swojego typu z modelem. Zależy od jakości sygnału (P0/P1).
 
 ### Silnik sygnału (dotychczasowa praca = wartość dziennika)
