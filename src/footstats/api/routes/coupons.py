@@ -472,18 +472,27 @@ def set_coupon_result(coupon_id: int, req: CouponResultRequest, user_id: int = D
     CAS-guard (expected_status=ACTIVE) chroni przed podwójnym rozliczeniem —
     drugie wywołanie na już rozliczonym kuponie zwraca 409. Zero operacji na
     bankroll_state (dziennik jest neutralny dla papierowego salda).
+    Tylko kupony kupon_type='manual' — inaczej user mógłby ręcznie wymusić
+    fałszywy WON na własnym kuponie AI (accumulator/system), który normalnie
+    rozlicza automat (coupon_settlement).
     """
     if req.result not in ("WON", "LOST", "VOID"):
         raise HTTPException(status_code=400, detail="Wynik musi być WON, LOST lub VOID")
     try:
         with _connect() as conn:
             row = conn.execute(
-                "SELECT user_id, stake_pln, total_odds FROM coupons WHERE id = ?", (coupon_id,)
+                "SELECT user_id, stake_pln, total_odds, kupon_type FROM coupons WHERE id = ?",
+                (coupon_id,),
             ).fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Kupon nie istnieje")
             if int(row["user_id"]) != user_id:
                 raise HTTPException(status_code=403, detail="Brak uprawnień do tego kuponu")
+            if row["kupon_type"] != "manual":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Tylko ręcznie dodane kupony można rozliczać ręcznie",
+                )
             stake = float(row["stake_pln"] or 0.0)
             total_odds = float(row["total_odds"] or 0.0)
     except psycopg2.Error as e:

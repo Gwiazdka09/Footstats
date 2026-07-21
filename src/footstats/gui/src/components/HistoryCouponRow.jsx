@@ -105,28 +105,44 @@ const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
       {isManualActive && (
         <div className="px-6 pb-4 flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-500 uppercase tracking-widest">Oznacz wynik:</span>
+          {/* Kolory inline (nie Tailwind-klasy): index.css ma niewarstwowe
+              `button { color: inherit; background: transparent }`, ktore bije
+              warstwowe (@layer utilities) klasy Tailwind na <button> — patrz
+              StatsView.jsx/ProgressChart.jsx (ten sam wzorzec). */}
           <button
             onClick={() => markResult('WON')}
             disabled={settling}
-            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 disabled:opacity-50 transition-colors"
+            style={{
+              color: 'var(--accent-primary)',
+              background: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)',
+            }}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 hover:opacity-80 transition-opacity"
           >
             WYGRANY
           </button>
           <button
             onClick={() => markResult('LOST')}
             disabled={settling}
-            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-pink-500/10 text-pink-400 hover:bg-pink-500/20 disabled:opacity-50 transition-colors"
+            style={{
+              color: 'var(--accent-secondary)',
+              background: 'color-mix(in srgb, var(--accent-secondary) 12%, transparent)',
+            }}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 hover:opacity-80 transition-opacity"
           >
             PRZEGRANY
           </button>
           <button
             onClick={() => markResult('VOID')}
             disabled={settling}
-            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white/5 text-slate-400 hover:bg-white/10 disabled:opacity-50 transition-colors"
+            style={{
+              color: 'var(--text-muted)',
+              background: 'color-mix(in srgb, var(--text-muted) 12%, transparent)',
+            }}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 hover:opacity-80 transition-opacity"
           >
             ANULOWANY
           </button>
-          {settleError && <span className="text-xs text-pink-400">{settleError}</span>}
+          {settleError && <span className="text-xs" style={{ color: 'var(--accent-secondary)' }}>{settleError}</span>}
         </div>
       )}
 

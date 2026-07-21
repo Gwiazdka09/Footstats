@@ -97,7 +97,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
                 value={leg.home}
                 onChange={(e) => updateLeg(i, 'home', e.target.value)}
                 maxLength={120}
-                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                className="min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
               />
               <input
                 type="text"
@@ -105,7 +105,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
                 value={leg.away}
                 onChange={(e) => updateLeg(i, 'away', e.target.value)}
                 maxLength={120}
-                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                className="min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
               />
               <input
                 type="text"
@@ -113,7 +113,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
                 value={leg.tip}
                 onChange={(e) => updateLeg(i, 'tip', e.target.value)}
                 maxLength={120}
-                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                className="min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
               />
               <input
                 type="number"
@@ -122,7 +122,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
                 placeholder="Kurs"
                 value={leg.odds}
                 onChange={(e) => updateLeg(i, 'odds', e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                className="min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
               />
               <button
                 onClick={() => removeLeg(i)}

@@ -8,9 +8,14 @@ const HistoryView = ({ apiFetch }) => {
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showManualForm, setShowManualForm] = useState(false);
+  const [error, setError] = useState('');
 
   const loadCoupons = () => apiFetch('/coupons?limit=50').then(data => {
+    setError('');
     setCoupons(data);
+    setLoading(false);
+  }).catch(err => {
+    setError(err.message || 'Nie udało się pobrać historii kuponów.');
     setLoading(false);
   });
 
@@ -38,13 +43,19 @@ const HistoryView = ({ apiFetch }) => {
           <PlusCircle size={16} /> Dodaj kupon
         </button>
       </div>
-      <div className="grid grid-cols-1 gap-4">
-        {coupons.length > 0 ? coupons.map((c) => (
-          <HistoryCouponRow key={c.id} c={c} apiFetch={apiFetch} onRefresh={loadCoupons} />
-        )) : (
-          <div className="text-center p-24 glass-card text-slate-500">Historia jest pusta.</div>
-        )}
-      </div>
+      {error ? (
+        <div className="text-center p-24 glass-card" style={{ color: 'var(--accent-secondary)' }}>
+          {error}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          {coupons.length > 0 ? coupons.map((c) => (
+            <HistoryCouponRow key={c.id} c={c} apiFetch={apiFetch} onRefresh={loadCoupons} />
+          )) : (
+            <div className="text-center p-24 glass-card text-slate-500">Historia jest pusta.</div>
+          )}
+        </div>
+      )}
       {showManualForm && (
         <ManualCouponForm
           apiFetch={apiFetch}

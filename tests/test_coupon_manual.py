@@ -262,6 +262,33 @@ def test_result_nieprawidlowa_wartosc_400(tmp_db):
     assert exc.value.status_code == 400
 
 
+def _saved_ai_coupon(user_id: int = 1, stake: float = 10.0, odds: float = 2.5) -> int:
+    """Kupon AI (accumulator) ACTIVE — do testu, że dziennik nie rozlicza cudzych automatów."""
+    from footstats.core.coupon_tracker import STATUS_ACTIVE, save_coupon, update_coupon_status
+
+    cid = save_coupon(
+        phase="final",
+        kupon_type="accumulator",
+        legs=[{"home": "Legia", "away": "Lech", "tip": "1", "odds": odds}],
+        total_odds=odds,
+        stake_pln=stake,
+        user_id=user_id,
+    )
+    update_coupon_status(cid, STATUS_ACTIVE)
+    return cid
+
+
+def test_result_niemanual_kupon_400(tmp_db):
+    """Guard: kupon AI (kupon_type != 'manual') nie może być ręcznie rozliczony —
+    inaczej user obszedłby automat i wpisał sobie fake WON."""
+    cid = _saved_ai_coupon(stake=10.0, odds=2.5)
+    with pytest.raises(HTTPException) as exc:
+        set_coupon_result(cid, CouponResultRequest(result="WON"), user_id=1)
+    assert exc.value.status_code == 400
+    row = _row(tmp_db, cid)
+    assert row["status"] == "ACTIVE"
+
+
 # ── integracja J1: get_user_stats liczy rozliczony ręczny kupon ─────────────
 
 def test_won_manual_coupon_liczony_w_user_stats(tmp_db):
