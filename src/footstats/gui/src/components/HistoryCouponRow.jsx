@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import { CheckCircle2, XCircle, Clock, ChevronRight, Share2 } from 'lucide-react';
 import { odmianaTypy } from '../lib/tips';
 
-const HistoryCouponRow = ({ c, apiFetch }) => {
+const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
   const [expanded, setExpanded] = useState(false);
   const [shared, setShared] = useState(!!c.shared);
   const [sharing, setSharing] = useState(false);
+  const [settling, setSettling] = useState(false);
+  const [settleError, setSettleError] = useState('');
   const isWon = ['WON', 'WIN'].includes(c.status);
   const isLost = ['LOST', 'LOSE'].includes(c.status);
+  const isManualActive = c.status === 'ACTIVE' && c.kupon_type === 'manual';
   const legs = c.legs || [];
   const wonCount = legs.filter(l => l.leg_won === true).length;
   const lostCount = legs.filter(l => l.leg_won === false).length;
@@ -26,6 +29,23 @@ const HistoryCouponRow = ({ c, apiFetch }) => {
       console.error('Błąd udostępniania kuponu:', err);
     } finally {
       setSharing(false);
+    }
+  };
+
+  const markResult = async (result) => {
+    if (settling) return;
+    setSettling(true);
+    setSettleError('');
+    try {
+      await apiFetch(`/coupon/${c.id}/result`, {
+        method: 'PATCH',
+        body: JSON.stringify({ result }),
+      });
+      onRefresh && onRefresh();
+    } catch (err) {
+      setSettleError(err.message);
+    } finally {
+      setSettling(false);
     }
   };
 
@@ -81,6 +101,34 @@ const HistoryCouponRow = ({ c, apiFetch }) => {
           )}
         </div>
       </div>
+
+      {isManualActive && (
+        <div className="px-6 pb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-slate-500 uppercase tracking-widest">Oznacz wynik:</span>
+          <button
+            onClick={() => markResult('WON')}
+            disabled={settling}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 disabled:opacity-50 transition-colors"
+          >
+            WYGRANY
+          </button>
+          <button
+            onClick={() => markResult('LOST')}
+            disabled={settling}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-pink-500/10 text-pink-400 hover:bg-pink-500/20 disabled:opacity-50 transition-colors"
+          >
+            PRZEGRANY
+          </button>
+          <button
+            onClick={() => markResult('VOID')}
+            disabled={settling}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white/5 text-slate-400 hover:bg-white/10 disabled:opacity-50 transition-colors"
+          >
+            ANULOWANY
+          </button>
+          {settleError && <span className="text-xs text-pink-400">{settleError}</span>}
+        </div>
+      )}
 
       {expanded && legs.length > 0 && (
         <div className="px-6 pb-6 space-y-2 border-t border-white/5 pt-4">
