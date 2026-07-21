@@ -539,40 +539,73 @@ def share_coupon(coupon_id: int, req: ShareRequest, user_id: int = Depends(requi
         raise HTTPException(status_code=500, detail=str(e))
 
 
+_LEADERBOARD_SORT_FIELDS = {"win_rate": "win_rate", "roi": "roi", "profit": "profit_pln"}
+
+
 @router.get("/leaderboard")
-@cached_response(ttl_seconds=1800)
-def get_leaderboard(min_coupons: int = 3, limit: int = 20):
-    """Ranking najlepszych typerów wg win rate na udostępnionych kuponach."""
+@cached_response(ttl_seconds=1800, vary_by=["sort", "days"])
+def get_leaderboard(min_coupons: int = 3, limit: int = 20, sort: str = "win_rate", days: int = 0):
+    """Ranking typerów wg wybranej metryki na udostępnionych (shared=TRUE), rozliczonych
+    (WON/WIN/LOST/LOSE) kuponach.
+
+    Metryki per user: win_rate (wins/total*100), staked/payout (suma stawek/wypłat),
+    profit_pln (payout-staked), roi (profit/staked*100, 0.0 gdy staked=0 — bez ZeroDivision).
+    `sort` wybiera metrykę rankingu (win_rate/roi/profit) — nieznana wartość to 400.
+    Tiebreak zawsze total DESC. `days` filtruje okno czasowe po created_at (0/brak = całość).
+
+    Bez agregacji per-ligę: schemat legów niespójny między źródłami kuponów (manual
+    free-form bez ligi, część automatów bez klucza "liga") — grupowanie byłoby
+    zawodne, analogicznie do per_league w core/user_stats.py.
+    """
+    if sort not in _LEADERBOARD_SORT_FIELDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nieznany sort '{sort}'. Dozwolone: {', '.join(sorted(_LEADERBOARD_SORT_FIELDS))}",
+        )
     try:
+        query = """
+            SELECT u.id as user_id, u.username,
+                   COUNT(*) as total,
+                   SUM(CASE WHEN c.status IN ('WON','WIN') THEN 1 ELSE 0 END) as wins,
+                   SUM(COALESCE(c.stake_pln, 0)) as staked,
+                   SUM(COALESCE(c.payout_pln, 0)) as payout
+            FROM coupons c
+            JOIN users u ON u.id = c.user_id
+            WHERE c.shared = TRUE AND c.status IN ('WON','WIN','LOST','LOSE')
+        """
+        params: list = []
+        if days > 0:
+            cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            query += " AND c.created_at >= ?"
+            params.append(cutoff)
+        query += " GROUP BY u.id, u.username HAVING COUNT(*) >= ?"
+        params.append(min_coupons)
+
         with _connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT u.id as user_id, u.username,
-                       COUNT(*) as total,
-                       SUM(CASE WHEN c.status IN ('WON','WIN') THEN 1 ELSE 0 END) as wins
-                FROM coupons c
-                JOIN users u ON u.id = c.user_id
-                WHERE c.shared = TRUE AND c.status IN ('WON','WIN','LOST','LOSE')
-                GROUP BY u.id, u.username
-                HAVING COUNT(*) >= ?
-                ORDER BY (CAST(SUM(CASE WHEN c.status IN ('WON','WIN') THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*)) DESC,
-                         total DESC
-                LIMIT ?
-                """,
-                (min_coupons, limit),
-            ).fetchall()
+            rows = conn.execute(query, tuple(params)).fetchall()
+
         result = []
         for r in rows:
             total = r["total"]
             wins = r["wins"] or 0
+            staked = r["staked"] or 0.0
+            payout = r["payout"] or 0.0
+            profit_pln = payout - staked
             result.append({
                 "user_id": r["user_id"],
                 "username": r["username"],
                 "total": total,
                 "wins": wins,
                 "win_rate": round(wins / total * 100, 1) if total else 0.0,
+                "staked": round(staked, 2),
+                "payout": round(payout, 2),
+                "profit_pln": round(profit_pln, 2),
+                "roi": round(profit_pln / staked * 100, 1) if staked else 0.0,
             })
-        return result
+
+        sort_field = _LEADERBOARD_SORT_FIELDS[sort]
+        result.sort(key=lambda row: (row[sort_field], row["total"]), reverse=True)
+        return result[:limit]
     except psycopg2.Error as e:
         _log.error("get_leaderboard error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
