@@ -152,6 +152,11 @@ def _validate_manual_coupon(req: ManualCouponRequest) -> None:
             status_code=400,
             detail=f"Nazwa bukmachera zbyt długa (max {_MAX_BOOKMAKER_LEN} znaków)",
         )
+    if req.match_date:
+        try:
+            datetime.strptime(req.match_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Data meczu musi być w formacie RRRR-MM-DD")
     for leg in req.legs:
         if leg.odds <= 1.0:
             raise HTTPException(status_code=400, detail="Kurs każdej nogi musi być większy niż 1.0")

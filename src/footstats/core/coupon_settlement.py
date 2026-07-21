@@ -246,7 +246,8 @@ def settle_active_coupons(
         rows = conn.execute(
             """SELECT id, legs_json, total_odds, stake_pln, match_date_first, user_id
                FROM coupons
-               WHERE status = 'ACTIVE' AND match_date_first <= ?""",
+               WHERE status = 'ACTIVE' AND match_date_first <= ?
+                 AND (kupon_type IS NULL OR kupon_type <> 'manual')""",
             (today.isoformat(),),
         ).fetchall()
 

@@ -440,7 +440,8 @@ def update_active_coupons(
             """SELECT id, legs_json, total_odds, stake_pln, match_date_first
                FROM coupons
                WHERE status = 'ACTIVE'
-               AND match_date_first < ?""",
+               AND match_date_first < ?
+               AND (kupon_type IS NULL OR kupon_type <> 'manual')""",
             (today.isoformat(),)
         ).fetchall()
 

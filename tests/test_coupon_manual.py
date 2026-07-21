@@ -182,6 +182,32 @@ def test_manual_coupon_za_dlugi_bookmaker_400(tmp_db):
     assert exc.value.status_code == 400
 
 
+def test_manual_coupon_niepoprawny_format_daty_400(tmp_db):
+    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0, match_date="21-07-2026")
+    with pytest.raises(HTTPException) as exc:
+        manual_coupon(req, user_id=1)
+    assert exc.value.status_code == 400
+
+
+def test_manual_coupon_smieciowa_data_400(tmp_db):
+    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0, match_date="nie-data")
+    with pytest.raises(HTTPException) as exc:
+        manual_coupon(req, user_id=1)
+    assert exc.value.status_code == 400
+
+
+def test_manual_coupon_poprawna_data_ok(tmp_db):
+    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0, match_date="2026-07-21")
+    res = manual_coupon(req, user_id=1)
+    assert res["ok"] is True
+
+
+def test_manual_coupon_brak_daty_dozwolony(tmp_db):
+    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0, match_date=None)
+    res = manual_coupon(req, user_id=1)
+    assert res["ok"] is True
+
+
 # ── PATCH /coupon/{id}/result ────────────────────────────────────────────────
 
 def test_result_won_payout_stake_x_odds(tmp_db):
