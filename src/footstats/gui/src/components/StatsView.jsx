@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Wallet, Flame, Trophy, ClipboardList } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ProgressChart from './ProgressChart';
 
 // Ulamek 0-1 (win_rate/roi z backendu) -> "66.7%".
 const formatPct = (fraction) => `${(fraction * 100).toFixed(1)}%`;
@@ -50,6 +51,7 @@ const MetricTile = ({ icon, label, value, valueColor }) => (
 
 const StatsView = ({ apiFetch }) => {
   const [stats, setStats] = useState(null);
+  const [progress, setProgress] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -61,6 +63,10 @@ const StatsView = ({ apiFetch }) => {
         setError('Nie udało się pobrać statystyk — spróbuj ponownie później.');
         setLoading(false);
       });
+    // Krzywa postępu (J3) — niekrytyczna: błąd nie blokuje reszty widoku statystyk.
+    apiFetch('/stats/progress')
+      .then(setProgress)
+      .catch(() => setProgress([]));
   }, []);
 
   if (loading) {
@@ -144,6 +150,10 @@ const StatsView = ({ apiFetch }) => {
         </div>
         <CouponResultRow label="Najlepszy kupon" result={stats.best_coupon} />
         <CouponResultRow label="Najgorszy kupon" result={stats.worst_coupon} />
+      </div>
+
+      <div className="mt-10">
+        <ProgressChart series={progress} />
       </div>
     </motion.div>
   );
