@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 // Ulamek 0-1 (win_rate/roi z backendu) -> "66.7%".
 const formatPct = (fraction) => `${(fraction * 100).toFixed(1)}%`;
 
-// Zysk-jednostki ze znakiem: "+10.00" / "-8.00".
+// Zysk PLN (papierowy bankroll) ze znakiem: "+10.00" / "-8.00".
 const formatSigned = (value) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
 
 const StreakBadge = ({ streak }) => {
@@ -28,7 +28,7 @@ const CouponResultRow = ({ label, result }) => (
         className="font-bold"
         style={{ color: result.profit_units >= 0 ? 'var(--accent-primary)' : 'var(--accent-secondary)' }}
       >
-        Kupon #{result.coupon_id}: {formatSigned(result.profit_units)} j.
+        Kupon #{result.coupon_id}: {formatSigned(result.profit_units)} PLN
       </span>
     ) : (
       <span style={{ color: 'var(--text-muted)' }}>Brak</span>
@@ -107,6 +107,9 @@ const StatsView = ({ apiFetch }) => {
         <p style={{ color: 'var(--text-muted)' }}>
           {stats.settled_count}/{stats.total_coupons} rozliczonych kuponów.
         </p>
+        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+          Kwoty PLN to papierowy bankroll — nie są prawdziwymi pieniędzmi.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
@@ -124,7 +127,7 @@ const StatsView = ({ apiFetch }) => {
         <MetricTile
           icon={<Wallet size={16} />}
           label="Zysk"
-          value={`${formatSigned(stats.profit_units)} j.`}
+          value={`${formatSigned(stats.profit_units)} PLN`}
           valueColor={profitColor}
         />
         <MetricTile
