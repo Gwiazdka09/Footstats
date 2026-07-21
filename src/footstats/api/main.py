@@ -101,6 +101,7 @@ from footstats.api.routes.coupons import router as coupons_router
 from footstats.api.routes.model_stats import router as model_stats_router
 from footstats.api.routes.settings import router as settings_router
 from footstats.api.routes.status import router as status_router
+from footstats.api.routes.user_stats import router as user_stats_router
 from footstats.api.routes.analyses import router as analyses_router
 
 def _init_db() -> None:
@@ -285,6 +286,7 @@ app.include_router(settings_router)
 app.include_router(coupons_router)
 app.include_router(model_stats_router)
 app.include_router(analyses_router)
+app.include_router(user_stats_router)
 
 
 @app.api_route("/health", methods=["GET", "HEAD"], tags=["ops"])
