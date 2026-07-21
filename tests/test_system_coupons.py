@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS coupons (
     groq_reasoning   TEXT,
     decision_score   INTEGER,
     match_date_first TEXT,
+    bookmaker        TEXT,
     user_id          INTEGER,
     shared           BOOLEAN NOT NULL DEFAULT 0
 );

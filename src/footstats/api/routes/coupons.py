@@ -2,6 +2,7 @@
 import hmac
 import json
 import logging
+import math
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional, Union
@@ -12,6 +13,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from footstats.api.auth import require_admin, require_auth
+from footstats.core.coupon_tracker import STATUS_ACTIVE, save_coupon, update_coupon_status
 from footstats.core.response_cache import cached_response
 from footstats.utils.db import connect as _connect
 
@@ -115,6 +117,52 @@ class SettleRequest(BaseModel):
 
 class ShareRequest(BaseModel):
     shared: bool
+
+
+class ManualLeg(BaseModel):
+    home: str
+    away: str
+    tip: str
+    odds: float
+
+
+class ManualCouponRequest(BaseModel):
+    legs: List[ManualLeg]
+    stake_pln: float
+    bookmaker: Optional[str] = None
+    match_date: Optional[str] = None
+
+
+class CouponResultRequest(BaseModel):
+    result: str  # "WON" | "LOST" | "VOID"
+
+
+_MAX_TEXT_LEN = 120
+_MAX_BOOKMAKER_LEN = 60
+
+
+def _validate_manual_coupon(req: ManualCouponRequest) -> None:
+    """Waliduje ręczny wpis kuponu (fail-fast, granica systemu — HTTP 400 + PL detail)."""
+    if not req.legs:
+        raise HTTPException(status_code=400, detail="Kupon musi mieć co najmniej jedną nogę")
+    if req.stake_pln <= 0:
+        raise HTTPException(status_code=400, detail="Stawka musi być dodatnia")
+    if req.bookmaker and len(req.bookmaker) > _MAX_BOOKMAKER_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nazwa bukmachera zbyt długa (max {_MAX_BOOKMAKER_LEN} znaków)",
+        )
+    for leg in req.legs:
+        if leg.odds <= 1.0:
+            raise HTTPException(status_code=400, detail="Kurs każdej nogi musi być większy niż 1.0")
+        for pole, wartosc in (("gospodarz", leg.home), ("gość", leg.away), ("typ", leg.tip)):
+            if not wartosc or not wartosc.strip():
+                raise HTTPException(status_code=400, detail=f"Pole '{pole}' nie może być puste")
+            if len(wartosc) > _MAX_TEXT_LEN:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Pole '{pole}' zbyt długie (max {_MAX_TEXT_LEN} znaków)",
+                )
 
 
 @router.get("/coupons/active")
@@ -384,6 +432,74 @@ def place_coupon(req: PlaceCouponRequest, user_id: int = Depends(require_auth)):
     from footstats.core.response_cache import clear_response_cache
     clear_response_cache()
     return {"ok": True, "coupon_id": coupon_id, "new_balance": new_balance, "stake_pln": req.stake_pln}
+
+
+@router.post("/coupon/manual")
+def manual_coupon(req: ManualCouponRequest, user_id: int = Depends(require_auth)):
+    """
+    Dziennik kuponów (J4a): ręczny wpis kuponu obstawionego gdzie indziej.
+    Free-form (bez match_id z naszej listy), NEUTRALNY dla bankrollu —
+    dziennik nie rusza papierowego salda (bankroll_state).
+    """
+    _validate_manual_coupon(req)
+    legs = [{"home": leg.home, "away": leg.away, "tip": leg.tip, "odds": leg.odds} for leg in req.legs]
+    total_odds = round(math.prod(leg.odds for leg in req.legs), 2)
+    coupon_id = save_coupon(
+        phase="manual",
+        kupon_type="manual",
+        legs=legs,
+        total_odds=total_odds,
+        stake_pln=req.stake_pln,
+        bookmaker=req.bookmaker,
+        match_date_first=req.match_date,
+        user_id=user_id,
+    )
+    update_coupon_status(coupon_id, STATUS_ACTIVE)
+    from footstats.core.response_cache import clear_response_cache
+    clear_response_cache()
+    return {"ok": True, "coupon_id": coupon_id, "total_odds": total_odds, "status": STATUS_ACTIVE}
+
+
+@router.patch("/coupon/{coupon_id}/result")
+def set_coupon_result(coupon_id: int, req: CouponResultRequest, user_id: int = Depends(require_auth)):
+    """Ręczne oznaczenie wyniku kuponu z dziennika (J4a).
+
+    CAS-guard (expected_status=ACTIVE) chroni przed podwójnym rozliczeniem —
+    drugie wywołanie na już rozliczonym kuponie zwraca 409. Zero operacji na
+    bankroll_state (dziennik jest neutralny dla papierowego salda).
+    """
+    if req.result not in ("WON", "LOST", "VOID"):
+        raise HTTPException(status_code=400, detail="Wynik musi być WON, LOST lub VOID")
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT user_id, stake_pln, total_odds FROM coupons WHERE id = ?", (coupon_id,)
+            ).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Kupon nie istnieje")
+            if int(row["user_id"]) != user_id:
+                raise HTTPException(status_code=403, detail="Brak uprawnień do tego kuponu")
+            stake = float(row["stake_pln"] or 0.0)
+            total_odds = float(row["total_odds"] or 0.0)
+    except psycopg2.Error as e:
+        _log.error("set_coupon_result lookup error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if req.result == "WON":
+        payout = round(stake * total_odds, 2)
+    elif req.result == "LOST":
+        payout = 0.0
+    else:  # VOID — neutralne, stawka zwrócona
+        payout = stake
+
+    zmieniono = update_coupon_status(
+        coupon_id, req.result, payout_pln=payout, expected_status="ACTIVE"
+    )
+    if not zmieniono:
+        raise HTTPException(status_code=409, detail="Kupon już rozliczony lub nieaktywny")
+    from footstats.core.response_cache import clear_response_cache
+    clear_response_cache()
+    return {"ok": True, "coupon_id": coupon_id, "status": req.result, "payout_pln": payout}
 
 
 @router.patch("/coupon/{coupon_id}/share")

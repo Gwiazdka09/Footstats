@@ -135,6 +135,13 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "ALTER TABLE predictions ADD COLUMN prob_away REAL",
                 ],
             ),
+            (
+                9,
+                "add_bookmaker_to_coupons",
+                [
+                    "ALTER TABLE coupons ADD COLUMN IF NOT EXISTS bookmaker TEXT",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -225,6 +232,13 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS prob_home REAL",
                     "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS prob_draw REAL",
                     "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS prob_away REAL",
+                ],
+            ),
+            (
+                9,
+                "add_bookmaker_to_coupons",
+                [
+                    "ALTER TABLE coupons ADD COLUMN IF NOT EXISTS bookmaker TEXT",
                 ],
             ),
         ]

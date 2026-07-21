@@ -44,6 +44,7 @@ def init_coupon_tables() -> None:
                 groq_reasoning   TEXT,
                 decision_score   INTEGER,
                 match_date_first TEXT,
+                bookmaker        TEXT,
                 user_id          INTEGER
             );
             CREATE INDEX IF NOT EXISTS idx_coupon_status  ON coupons(status);
@@ -65,6 +66,7 @@ def save_coupon(
     groq_reasoning: str = "",
     decision_score: int | None = None,
     match_date_first: str | None = None,
+    bookmaker: str | None = None,
     user_id: int = 1,
     shared: bool = False,
 ) -> int:
@@ -77,11 +79,12 @@ def save_coupon(
             """
             INSERT INTO coupons
                 (phase, status, kupon_type, legs_json, total_odds, stake_pln,
-                 groq_reasoning, decision_score, match_date_first, user_id, shared)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+                 groq_reasoning, decision_score, match_date_first, bookmaker, user_id, shared)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
             """,
             (phase, STATUS_DRAFT, kupon_type, legs_json,
-             total_odds, stake_pln, groq_reasoning, decision_score, match_date_first, user_id, shared),
+             total_odds, stake_pln, groq_reasoning, decision_score, match_date_first,
+             bookmaker, user_id, shared),
         ).fetchone()
         return row["id"]
     return _exec(_fn)
