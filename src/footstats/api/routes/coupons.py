@@ -748,6 +748,35 @@ def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/cron/settle-manual")
+def cron_settle_manual(x_cron_secret: str = Header(default=""), dry_run: bool = False):
+    """Endpoint dla Google Cloud Scheduler — auto-rozlicza kupony manual (dziennik, J4c).
+
+    Rozlicza TYLKO nogi, dla których już mamy wynik w predictions (link_leg
+    matched="exact" + niepusty actual_result) — zero zewnętrznych API, zero
+    bankrollu. Osobny trigger, NIE wpięty domyślnie w scheduler (enablement
+    to świadoma decyzja usera, patrz `settle_manual_coupons`).
+    """
+    expected = os.getenv("CRON_SECRET", "")
+    if not expected or not hmac.compare_digest(x_cron_secret, expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        from footstats.core.coupon_settlement import settle_manual_coupons
+        from footstats.core.response_cache import clear_response_cache
+        stats = settle_manual_coupons(dry_run=dry_run, verbose=True)
+        clear_response_cache()
+        _log.info("cron_settle_manual: %s", stats)
+        return {
+            "ok": True,
+            "settled": stats.get("settled", 0),
+            "skipped": stats.get("skipped", 0),
+            "errors": stats.get("errors", 0),
+        }
+    except (ValueError, KeyError, RuntimeError) as e:
+        _log.error("cron_settle_manual error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/cron/draft")
 def cron_draft(x_cron_secret: str = Header(default=""), days: int = 2, dry_run: bool = True):
     """Endpoint dla Google Cloud Scheduler — lite draft System paper-trading (PC-niezależny).

@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 
 log = logging.getLogger(__name__)
 
+from footstats.core import match_linker
 from footstats.utils.betting import oblicz_tip_correct
 from footstats.utils.normalize import normalize_team_name
 
@@ -499,6 +500,114 @@ def _send_to_rag_feedback(coupon_id: int, legs: list, mdate: str, reason: str, v
                 log.info("Wysłano feedback do RAG dla kuponu #%s, leg #%s", coupon_id, i + 1)
         except (ImportError, AttributeError, TypeError, ValueError, OSError) as e:
             log.warning("Błąd wysyłania feedback do RAG dla kuponu #%s, leg #%s: %s", coupon_id, i + 1, e)
+
+
+def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
+    """
+    Auto-rozlicza kupony manual (dziennik, Etap C planu J4c).
+
+    Zasada nadrzędna „co mamy — my": noga jest rozliczalna TYLKO gdy
+    `link_leg` zwróci matched="exact" ORAZ zlinkowana predykcja ma niepusty
+    `actual_result` (czyli wynik meczu już mamy w naszej bazie). Jakakolwiek
+    noga niepewna (brak dopasowania, brak wyniku, nierozliczalny tip) →
+    CAŁY kupon zostaje ACTIVE — konserwatywnie, bez rozliczenia częściowego;
+    user domknie go ręcznie przez `set_coupon_result`.
+
+    ZERO zewnętrznych API — w odróżnieniu od `settle_active_coupons` (kupony
+    AI) ta funkcja NIE woła `_find_leg_result`/FlashScore/football-data, żeby
+    nie generować dodatkowego ruchu do zewnętrznych źródeł dla wpisów
+    ręcznych. Bankroll-neutralne: dziennik nie rusza `bankroll_state` ani
+    `bankroll_history` (spójnie z `/api/coupon/manual` i ręcznym
+    `set_coupon_result`). Bez RAG-feedbacku i bez Telegrama.
+
+    Args:
+        dry_run: tylko licz statystyki, bez zapisu do DB.
+        verbose: drukuj PL logi na stdout.
+
+    Returns:
+        {"settled": N, "skipped": M, "errors": K}
+    """
+    from footstats.core.backtest import _connect, init_db
+
+    init_db()
+
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT id, legs_json, total_odds, stake_pln, match_date_first, user_id
+               FROM coupons
+               WHERE status = 'ACTIVE' AND kupon_type = 'manual'"""
+        ).fetchall()
+
+    stats = {"settled": 0, "skipped": 0, "errors": 0}
+    if not rows:
+        if verbose:
+            print("[SettleManual] Brak ACTIVE kuponów manual do rozliczenia.")
+        return stats
+
+    if verbose:
+        print(f"[SettleManual] ACTIVE kuponów manual do sprawdzenia: {len(rows)}")
+
+    for row in rows:
+        coupon_id = row["id"]
+        try:
+            legs = json.loads(row["legs_json"])
+            mdate = (row["match_date_first"] or "")[:10]
+            total_odds = row["total_odds"]
+            stake = row["stake_pln"]
+
+            leg_results: list[int] = []
+            unresolved = False
+            for leg in legs:
+                lr = match_linker.link_leg(leg.get("home", ""), leg.get("away", ""), mdate)
+                if not lr.matched or not lr.prediction or not lr.prediction.get("actual_result"):
+                    unresolved = True
+                    break
+                correct = oblicz_tip_correct(leg.get("tip", ""), lr.prediction["actual_result"])
+                if correct is None:
+                    unresolved = True
+                    break
+                leg_results.append(correct)
+
+            if unresolved:
+                stats["skipped"] += 1
+                if verbose:
+                    print(f"  [ACTIVE] Kupon manual #{coupon_id} — noga bez pewnego wyniku, zostaje ACTIVE")
+                continue
+
+            all_won = all(c == 1 for c in leg_results)
+            new_status = "WON" if all_won else "LOST"
+            payout = round(stake * total_odds, 2) if all_won else 0.0
+
+            if verbose:
+                tag = "DRY" if dry_run else "SETTLE"
+                print(f"  [{tag}] Kupon manual #{coupon_id} → {new_status} | wypłata: {payout} PLN")
+
+            if not dry_run:
+                from footstats.core.coupon_tracker import update_coupon_status
+
+                zmieniono = update_coupon_status(
+                    coupon_id, new_status, payout_pln=payout, expected_status="ACTIVE"
+                )
+                if not zmieniono:
+                    # CAS-guard: kupon rozliczony ręcznie równolegle (set_coupon_result)
+                    # zdążył zmienić status — nie kredytujemy/nie liczymy jako settled.
+                    log.warning(
+                        "Kupon manual #%s nie jest już ACTIVE — rozliczony równolegle, pomijam",
+                        coupon_id,
+                    )
+                    continue
+
+            stats["settled"] += 1
+        except (KeyError, TypeError, ValueError, OSError) as e:
+            log.error("Błąd rozliczania kuponu manual ID=%s: %s", coupon_id, e)
+            stats["errors"] += 1
+
+    if verbose:
+        print(
+            f"\n[SettleManual] Rozliczonych: {stats['settled']} | "
+            f"Pominiętych: {stats['skipped']} | Błędów: {stats['errors']}"
+        )
+    return stats
 
 
 if __name__ == "__main__":
