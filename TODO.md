@@ -32,7 +32,14 @@
 - [x] **J3 — Krzywa postępu** ✅ `get_progress_series` + `GET /api/stats/progress` + `ProgressChart.jsx` (recharts, profit indigo / win-rate pink). Data = `created_at` (schemat bez `settled_at`). Playwright PASS.
 - [x] **J4 — Ręczny wpis kuponu** ✅ kolumna `bookmaker` (migracja 9→Supabase deploy) + `POST /api/coupon/manual` (free-form, ACTIVE, bankroll-neutral) + `PATCH /api/coupon/{id}/result` (owner-check, CAS, guard `kupon_type=='manual'`) + `ManualCouponForm.jsx` + WON/LOST/VOID w `HistoryCouponRow`. **Manual WYKLUCZONY z auto-settle** (hybryda: co mamy=my, reszta=user ręcznie). Playwright PASS.
 - [x] **J5 — Leaderboard v2** ✅ `GET /leaderboard` + ROI/profit/win-rate + `sort` (win_rate/roi/profit, nieznany→400) + filtr czasu `days` (cache vary_by) + `LeaderboardView` v2 (selektory, design-system inline-token, disclaimer PLN). Liga/sezon POMINIĘTE (legi niespójne). **Ranking = shared-only (opt-in); statystyki osobiste = WSZYSTKIE kupony (decyzja 2026-07-21).** Playwright PASS.
-- [ ] **J6 — Predykcja jako sygnał w dzienniku**: przy dodawaniu/podglądzie kuponu pokaż predykcję modelu + **kalibrowaną pewność** (uczciwe 65%=65%) obok wyboru usera → user widzi zgodność swojego typu z modelem. Zależy od jakości sygnału (P0/P1).
+- [x] **J6 — Predykcja jako sygnał w dzienniku** ✅ `POST /api/coupon/preview-signal` + podgląd "Nasz typ @conf%" w `ManualCouponForm` (indigo zgoda / pink rozjazd / muted brak typu). Kalibracja OFF → pewność=model (przepływa przez `calibrate_confidence` gdy włączą). Playwright PASS.
+
+### 🔗 Match-linking (fundament J6+J4c, kierunek 2026-07-21) — DONE
+> Free-form mecz → nasze dane. Odblokowało oba: podgląd sygnału (J6) + auto-settle (J4c).
+- [x] **A — `core/match_linker.py`** ✅ `link_leg(home,away,date)` STRICT `_norm_ascii` (NIE `normalize_team_name` — ono koliduje City==United!). Konserwatywny: exact-only, swap/ambiguous/pusta-norma → brak matchu. 11 testów. Ograniczenie: `ł` daje false-negative (bezpieczne).
+- [x] **C — J4c `settle_manual_coupons`** ✅ auto-settle nóg manual TYLKO gdy match+nasz `actual_result`; all-legs-or-nothing; ZERO zewn. API; CAS-guard; bankroll-neutralny; guard pustych nóg. `POST /cron/settle-manual` (X-Cron-Secret, **NIE wpięty w scheduler**). reviewer APPROVED + data-guard GREEN. 13 testów.
+  - ⏳ **Decyzja usera:** enablement `/cron/settle-manual` — dodać do Cloud Scheduler (dry-run first) czy manualny trigger?
+  - Follow-up (opcj.): aliasy PSG/Man City (kontrolowana lista), per-leg result w legs_json dla UI.
 
 ### Silnik sygnału (dotychczasowa praca = wartość dziennika)
 Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **feature zaufania w dzienniku**: uczciwa pewność, której blind-tipster nie da. P0 walidacja dalej ważna, ale jako **jakość sygnału**, nie jako "bicie rynku".
@@ -42,7 +49,7 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ### 🐞 Znalezione przy J1-J4 (osobne taski, NIE blokują dziennika)
 - **CSS cascade-layer bug (app-wide):** `gui/src/index.css` `button {color:inherit;background:transparent}` jest POZA `@layer` → w Tailwind v4 bije utility-klasy, więc `text-*`/`bg-*` na KAŻDYM `<button>` się nie stosują (przyciski bezbarwne). Obejście w dzienniku: inline `style var()`. Fix globalny = owinąć reset w `@layer base` + pełna regresja wizualna przycisków.
-- **Auto-settle hybryda „co mamy — my":** manual kupony na razie TYLKO ręczne rozliczenie. Follow-up J4c: best-effort auto-match ręcznych nóg do naszych wyników (fuzzy nazwa+data) → link match_id → istniejący settle. Ostrożnie (settlement correctness, data-guard) — osobny task.
+- ~~**Auto-settle hybryda „co mamy — my":**~~ ✅ ZROBIONE (match-linking A+C wyżej). Zostaje decyzja enablement `/cron/settle-manual`.
 - **Testy dotykają prod Neon:** import `api/routes/coupons` przy zbiórce testów próbuje realnego połączenia do martwego Neona (`config.py` `load_dotenv override` → `DATABASE_URL` z `.env`). Pre-existing. Fix: marker `@pytest.mark.integration` + test-DB (patrz P0 dług testowy).
 
 ---
