@@ -12,7 +12,13 @@ ENV/
 .env
 .env.*
 logs/
-/data/
+# /data/ wykluczone, ale whitelistujemy full_dataset.parquet (Poisson-DC na cloud;
+# bez niego cloud-draft robi fallback na bzzoiro-ml). Reszta data/ (SQLite, inne
+# parquety, logi) dalej poza build-contextem.
+/data/*
+!/data/hist_cache/
+/data/hist_cache/*
+!/data/hist_cache/full_dataset.parquet
 tests/
 scratch/
 *.pdf
