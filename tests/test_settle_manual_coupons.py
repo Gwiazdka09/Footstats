@@ -258,6 +258,23 @@ def test_mieszany_kupon_jedna_noga_niepewna_caly_zostaje(tmp_db, monkeypatch):
     assert stats["skipped"] == 1
 
 
+def test_kupon_bez_nog_nie_settluje(tmp_db, monkeypatch):
+    # Defense-in-depth: legs_json="[]" wstawione bezpośrednio do DB (omija
+    # _validate_manual_coupon, który w praktyce odrzuca puste nogi). Bez guardu
+    # all([])==True dałoby fałszywe WON z payout=stake*odds.
+    _mock_link_leg_single(
+        monkeypatch, LinkResult(True, "exact", _prediction("2-0"), "Dopasowano")
+    )
+    cid = _insert_coupon(tmp_db, [])
+
+    stats = settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    row = _row(tmp_db, cid)
+    assert row["status"] == "ACTIVE"
+    assert stats["settled"] == 0
+    assert stats["skipped"] >= 1
+
+
 def test_tip_nieparsowalny_zostaje_active(tmp_db, monkeypatch):
     _mock_link_leg_single(
         monkeypatch, LinkResult(True, "exact", _prediction("2-0"), "Dopasowano")

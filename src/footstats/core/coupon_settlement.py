@@ -568,6 +568,13 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                     break
                 leg_results.append(correct)
 
+            # Guard (defense-in-depth, analogicznie do settle_active_coupons ~L322):
+            # kupon bez nóg (legs_json="[]") NIE może "wygrać" przez all([])==True.
+            # W praktyce niemożliwe (_validate_manual_coupon odrzuca puste nogi),
+            # ale traktujemy jak nierozwiązany — belt-and-suspenders.
+            if not leg_results:
+                unresolved = True
+
             if unresolved:
                 stats["skipped"] += 1
                 if verbose:
