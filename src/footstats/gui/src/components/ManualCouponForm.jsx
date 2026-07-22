@@ -145,7 +145,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
                 {signals[i]?.matched && (
                   <div
                     className="flex items-center gap-1 text-xs px-1"
-                    style={{ color: signals[i].agrees ? 'var(--accent-primary)' : 'var(--accent-secondary)' }}
+                    style={{ color: signals[i].agrees === true ? 'var(--accent-primary)' : signals[i].agrees === false ? 'var(--accent-secondary)' : 'var(--text-muted)' }}
                   >
                     <Sparkles size={16} />
                     <span>

@@ -511,6 +511,10 @@ def preview_signal(req: PreviewSignalRequest, user_id: int = Depends(require_aut
             continue
         pred = link.prediction
         our_tip = pred["ai_tip"]
+        if not our_tip:  # LOW-1: predykcja bez tipu = brak użytecznego sygnału
+            result.append(_empty_signal())
+            continue
+        user_tip = leg.tip.strip()
         result.append({
             "matched": True,
             "our_tip": our_tip,
@@ -518,7 +522,8 @@ def preview_signal(req: PreviewSignalRequest, user_id: int = Depends(require_aut
             "prob_home": pred["prob_home"],
             "prob_draw": pred["prob_draw"],
             "prob_away": pred["prob_away"],
-            "agrees": leg.tip.strip().upper() == our_tip.strip().upper(),
+            # LOW-2: agrees=None dopóki user nie wpisał typu (nie pokazuj "rozjazdu" przedwcześnie)
+            "agrees": None if not user_tip else user_tip.upper() == our_tip.strip().upper(),
         })
     return result
 
