@@ -64,13 +64,19 @@ const LoginView = ({ setToken, setUser }) => {
       const isRegister = mode === 'register';
       const response = await post(`/auth/${isRegister ? 'register' : 'login'}`, isRegister ? { username, email, password } : { username, password });
       if (!response.ok) {
+        // Rozróżnij błąd serwera od złych danych — inaczej 5xx/limit maskuje się
+        // jako "Błędne dane logowania" i myli użytkownika (audyt 2026-07-27).
+        if (response.status >= 500) throw new Error('Błąd serwera — spróbuj ponownie za chwilę.');
+        if (response.status === 429) throw new Error('Za dużo prób — odczekaj chwilę i spróbuj ponownie.');
         throw new Error(await extractError(response, isRegister ? 'Nie udało się utworzyć konta' : 'Błędne dane logowania'));
       }
       const data = await response.json();
       setUser(username);
       setToken(data.access_token);
     } catch (err) {
-      setError(err.message);
+      // Błąd sieci/CORS (fetch rzuca TypeError) — nie pokazuj surowego "Failed to fetch".
+      const isNetwork = err instanceof TypeError;
+      setError(isNetwork ? 'Brak połączenia z serwerem — sprawdź sieć i spróbuj ponownie.' : err.message);
     } finally {
       setLoading(false);
     }
