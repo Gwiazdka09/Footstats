@@ -42,6 +42,21 @@ jobs:
           service: ${{ secrets.CLOUD_RUN_SERVICE }}
           region: ${{ secrets.GCP_REGION }}
           image: ${{ env.IMAGE }}:${{ github.sha }}
+          # Jawnie re-asertujemy krytyczne env/sekrety przy KAZDYM deployu, zeby
+          # przypadkowa reczna chirurgia na serwisie nie mogla znow zdmuchnac
+          # logowania (incydent 2026-07-27: brak JWT_SECRET -> login 500).
+          # Strategia 'merge' NIE rusza pozostalych zmiennych (np. ALLOWED_ORIGINS,
+          # ENSEMBLE_MARKET_WEIGHT ustawionych na serwisie).
+          env_vars: |
+            ENV=production
+          env_vars_update_strategy: merge
+          secrets: |
+            JWT_SECRET=JWT_SECRET:latest
+            FOOTSTATS_USER=FOOTSTATS_USER:latest
+            FOOTSTATS_PASSWORD_HASH=FOOTSTATS_PASSWORD_HASH:latest
+            DATABASE_URL=DATABASE_URL:latest
+            CRON_SECRET=CRON_SECRET:latest
+          secrets_update_strategy: merge
 
       - name: Verify deployment health
         run: |
