@@ -50,12 +50,15 @@ jobs:
           env_vars: |
             ENV=production
           env_vars_update_strategy: merge
+          # UWAGA: tylko sekrety ktore JUZ sa typu secretKeyRef na serwisie.
+          # CRON_SECRET jest plain env var -> proba ustawienia go jako sekret
+          # daje "Cannot update environment variable to the given type" (deploy fail).
+          # Merge i tak zachowuje CRON_SECRET/ENSEMBLE_MARKET_WEIGHT ustawione recznie.
           secrets: |
             JWT_SECRET=JWT_SECRET:latest
             FOOTSTATS_USER=FOOTSTATS_USER:latest
             FOOTSTATS_PASSWORD_HASH=FOOTSTATS_PASSWORD_HASH:latest
             DATABASE_URL=DATABASE_URL:latest
-            CRON_SECRET=CRON_SECRET:latest
           secrets_update_strategy: merge
 
       - name: Verify deployment health
