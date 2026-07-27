@@ -95,6 +95,16 @@ def get_user_by_email(email: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def _verify_password(plain: str, hashed: str) -> bool:
+    """bcrypt.checkpw odporne na uszkodzony hash (np. seed placeholder 'changeme'
+    z migracji na świeżej DB). Zły salt → ValueError; łapiemy i zwracamy False,
+    inaczej logowanie kończy się 500 zamiast 401 (audyt 2026-07-27)."""
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except (ValueError, TypeError):
+        return False
+
+
 def _make_token(username: str, user_id: int, is_admin: bool = False) -> str:
     exp = datetime.now(timezone.utc) + timedelta(hours=_EXPIRE_HOURS)
     return jwt.encode(
@@ -113,7 +123,7 @@ def login(request: Request, req: LoginRequest) -> TokenResponse:
         user = get_user_by_email(req.username)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    if not bcrypt.checkpw(req.password.encode(), user["password_hash"].encode()):
+    if not _verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     return TokenResponse(
         access_token=_make_token(user["username"], user["id"], bool(user.get("is_admin", False)))
@@ -211,7 +221,7 @@ def change_password(req: ChangePasswordRequest, user_id: int = Depends(require_a
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
-    if not bcrypt.checkpw(req.current_password.encode(), row["password_hash"].encode()):
+    if not _verify_password(req.current_password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="Nieprawidłowe aktualne hasło")
     new_hash = bcrypt.hashpw(req.new_password.encode(), bcrypt.gensalt()).decode()
     with connect() as conn:
@@ -321,7 +331,7 @@ def delete_account(req: DeleteAccountRequest, user_id: int = Depends(require_aut
         raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
     if row["is_admin"]:
         raise HTTPException(status_code=400, detail="Konto administratora nie można usunąć tą metodą")
-    if not bcrypt.checkpw(req.password.encode(), row["password_hash"].encode()):
+    if not _verify_password(req.password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="Nieprawidłowe hasło")
 
     anon_hash = bcrypt.hashpw(os.urandom(32), bcrypt.gensalt()).decode()
@@ -444,7 +454,7 @@ def change_username(req: ChangeUsernameRequest, user_id: int = Depends(require_a
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
-    if not bcrypt.checkpw(req.current_password.encode(), row["password_hash"].encode()):
+    if not _verify_password(req.current_password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="Nieprawidłowe aktualne hasło")
     try:
         with connect() as conn:

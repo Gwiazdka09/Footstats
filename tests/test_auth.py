@@ -57,6 +57,22 @@ def test_login_wrong_user(client):
     assert resp.status_code == 401
 
 
+def test_login_malformed_hash_returns_401_not_500(client, monkeypatch):
+    """Uzytkownik z niepoprawnym bcrypt-hashem (np. seed placeholder 'changeme')
+    NIE moze wysadzic logowania 500 — bcrypt.checkpw rzuca ValueError na zlym
+    salcie. Traktujemy jak zle dane (401), defense-in-depth (audyt 2026-07-27)."""
+    import footstats.api.auth as _auth
+
+    def _fake_get_user(username: str):
+        if username == "brokenuser":
+            return {"id": 5, "username": "brokenuser", "password_hash": "changeme", "is_admin": False}
+        return None
+
+    monkeypatch.setattr(_auth, "get_user_by_username", _fake_get_user)
+    resp = client.post("/api/auth/login", json={"username": "brokenuser", "password": "whatever"})
+    assert resp.status_code == 401
+
+
 def test_protected_no_token(client):
     resp = client.get("/protected")
     assert resp.status_code == 401
