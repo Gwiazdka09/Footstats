@@ -351,10 +351,18 @@ def metrics_endpoint(x_metrics_token: str = Header(default="")):
         return {"status": "metrics-disabled", "reason": "prometheus_client not installed"}
 
 
-from fastapi_mcp import FastApiMCP as _FastApiMCP
+def _mcp_enabled() -> bool:
+    """MCP (/mcp) montujemy TYLKO poza produkcją. Na prod to zbędna powierzchnia
+    ataku i enumeracja schematu API bez wartości biznesowej (audyt 2026-07-27).
+    Dev/test zostają, by dało się korzystać z narzędzi MCP lokalnie."""
+    return os.environ.get("ENV", "").lower() != "production"
 
-_mcp = _FastApiMCP(app)
-_mcp.mount_http()
+
+if _mcp_enabled():
+    from fastapi_mcp import FastApiMCP as _FastApiMCP
+
+    _mcp = _FastApiMCP(app)
+    _mcp.mount_http()
 
 _dist = Path(__file__).parent.parent / "gui" / "dist"
 
