@@ -78,6 +78,10 @@ src/footstats/gui/node_modules/
 # ── Plany superpowers (lokalne notatki)
 docs/superpowers/plans/
 
+# ── Archiwum lokalne (stare raporty PDF, logi kuponów, screenshoty QA)
+docs/archive/
+docs/screenshots/
+
 # ── Kopie zapasowe
 # (objęte przez *_backup.py i *_BACKUP.py wyżej)
 
