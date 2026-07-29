@@ -3,6 +3,40 @@
 > Archiwum ukończonych prac (przeniesione z TODO.md przez `footstats-scribe`).
 > Aktywne zadania: `TODO.md`. Pełna historia commitów: `git log`.
 
+## 2026-07-27
+
+### Incydent logowania — redeploy zgubił env Cloud Run
+- **Objaw:** login zwracał 500, a GUI pokazywało „nieprawidłowe dane" → wyglądało na złe hasło, było brakiem
+  `JWT_SECRET` i reszty env po redeployu. Naprawione rev **00313-mf5**.
+- **`335df65bb`** login odporny na malformed `password_hash` — 401 zamiast 500 (bcrypt na śmieciu rzucał).
+- **`0cded9b4d`** `/mcp` montowany **tylko poza produkcją** (niepotrzebna powierzchnia ataku na prod).
+- **`b5c49484a`** CD jawnie re-asertuje krytyczne sekrety przy deployu (self-heal — env nie zniknie po redeployu).
+- **`aa307944f`** `CRON_SECRET` wyjęty z `secrets` (plain env var → konflikt typów blokował deploy).
+- **`cc4574d16`** `LoginView` rozróżnia błąd serwera / rate-limit / brak sieci od faktycznie złych danych.
+- **`17a2ecea4`** `scripts/backfill_users_from_neon.py` — przeniesienie kont Neon→Supabase 1:1 (login+hasło).
+- **Audyt auth:** 6 znalezisk, rdzeń szczelny (SQL parametryzowane, JWT fail-closed, rate-limity działają).
+
+### Sprzątanie repo
+- **`0832d8bc2`** `pdf/` (12 raportów luty-maj) → `docs/archive/pdf/`, `logs/*` (25 plików) → `docs/archive/logs/`,
+  10 screenshotów QA z rootu → `docs/screenshots/`. Usunięte regenerowalne: `.playwright-mcp`, `.mypy_cache`,
+  `.pytest_cache`, `.ruff_cache`, 42 stare hook-backupy, `validation_errors.csv`, `brain_graph.html` (~17 MB).
+- Docs zsynchronizowane ze stanem faktycznym: `STATUS.md` (był 07-03), `TODO.md` (plan P0-P3), oba README
+  (Neon→Supabase, Task Scheduler→Cloud Run Jobs, 1656 testów), `PROJECT_STRUCTURE.md`.
+
+## 2026-07-21/22
+
+### Dziennik kuponów J1-J6 + match-linking
+- **J1** `core/user_stats.py` — agregat read-only (ROI/win-rate/profit/streak/best-worst), 25 testów.
+- **J2** `GET /api/stats/me` + `StatsView.jsx` — etykiety PLN + disclaimer „papierowy bankroll".
+- **J3** `get_progress_series` + `GET /api/stats/progress` + `ProgressChart.jsx` (recharts).
+- **J4** kolumna `bookmaker` + `POST /api/coupon/manual` + `PATCH /api/coupon/{id}/result`
+  (owner-check, CAS, guard `kupon_type=='manual'`) + `ManualCouponForm.jsx`. Manual **wykluczony z auto-settle**.
+- **J5** `GET /leaderboard` — sort (win_rate/roi/profit) + filtr `days`, ranking **shared-only** (opt-in).
+- **J6** `POST /api/coupon/preview-signal` — podgląd „Nasz typ @conf%" w formularzu ręcznym.
+- **Match-linking** `core/match_linker.py` (STRICT `_norm_ascii`, exact-only, 11 testów) +
+  `settle_manual_coupons` (all-legs-or-nothing, CAS-guard, zero zewn. API, 13 testów) +
+  `POST /cron/settle-manual` — **nie wpięty w scheduler**, czeka na decyzję.
+
 ## 2026-07-20
 
 ### Incydent po wyjeździe — potrójna awaria pipeline (14-20.07) + migracja DB

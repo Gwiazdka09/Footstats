@@ -1,6 +1,6 @@
 # FootStats Project Structure
 
-Zaktualizowano: 2026-07-04 (po migracji do chmury). Predykcje piłkarskie: Poisson/Dixon-Coles + RAG + Groq LLM.
+Zaktualizowano: 2026-07-27 (po migracji do chmury + Supabase + sprzątaniu repo). Predykcje piłkarskie: Poisson/Dixon-Coles + RAG + Groq LLM.
 
 ```plaintext
 bot/
@@ -34,7 +34,7 @@ bot/
 │   ├── core/                   # Modele: Poisson, Dixon-Coles, Kelly, kalibracja, settlement, backtest
 │   ├── scrapers/               # Zbieranie danych: Bzzoiro API, Playwright, football-data, API-Football
 │   ├── api/                    # FastAPI: routes, auth (JWT), admin
-│   ├── db/                     # Neon Postgres: connect, migrations
+│   ├── db/                     # Supabase Postgres: connect, migrations
 │   ├── export/                 # Eksport PDF / raporty
 │   ├── gui/                    # Frontend React/Vite/Tailwind v4 (Brain Graph)
 │   └── utils/                  # Logging, cache, DB helpers, betting math
@@ -50,13 +50,15 @@ bot/
 │   ├── accuracy_report.py / sanity_check.py / preflight_footstats.py / evict_cache.py
 │   └── run_daily.bat, run_operator.bat, schedule_agents.ps1, silent_run.vbs  [LEGACY LOKALNE — rollback]
 │
-├── tests/                      # Pytest (~1440 testów, gate cov 56%)
-├── docs/                       # Dokumentacja rozszerzona (cloud_migration.md, scheduler_setup.md, archive/)
+├── tests/                      # Pytest (1656 testów zebranych, gate cov 56%)
+├── docs/                       # Dokumentacja rozszerzona (cloud_migration.md, scheduler_setup.md, blueprints/, roasts/)
+│   ├── archive/                # [gitignored] stare raporty PDF + logi kuponów (przeniesione 07-27)
+│   └── screenshots/            # [gitignored] screenshoty QA Playwright
 ├── .claude/                    # Konfiguracja Claude Code: agents/, commands/, rules/, settings
 ├── .github/workflows/          # CI (ci.yml), CD (cd.yml), backup (backup.yml)
 │
-├── data/                       # SQLite (backtest) + parquet — NIE RUSZAĆ
-├── cache/ · logs/ · pdf/ · .backups/   # Artefakty runtime (gitignored)
+├── data/                       # SQLite (legacy backtest) + parquet — NIE RUSZAĆ
+├── cache/ · logs/ · .backups/  # Artefakty runtime (gitignored)
 └── assets/ · lib/              # Zasoby statyczne / vendored
 ```
 
@@ -64,5 +66,6 @@ bot/
 Cały pipeline działa w **Google Cloud** (projekt `footstats-495009`, `europe-west1`) — patrz `docs/cloud_migration.md`:
 - **Cloud Run Jobs:** `footstats-final` (11:00, kupony), `footstats-evening` (23:00, rozliczenie).
 - **Cloud Scheduler:** triggery final/evening + draft 07:30 + settle 06:00/21:30.
-- **API:** Cloud Run Service (FastAPI). **Frontend:** Vercel.
+- **API:** Cloud Run Service (FastAPI). **Frontend:** Vercel. **DB:** Supabase (session pooler eu-west-1) od 20.07 — Neon quota-block do 1.08.
 - Lokalne Windows Task Scheduler taski — WYŁĄCZONE (skrypty `.bat/.vbs/.ps1` w `scripts/` zostają na wypadek rollbacku).
+- ⚠️ Obraz `footstats-jobs` jest starszy niż commit parquetu → live gra `bzzoiro-ml`, nie Poisson-DC. Rebuild+redeploy = **P0/A** w `TODO.md`.

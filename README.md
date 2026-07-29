@@ -5,11 +5,11 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Playwright](https://img.shields.io/badge/Playwright-1.40-45ba4b.svg)](https://playwright.dev/)
-[![Tests](https://img.shields.io/badge/tests-1346-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1656-brightgreen.svg)](tests/)
 
 **🌐 English · [Polski](README.pl.md)**
 
-**FootStats** is an autonomous soccer-betting prediction system combining Bayesian statistics (Poisson + Dixon-Coles), ML (CatBoost/Bzzoiro), xG analysis (Understat) and an LLM (Groq/Llama 3.1). It runs fully unattended: scraping → analysis → coupon generation → settlement → learning from mistakes. React/Vite frontend (Vercel), FastAPI backend (Cloud Run), Neon PostgreSQL database.
+**FootStats** is an autonomous soccer-betting prediction system combining Bayesian statistics (Poisson + Dixon-Coles), ML (CatBoost/Bzzoiro), xG analysis (Understat) and an LLM (Groq/Llama 3.1). It runs fully unattended: scraping → analysis → coupon generation → settlement → learning from mistakes. React/Vite frontend (Vercel), FastAPI backend (Cloud Run), Supabase PostgreSQL database.
 
 ---
 
@@ -19,12 +19,12 @@
 > (Poisson + Dixon-Coles) + ensemble + LLM, validated **walk-forward out-of-sample on 32,400 matches**.
 > A full hands-off loop: scraping → prediction → coupon → settlement → learning from mistakes.
 
-**🔗 Live demo:** [bot-opal-nu.vercel.app](https://bot-opal-nu.vercel.app)  ·  **API:** FastAPI @ Google Cloud Run  ·  **DB:** Neon PostgreSQL
+**🔗 Live demo:** [bot-opal-nu.vercel.app](https://bot-opal-nu.vercel.app)  ·  **API:** FastAPI @ Google Cloud Run  ·  **DB:** Supabase PostgreSQL
 
 ### Why it's worth a look
-- 🧪 **1,346 tests** with pytest + CI (lint · security · coverage gate) + a regression gate on broad excepts — quality is *enforced*, not claimed.
+- 🧪 **1,656 tests** with pytest + CI (lint · security · coverage gate) + a regression gate on broad excepts — quality is *enforced*, not claimed.
 - 📊 **Scientific validation, not marketing** — walk-forward with no look-ahead, A/B of model variants, per-band calibration. Dixon-Coles **51.8%** out-of-sample; the market ceiling was deliberately measured (4 experiments, 3 rejected as dead ends — data-driven decisions).
-- 🤖 **Full autonomy** — a daily pipeline (Windows Task Scheduler + Google Cloud Scheduler), PC-independent; prediction, settlement and RAG feedback with zero intervention.
+- 🤖 **Full autonomy** — a daily pipeline on Google Cloud Run Jobs + Cloud Scheduler, fully PC-independent; prediction, settlement and RAG feedback with zero intervention.
 - 🔒 **Production rigor** — OWASP API hardening (live), JWT multi-user, GDPR, DevSecOps in CI (bandit · gitleaks · pip-audit), feature-flagged rollouts (default-OFF, validated before flipping).
 - 🧩 **Architecture** — multi-source scraping with cross-validation (4 sources), graceful degradation, idempotent writers, decomposition of god-modules.
 
@@ -32,13 +32,13 @@ Tech at a glance:
 
 | Area | Implementation |
 |------|----------------|
-| **Autonomous Agents** | Draft→Final scheduler, Evening Agent (23:00), Operator Agent |
+| **Autonomous Agents** | Cloud Run Jobs: Draft (07:30) → Final (11:00) → Evening (23:00), Operator Agent |
 | **RAG Feedback Loop** | Groq analyzes lost coupons → vectors → context for the next prediction |
 | **Feature Engineering** | Poisson + xG (attack × opponent defense) + home/away form + fatigue/rotation + injuries (both sides) + referee |
 | **Bayesian Statistics** | Isotonic calibration + 1X2 renormalization, Poisson+ML ensemble (per-league weights), CLV tracking |
 | **Advanced Scraping** | Playwright (Superbet, FlashScore, STS), requests (Understat, Bzzoiro, API-Football) |
-| **Full-Stack** | FastAPI REST (Cloud Run) + React/Vite SPA (Vercel) + Neon PostgreSQL + multi-user (JWT) |
-| **Quality** | 1,346 pytest tests, broad-except regression gate, CI (lint/security/coverage) + Docker health + daily DB backup (Neon pg_dump) |
+| **Full-Stack** | FastAPI REST (Cloud Run) + React/Vite SPA (Vercel) + Supabase PostgreSQL + multi-user (JWT) |
+| **Quality** | 1,656 pytest tests, broad-except regression gate, CI (lint/security/coverage) + Docker health + daily DB backup (pg_dump → GCS) |
 
 ---
 
@@ -46,8 +46,8 @@ Tech at a glance:
 
 ```mermaid
 graph TD
-    A[daily_agent_scheduler] -->|08:00 Draft| B(Fetch candidates)
-    A -->|Match -70min Final| C(Enrich lineups + referee)
+    A[Cloud Scheduler] -->|07:30 Draft| B(Fetch candidates)
+    A -->|11:00 Final| C(Enrich lineups + referee)
 
     subgraph "Data Sources"
         D[API-Football]
@@ -67,11 +67,11 @@ graph TD
     J -->|context| I
     I --> K[Coupon Generation]
 
-    K --> L[(footstats_backtest.db)]
+    K --> L[(Supabase PostgreSQL)]
     L --> M[React SPA Vercel]
     L --> N[FastAPI /api]
 
-    O[Evening Agent 23:00] --> L
+    O[Evening Job 23:00] --> L
     O -->|CLV| P[API-Football /odds]
     O -->|settlement| L
 ```
@@ -85,10 +85,10 @@ graph TD
 | **AI / ML** | Groq (Llama 3.1 70B/8B), CatBoost (Bzzoiro), Bayesian Poisson, Ensemble |
 | **Feature Eng.** | xG (Understat), home/away form (`core/form.py`), fatigue (`core/fatigue.py`), injuries |
 | **Scraping** | Playwright, requests + BS4, Understat JSON, API-Football v3 |
-| **Backend** | FastAPI, Uvicorn, Neon PostgreSQL (prod) / SQLite (dev), Pydantic v2 |
+| **Backend** | FastAPI, Uvicorn, Supabase PostgreSQL (prod) / SQLite (dev), Pydantic v2 |
 | **Frontend** | React/Vite SPA (Vercel) — coupon builder, BetBuilder, markets catalog; Streamlit/Rich (dev/CLI) |
 | **Tracking** | CLV (Closing Line Value), A/B accuracy tab, weekly per-league report |
-| **Ops** | Windows Task Scheduler, Cloud Run (GCP), Docker, Sentry |
+| **Ops** | Cloud Run Jobs + Cloud Scheduler (GCP), Docker, Sentry |
 
 ---
 
@@ -106,9 +106,9 @@ graph TD
 - **Value Bet Filter** — EV > 3%, Kelly > 1%, pre-filter before Groq (token savings)
 
 ### Automation
-- **Draft Phase (08:00)** — candidates from Bzzoiro + API-Football Ekstraklasa, Poisson, Groq
-- **Final Phase (match −70 min)** — lineups from API-Football, coupon decision, Telegram delivery
-- **Evening Agent (23:00)** — settle ACTIVE coupons, CLV capture, auto-trainer after 20+ results
+- **Draft Phase (07:30, Cloud Scheduler)** — candidates from Bzzoiro + API-Football, Poisson, Groq
+- **Final Phase (11:00, Cloud Run Job)** — lineups from API-Football, coupon decision, Telegram delivery
+- **Evening Job (23:00)** — settle ACTIVE coupons, CLV capture, auto-trainer after 20+ results
 - **RAG Feedback Loop** — post-match AI analysis of losses → vectors → context
 
 ### Monitoring
@@ -132,10 +132,11 @@ src/footstats/
 ├── evening_agent.py       # coupon settlement @ 23:00
 ├── daily_agent_scheduler.py
 └── operator_agent.py      # smoke + pipeline + review orchestrator
-tests/             # 1,346 pytest tests
+tests/             # 1,656 pytest tests
 scripts/           # preflight, backup_db, visualize_brain, run_operator.bat
-data/              # footstats_backtest.db, model_calibration.json
+data/              # parquet history, model_calibration.json, legacy SQLite (backtest)
 cache/             # api_football/, understat_xg/, flashscore/, kursy/
+docs/              # extended docs + archive/ (old reports) + screenshots/ (QA)
 ```
 
 ---
@@ -158,7 +159,7 @@ Logs: `data/logs/operator_agent.log` | Reports: `data/operator_reports/`
 ## 🧪 Tests
 
 ```bash
-pytest tests/ -v                          # 1,346 tests
+pytest tests/ -v                          # 1,656 tests
 pytest tests/test_poisson.py -v           # Bayesian Poisson + edge cases
 pytest tests/test_clv_tracker.py -v       # CLV tracking
 pytest tests/test_broad_except_audit.py   # regression gate: no new broad excepts

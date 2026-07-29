@@ -6,12 +6,42 @@
 
 > **🎯 KIERUNEK 2026-07-21:** produkt = **dziennik kuponów + śledzenie postępu ludzi** (nie tylko surowa predykcja). NIE bukmacher, **zero obsługi pieniędzy** (jednostki, nie PLN przez nas). Predykcja = sygnał zaufania w dzienniku, nie sprzedawany edge. Plan → sekcja `📓 DZIENNIK KUPONÓW` niżej. Omija KILL rady ROAST (dziennik ≠ konkurent devigu rynku).
 
-**Aktualizacja:** 2026-07-21 · v3.4-stable
-**Accuracy:** offline **51.8%** (WF A/B, DC W=0.5) | live świeże ≥06-19 **47.8%** (23 settled, fixy Cel B) vs stare 31%
-**Cel M1:** 55% win rate · **Suite:** ~1539 pass unit-mode (coverage 57)
+> **🎯 KIERUNEK 2026-07-27:** produkt zostaje na **użytek prywatny + beta-testerzy (znajomi)**. Priorytet = **żeby bot się uczył** (pętla predykcja→settle→kalibracja→RAG). Zero monetyzacji, zero publicznego launchu. Plan wykonawczy → sekcja `🎯 PLAN P0-P3` niżej.
+
+**Aktualizacja:** 2026-07-27 · v3.4-stable
+**Accuracy:** offline **51.8%** (WF A/B, DC W=0.5) | live: **data-starved — 6 settled na Supabase** (historia 171/104 uwięziona w Neonie do 1.08)
+**Cel M1:** 55% win rate · **Suite:** 1656 testów zebranych (23 integracyjne wymagają żywej DB)
 **LIVE:** pipeline **PC-off w chmurze** — Cloud Run Jobs (final 11:00 + evening 23:00) + Scheduler (draft 07:30, settle 06:00/21:30). Szczegóły → `docs/cloud_migration.md`.
+**⚠️ INCYDENT 27.07 (naprawiony):** redeploy zgubił env Cloud Run (`JWT_SECRET` itd.) → login zwracał 500 udający „złe hasło". Fix: rev 00313-mf5 + malformed-hash guard (401 nie 500) + `/mcp` off w prod + CD re-asertuje krytyczne sekrety + LoginView rozróżnia błąd serwera/limit/sieć od złych danych. Audyt auth: 6 znalezisk, rdzeń szczelny.
 **⚠️ INCYDENT 14-20.07 (naprawiony 07-20):** potrójna awaria — Neon quota-block → **DB = Supabase free** (session pooler); image jobów bez `footstats.data` (`.gcloudignore` fix); kupon=None crash. **Luka w danych 14-20.07** (zero predykcji/settled). Dane 1-17.07 uwięzione w Neonie do **1.08**. Szczegóły → `CHANGELOG.md` 07-20.
 **Zbudowane flag-OFF (flip po walidacji):** `SELECTION_MIN_CONF` (#1) · `LEAGUE_GATING` (#2). Już LIVE: `ENSEMBLE_MARKET_WEIGHT=0.70` (reweight ku rynkowi).
+
+---
+
+## 🎯 PLAN P0-P3 — PĘTLA UCZENIA (2026-07-27, DO WYKONANIA)
+
+> **Cel nadrzędny:** bot ma się **uczyć**, a nie tylko generować. Dziś pętla jest przerwana w trzech miejscach naraz: gra nie ten model, nie ma danych, RAG dostaje puste faktory.
+> **Kolejność usera: A → C → B.** Wszystko model-critical → walk-forward + zgoda usera przed każdym flipem.
+
+| # | Zadanie | Kod | Blokada | Status |
+|---|---------|-----|---------|--------|
+| **P0** | **Model musi realnie grać live** — rebuild+redeploy `footstats-jobs` z parquetem → Poisson-DC zamiast `bzzoiro-ml` | **A** | brak (można od razu; najlepszy timing = powrót lig klubowych ~poł. sierpnia) | ⏳ |
+| **P1** | **Pętla settle→kalibracja** — `calibration_monitor.py` + `flip_advisor` co 2-3 dni, licznik settled → progi flipów (`SELECTION_MIN_CONF`, `LEAGUE_GATING`, `CALIBRATION_ENABLED`) | — | wymaga danych (P2) | ⏳ |
+| **P2** | **Więcej danych → lepsze λ** — backfill Neon→Supabase `predictions`+`coupons` + rotacja hasła Neon | **B** | **1.08** (reset quota Neon) | ⏳ |
+| **P3** | **RAG feedback domyka sygnał** — fix pustych `factors` (`pred` sub-dict pusty w quick_picks `wyniki` → `wyciagnij_faktory` puste) | **C** | brak — data-independent, TDD, do zrobienia od razu | ⏳ |
+
+### P0 / A — szczegóły
+- Dowód problemu: obraz `footstats-jobs:latest` zbudowany **2026-07-20 17:56**, commit parquetu-do-obrazu `0cb82150f` = **2026-07-22 10:33** → parquet nigdy nie wdrożony → `load_cached()`=None → `cloud_draft._wykryj_model_source` = `bzzoiro-ml`.
+- **KOREKTA:** flaga `QUICK_PICKS_USE_POISSON_CACHE` ma default **"1" (ON)** (`quick_picks.py:73`). Blokada to brak parquetu w obrazie, nie flaga.
+- Kroki: `gcloud builds submit` → `gcloud run jobs update footstats-final/evening --image <digest>`. Po flipie mierzyć Poisson-DC vs bzzoiro-ml.
+
+### P3 / C — szczegóły
+- `pred` sub-dict nigdy nie budowany w ścieżce quick_picks (tylko weekly_picks) → `wyciagnij_faktory` zwraca `[]` → `factors='[]'` na 15/15 predykcji → RAG nie ma tagów do nauki.
+- Ten sam pusty `pred` był źródłem bug 1 (confidence) — confidence naprawione, faktory nie.
+
+### P2 / B — szczegóły
+- `scripts/backfill_users_from_neon.py` istnieje (users 1:1 login+hasło). Rozszerzyć o `predictions` + `coupons`.
+- Bez backfillu licznik settled = od zera → P1 nie ruszy.
 
 ---
 
@@ -65,7 +95,7 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
-## 🔴 P0 — WALIDACJA (blokuje M1, PASYWNE — NIE dokładaj zmian λ)
+## 🔬 WALIDACJA — szczegóły P1/P2 (blokuje M1, PASYWNE — NIE dokładaj zmian λ)
 
 > Root-cause'y Cel B usunięte. Kalibracja OFF (`CALIBRATION_ENABLED`), auto-refit czeka na dane (D2).
 > STOP na nowe λ aż zbierzemy świeże settled — zmiana teraz zaciemnia czy fixy działają.
@@ -80,7 +110,7 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
-## 🟠 P1 — M1 LEVERS (zbudowane flag-OFF → flip po ~88 fresh settled)
+## 🟠 M1 LEVERS — szczegóły P1 (zbudowane flag-OFF → flip po ~88 fresh settled)
 
 > Kalibracja: **65%+ conf = 68%** (robustnie). Per-liga: NED 56/SCO 55/ITA 54/ENG 54 ≥M1; POL 44/ESP 49/FRA 49 w dół.
 > Wniosek M1 (zgodny z Cel B): model OK, droga = **SELEKCJA** (65%+ subset) + **gating lig**.
@@ -92,7 +122,7 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
-## 🟡 P2 — SIERPIEŃ (restart lig klubowych)
+## 🟡 SIERPIEŃ (restart lig klubowych) — okno wykonania P0/A
 
 > Teraz off-season = mecze kadr (WC) → Poisson nie ma historii reprezentacji (dataset = ligi klubowe). Realny zysk dopiero na restart lig.
 
@@ -109,7 +139,7 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
-## 🗄️ P3 — MONETYZACJA / LAUNCH (ARCHIWUM — pivot 2026-07-06, zero monetyzacji)
+## 🗄️ MONETYZACJA / LAUNCH (ARCHIWUM — pivot 2026-07-06, zero monetyzacji)
 
 > Odłożone bezterminowo. Focus = predykcja (`docs/PREDICTION_ROADMAP.md`). Zostawione jako referencja gdyby wróciło.
 
@@ -120,7 +150,7 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
-## ⚪ P4 — OPCJONALNE
+## ⚪ OPCJONALNE
 
 - [ ] **Scrapery — ocena per-stabilność/anti-bot:** Soccer24 (klon FlashScore, skip), Meczyki/LiveScore (anti-bot), Transfermarkt (squad/value nie wyniki). 4 źródła już wpięte (AF/football-data.co.uk/FlashScore/TheSportsDB).
 
@@ -136,11 +166,11 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ## 📋 Następne kroki
 
-1. **Pasywne (PRIORYTET):** zbieraj świeże settled — pipeline leci PC-niezależnie. Co kilka dni `calibration_monitor.py`: czy reweight 30/70 + Poisson ruszyły accuracy. Budżet AF 100/dzień.
-2. **Sierpień:** zweryfikuj że quick_picks-fix → Poisson live (51.8%) zamiast Bzzoiro-ML.
-3. **Po ~88 settled:** D2 auto-refit → `CALIBRATION_ENABLED=1`; D3 decyzja; flip selekcja #1 + gating #2.
-4. **Opcjonalne:** parquet na cloud (→ cloud-draft Poisson).
-5. **Sam koniec (D8):** JDG/prawnik (wstrzymane). Email/płatności po walidacji.
+1. **P3 / C (TERAZ):** fix pustych `factors` — data-independent, TDD, nic nie blokuje.
+2. **P0 / A (sierpień, przy restarcie lig):** rebuild+redeploy `footstats-jobs` z parquetem → Poisson-DC gra live.
+3. **P2 / B (1.08):** backfill Neon→Supabase `predictions`+`coupons` + rotacja hasła Neon.
+4. **P1 (po backfillu):** `calibration_monitor.py` co 2-3 dni → po ~88 settled D2 auto-refit → `CALIBRATION_ENABLED=1`; D3 decyzja; flip `SELECTION_MIN_CONF` + `LEAGUE_GATING`.
+5. **Pasywne przez cały czas:** pipeline leci PC-niezależnie, zbiera settled. Budżet AF 100/dzień.
 
 ---
 

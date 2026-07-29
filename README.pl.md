@@ -5,11 +5,11 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Playwright](https://img.shields.io/badge/Playwright-1.40-45ba4b.svg)](https://playwright.dev/)
-[![Tests](https://img.shields.io/badge/tests-1346-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1656-brightgreen.svg)](tests/)
 
 **🌐 [English](README.md) · Polski**
 
-**FootStats** to autonomiczny system typowania piłkarskiego łączący statystykę Bayesowską (Poisson + Dixon-Coles), ML (CatBoost/Bzzoiro), analizę xG (Understat) oraz LLM (Groq/Llama 3.1). Działa w pełni bezobsługowo: scraping → analiza → generowanie kuponu → rozliczenie → nauka na błędach. Frontend React/Vite (Vercel), backend FastAPI (Cloud Run), DB Neon PostgreSQL.
+**FootStats** to autonomiczny system typowania piłkarskiego łączący statystykę Bayesowską (Poisson + Dixon-Coles), ML (CatBoost/Bzzoiro), analizę xG (Understat) oraz LLM (Groq/Llama 3.1). Działa w pełni bezobsługowo: scraping → analiza → generowanie kuponu → rozliczenie → nauka na błędach. Frontend React/Vite (Vercel), backend FastAPI (Cloud Run), DB Supabase PostgreSQL.
 
 ---
 
@@ -19,12 +19,12 @@
 > (Poisson + Dixon-Coles) + ensemble + LLM, walidowany **walk-forward out-of-sample na 32 400 meczach**.
 > Pełny cykl bez człowieka: scraping → predykcja → kupon → rozliczenie → nauka na błędach.
 
-**🔗 Live demo:** [bot-opal-nu.vercel.app](https://bot-opal-nu.vercel.app)  ·  **API:** FastAPI @ Google Cloud Run  ·  **DB:** Neon PostgreSQL
+**🔗 Live demo:** [bot-opal-nu.vercel.app](https://bot-opal-nu.vercel.app)  ·  **API:** FastAPI @ Google Cloud Run  ·  **DB:** Supabase PostgreSQL
 
 ### Dlaczego warto zerknąć
-- 🧪 **1346 testów** pytest + CI (lint · security · coverage gate) + regression gate na broad-except — jakość *wymuszana*, nie deklarowana.
+- 🧪 **1656 testów** pytest + CI (lint · security · coverage gate) + regression gate na broad-except — jakość *wymuszana*, nie deklarowana.
 - 📊 **Walidacja naukowa, nie marketing** — walk-forward no-lookahead, A/B wariantów modelu, kalibracja per-pasmo. Dixon-Coles **51.8%** out-of-sample; sufit rynku świadomie zmierzony (4 eksperymenty, 3 odrzucone jako ślepe uliczki — decyzje oparte o dane).
-- 🤖 **Pełna autonomia** — dzienny pipeline (Windows Task Scheduler + Google Cloud Scheduler), PC-niezależny; predykcja, rozliczenie i RAG-feedback bez interwencji.
+- 🤖 **Pełna autonomia** — dzienny pipeline na Google Cloud Run Jobs + Cloud Scheduler, w pełni PC-niezależny; predykcja, rozliczenie i RAG-feedback bez interwencji.
 - 🔒 **Rygor produkcyjny** — OWASP API hardening (live), JWT multi-user, RODO, DevSecOps w CI (bandit · gitleaks · pip-audit), rollouty za flagami (default-OFF, walidowane przed flipem).
 - 🧩 **Architektura** — multi-source scraping z cross-walidacją (4 źródła), graceful degradation, idempotentne writery, dekompozycja god-modułów.
 
@@ -37,8 +37,8 @@ Stos technik zwięźle:
 | **Feature Engineering** | Poisson + xG (atak×obrona rywala) + forma H/A + zmęczenie/rotacja + kontuzje (dwustronne) + sędzia |
 | **Bayesian Statistics** | Isotonic kalibracja + renorm 1X2, ensemble Poisson+ML (wagi per-liga), CLV tracking |
 | **Advanced Scraping** | Playwright (Superbet, FlashScore, STS), requests (Understat, Bzzoiro, API-Football) |
-| **Full-Stack** | FastAPI REST (Cloud Run) + React/Vite SPA (Vercel) + Neon PostgreSQL + multi-user (JWT) |
-| **Quality** | 1346 testów pytest, regression gate na broad-except, CI (lint/security/coverage) + Docker health + daily DB backup (Neon pg_dump) |
+| **Full-Stack** | FastAPI REST (Cloud Run) + React/Vite SPA (Vercel) + Supabase PostgreSQL + multi-user (JWT) |
+| **Quality** | 1656 testów pytest, regression gate na broad-except, CI (lint/security/coverage) + Docker health + daily DB backup (pg_dump → GCS) |
 
 ---
 
@@ -46,7 +46,7 @@ Stos technik zwięźle:
 
 ```mermaid
 graph TD
-    A[daily_agent_scheduler] -->|08:00 Draft| B(Pobierz kandydatów)
+    A[Cloud Scheduler] -->|07:30 Draft| B(Pobierz kandydatów)
     A -->|Match -70min Final| C(Wzbogać składy + sędzia)
 
     subgraph "Data Sources"
@@ -67,7 +67,7 @@ graph TD
     J -->|kontekst| I
     I --> K[Coupon Generation]
 
-    K --> L[(footstats_backtest.db)]
+    K --> L[(Supabase PostgreSQL)]
     L --> M[React SPA Vercel]
     L --> N[FastAPI /api]
 
@@ -85,10 +85,10 @@ graph TD
 | **AI / ML** | Groq (Llama 3.1 70B/8B), CatBoost (Bzzoiro), Poisson Bayesian, Ensemble |
 | **Feature Eng.** | xG (Understat), forma H/A (`core/form.py`), zmęczenie (`core/fatigue.py`), kontuzje |
 | **Scraping** | Playwright, requests + BS4, Understat JSON, API-Football v3 |
-| **Backend** | FastAPI, Uvicorn, Neon PostgreSQL (prod) / SQLite (dev), Pydantic v2 |
+| **Backend** | FastAPI, Uvicorn, Supabase PostgreSQL (prod) / SQLite (dev), Pydantic v2 |
 | **Frontend** | React/Vite SPA (Vercel) — kreator kuponów, BetBuilder, katalog rynków; Streamlit/Rich (dev/CLI) |
 | **Tracking** | CLV (Closing Line Value), A/B accuracy tab, weekly per-liga raport |
-| **Ops** | Windows Task Scheduler, Cloud Run (GCP), Docker, Sentry |
+| **Ops** | Cloud Run Jobs + Cloud Scheduler (GCP), Docker, Sentry |
 
 ---
 
@@ -106,9 +106,9 @@ graph TD
 - **Value Bet Filter** — EV > 3%, Kelly > 1%, pre-filtr przed Groq (oszczędność tokenów)
 
 ### Automatyzacja
-- **Draft Phase (08:00)** — kandydaci z Bzzoiro + API-Football Ekstraklasa, Poisson, Groq
-- **Final Phase (mecz −70 min)** — składy z API-Football, decyzja kuponu, wysyłka Telegram
-- **Evening Agent (23:00)** — rozliczenie ACTIVE kuponów, CLV capture, auto-trainer po 20+ wynikach
+- **Draft Phase (07:30, Cloud Scheduler)** — kandydaci z Bzzoiro + API-Football, Poisson, Groq
+- **Final Phase (11:00, Cloud Run Job)** — składy z API-Football, decyzja kuponu, wysyłka Telegram
+- **Evening Job (23:00)** — rozliczenie ACTIVE kuponów, CLV capture, auto-trainer po 20+ wynikach
 - **RAG Feedback Loop** — post-match AI analiza porażek → wektory → kontekst
 
 ### Monitoring
@@ -132,10 +132,11 @@ src/footstats/
 ├── evening_agent.py       # rozliczanie kuponów @ 23:00
 ├── daily_agent_scheduler.py
 └── operator_agent.py      # smoke + pipeline + review orchestrator
-tests/             # 1346 testów pytest
+tests/             # 1656 testów pytest
 scripts/           # preflight, backup_db, visualize_brain, run_operator.bat
-data/              # footstats_backtest.db, model_calibration.json
+data/              # parquet (historia), model_calibration.json, legacy SQLite (backtest)
 cache/             # api_football/, understat_xg/, flashscore/, kursy/
+docs/              # dokumentacja + archive/ (stare raporty) + screenshots/ (QA)
 ```
 
 ---
@@ -158,7 +159,7 @@ Logi: `data/logs/operator_agent.log` | Raporty: `data/operator_reports/`
 ## 🧪 Testy
 
 ```bash
-pytest tests/ -v                          # 1346 testów
+pytest tests/ -v                          # 1656 testów
 pytest tests/test_poisson.py -v           # Bayesian Poisson + edge cases
 pytest tests/test_clv_tracker.py -v       # CLV tracking
 pytest tests/test_broad_except_audit.py   # regression gate: brak nowych broad except

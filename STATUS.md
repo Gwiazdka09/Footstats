@@ -1,10 +1,11 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-07-03
+**Last Updated:** 2026-07-27
 **Current Version:** v3.4-stable
-**System State:** FUNCTIONAL — PRODUCTION (hardening OWASP + reweight 30/70 + cloud-draft live; **pełny pipeline → Cloud Run Jobs w toku**)
-**Suite:** 1448 passed / 8 skip
-**Nowe (07-03):** reset hasła (auth) + panel Model vs Live (admin) + Kontuzje v2 rdzeń + kalibracja health-gate + cloud-jobs deploy (final/evening PC-off)
+**System State:** FUNCTIONAL — PRODUCTION (pipeline PC-off na Cloud Run Jobs, DB = Supabase, dziennik kuponów J1-J6 live)
+**Suite:** 1656 testów zebranych (unit-mode; 23 integracyjne wymagają żywej DB — patrz dług testowy w TODO)
+**Nowe (07-27):** auth hardening po incydencie logowania (malformed hash → 401 nie 500, MCP tylko poza prod, CD re-asercje sekretów, LoginView rozróżnia błąd serwera od złych danych) + skrypt backfillu users Neon→Supabase
+**Nowe (07-21/22):** dziennik kuponów J1-J6 (statystyki usera, krzywa postępu, ręczny wpis, leaderboard v2, predykcja jako sygnał) + match-linking + auto-settle manual
 
 ---
 
@@ -13,7 +14,9 @@
 | Metric | Status | Value |
 |--------|--------|-------|
 | **Accuracy (model offline)** | ✅ | Walk-forward 10 lig: DC **51.3%** > baseline 49.6% (NED 54.9%), kalibracja monotoniczna |
-| **Accuracy (live)** | 🟡 | 31.7% (stare 58 settled, sprzed fixów Cel B) — czeka na świeże dane po fixach |
+| **Accuracy (live)** | 🔴 | **Data-starved:** Supabase = 15 pred / 6 settled od migracji 20.07. Historia (171/104, live 37.5%) uwięziona w zablokowanym Neonie do **1.08**. Na n=6 nic nie da się walidować |
+| **Model faktycznie grający live** | 🔴 | **`bzzoiro-ml`, NIE nasz Poisson-DC** — obraz `footstats-jobs` z 20.07 17:56 < commit parquetu `0cb82150f` z 22.07 → `load_cached()`=None → fallback. Fix = rebuild+redeploy jobs (**P0/A**) |
+| **RAG factors** | 🔴 | `factors='[]'` na 15/15 predykcji — `pred` sub-dict pusty w quick_picks → `wyciagnij_faktory` puste → RAG się nie uczy (**P3/C**, data-independent) |
 | **Model fixes** | ✅ | Cel B root-cause USUNIĘTY (bug 1 conf + bug kalibracji per-wynik 1X2, `11cc57232`) + D3 część 1+2 (prob modelu w `predictions` + guard `koryguj_tip_wg_modelu`, `4823ac9c0`) + Dixon-Coles w prod (flaga ON) + Faza 17 + A1-A3 + λ |
 | **Kalibracja** | 🟡 | Gate `CALIBRATION_ENABLED` OFF (identity) — zdegenerowana krzywa psuła Kelly/value-bet. Auto-refit co +30 settled wpięty (D2), czeka na próg ~88 settled |
 | **Kursy (odds)** | ✅ | Fallback chain Bzzoiro → API-Football `/odds` (live OK, zero anti-bot) → Sofascore (403, niski priorytet) |
@@ -26,11 +29,13 @@
 | **Brain graph** | ✅ | `scripts/visualize_brain.py` przepisany — 41 węzłów, warstwowa architektura aktualna (agenty/AI/model/settlement/scrapery/sources/API/DB) (`53499bbfc`) |
 | **CI/CD** | ✅ | `ci.yml` 5 jobów: lint (`ruff` E9+F / `mypy` sources) + security (`bandit` + `pip-audit`) + secrets (`gitleaks`) + test + docker-health. Dependabot (pip/npm/actions) + pre-commit. CI+CD green na main (06-25) |
 | **Standardy kodu** | ✅ | god-moduły rozbite: `superbet.py` 1128→867 (06-25), `daily_agent.py` 1078→818 (output+decision), `utils/logging.py` 723→539 (exceptions+safe_http). Ruff lint gate w CI |
-| **Tests** | ✅ | ~1346 testów pass / 6 skip (+cloud-draft, +cache_evict, +quick_picks regression, +ml_features/standings 06-26) |
-| **Automation** | ✅ | Task Scheduler: draft 08:00 (zapisuje wszystko, enrich) + final 11:00 + evening 23:00. No-faza `FootStats-DailyAgent` WYŁĄCZONY (D5, redundantny) |
-| **API** | ✅ | FastAPI + Sentry + SlowAPI + CORS + Timeout |
-| **DB** | ✅ | Neon PG (prod), keepalives, pool maxconn=10, migracja 6 (telegram_chat_id) |
-| **Security** | ✅ | **Hardening OWASP API Top 10 LIVE (06-25)**: `/health` bez danych biznesowych, `/metrics` za METRICS_TOKEN (401), `/docs`+`/openapi` off w prod (ENV), nagłówki nosniff/DENY/HSTS/no-referrer, rate-limit login 10/min + register 5/min. SQL parametryzowane, JWT_SECRET fail-closed, zero hardcoded sekretów (gitleaks/bandit/pip-audit czyste), telegram chat_id allowlist |
+| **Dziennik kuponów** | ✅ | **J1-J6 DONE (07-21/22):** `core/user_stats.py` (ROI/win-rate/streak) · `StatsView` + `ProgressChart` (recharts) · ręczny wpis kuponu (`POST /api/coupon/manual`, kolumna `bookmaker`) · leaderboard v2 (sort+filtr dni, shared-only opt-in) · podgląd sygnału modelu w formularzu (`/api/coupon/preview-signal`) |
+| **Match-linking** | ✅ | `core/match_linker.py` (STRICT `_norm_ascii`, exact-only) + `settle_manual_coupons` all-legs-or-nothing + `POST /cron/settle-manual` (**NIE wpięty w scheduler** — decyzja usera) |
+| **Tests** | ✅ | **1656 testów zebranych**; 23 integracyjne biją w `DATABASE_URL` z `.env` (dług testowy: marker `@pytest.mark.integration` + test-DB) |
+| **Automation** | ✅ | **Cloud Run Jobs** `footstats-final` 11:00 + `footstats-evening` 23:00 + Scheduler (draft 07:30, settle 06:00/21:30). Lokalne Task Scheduler taski **WYŁĄCZONE** (`.bat/.vbs` zostają na rollback) |
+| **API** | ✅ | FastAPI + Sentry + SlowAPI + CORS + Timeout. `/mcp` montowany **tylko poza prod** (07-27) |
+| **DB** | 🟡 | **Supabase free** (session pooler eu-west-1) od 20.07, RLS na 11 tabelach. Neon zablokowany quota do **1.08** → backfill (`scripts/backfill_users_from_neon.py`, users gotowe; predictions+coupons do dopisania) |
+| **Security** | ✅ | **Auth hardening 07-27** (po incydencie): login odporny na malformed `password_hash` (401 nie 500), `/mcp` off w prod, CD jawnie re-asertuje krytyczne sekrety przy deployu (self-heal po zgubieniu env), LoginView rozróżnia błąd serwera/limit/sieć od złych danych. Audyt auth: 6 znalezisk, rdzeń szczelny. **Hardening OWASP API Top 10 LIVE (06-25)**: `/health` bez danych biznesowych, `/metrics` za METRICS_TOKEN (401), `/docs`+`/openapi` off w prod (ENV), nagłówki nosniff/DENY/HSTS/no-referrer, rate-limit login 10/min + register 5/min. SQL parametryzowane, JWT_SECRET fail-closed, zero hardcoded sekretów (gitleaks/bandit/pip-audit czyste), telegram chat_id allowlist |
 | **Auth** | ✅ | JWT, login/register/delete, per-user (bankroll/settings/telegram) |
 | **RODO** | ✅ | Cookie consent, polityka, regulamin, self-delete UI |
 | **SEO** | ✅ | meta/OG/Twitter, sitemap.xml, robots.txt |
@@ -43,13 +48,13 @@
 |-----------|--------|----------|
 | **Frontend** | ✅ Vercel | bot-opal-nu.vercel.app |
 | **Backend API** | ✅ Cloud Run | footstats-api-949240532526.europe-west1.run.app |
-| **DB** | ✅ Neon.tech | europe-west |
+| **DB** | ✅ Supabase free | session pooler eu-west-1 (od 20.07). Neon: quota-block do 1.08, do backfillu + rotacji hasła |
 | **Monitoring** | ✅ Sentry | aktywne w Cloud Run |
 | **Uptime** | ✅ UptimeRobot | monitor 803305270, /health HEAD+GET |
-| **Daily Agent** | ✅ | Task Scheduler 08:00 Draft + 11:00 Final + System paper-trading (no-faza task WYŁĄCZONY, D5) |
-| **Cloud-draft** | ✅ | Cloud Scheduler `footstats-draft-morning` 07:30 CEST → `/api/cron/draft?dry_run=false` (PC-niezależny, idempotentny). `model_source=bzzoiro-ml` na cloud (parquet nieobecny) |
-| **Settle (cloud)** | ✅ | Cloud Scheduler `footstats-settle-morning` (06:00 UTC) + wieczorny |
-| **Evening Agent** | ✅ | Task Scheduler 23:00 |
+| **Daily Agent** | ✅ Cloud Run Job | `footstats-final` 11:00 (PC-off). Lokalne taski Windows wyłączone |
+| **Cloud-draft** | ✅ | Cloud Scheduler `footstats-draft-morning` 07:30 CEST → `/api/cron/draft?dry_run=false` (idempotentny). ⚠️ `model_source=bzzoiro-ml` — parquet nie w obrazie (P0/A) |
+| **Settle (cloud)** | ✅ | Cloud Scheduler `footstats-settle-morning` (06:00 UTC) + wieczorny. `/cron/settle-manual` istnieje, **nie wpięty** |
+| **Evening Agent** | ✅ Cloud Run Job | `footstats-evening` 23:00 |
 
 ---
 
@@ -57,7 +62,12 @@
 
 | # | Problem | Priorytet |
 |---|---------|-----------|
-| 1 | Live accuracy 31.7% (stare 58 settled, sprzed fixów) — root-cause Cel B **USUNIĘTY w całości**: bug 1 (conf=Groq fallback) + bug kalibracji per-wynik 1X2 (`11cc57232`, 06-20). Bug 2 (ai_tip=selekcja Groq, D3) — część 1+2 ZROBIONE 06-22 (prob modelu + guard, `4823ac9c0`); pełna decyzja a/b/c czeka na ≥20 ŚWIEŻYCH settled z zapisanym prob | 🟡 P1 |
+| 1 | **Live gra `bzzoiro-ml`, nie Poisson-DC** — obraz jobs starszy niż commit parquetu → `load_cached()`=None → fallback. Fix: rebuild+redeploy `footstats-jobs`. Timing: powrót lig klubowych ~poł. sierpnia | 🔴 **P0 / A** |
+| 2 | **`factors` puste 15/15** — `pred` sub-dict pusty w quick_picks `wyniki` → `wyciagnij_faktory` puste → RAG nie ma się na czym uczyć. Data-independent, TDD | 🔴 **P3 / C** |
+| 3 | **Data-starved (6 settled)** — backfill Neon→Supabase `predictions`+`coupons` po 1.08 + rotacja hasła Neon (wisiało plaintext w env Cloud Run) | 🔴 **P2 / B**, twarda data 1.08 |
+| 4 | Bug 2 (ai_tip = selekcja Groq, D3) — część 1+2 ZROBIONE 06-22 (prob modelu + guard, `4823ac9c0`); pełna decyzja a/b/c czeka na ≥20 ŚWIEŻYCH settled z zapisanym prob | 🟡 P1 |
+| 5 | **CSS cascade-layer bug (app-wide)** — `gui/src/index.css` reset `button {color:inherit}` poza `@layer` → w Tailwind v4 bije utility-klasy, `text-*`/`bg-*` na każdym `<button>` nie działa. Obejście: inline `style var()`. Fix = `@layer base` + regresja wizualna | 🟡 P1 |
+| 6 | **Dług testowy** — `config.py` `load_dotenv(override=True)` → 23 testy integracyjne biją w prod `DATABASE_URL`. Fix: marker `@pytest.mark.integration` + test-DB | 🟡 P1 |
 
 ### Cel A — walk-forward offline (10 lig, 2026-06-19, out-of-sample, n=25738)
 - **A/B:** dixoncoles **51.3%** > baseline 49.6% > poisson_only 48.1%. DC +1.7pp — generalizuje (NED było +1.9pp).
@@ -80,11 +90,10 @@
 ### Kursy 2. źródło — D1b/D6 (2026-06-20/21, ROZWIĄZANE)
 - Fallback chain: Bzzoiro → API-Football `/odds` (`131abc1bf`, PODSTAWOWY, zero anti-bot, live smoke potwierdził) → Sofascore (`6b3b2bfd1`, 2. fallback, obecnie 403 anti-bot — niski priorytet).
 
-| 2 | Email transakcyjny (Resend) — wpięty 06-22 (`8dcb76a27`), live OK; FROM=test-sender, podmień domenę przed prod | 🟢 P3 |
-| 3 | JDG + prawnik — przed pierwszym płatnym userem (D8: WSTRZYMANE, user się waha — koszt/ryzyko) | 🟡 P2 |
-| 4 | Płatności (Lemon Squeezy) — nie zintegrowane (po JDG) | 🟡 P2 |
-| 5 | ImportanceIndex λ — blocked (standings map + off-season) | ⚪ P4 |
-| 6 | Sofascore 403 anti-bot (odds + form_scraper) — OPCJONALNE stealth, tylko jeśli AF coverage za cienki | ⚪ P4 |
+| 7 | Email transakcyjny (Resend) — wpięty 06-22 (`8dcb76a27`), live OK; FROM=test-sender, podmień domenę przed prod | 🟢 P3 |
+| 8 | JDG + prawnik / płatności (Lemon Squeezy) — **ARCHIWUM** (pivot 07-06: zero monetyzacji; kierunek 07-21: prywatny użytek + beta-testerzy) | 🗄️ |
+| 9 | ImportanceIndex λ — blocked (standings map + off-season) | ⚪ P4 |
+| 10 | Sofascore 403 anti-bot (odds + form_scraper) — OPCJONALNE stealth, tylko jeśli AF coverage za cienki | ⚪ P4 |
 
 ---
 
@@ -92,6 +101,9 @@
 
 | Funkcja | Data |
 |---------|------|
+| **Auth hardening po incydencie logowania** — redeploy zgubił env Cloud Run (JWT_SECRET itd.) → login 500 udający „złe hasło". Fix rev 00313-mf5 + `335df65bb` (malformed hash → 401) + `0cded9b4d` (`/mcp` off w prod) + `b5c49484a` (CD re-asercje sekretów) + `cc4574d16` (LoginView) + `17a2ecea4` (backfill users Neon→Supabase) | 07-27 |
+| **Dziennik kuponów J1-J6** — statystyki usera (`core/user_stats.py`) + `StatsView` + krzywa postępu (recharts) + ręczny wpis kuponu + leaderboard v2 (sort/filtr dni) + predykcja jako sygnał w formularzu. Match-linking (`core/match_linker.py`) + auto-settle manual (`/cron/settle-manual`, nie wpięty) | 07-21/22 |
+| **Migracja DB → Supabase** (Neon quota-block) + `.gcloudignore` fix (image jobs bez `footstats.data`) + None-guardy Groq (`kupon=None` crash) — pierwszy zielony `footstats-final` od 13.07 | 07-20 |
 | **Cloud-draft PC-niezależny** (`/cron/draft` + scheduler 07:30 CEST, requests-only) + **reweight 30/70 live** (rev 00274) + **quick_picks Poisson schema fix** (eng load_cached → pl, default ON) + ml_features/standings (infra ML, dead-end) | 06-26 |
 | **Scrapery multi-source + cross-walidacja** — framework `scrapers/sources/` (MatchData/ResultsSource/aggregator) + 3 źródła (API-Football, football-data.co.uk, FlashScore); live 27 meczów potwierdzonych ≥2 źródła, 0 rozjazdów; **brain graph szczegółowy** (41 węzłów) | 06-23 |
 | **FlashScore live-leak fix** — `_parse_mobi_html` ignorował `class="fin"`, mecz w trakcie zwracany jako końcowy → kupony #240/241/242 LOST błędnie; fix + revert do ACTIVE + cache wyczyszczony | 06-23 |
