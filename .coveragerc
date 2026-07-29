@@ -3,8 +3,6 @@ source = src/footstats
 omit =
     src/footstats/scrapers/base_playwright.py
     src/footstats/scrapers/superbet.py
-    src/footstats/scrapers/superoferta.py
-    src/footstats/scrapers/sts.py
     src/footstats/scrapers/flashscore_match.py
     src/footstats/scrapers/flashscore_results.py
     src/footstats/scrapers/form_scraper.py
