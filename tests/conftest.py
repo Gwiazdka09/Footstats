@@ -4,6 +4,63 @@ import pandas as pd
 import pytest
 from datetime import datetime, timedelta
 
+# Hosty baz PRODUKCYJNYCH. Suita nie ma prawa ich dotknąć.
+_HOSTY_PROD = ("supabase.co", "supabase.com", "neon.tech")
+
+# Świadome obejście — TYLKO gdy naprawdę chcesz uderzyć w prod (diagnostyka).
+_ENV_OBEJSCIE = "FOOTSTATS_ALLOW_PROD_DB"
+
+
+def _efektywny_database_url() -> str:
+    """
+    URL, którego REALNIE użyją testy — liczony tak samo jak w aplikacji.
+
+    Nie wystarczy `os.environ`: przy starcie pytesta zmiennej jeszcze nie ma,
+    bo wnosi ją dopiero `config.py` swoim `load_dotenv(ENV_FILE)` przy imporcie
+    (czyli w fazie zbierania testów, JUŻ PO `pytest_configure`). Ten `load_dotenv`
+    jest bez `override`, więc gdy klucz istnieje w środowisku — nawet pusty —
+    to on wygrywa. Stąd `DATABASE_URL=""` skutecznie wyłącza bazę, a brak zmiennej
+    oznacza, że wejdzie wartość z `.env`.
+    """
+    if "DATABASE_URL" in os.environ:
+        return os.environ["DATABASE_URL"].strip()
+    try:
+        from pathlib import Path
+        from dotenv import dotenv_values
+        plik = Path(__file__).resolve().parents[1] / ".env"
+        return (dotenv_values(plik).get("DATABASE_URL") or "").strip() if plik.exists() else ""
+    except ImportError:
+        return ""
+
+
+def pytest_configure(config):
+    """
+    Przerywa CAŁĄ sesję, jeśli `DATABASE_URL` wskazuje produkcję.
+
+    Incydent 2026-07-29: `pytest tests/` odpalone bez `DATABASE_URL=""` poszło na
+    produkcyjne Supabase (`.env` wskazuje prod od tego dnia). Testy obciążyły
+    papierowy bankroll Admin_JG o 2 PLN i dopisały wiersz do `bankroll_history`;
+    trzeba to było ręcznie cofać. Reguła „testy nie dotykają proda" istniała
+    w dokumentacji, ale NIC jej nie egzekwowało — sam guard sieciowy niżej działa
+    wyłącznie gdy DATABASE_URL jest pusty, czyli dokładnie nie w tym przypadku.
+
+    Testy integracyjne uruchamiaj przeciw OSOBNEJ bazie, nie przeciw prod.
+    """
+    if os.environ.get(_ENV_OBEJSCIE) == "1":
+        return
+    url = _efektywny_database_url()
+    if not url:
+        return
+    trafiony = next((h for h in _HOSTY_PROD if h in url), None)
+    if trafiony:
+        raise pytest.UsageError(
+            f"STOP: DATABASE_URL wskazuje produkcję ({trafiony}). Testy PISZĄ do bazy "
+            f"(zakładają userów, zmieniają salda i statusy kuponów).\n"
+            f"  Suita unit:        DATABASE_URL=\"\" pytest tests/\n"
+            f"  Testy integracyjne: DATABASE_URL=<osobna baza testowa> pytest tests/\n"
+            f"  Świadome obejście:  {_ENV_OBEJSCIE}=1 (tylko diagnostyka, na własną odpowiedzialność)"
+        )
+
 
 @pytest.fixture(autouse=True)
 def _patch_auth_db_when_no_database_url(monkeypatch):
