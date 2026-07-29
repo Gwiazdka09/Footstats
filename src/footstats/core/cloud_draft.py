@@ -81,7 +81,10 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
         powod_fallbacku = ""
 
         if not klucz:
-            powod_fallbacku = "brak BZZOIRO_API_KEY"
+            # Nazwa zmiennej z ENV_BZZOIRO, nie zaszyta na sztywno — wcześniej komunikat
+            # mówił "BZZOIRO_API_KEY", a realna zmienna to BZZOIRO_KEY, co przy diagnozie
+            # incydentu (draft cicho zwracał ok:False od 20.07) wysyłało na złą ścieżkę.
+            powod_fallbacku = f"brak {ENV_BZZOIRO} w env"
         else:
             kandydat = BzzoiroClient(klucz)
             ok, msg = kandydat.waliduj()

@@ -4,6 +4,7 @@ Wzorowane na test_analyses_endpoint.py: dependency_overrides[require_auth] dla k
 zalogowanego, realny require_auth dla anonima. get_user_stats zamockowane bezpośrednio
 w module trasy — zero dotykania DB (SQLite/Neon), test wyłącznie serializacji/auth.
 """
+import psycopg2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -80,12 +81,18 @@ def test_stats_me_empty_user_zwraca_null_best_worst(client, monkeypatch):
 
 
 # ── błąd DB → 503 ────────────────────────────────────────────────────────────
+#
+# Symulujemy psycopg2.OperationalError, bo tak wygląda REALNA awaria tej ścieżki
+# (np. wyczerpany limit Neona: "connection to server ... failed: ERROR: Your account
+# or project has exceeded the compute time quota"). Wcześniej test rzucał gołym
+# RuntimeError, co przechodziło tylko dlatego, że endpoint łapał `except Exception`
+# — a to łamało gate broad-except w CI.
 
 def test_stats_me_blad_db_zwraca_503(client, monkeypatch):
     import footstats.api.routes.user_stats as us
 
     def _boom(user_id: int):
-        raise RuntimeError("DB down")
+        raise psycopg2.OperationalError("DB down")
 
     monkeypatch.setattr(us, "get_user_stats", _boom)
 
@@ -137,7 +144,7 @@ def test_stats_progress_blad_db_zwraca_503(client, monkeypatch):
     import footstats.api.routes.user_stats as us
 
     def _boom(user_id: int):
-        raise RuntimeError("DB down")
+        raise psycopg2.OperationalError("DB down")
 
     monkeypatch.setattr(us, "get_progress_series", _boom)
 

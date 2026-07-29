@@ -7,6 +7,7 @@ za definicję pól i reguły rozliczenia (co wchodzi do win-rate/streak/postępu
 import dataclasses
 import logging
 
+import psycopg2
 from fastapi import APIRouter, Depends, HTTPException
 
 from footstats.api.auth import require_auth
@@ -15,15 +16,23 @@ from footstats.core.user_stats import get_progress_series, get_user_stats
 router = APIRouter(prefix="/api", tags=["user-stats"])
 log = logging.getLogger(__name__)
 
+# Jawna lista zamiast `except Exception` — gate broad-except w CI tego pilnuje.
+# Odczyt statystyk może polec na: martwej/zerwanej DB (psycopg2), braku sterownika
+# lub kolumny (ImportError/KeyError), złych typach w wierszu (TypeError/ValueError).
+# Wszystkie kończą się tym samym: 503 „Dane niedostępne", nie 500.
+_BLEDY_ODCZYTU = (
+    psycopg2.Error, OSError, ValueError, TypeError, KeyError, AttributeError, ImportError,
+)
+
 
 @router.get("/stats/me")
 def stats_me(user_id: int = Depends(require_auth)) -> dict:
     """Zwraca zagregowane statystyki (win-rate/ROI/profit/streak/best/worst) usera."""
     try:
         stats = get_user_stats(user_id)
-    except Exception as e:  # noqa: BLE001 — DB/psycopg2: zwróć 503, nie 500
+    except _BLEDY_ODCZYTU as e:
         log.warning("stats/me: odczyt statystyk nieudany (user_id=%s): %s", user_id, e)
-        raise HTTPException(status_code=503, detail="Dane niedostępne")
+        raise HTTPException(status_code=503, detail="Dane niedostępne") from e
     return dataclasses.asdict(stats)
 
 
@@ -32,7 +41,7 @@ def stats_progress(user_id: int = Depends(require_auth)) -> list[dict]:
     """Zwraca krzywą postępu (kumulatywny profit + running win-rate) usera."""
     try:
         series = get_progress_series(user_id)
-    except Exception as e:  # noqa: BLE001 — DB/psycopg2: zwróć 503, nie 500
+    except _BLEDY_ODCZYTU as e:
         log.warning("stats/progress: odczyt serii nieudany (user_id=%s): %s", user_id, e)
-        raise HTTPException(status_code=503, detail="Dane niedostępne")
+        raise HTTPException(status_code=503, detail="Dane niedostępne") from e
     return [dataclasses.asdict(point) for point in series]
