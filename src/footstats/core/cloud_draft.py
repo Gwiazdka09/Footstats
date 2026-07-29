@@ -119,6 +119,17 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
         from footstats.core.daily_filters import _pre_filtruj_ligi
 
         kandydaci = _pre_filtruj_ligi(wyniki)
+
+        # Fallback nie ma kursów, a `najlepszy_typ` bez kursu zwraca None → zero
+        # kuponów mimo poprawnych prob. Dociągamy je z AF po filtrze lig, żeby
+        # ograniczony budżet szedł tylko na mecze, które faktycznie rozważamy.
+        if fixtures_source != "bzzoiro" and kandydaci:
+            from footstats.scrapers.fixtures_fallback import dolacz_kursy
+            limit = int(os.getenv("FALLBACK_ODDS_LIMIT", "15"))
+            uzupelnione = dolacz_kursy(kandydaci, limit=limit)
+            log.info("fallback: kursy AF dociagniete dla %d/%d kandydatow (limit %d)",
+                     uzupelnione, len(kandydaci), limit)
+
         viable = []
         for w in kandydaci:
             if not w.get("gospodarz") or not w.get("goscie"):

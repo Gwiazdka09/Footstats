@@ -135,3 +135,49 @@ class FixturesFallbackClient:
             }
         except (AttributeError, TypeError, ValueError):
             return None
+
+
+def dolacz_kursy(wyniki: list[dict], limit: int = 15) -> int:
+    """
+    Dociąga kursy z API-Football do meczów, które ich nie mają. Zwraca ile uzupełnił.
+
+    Po co: `system_paper.najlepszy_typ` pomija każdy typ bez kursu, więc fallback
+    bez kursów dałby poprawne prawdopodobieństwa i ZERO kuponów.
+
+    Budżet: 1 mecz = 2 zapytania AF (`znajdz_fixture_id` + `kursy_fixture`) przy
+    dziennym limicie 100 — dlatego `limit` jest twardy, a kolejność idzie od
+    najpewniejszych typów, żeby budżet szedł na mecze, które realnie dadzą kupon.
+
+    Graceful: błąd pojedynczego meczu nie przerywa reszty ani nie rzuca w górę.
+    """
+    from footstats.scrapers.api_football import fetch_odds_af
+
+    braki = [w for w in wyniki if not (w.get("odds") or {})]
+    if not braki:
+        return 0
+
+    def _pewnosc(w: dict) -> float:
+        typy = w.get("typy") or []
+        try:
+            return max(float(p) for _, p in typy)
+        except (ValueError, TypeError):
+            return 0.0
+
+    braki.sort(key=_pewnosc, reverse=True)
+
+    uzupelnione = 0
+    for w in braki[:max(0, limit)]:
+        try:
+            odds = fetch_odds_af(
+                str(w.get("gospodarz") or ""),
+                str(w.get("goscie") or ""),
+                str(w.get("data") or ""),
+            )
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            log.warning("kursy AF dla %s vs %s nieosiągalne: %s",
+                        w.get("gospodarz"), w.get("goscie"), e)
+            continue
+        if odds:
+            w["odds"] = odds
+            uzupelnione += 1
+    return uzupelnione

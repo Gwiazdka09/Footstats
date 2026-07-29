@@ -6,7 +6,7 @@ a prawdopodobieństwa liczy Poisson (fallback NIE ma ramienia ML).
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import footstats.core.cloud_draft as cd
 from footstats.scrapers.bzzoiro import ENV_BZZOIRO
@@ -99,6 +99,84 @@ def test_pyta_af_o_kazdy_dzien_horyzontu():
     klient.predykcje_tygodnia()
     assert af._get.call_count == 2
     assert all(c.args[0] == "/fixtures" for c in af._get.call_args_list)
+
+
+# ── dołączanie kursów (fallback ich nie ma, a najlepszy_typ ich wymaga) ─────
+
+
+def test_dolacz_kursy_uzupelnia_mecze_bez_kursow():
+    """Bez kursów najlepszy_typ zwraca None → zero kuponów. Fallback musi je dociągnąć."""
+    from footstats.scrapers.fixtures_fallback import dolacz_kursy
+
+    wyniki = [
+        {"gospodarz": "Arsenal", "goscie": "Chelsea", "data": "2026-08-01",
+         "typy": [("1", 60.0)], "odds": {}},
+    ]
+    with patch("footstats.scrapers.api_football.fetch_odds_af",
+               return_value={"home": 1.85, "draw": 3.4, "away": 4.2}) as mock_af:
+        n = dolacz_kursy(wyniki, limit=5)
+
+    assert n == 1
+    assert wyniki[0]["odds"]["home"] == 1.85
+    mock_af.assert_called_once_with("Arsenal", "Chelsea", "2026-08-01")
+
+
+def test_dolacz_kursy_respektuje_limit_budzetu():
+    """Budżet AF to 100 req/dzień, a 1 mecz = 2 zapytania → limit jest twardy."""
+    from footstats.scrapers.fixtures_fallback import dolacz_kursy
+
+    wyniki = [
+        {"gospodarz": f"H{i}", "goscie": f"A{i}", "data": "2026-08-01",
+         "typy": [("1", 50.0 + i)], "odds": {}}
+        for i in range(10)
+    ]
+    with patch("footstats.scrapers.api_football.fetch_odds_af",
+               return_value={"home": 1.9}) as mock_af:
+        n = dolacz_kursy(wyniki, limit=3)
+
+    assert n == 3
+    assert mock_af.call_count == 3
+
+
+def test_dolacz_kursy_bierze_najpewniejsze_najpierw():
+    """Limitowany budżet ma iść na mecze z najwyższą pewnością, nie na pierwsze z brzegu."""
+    from footstats.scrapers.fixtures_fallback import dolacz_kursy
+
+    slaby = {"gospodarz": "Slaby", "goscie": "X", "data": "2026-08-01",
+             "typy": [("1", 41.0)], "odds": {}}
+    mocny = {"gospodarz": "Mocny", "goscie": "Y", "data": "2026-08-01",
+             "typy": [("1", 78.0)], "odds": {}}
+    wyniki = [slaby, mocny]
+
+    with patch("footstats.scrapers.api_football.fetch_odds_af",
+               return_value={"home": 1.9}) as mock_af:
+        dolacz_kursy(wyniki, limit=1)
+
+    assert mock_af.call_args[0][0] == "Mocny"
+    assert mocny["odds"] and not slaby["odds"]
+
+
+def test_dolacz_kursy_nie_nadpisuje_istniejacych():
+    """Mecz który już ma kursy (ścieżka Bzzoiro) nie marnuje budżetu."""
+    from footstats.scrapers.fixtures_fallback import dolacz_kursy
+
+    wyniki = [{"gospodarz": "A", "goscie": "B", "data": "2026-08-01",
+               "typy": [("1", 60.0)], "odds": {"home": 2.0}}]
+    with patch("footstats.scrapers.api_football.fetch_odds_af") as mock_af:
+        assert dolacz_kursy(wyniki, limit=5) == 0
+    mock_af.assert_not_called()
+
+
+def test_dolacz_kursy_graceful_gdy_af_padnie():
+    """Błąd AF nie może wywalić draftu — mecz zostaje bez kursów."""
+    from footstats.scrapers.fixtures_fallback import dolacz_kursy
+
+    wyniki = [{"gospodarz": "A", "goscie": "B", "data": "2026-08-01",
+               "typy": [("1", 60.0)], "odds": {}}]
+    with patch("footstats.scrapers.api_football.fetch_odds_af",
+               side_effect=OSError("timeout")):
+        assert dolacz_kursy(wyniki, limit=5) == 0
+    assert wyniki[0]["odds"] == {}
 
 
 # ── wpięcie w cloud_draft ────────────────────────────────────────────────────
