@@ -143,6 +143,11 @@ def parse_understat_players(html: str) -> list[dict]:
     data = _parse_players_json(html)
     if not data:
         return []
+    return _mapuj_graczy(data)
+
+
+def _mapuj_graczy(data: list[dict]) -> list[dict]:
+    """Surowe playersData → schemat projektu. Wspólne dla HTML i odczytu z `window`."""
     out: list[dict] = []
     for p in data:
         name = (p.get("player_name") or "").strip()
@@ -173,6 +178,95 @@ def parse_understat_players(html: str) -> list[dict]:
     return out
 
 
+def _parsuj_liczbe(txt: str) -> float | None:
+    """
+    Pierwsza liczba z komórki tabeli Understat. None gdy jej nie ma.
+
+    Kolumny xG/xGA niosą deltę wobec goli sklejoną z wartością ("77.49+6.49"),
+    więc `float()` na całości by poległo, a naiwny split po '+' zgubiłby '-'.
+    """
+    m = re.match(r"\s*(-?\d+(?:\.\d+)?)", str(txt or ""))
+    if not m:
+        return None
+    try:
+        return float(m.group(1))
+    except ValueError:
+        return None
+
+
+def fetch_league_team_xg(league_key: str, season: int) -> dict[str, dict]:
+    """
+    xG/xGA wszystkich drużyn ligi — JEDNO pobranie przeglądarką.
+
+    Understat porzucił zmienne JS (`matchesData`/`playersData` nie ma ani w HTML,
+    ani w `window`); dane są w tabelach DOM budowanych po stronie klienta. Tabela
+    ligi ma komplet (Team / M / xG / xGA), więc jeden fetch obsługuje ~20 drużyn
+    zamiast 20 osobnych uruchomień chromium.
+
+    Zapisuje wynik do tego samego cache, z którego czyta `poisson.predict_match`
+    (`_cache_get(_to_slug(team), season)`), więc blend 20% xG rusza bez zmian w modelu.
+
+    UWAGA na semantykę: to średnia **sezonowa** (xG/M), a nie z ostatnich N meczów
+    jak w `fetch_team_xg`. Jest gładsza i mniej czuła na formę — świadomy kompromis
+    za to, że w ogóle mamy xG (wcześniej cache był pusty, blend był cichym no-opem).
+
+    Zwraca {nazwa_druzyny: payload}. Brak przeglądarki/danych → {}.
+    """
+    from footstats.scrapers.browser_fetch import pobierz_html
+
+    url = f"https://understat.com/league/{league_key}/{season}"
+    _log.info("[Understat] tabela ligi %s/%d", league_key, season)
+    html = pobierz_html(url, czekaj_na="table")
+    if not html:
+        return {}
+
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+    except ImportError:
+        _log.warning("[Understat] brak bs4 — pomijam tabelę ligi")
+        return {}
+
+    wynik: dict[str, dict] = {}
+    for tabela in soup.find_all("table"):
+        naglowki = [th.get_text(strip=True) for th in tabela.find_all("th")]
+        if not {"Team", "xG", "xGA"}.issubset(set(naglowki)):
+            continue  # kalendarze i inne tabele na stronie
+        try:
+            i_team, i_m = naglowki.index("Team"), naglowki.index("M")
+            i_xg, i_xga = naglowki.index("xG"), naglowki.index("xGA")
+        except ValueError:
+            continue
+
+        for wiersz in tabela.find_all("tr")[1:]:
+            komorki = [c.get_text(strip=True) for c in wiersz.find_all(["td", "th"])]
+            if len(komorki) <= max(i_team, i_m, i_xg, i_xga):
+                continue
+            team = komorki[i_team].strip()
+            mecze = _parsuj_liczbe(komorki[i_m])
+            xg = _parsuj_liczbe(komorki[i_xg])
+            xga = _parsuj_liczbe(komorki[i_xga])
+            # Niepełny wiersz jest bezużyteczny — pomijamy zamiast zgadywać.
+            if not team or not mecze or mecze <= 0 or xg is None or xga is None:
+                continue
+
+            payload = {
+                "team": team,
+                "season": season,
+                "mecze": int(mecze),
+                "xg_for_avg": round(xg / mecze, 2),
+                "xga_avg": round(xga / mecze, 2),
+                "historia": [],  # tabela ligi nie ma rozbicia na mecze
+                "zrodlo": "understat-liga",
+            }
+            _cache_set(_to_slug(team), season, payload)
+            wynik[team] = payload
+        break  # pierwsza tabela z kompletem kolumn wystarczy
+
+    _log.info("[Understat] tabela ligi %s: %d drużyn", league_key, len(wynik))
+    return wynik
+
+
 # Klucze lig Understat (URL) — pokrywa TOP5 + rosyjska. MLS/Saudi/LigaMX poza zasięgiem.
 UNDERSTAT_LIGI: dict[str, str] = {
     "PL": "EPL",
@@ -188,23 +282,47 @@ def fetch_league_players_understat(league_key: str, season: int) -> list[dict]:
     Parsuje pełen skład ligi z Understat (per-gracz gole/asysty/xG).
     league_key: URL Understat (np. 'EPL','La_liga'). Zwraca [] gdy brak/HTTP błąd.
 
-    UWAGA: od ~2026 Understat NIE osadza już `playersData` w HTML dla prostych
-    klientów (zwraca 18KB shell) — dane renderują się po stronie JS. Ten plain-HTTP
-    fetch zwróci [] (loguje warning). Kolekcja wymaga przeglądarki z JS (odczyt
-    `window.playersData`); `parse_understat_players` działa na wyrenderowanym HTML.
+    Od ~2026 Understat NIE osadza już `playersData` w HTML dla prostych klientów
+    (zwraca ~18KB shell) — dane wstrzykuje JS. Gdy plain-HTTP nic nie znajdzie,
+    schodzimy na przeglądarkę (`browser_fetch`, chromium jest w obrazie jobs).
     """
     url = f"https://understat.com/league/{league_key}/{season}"
     _log.info("[Understat] GET %s", url)
     try:
         time.sleep(1.0)  # grzeczny scraper
         resp = _SESSION.get(url, timeout=20)
-        if resp.status_code != 200:
+        if resp.status_code == 200:
+            gracze = parse_understat_players(resp.text)
+            if gracze:
+                return gracze
+        else:
             _log.warning("[Understat] HTTP %d dla %s", resp.status_code, url)
-            return []
-        return parse_understat_players(resp.text)
     except (requests.RequestException, ValueError, KeyError) as e:
         _log.error("[Understat] Błąd HTTP: %s", e)
+
+    return _gracze_przez_przegladarke(url)
+
+
+def _gracze_przez_przegladarke(url: str) -> list[dict]:
+    """Fallback: odczyt `window.playersData` z wyrenderowanej strony. [] gdy brak."""
+    from footstats.scrapers.browser_fetch import pobierz_zmienne_js
+
+    _log.info("[Understat] plain-HTTP bez playersData → przeglądarka: %s", url)
+    zmienne = pobierz_zmienne_js(url, ["playersData"])
+    surowe = zmienne.get("playersData")
+    if not surowe:
         return []
+    return _mapuj_graczy(surowe)
+
+
+def _matches_przez_przegladarke(url: str) -> list[dict] | None:
+    """Fallback: odczyt `window.matchesData` z wyrenderowanej strony. None gdy brak."""
+    from footstats.scrapers.browser_fetch import pobierz_zmienne_js
+
+    _log.info("[Understat] plain-HTTP bez matchesData → przeglądarka: %s", url)
+    zmienne = pobierz_zmienne_js(url, ["matchesData"])
+    surowe = zmienne.get("matchesData")
+    return surowe if surowe else None
 
 
 def fetch_team_xg(
@@ -237,18 +355,22 @@ def fetch_team_xg(
     url = f"https://understat.com/team/{slug}/{season}"
     _log.info("[Understat] GET %s", url)
 
+    matches: list[dict] | None = None
     try:
         time.sleep(1.0)  # grzeczny scraper
         resp = _SESSION.get(url, timeout=15)
-        if resp.status_code != 200:
+        if resp.status_code == 200:
+            matches = _parse_matches_json(resp.text)
+        else:
             _log.warning("[Understat] HTTP %d dla %s", resp.status_code, url)
-            return None
-        html = resp.text
     except (requests.RequestException, ValueError, KeyError) as e:
         _log.error("[Understat] Błąd HTTP: %s", e)
-        return None
 
-    matches = _parse_matches_json(html)
+    # Od ~2026 strona nie embeduje `matchesData` w HTML (JS wstrzykuje je w window).
+    # Bez tego fallbacku cały xG był martwy, a blend 20% w predict_match nigdy nie grał.
+    if matches is None:
+        matches = _matches_przez_przegladarke(url)
+
     if matches is None:
         _log.warning("[Understat] Nie znaleziono matchesData dla %s/%d", slug, season)
         return None

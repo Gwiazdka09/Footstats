@@ -111,12 +111,18 @@ def szybkie_pewniaczki_2dni(
         }
         _missing = [t for t in _top5_teams if not _cache_get(_to_slug(t), _season)]
         if _missing:
-            console.print(f"[dim]xG prefetch top-5: {len(_missing)} drużyn...[/dim]")
-            for _team in _missing:
+            # Jedno pobranie tabeli ligi zapełnia cache ~20 drużyn naraz. Understat
+            # przestał embedować dane w HTML, więc każde `fetch_team_xg` to osobne
+            # uruchomienie chromium — per liga jest o rząd wielkości taniej.
+            from footstats.scrapers.understat_xg import UNDERSTAT_LIGI, fetch_league_team_xg
+            console.print(f"[dim]xG prefetch top-5: {len(_missing)} drużyn bez cache...[/dim]")
+            for _liga_key in dict.fromkeys(UNDERSTAT_LIGI.values()):
                 try:
-                    fetch_team_xg(_team, _season)
+                    fetch_league_team_xg(_liga_key, _season)
                 except (OSError, ValueError, RuntimeError):
                     pass
+                if not [t for t in _missing if not _cache_get(_to_slug(t), _season)]:
+                    break  # komplet uzupełniony — nie ruszaj kolejnych lig
     except (ImportError, AttributeError):
         pass
 

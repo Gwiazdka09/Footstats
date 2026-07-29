@@ -562,18 +562,24 @@ def main():
 
     # xG prefetch z Understat (wypełnia cache przed pętlą Poissona)
     try:
-        from footstats.scrapers.understat_xg import fetch_team_xg, _to_slug, _cache_get
+        from footstats.scrapers.understat_xg import (
+            UNDERSTAT_LIGI, fetch_league_team_xg, _to_slug, _cache_get,
+        )
         from datetime import datetime as _dt
         _season = _dt.now().year if _dt.now().month >= 7 else _dt.now().year - 1
         _teams = {w.get("gospodarz", "") for w in wyniki} | {w.get("goscie", "") for w in wyniki}
         _missing = [t for t in _teams if t and not _cache_get(_to_slug(t), _season)]
         if _missing:
-            console.print(f"[dim]xG prefetch: {len(_missing)} drużyn z Understat...[/dim]")
-            for _team in _missing:
+            # Tabela ligi zapełnia cache ~20 drużyn jednym pobraniem. Understat nie
+            # embeduje już danych w HTML, więc per drużyna = osobne chromium.
+            console.print(f"[dim]xG prefetch: {len(_missing)} drużyn bez cache...[/dim]")
+            for _liga_key in dict.fromkeys(UNDERSTAT_LIGI.values()):
                 try:
-                    fetch_team_xg(_team, _season)
+                    fetch_league_team_xg(_liga_key, _season)
                 except (OSError, ValueError, RuntimeError):
                     pass
+                if not [t for t in _missing if not _cache_get(_to_slug(t), _season)]:
+                    break
     except (ImportError, AttributeError):
         pass
 
