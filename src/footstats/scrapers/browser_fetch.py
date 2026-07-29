@@ -27,6 +27,17 @@ from footstats.scrapers.base_playwright import (
     page_context,
 )
 
+# Jawna lista błędów zamiast `except Exception` — gate broad-except w CI słusznie
+# tego pilnuje. RuntimeError jest w zestawie, bo Playwright potrafi nim rzucić przy
+# ubitym procesie przeglądarki, a fetcher danych nie może wywalić pipeline'u.
+try:  # Playwright bywa nieobecny (lekki obraz API) — wtedy i tak nic nie robimy.
+    from playwright.sync_api import Error as PWError, TimeoutError as PWTimeout
+    _BLEDY_PRZEGLADARKI: tuple[type[BaseException], ...] = (
+        PWError, PWTimeout, OSError, ValueError, RuntimeError,
+    )
+except ImportError:  # pragma: no cover — środowisko bez Playwrighta
+    _BLEDY_PRZEGLADARKI = (OSError, ValueError, RuntimeError)
+
 log = logging.getLogger(__name__)
 
 _TIMEOUT_MS = 30_000
@@ -63,12 +74,12 @@ def pobierz_zmienne_js(
                 for nazwa in nazwy:
                     try:
                         wartosc = page.evaluate(f"() => window.{nazwa}")
-                    except Exception as e:  # noqa: BLE001 — Playwright rzuca własnymi typami
+                    except _BLEDY_PRZEGLADARKI as e:
                         log.debug("browser_fetch: window.%s niedostępne (%s)", nazwa, e)
                         continue
                     if wartosc is not None:
                         wynik[nazwa] = wartosc
-    except Exception as e:  # noqa: BLE001 — pobieranie danych nie może wywalić pipeline'u
+    except _BLEDY_PRZEGLADARKI as e:
         log.warning("browser_fetch: %s nieosiągalne: %s", url, e)
         return {}
     return wynik
@@ -96,10 +107,10 @@ def pobierz_html(
                 if czekaj_na:
                     try:
                         page.wait_for_selector(czekaj_na, timeout=timeout_ms)
-                    except Exception as e:  # noqa: BLE001 — brak selektora ≠ brak treści
+                    except _BLEDY_PRZEGLADARKI as e:  # brak selektora ≠ brak treści
                         log.debug("browser_fetch: selektor %s nie pojawił się (%s)",
                                   czekaj_na, e)
                 return page.content()
-    except Exception as e:  # noqa: BLE001 — pobieranie danych nie może wywalić pipeline'u
+    except _BLEDY_PRZEGLADARKI as e:
         log.warning("browser_fetch: %s nieosiągalne: %s", url, e)
         return None
