@@ -412,6 +412,23 @@ def _wzbogac_o_kursy_fallback(wyniki: list, top_n: int | None = None) -> None:
     if not nadal_braki:
         return
 
+    # 2. The Odds API — requests-only, bez anti-bota, cała liga w jednym zapytaniu.
+    # Idzie PRZED SofaScore, bo SofaScore oddaje 403 i wymaga Playwrighta (w cloud
+    # draft nie istnieje). Brak ODDS_API_KEY → cicho pomijane, łańcuch leci dalej.
+    try:
+        from footstats.scrapers.odds_api import dolacz_kursy_odds_api
+        uzupelniono_oa = dolacz_kursy_odds_api(nadal_braki)
+        if uzupelniono_oa:
+            console.print(f"[cyan]The Odds API: uzupełniono {uzupelniono_oa} meczów[/cyan]")
+        nadal_braki = [w for w in nadal_braki if not all(
+            (w.get("odds") or {}).get(k) for k in ("home", "draw", "away")
+        )]
+    except (ImportError, OSError, ValueError, KeyError) as e:
+        log.debug("The Odds API fallback pominiety: %s", e)
+
+    if not nadal_braki:
+        return
+
     try:
         from footstats.scrapers.sofascore_odds import fetch_odds, PLAYWRIGHT_OK
         from footstats.scrapers.form_scraper import _sofa_session
