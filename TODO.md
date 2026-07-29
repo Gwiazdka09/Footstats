@@ -25,12 +25,13 @@
 
 | # | Zadanie | Kod | Blokada | Status |
 |---|---------|-----|---------|--------|
-| **P0** | **Model musi realnie grać live** — rebuild+redeploy `footstats-jobs` z parquetem → Poisson-DC zamiast `bzzoiro-ml` | **A** | brak (można od razu; najlepszy timing = powrót lig klubowych ~poł. sierpnia) | ⏳ |
+| **P0** | **Model musi realnie grać live** — rebuild+redeploy `footstats-jobs` z parquetem **ORAZ parquet do `Dockerfile.api`** (draft chodzi na serwisie) → Poisson-DC zamiast `bzzoiro-ml` | **A** | brak (można od razu; najlepszy timing = powrót lig klubowych ~poł. sierpnia) | ⏳ |
 | **P1** | **Pętla settle→kalibracja** — `calibration_monitor.py` + `flip_advisor` co 2-3 dni, licznik settled → progi flipów (`SELECTION_MIN_CONF`, `LEAGUE_GATING`, `CALIBRATION_ENABLED`) | — | wymaga danych (P2) | ⏳ |
 | **P2** | **Więcej danych → lepsze λ** — backfill Neon→Supabase `predictions`+`coupons` + rotacja hasła Neon | **B** | **1.08** (reset quota Neon) | ⏳ |
 | **P3** | **RAG feedback domyka sygnał** — fix pustych `factors` (`pred` sub-dict pusty w quick_picks `wyniki` → `wyciagnij_faktory` puste) | **C** | brak — data-independent, TDD, do zrobienia od razu | ⏳ |
 
 ### P0 / A — szczegóły
+> **KOREKTA 2026-07-29:** sam rebuild jobów **NIE wystarczy**. `/cron/draft` — czyli to, co tworzy kupony System (dane walidacyjne) — chodzi na **serwisie** `footstats-api`, a `Dockerfile.api` **nie kopiuje parquetu** (robi to tylko `Dockerfile.jobs`). Potwierdzone dry-runem na prodzie 29.07: `model_source: bzzoiro-ml`. Żeby Poisson-DC grał w OBU ścieżkach, parquet (562 KB) musi trafić też do `Dockerfile.api` — albo draft trzeba przenieść do joba.
 - Dowód problemu: obraz `footstats-jobs:latest` zbudowany **2026-07-20 17:56**, commit parquetu-do-obrazu `0cb82150f` = **2026-07-22 10:33** → parquet nigdy nie wdrożony → `load_cached()`=None → `cloud_draft._wykryj_model_source` = `bzzoiro-ml`.
 - **KOREKTA:** flaga `QUICK_PICKS_USE_POISSON_CACHE` ma default **"1" (ON)** (`quick_picks.py:73`). Blokada to brak parquetu w obrazie, nie flaga.
 - Kroki: `gcloud builds submit` → `gcloud run jobs update footstats-final/evening --image <digest>`. Po flipie mierzyć Poisson-DC vs bzzoiro-ml.

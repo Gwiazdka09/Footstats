@@ -68,6 +68,7 @@ jobs:
             DATABASE_URL=DATABASE_URL:latest
             BZZOIRO_KEY=BZZOIRO_KEY:latest
             APISPORTS_KEY=APISPORTS_KEY:latest
+            ODDS_API_KEY=ODDS_API_KEY:latest
           secrets_update_strategy: merge
 
       - name: Verify deployment health
