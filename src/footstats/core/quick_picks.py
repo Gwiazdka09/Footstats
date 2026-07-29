@@ -111,12 +111,18 @@ def szybkie_pewniaczki_2dni(
         }
         _missing = [t for t in _top5_teams if not _cache_get(_to_slug(t), _season)]
         if _missing:
-            console.print(f"[dim]xG prefetch top-5: {len(_missing)} drużyn...[/dim]")
-            for _team in _missing:
+            # Jedno pobranie tabeli ligi zapełnia cache ~20 drużyn naraz. Understat
+            # przestał embedować dane w HTML, więc każde `fetch_team_xg` to osobne
+            # uruchomienie chromium — per liga jest o rząd wielkości taniej.
+            from footstats.scrapers.understat_xg import UNDERSTAT_LIGI, fetch_league_team_xg
+            console.print(f"[dim]xG prefetch top-5: {len(_missing)} drużyn bez cache...[/dim]")
+            for _liga_key in dict.fromkeys(UNDERSTAT_LIGI.values()):
                 try:
-                    fetch_team_xg(_team, _season)
+                    fetch_league_team_xg(_liga_key, _season)
                 except (OSError, ValueError, RuntimeError):
                     pass
+                if not [t for t in _missing if not _cache_get(_to_slug(t), _season)]:
+                    break  # komplet uzupełniony — nie ruszaj kolejnych lig
     except (ImportError, AttributeError):
         pass
 
@@ -219,6 +225,11 @@ def szybkie_pewniaczki_2dni(
         _fort_g = None
         _h2h_g  = None
         _h2h_a  = None
+        # P3/C: heurystyki trzymane w zewnętrznym scope — trafiają do `pred`, z którego
+        # `rag.wyciagnij_faktory` czyta tagi (ROTACJA/ZMECZENIE). Wcześniej były lokalne
+        # dla bloku try, więc RAG dostawał pusty pred → factors='[]' na każdej predykcji.
+        _heur_g = None
+        _heur_a = None
         if df_mecze is not None:
             try:
                 from footstats.core.poisson import predict_match
@@ -301,7 +312,20 @@ def szybkie_pewniaczki_2dni(
                 "btts":        bt,
                 "over25":      o25,
                 "under25":     u25,
+                # P3/C: sygnały λ, z których `rag.wyciagnij_faktory` robi tagi
+                # (PATENT/ZEMSTA/TWIERDZA/ROTACJA/ZMECZENIE). Bez nich RAG zapisywał
+                # factors='[]' i nie miał czego zestawiać z wynikami meczów.
+                # imp_g/imp_a celowo puste — ImportanceIndex wymaga tabeli ligi,
+                # niedostępnej w tej ścieżce (patrz komentarz przy inicjalizacji λ).
+                "h2h_g":       _h2h_g,
+                "h2h_a":       _h2h_a,
+                "fortress_g":  _fort_g,
+                "heur_g":      _heur_g,
+                "heur_a":      _heur_a,
             },
+            # P3/C: `rag.pobierz_rag_kontekst` przepuszcza wyłącznie "POISSON" —
+            # bez tego pola kontekst RAG nigdy nie trafiał do promptu Groq.
+            "metoda":     "POISSON" if poisson_blend else "ML",
             "wynik_g":    wg,
             "wynik_a":    wa,
             "odds":         odds,

@@ -208,19 +208,6 @@ SUPERBET_CONFIG = SiteConfig(
     login_success_hidden="button:has-text('Zaloguj')",
 )
 
-SUPEROFERTA_CONFIG = SiteConfig(
-    name="STS",
-    url="https://www.sts.pl",
-    cache_dir=Path("cache/superoferta"),
-    login_env="STS_LOGIN",
-    password_env="STS_HASLO",
-    popup_selectors=(
-        "button#onetrust-accept-btn-handler",
-        "[aria-label='Zamknij']",
-        "button:has-text('Akceptuję')",
-    ),
-)
-
 
 def zamknij_popup(page: Page, cfg: SiteConfig) -> None:
     for sel in cfg.popup_selectors:

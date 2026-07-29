@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, ChevronRight, ShieldCheck, Trophy, Swords, X, BarChart3
+  LayoutDashboard, History, Settings, Menu, PlusCircle, LogOut, ChevronLeft, ChevronRight, ShieldCheck, Trophy, Swords, X, BarChart3, CalendarDays
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
@@ -12,6 +12,7 @@ import CouponWizard from './components/Wizard/CouponWizard';
 import HistoryView from './components/HistoryView';
 import StatsView from './components/StatsView';
 import LeaderboardView from './components/LeaderboardView';
+import TerminarzView from './components/TerminarzView';
 import SettingsView from './components/SettingsView';
 import AdminPanelView from './components/AdminPanelView';
 import MatchAnalysisView from './components/MatchAnalysisView';
@@ -35,6 +36,7 @@ const App = () => {
     { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { key: 'wizard', label: 'Stwórz Kupon', icon: <PlusCircle size={20} /> },
     { key: 'analizy', label: 'Analizy meczów', icon: <Swords size={20} /> },
+    { key: 'terminarz', label: 'Terminarz', icon: <CalendarDays size={20} /> },
     { key: 'history', label: 'Historia', icon: <History size={20} /> },
     { key: 'stats', label: 'Statystyki', icon: <BarChart3 size={20} /> },
     { key: 'settings', label: 'Ustawienia', icon: <Settings size={20} /> },
@@ -256,6 +258,9 @@ const App = () => {
             )}
             {view === 'stats' && (
               <StatsView key="stats" apiFetch={apiFetch} />
+            )}
+            {view === 'terminarz' && (
+              <TerminarzView key="term" apiFetch={apiFetch} />
             )}
             {view === 'settings' && (
               <SettingsView

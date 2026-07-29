@@ -25,12 +25,13 @@
 
 | # | Zadanie | Kod | Blokada | Status |
 |---|---------|-----|---------|--------|
-| **P0** | **Model musi realnie grać live** — rebuild+redeploy `footstats-jobs` z parquetem → Poisson-DC zamiast `bzzoiro-ml` | **A** | brak (można od razu; najlepszy timing = powrót lig klubowych ~poł. sierpnia) | ⏳ |
+| **P0** | **Model musi realnie grać live** — rebuild+redeploy `footstats-jobs` z parquetem **ORAZ parquet do `Dockerfile.api`** (draft chodzi na serwisie) → Poisson-DC zamiast `bzzoiro-ml` | **A** | brak (można od razu; najlepszy timing = powrót lig klubowych ~poł. sierpnia) | ⏳ |
 | **P1** | **Pętla settle→kalibracja** — `calibration_monitor.py` + `flip_advisor` co 2-3 dni, licznik settled → progi flipów (`SELECTION_MIN_CONF`, `LEAGUE_GATING`, `CALIBRATION_ENABLED`) | — | wymaga danych (P2) | ⏳ |
 | **P2** | **Więcej danych → lepsze λ** — backfill Neon→Supabase `predictions`+`coupons` + rotacja hasła Neon | **B** | **1.08** (reset quota Neon) | ⏳ |
 | **P3** | **RAG feedback domyka sygnał** — fix pustych `factors` (`pred` sub-dict pusty w quick_picks `wyniki` → `wyciagnij_faktory` puste) | **C** | brak — data-independent, TDD, do zrobienia od razu | ⏳ |
 
 ### P0 / A — szczegóły
+> **KOREKTA 2026-07-29:** sam rebuild jobów **NIE wystarczy**. `/cron/draft` — czyli to, co tworzy kupony System (dane walidacyjne) — chodzi na **serwisie** `footstats-api`, a `Dockerfile.api` **nie kopiuje parquetu** (robi to tylko `Dockerfile.jobs`). Potwierdzone dry-runem na prodzie 29.07: `model_source: bzzoiro-ml`. Żeby Poisson-DC grał w OBU ścieżkach, parquet (562 KB) musi trafić też do `Dockerfile.api` — albo draft trzeba przenieść do joba.
 - Dowód problemu: obraz `footstats-jobs:latest` zbudowany **2026-07-20 17:56**, commit parquetu-do-obrazu `0cb82150f` = **2026-07-22 10:33** → parquet nigdy nie wdrożony → `load_cached()`=None → `cloud_draft._wykryj_model_source` = `bzzoiro-ml`.
 - **KOREKTA:** flaga `QUICK_PICKS_USE_POISSON_CACHE` ma default **"1" (ON)** (`quick_picks.py:73`). Blokada to brak parquetu w obrazie, nie flaga.
 - Kroki: `gcloud builds submit` → `gcloud run jobs update footstats-final/evening --image <digest>`. Po flipie mierzyć Poisson-DC vs bzzoiro-ml.
@@ -106,7 +107,10 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 - [ ] **D3 — pełna decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled z zapisanym prob. Zwaliduj że guard pomaga, dostrój próg. (D3 cz.1+2 prob+guard ZROBIONE 06-22.)
 - [ ] **Po ~88 settled → D2 auto-refit sam** (delta +30 od n_train); gdy krzywa zdrowa → włącz `CALIBRATION_ENABLED=1`.
 - [x] ~~**DECYZJA (nie bug):** Bzzoiro etykietuje towarzyskie kadr jako "World Cup 2026" → whitelist MŚ (D1a).~~ **Wygasło 07-20** — MŚ zakończone 19.07; wraca ewentualnie przy Euro/kadrach.
-- [ ] **🆕 Dług testowy:** lokalna pełna suita wymaga żywej DB — `config.py` robi `load_dotenv(override=True)` → 23 testy integracyjne biją w `DATABASE_URL` z `.env` (= martwy Neon). Fix krótki: podmienić `DATABASE_URL` w `.env` na Supabase (wymaga zgody usera). Fix docelowy: testy integracyjne za markerem `@pytest.mark.integration` + oddzielny test-DB.
+- [ ] **🆕 Dług testowy:** `config.py` robi `load_dotenv(override=True)` → testy integracyjne biją w `DATABASE_URL` z `.env`.
+  - ✅ **Zrobione 07-29:** `DATABASE_URL` wskazuje już Supabase (prod), stary Neon zachowany jako `DATABASE_URL_NEON` (źródło backfillu). Naprawia narzędzia/skrypty diagnostyczne, które dotąd trafiały w martwego Neona.
+  - ⚠️ **KOREKTA:** to NIE jest fix długu testowego. Część tych testów **pisze** (`test_auth` zakłada userów, `test_settle_*` zmienia statusy kuponów) — uruchomienie ich teraz celowałoby w PRODUKCJĘ. Suitę dalej odpalamy z `DATABASE_URL=""` (guard sieciowy w `conftest`).
+  - Fix docelowy bez zmian: marker `@pytest.mark.integration` + oddzielny test-DB.
 
 ---
 
@@ -161,6 +165,8 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 - **ImportanceIndex** (crude ±20%): A/B −0.1pp, high-stakes −0.59pp → ślepa uliczka. `core/standings.py` zostaje jako CECHY do ML.
 - **LightGBM / własny model ML:** 51.6% (z kursami) < rynek 53.1% < baseline. Rynek nieprzekraczalny (jak literatura). `core/ml_features.py` zostaje jako infra. Jedyny owoc = reweight ensemble ku rynkowi.
 - **Schedule-adjusted ratings** (M1 lever #5): offline A/B +0.20pp (szum, se~0.92pp), +57% wolniej. Flag `SCHEDULE_ADJUSTED_RATINGS` zostaje OFF; kod+7 testów jako infra.
+- **FBref jako źródło xG** (sprawdzone 2026-07-29): HTTP **403 z normalnym User-Agentem**, a przez headless chromium wraca **strona challenge Cloudflare**. Przepuszczenie wymagałoby stealth/anti-detekcji — wysoki koszt utrzymania, kruche. NIE wracać bez nowego powodu.
+- **StatsBomb open-data jako źródło xG** (sprawdzone 2026-07-29): API działa bez anti-bota, ale **nie nadaje się do tego projektu**. Twarde liczby: `matches.json` **nie zawiera xG** (tylko wyniki) — xG jest wyłącznie w `events/{match_id}.json` po **~2.6 MB na mecz**. Pokrycie to wyłącznie historia (najnowsze: Bundesliga 2023/24 = **34 mecze**, La Liga 2020/21, MŚ 2022), **zero sezonu bieżącego** → nie nakarmi live λ. Do walidacji offline próbka o 3 rzędy wielkości za mała (walk-forward chodzi na 25k+ meczów). Koszt ~90 MB za jedną niepełną konkurencję.
 
 ---
 

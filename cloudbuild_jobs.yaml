@@ -1,0 +1,51 @@
+# cloudbuild_jobs.yaml — build obrazu Cloud Run Jobs (Dockerfile.jobs).
+#
+# Po co plik w repo: `gcloud builds submit --tag` używa domyślnego `Dockerfile`,
+# a my potrzebujemy `Dockerfile.jobs` (Playwright + chromium + parquet). Wcześniej
+# ta konfiguracja żyła w scratchpadzie sesji, przez co P0/A nie dało się powtórzyć.
+#
+# Użycie:
+#   gcloud builds submit --config cloudbuild_jobs.yaml .
+#
+# Potem podmiana obrazu w jobach (osobny, świadomy krok — zmienia PRODUKCJĘ).
+# Podawaj DIGEST (@sha256:...), nie tag — joby trzymają w specie dokładnie to, co
+# im podasz, więc ruchomy tag oznacza, że dowolny późniejszy build zmienia produkcję:
+#   gcloud run jobs update footstats-final   --region=europe-west1 --image <IMAGE>@sha256:...
+#   gcloud run jobs update footstats-evening --region=europe-west1 --image <IMAGE>@sha256:...
+# Digest gotowego obrazu:
+#   gcloud artifacts docker images list <IMAGE> --include-tags --sort-by=~UPDATE_TIME --limit=3
+#
+# WYMAGANIE: `.dockerignore` musi zawierać negację
+# `!data/hist_cache/full_dataset.parquet`. Bez niej `COPY` parquetu wywala build
+# ("not found", plik wycięty z kontekstu) — zweryfikowane realnym buildem 2026-07-29.
+
+substitutions:
+  _IMAGE: europe-west1-docker.pkg.dev/footstats-495009/footstats/footstats-jobs
+  # UWAGA: NIE używać wbudowanego $SHORT_SHA — jest pusty przy `builds submit` z
+  # katalogu lokalnego (wypełnia go tylko trigger z repo), przez co tag wychodzi
+  # "obraz:" i build pada na "could not parse reference". Tag podajemy jawnie:
+  #   gcloud builds submit --config cloudbuild_jobs.yaml \
+  #     --substitutions=_TAG=$(git rev-parse --short HEAD) .
+  _TAG: manual
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=Dockerfile.jobs
+      # TYLKO tag immutable. NIE pushujemy `:latest` — incydent 2026-07-29:
+      # joby wskazywały `footstats-jobs:latest` bez przypiętego digestu, więc
+      # sam build (pomyślany jako neutralny) podmienił im obraz przy najbliższym
+      # uruchomieniu. Build ma budować, podmiana obrazu ma być OSOBNĄ decyzją.
+      - --tag=${_IMAGE}:${_TAG}
+      - .
+
+images:
+  - ${_IMAGE}:${_TAG}
+
+options:
+  # Obraz z chromium jest ciężki — domyślna maszyna potrafi nie wyrobić w limicie.
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s

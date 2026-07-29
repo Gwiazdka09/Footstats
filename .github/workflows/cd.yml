@@ -54,11 +54,21 @@ jobs:
           # CRON_SECRET jest plain env var -> proba ustawienia go jako sekret
           # daje "Cannot update environment variable to the given type" (deploy fail).
           # Merge i tak zachowuje CRON_SECRET/ENSEMBLE_MARKET_WEIGHT ustawione recznie.
+          # BZZOIRO_KEY + APISPORTS_KEY doszly 2026-07-29: serwis ich NIE MIAL, przez co
+          # /cron/draft od migracji na Supabase (20.07) zwracal {'ok': False, 'error':
+          # 'brak BZZOIRO_KEY'} przy HTTP 200 -> System paper-trading utworzyl 0 kuponow
+          # przez 9 dni. Joby footstats-final/evening te klucze mialy, dlatego predykcje
+          # szly dalej i awaria nie rzucala sie w oczy.
+          # Oba sekrety JUZ istnieja w Secret Managerze — dopisanie nieistniejacego
+          # wywaliloby deploy, wiec przed dodaniem kolejnego sprawdz `gcloud secrets list`.
           secrets: |
             JWT_SECRET=JWT_SECRET:latest
             FOOTSTATS_USER=FOOTSTATS_USER:latest
             FOOTSTATS_PASSWORD_HASH=FOOTSTATS_PASSWORD_HASH:latest
             DATABASE_URL=DATABASE_URL:latest
+            BZZOIRO_KEY=BZZOIRO_KEY:latest
+            APISPORTS_KEY=APISPORTS_KEY:latest
+            ODDS_API_KEY=ODDS_API_KEY:latest
           secrets_update_strategy: merge
 
       - name: Verify deployment health

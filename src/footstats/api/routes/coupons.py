@@ -790,8 +790,19 @@ def cron_draft(x_cron_secret: str = Header(default=""), days: int = 2, dry_run: 
         raise HTTPException(status_code=401, detail="Unauthorized")
     from footstats.core.cloud_draft import generuj_system_draft
     result = generuj_system_draft(dni=days, dry_run=dry_run)
-    _log.info("cron_draft (dry_run=%s): %s", dry_run,
-              {k: v for k, v in result.items() if k != "legs"})
+    podsumowanie = {k: v for k, v in result.items() if k != "legs"}
+
+    # Poziom logu zależny od wyniku. Wcześniej wszystko szło na INFO, więc draft
+    # zwracający {'ok': False, 'error': 'brak BZZOIRO_KEY'} przy HTTP 200 nie rzucał
+    # się w oczy — System paper-trading stał 9 dni (20-29.07) i nikt tego nie widział.
+    if not result.get("ok"):
+        _log.error("cron_draft NIEUDANY (dry_run=%s): %s", dry_run, podsumowanie)
+    elif not dry_run and result.get("created", 0) == 0:
+        # Zero kuponów w trybie live to nie zawsze błąd (off-season, brak kandydatów),
+        # ale utrzymujące się zero oznacza, że pętla zbierania danych nie żyje.
+        _log.warning("cron_draft: 0 kuponow utworzonych (dry_run=False): %s", podsumowanie)
+    else:
+        _log.info("cron_draft (dry_run=%s): %s", dry_run, podsumowanie)
     return result
 
 
