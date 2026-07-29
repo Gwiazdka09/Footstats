@@ -99,11 +99,14 @@ def link_leg(
 
     placeholders = ",".join("?" for _ in window)
     with connect() as conn:
+        # nosec B608 — f-string wstawia WYŁĄCZNIE `placeholders`, czyli ciąg znaków "?"
+        # wygenerowany z długości `window`. Żadna wartość od użytkownika nie trafia do
+        # SQL-a: daty idą osobno przez sparametryzowane `tuple(window)`.
         rows = conn.execute(
             f"""SELECT id, team_home, team_away, match_date, ai_tip,
                        ai_confidence, prob_home, prob_draw, prob_away, actual_result
                 FROM predictions
-                WHERE substr(match_date, 1, 10) IN ({placeholders})""",
+                WHERE substr(match_date, 1, 10) IN ({placeholders})""",  # nosec B608
             tuple(window),
         ).fetchall()
 

@@ -434,7 +434,6 @@ def _try_fbref_shooting(fbref, league: str, sched, date_col, home_col, away_col)
 
     # Statystyki shooting mają MultiIndex (team, game_id) lub (game_id, team)
     shots_flat = shots.reset_index()
-    scols = {c.lower(): c for c in shots_flat.columns}
 
     xg_col = next((shots_flat.columns[i] for i, c in enumerate(shots_flat.columns)
                    if c.lower() in ("xg", "expected_goals", "xgoals")), None)

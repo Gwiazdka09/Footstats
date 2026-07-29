@@ -99,7 +99,7 @@ def szybkie_pewniaczki_2dni(
 
     # 11.4: Understat xG prefetch dla drużyn z top-5 lig przed pętlą Poissona
     try:
-        from footstats.scrapers.understat_xg import fetch_team_xg, _to_slug, _cache_get
+        from footstats.scrapers.understat_xg import _to_slug, _cache_get
         from footstats.config import LIGI_POISSON_TOP5
         _season = teraz.year if teraz.month >= 7 else teraz.year - 1
         _top5_vals = set(LIGI_POISSON_TOP5.values())
