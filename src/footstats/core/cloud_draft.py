@@ -72,17 +72,46 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
         from footstats.core.quick_picks import szybkie_pewniaczki_2dni
         from footstats.config import AGENT_KANDYDAT_PROG
 
+        # Bzzoiro to źródło główne (mecze + ML). Gdy padnie — fallback na fixtures
+        # z API-Football, żeby dzień nie przepadł. Fallback nie ma ML, więc prob
+        # liczy sam Poisson (wymaga parquetu — patrz P0/A w TODO.md).
         klucz = os.getenv(ENV_BZZOIRO, "")
-        if not klucz:
-            return {"ok": False, "error": "brak BZZOIRO_API_KEY"}
+        klient = None
+        fixtures_source = "bzzoiro"
+        powod_fallbacku = ""
 
-        klient = BzzoiroClient(klucz)
-        ok, msg = klient.waliduj()
-        if not ok:
-            return {"ok": False, "error": f"Bzzoiro niedostępne: {msg}"}
+        if not klucz:
+            powod_fallbacku = "brak BZZOIRO_API_KEY"
+        else:
+            kandydat = BzzoiroClient(klucz)
+            ok, msg = kandydat.waliduj()
+            if ok:
+                klient = kandydat
+            else:
+                powod_fallbacku = f"Bzzoiro niedostępne: {msg}"
+
+        if klient is None:
+            from footstats.scrapers.fixtures_fallback import FixturesFallbackClient
+            log.warning("cloud_draft fallback fixtures — %s", powod_fallbacku)
+            zapas = FixturesFallbackClient(dni=dni)
+            ok_fb, msg_fb = zapas.waliduj()
+            if not ok_fb:
+                return {
+                    "ok": False,
+                    "error": f"{powod_fallbacku}; fallback też nieaktywny: {msg_fb}",
+                }
+            klient = zapas
+            fixtures_source = "api-football-fallback"
 
         model_source = _wykryj_model_source()
         wyniki = szybkie_pewniaczki_2dni(klient, prog=AGENT_KANDYDAT_PROG, godziny=dni * 24)
+
+        if fixtures_source != "bzzoiro" and not wyniki:
+            log.warning(
+                "cloud_draft: fallback fixtures dał 0 kandydatów — bez ML prob "
+                "musi policzyc Poisson, a ten wymaga parquetu (model_source=%s)",
+                model_source,
+            )
 
         # Podgląd selekcji single-leg — identyczny dobór jak build_single_leg_coupons,
         # ale bez zapisu i bez sprawdzania idempotencji (to wymaga Neon).
@@ -106,6 +135,7 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
         if dry_run:
             return {
                 "ok": True, "dry_run": True, "model_source": model_source,
+                "fixtures_source": fixtures_source,
                 "candidates": len(wyniki), "after_league_filter": len(kandydaci),
                 "would_create": len(viable), "legs": viable[:50],
                 **_swiezosc_danych_system(),
@@ -124,6 +154,7 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
             )
         return {
             "ok": True, "dry_run": False, "model_source": model_source,
+            "fixtures_source": fixtures_source,
             "candidates": len(wyniki), "created": created, **fresh,
         }
     except Exception as e:  # noqa: BLE001 — endpoint musi być graceful (nigdy 500)

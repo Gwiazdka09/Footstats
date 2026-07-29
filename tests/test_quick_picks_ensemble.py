@@ -140,6 +140,74 @@ def test_invalid_bzzoiro_returns_empty():
     assert szybkie_pewniaczki_2dni(bzz) == []
 
 
+# ── ścieżka Poisson-only (źródło bez ramienia ML, np. fallback fixtures) ─────
+
+_EVENT_BEZ_ML = {
+    "gosp": "Arsenal",
+    "gosc": "Chelsea",
+    "liga": "Premier League",
+    "data": _DATE,
+    "godzina": _HOUR,
+    "status": "notstarted",
+    # brak pred_ml — fallback API-Football nie ma modelu ML
+}
+
+
+def test_bez_pred_ml_bez_historii_pomija_mecz():
+    """Brak ML i brak historii = zero podstaw do typu → mecz pominięty (bez zgadywania)."""
+    zrodlo = _make_bzzoiro([_EVENT_BEZ_ML])
+    with patch(
+        "footstats.data.historical_loader.load_cached",
+        side_effect=FileNotFoundError("brak cache"),
+    ):
+        assert szybkie_pewniaczki_2dni(zrodlo, prog=0.0) == []
+
+
+def test_bez_pred_ml_poisson_liczy_sam():
+    """Brak ML ale jest historia → Poisson dostarcza prob (bez blendu, brak ramienia ML)."""
+    zrodlo = _make_bzzoiro([_EVENT_BEZ_ML])
+    df_dummy = pd.DataFrame([{"gospodarz": "A", "goscie": "B", "gole_g": 1, "gole_a": 0, "data": "2026-01-01"}])
+
+    mock_null = MagicMock()
+    mock_null.analiza.return_value = None
+    mock_klas = MagicMock()
+    mock_klas.klasyfikuj.return_value = None
+
+    with patch(
+        "footstats.core.poisson.predict_match", return_value=_POISSON_PRED
+    ), patch(
+        "footstats.core.fortress.HomeFortress", return_value=mock_null
+    ), patch(
+        "footstats.core.h2h.AnalizaH2H", return_value=mock_null
+    ), patch(
+        "footstats.core.fatigue.HeurystaZmeczeniaRotacji", return_value=mock_null
+    ), patch(
+        "footstats.core.classifier.KlasyfikatorMeczu", return_value=mock_klas
+    ):
+        wyniki = szybkie_pewniaczki_2dni(zrodlo, prog=0.0, df_mecze=df_dummy)
+
+    assert len(wyniki) == 1
+    r = wyniki[0]
+    assert r["poisson_blend"] is True
+    # Czysty Poisson — ZERO blendu z ML (nie ma z czym mieszać).
+    assert r["pw"] == pytest.approx(50.0, abs=0.1)
+    assert r["pr"] == pytest.approx(30.0, abs=0.1)
+    assert r["pp"] == pytest.approx(20.0, abs=0.1)
+    # Schemat dla warstwy AI musi być kompletny (Cel B bug 1).
+    assert r["pred"]["p_wygrana"] == pytest.approx(50.0, abs=0.1)
+    # Brak most_likely_score w źródle bez ML → domyślny wynik, nie crash.
+    assert isinstance(r["wynik_g"], int) and isinstance(r["wynik_a"], int)
+
+
+def test_bez_pred_ml_gdy_poisson_zwraca_none_pomija():
+    """Brak ML + predict_match=None → nie ma prob → mecz pominięty."""
+    zrodlo = _make_bzzoiro([_EVENT_BEZ_ML])
+    df_dummy = pd.DataFrame([{"gospodarz": "A", "goscie": "B", "gole_g": 1, "gole_a": 0, "data": "2026-01-01"}])
+
+    with patch("footstats.core.poisson.predict_match", return_value=None):
+        assert szybkie_pewniaczki_2dni(zrodlo, prog=0.0, df_mecze=df_dummy) == []
+
+
 _BZZ_EVENT_SYGNAL = {
     "gosp": "Londrina",
     "gosc": "Athletic",
