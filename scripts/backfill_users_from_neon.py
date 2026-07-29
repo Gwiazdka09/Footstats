@@ -17,7 +17,9 @@ Bezpieczeństwo:
 Użycie:
   python scripts/backfill_users_from_neon.py            # dry-run (podgląd)
   python scripts/backfill_users_from_neon.py --apply    # faktyczny zapis
-Wymaga w .env: DATABASE_URL (Neon, źródło), DATABASE_URL_SUPABASE (Supabase, cel).
+Wymaga w .env: DATABASE_URL_NEON (źródło), DATABASE_URL_SUPABASE (cel).
+UWAGA: od 2026-07-29 `DATABASE_URL` wskazuje PRODUKCJĘ (Supabase), nie Neona —
+źródło trzymamy pod osobną nazwą, a skrypt przerywa gdy źródło == cel.
 """
 from __future__ import annotations
 
@@ -88,8 +90,23 @@ def main() -> None:
     args = ap.parse_args()
 
     env = dotenv_values(Path(__file__).resolve().parents[1] / ".env")
-    src = _connect(env.get("DATABASE_URL"), "NEON (źródło)")
-    dst = _connect(env.get("DATABASE_URL_SUPABASE"), "SUPABASE (cel)")
+
+    # Źródło bierzemy z DATABASE_URL_NEON. Fallback na DATABASE_URL jest wyłącznie
+    # wsteczny: od 2026-07-29 DATABASE_URL wskazuje PRODUKCJĘ (Supabase), bo inaczej
+    # cała reszta narzędzi i testów integracyjnych celowała w martwego Neona.
+    url_src = env.get("DATABASE_URL_NEON") or env.get("DATABASE_URL")
+    url_dst = env.get("DATABASE_URL_SUPABASE")
+
+    # Guard: bez tego po podmianie DATABASE_URL skrypt kopiowałby Supabase → Supabase
+    # i „udanie" nie zrobiłby nic, maskując brak backfillu.
+    if url_src and url_dst and url_src.strip() == url_dst.strip():
+        sys.exit(
+            "BŁĄD: źródło i cel to ta sama baza. Ustaw DATABASE_URL_NEON na URL Neona "
+            "(DATABASE_URL wskazuje teraz Supabase) — przerwane, żeby nie udawać backfillu."
+        )
+
+    src = _connect(url_src, "NEON (źródło)")
+    dst = _connect(url_dst, "SUPABASE (cel)")
 
     cols = _cols_intersection(src, dst)
     col_list = ", ".join(cols)

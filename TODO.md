@@ -107,7 +107,10 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 - [ ] **D3 — pełna decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled z zapisanym prob. Zwaliduj że guard pomaga, dostrój próg. (D3 cz.1+2 prob+guard ZROBIONE 06-22.)
 - [ ] **Po ~88 settled → D2 auto-refit sam** (delta +30 od n_train); gdy krzywa zdrowa → włącz `CALIBRATION_ENABLED=1`.
 - [x] ~~**DECYZJA (nie bug):** Bzzoiro etykietuje towarzyskie kadr jako "World Cup 2026" → whitelist MŚ (D1a).~~ **Wygasło 07-20** — MŚ zakończone 19.07; wraca ewentualnie przy Euro/kadrach.
-- [ ] **🆕 Dług testowy:** lokalna pełna suita wymaga żywej DB — `config.py` robi `load_dotenv(override=True)` → 23 testy integracyjne biją w `DATABASE_URL` z `.env` (= martwy Neon). Fix krótki: podmienić `DATABASE_URL` w `.env` na Supabase (wymaga zgody usera). Fix docelowy: testy integracyjne za markerem `@pytest.mark.integration` + oddzielny test-DB.
+- [ ] **🆕 Dług testowy:** `config.py` robi `load_dotenv(override=True)` → testy integracyjne biją w `DATABASE_URL` z `.env`.
+  - ✅ **Zrobione 07-29:** `DATABASE_URL` wskazuje już Supabase (prod), stary Neon zachowany jako `DATABASE_URL_NEON` (źródło backfillu). Naprawia narzędzia/skrypty diagnostyczne, które dotąd trafiały w martwego Neona.
+  - ⚠️ **KOREKTA:** to NIE jest fix długu testowego. Część tych testów **pisze** (`test_auth` zakłada userów, `test_settle_*` zmienia statusy kuponów) — uruchomienie ich teraz celowałoby w PRODUKCJĘ. Suitę dalej odpalamy z `DATABASE_URL=""` (guard sieciowy w `conftest`).
+  - Fix docelowy bez zmian: marker `@pytest.mark.integration` + oddzielny test-DB.
 
 ---
 

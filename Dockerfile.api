@@ -23,6 +23,14 @@ COPY pyproject.toml ./
 COPY src ./src
 COPY --from=gui-build /gui/dist ./src/footstats/gui/dist
 
+# Dataset Poissona (32k meczów, 562 KB). Ten obraz serwuje NIE TYLKO API — chodzi na
+# nim `/cron/draft`, czyli to co tworzy kupony System (nasze dane walidacyjne).
+# Bez parquetu `load_cached()` zwraca None i draft robi cichy fallback na bzzoiro-ml
+# zamiast Poisson-DC (potwierdzone dry-runem na prodzie 29.07: model_source=bzzoiro-ml).
+# Wymaga negacji `!data/hist_cache/full_dataset.parquet` w .dockerignore — bez niej
+# ten COPY wywala build ("not found", plik wycięty z kontekstu).
+COPY data/hist_cache/full_dataset.parquet ./data/hist_cache/full_dataset.parquet
+
 RUN uv pip install --system ".[api]" && mkdir -p /app/data
 
 RUN addgroup --system app && adduser --system --ingroup app app \

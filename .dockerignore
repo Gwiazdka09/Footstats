@@ -9,7 +9,13 @@ ENV/
 logs/*.log
 logs/*.txt
 data/footstats_backtest.db
+# Cache historyczny jest ciezki i niepotrzebny w obrazie — Z JEDNYM WYJATKIEM.
+# full_dataset.parquet (562 KB) to dataset Poissona: bez niego load_cached() zwraca
+# None i pipeline robi cichy fallback na bzzoiro-ml zamiast Poisson-DC.
+# Wykluczenie calego katalogu bez tej negacji powodowalo, ze `COPY` w Dockerfile.jobs
+# WYWALAL build ("not found", plik wyciety z kontekstu) — zweryfikowane 2026-07-29.
 data/hist_cache/
+!data/hist_cache/full_dataset.parquet
 .vscode/
 .git/
 .github/
