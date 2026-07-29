@@ -176,14 +176,21 @@ def szybkie_pewniaczki_2dni(
         pred_ml = ev.get("pred_ml")
         odds    = ev.get("odds") or {}
 
-        if not pred_ml:
+        # Źródło bez ramienia ML (fallback fixtures z API-Football) — prob policzy
+        # sam Poisson niżej. Bez historii (df_mecze) nie ma z czego, więc pomijamy:
+        # lepiej zero kuponów niż typ zgadywany.
+        ma_ml = bool(pred_ml)
+        if not ma_ml and df_mecze is None:
             continue
 
-        # Parsuj ML przez universalny parser (wszystkie formaty Bzzoiro)
-        wyp = _bzz_parse_prob(pred_ml)
-        if wyp is None:
-            continue
-        pw_raw, pr_raw, pp_raw, bt_raw, o25_raw = wyp
+        if ma_ml:
+            # Parsuj ML przez universalny parser (wszystkie formaty Bzzoiro)
+            wyp = _bzz_parse_prob(pred_ml)
+            if wyp is None:
+                continue
+            pw_raw, pr_raw, pp_raw, bt_raw, o25_raw = wyp
+        else:
+            pw_raw = pr_raw = pp_raw = bt_raw = o25_raw = 0.0
 
         # ── Cel B fix (06-20): NIE kalibruj per-wynik 1X2/bt/o25 ──
         # calibrate_confidence było zaprojektowane dla JEDNEJ liczby (confidence
@@ -238,17 +245,26 @@ def szybkie_pewniaczki_2dni(
                     if USE_DIXON_COLES:
                         from footstats.core.poisson_bayesian import blend_dixon_coles
                         _p_pois = blend_dixon_coles(_p_pois, g, a, df_mecze, w_bayesian=W_BAYESIAN)
-                    _p_bzz  = {"pw": pw, "pr": pr, "pp": pp, "bt": bt, "o25": o25}
-                    _bl = ensemble_probs(_p_pois, _p_bzz, liga=liga)
-                    pw  = round(_bl["pw"], 1)
-                    pr  = round(_bl["pr"], 1)
-                    pp  = round(_bl["pp"], 1)
-                    bt  = round(_bl["bt"], 1)
-                    o25 = round(_bl["o25"], 1)
+                    if ma_ml:
+                        _p_bzz  = {"pw": pw, "pr": pr, "pp": pp, "bt": bt, "o25": o25}
+                        _fin = ensemble_probs(_p_pois, _p_bzz, liga=liga)
+                    else:
+                        # Brak ramienia ML (fallback fixtures) — czysty Poisson,
+                        # NIE mieszaj z zerami z `_p_bzz`, bo rozcieńczyłyby sygnał.
+                        _fin = _p_pois
+                    pw  = round(_fin["pw"], 1)
+                    pr  = round(_fin["pr"], 1)
+                    pp  = round(_fin["pp"], 1)
+                    bt  = round(_fin["bt"], 1)
+                    o25 = round(_fin["o25"], 1)
                     u25 = round(100.0 - o25, 1)
                     poisson_blend = True
             except (ImportError, AttributeError, ValueError, KeyError, TypeError):
                 pass  # Poisson niedostępny → zostaw Bzzoiro
+
+        # Źródło bez ML, w którym Poisson też nie dał rady → brak jakichkolwiek prob.
+        if not ma_ml and not poisson_blend:
+            continue
 
         # Zbierz typy pewne (na skalibrowanych prob)
         typy = _typy_pewne(pw, pr, pp, bt, o25, u25, g, a, prog)
@@ -260,8 +276,8 @@ def szybkie_pewniaczki_2dni(
         # EV > 0 = zysk na dluga mete, EV < 0 = strata
         scout = _scout_bot_ocen(typy, odds, pw, pr, pp, bt, o25, u25)
 
-        # Oczekiwany wynik (most likely score ML)
-        ms = (pred_ml.get("most_likely_score") or {})
+        # Oczekiwany wynik (most likely score ML). Źródło bez ML go nie ma → domyślny.
+        ms = ((pred_ml or {}).get("most_likely_score") or {})
         wg = int(ms.get("home", 1)); wa = int(ms.get("away", 0))
 
         wyniki.append({

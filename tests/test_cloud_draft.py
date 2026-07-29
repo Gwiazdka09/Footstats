@@ -62,15 +62,32 @@ def test_live_pisze_przez_build(monkeypatch):
     assert r["created"] == 2 and cnt["n"] == 1
 
 
+class _FallbackDown:
+    """Fallback fixtures nieaktywny (brak klucza AF) — nie rusza sieci."""
+
+    def __init__(self, *a, **k):
+        self._valid = False
+
+    def waliduj(self):
+        return (False, "brak klucza APISPORTS_KEY — fallback nieaktywny")
+
+
 def test_brak_klucza_graceful(monkeypatch):
+    """Brak Bzzoiro I martwy fallback → uczciwy błąd z obiema przyczynami."""
     monkeypatch.delenv(ENV_BZZOIRO, raising=False)
+    monkeypatch.setattr("footstats.scrapers.fixtures_fallback.FixturesFallbackClient",
+                        _FallbackDown)
     r = cd.generuj_system_draft(dry_run=True)
-    assert r["ok"] is False and "BZZOIRO" in r["error"]
+    assert r["ok"] is False
+    assert "BZZOIRO" in r["error"] and "fallback" in r["error"].lower()
 
 
 def test_bzzoiro_down_graceful(monkeypatch):
+    """Bzzoiro 503 I martwy fallback → błąd. (Żywy fallback: test_fixtures_fallback.py)"""
     monkeypatch.setenv(ENV_BZZOIRO, "fake-key")
     monkeypatch.setattr("footstats.scrapers.bzzoiro.BzzoiroClient", _ClientDown)
+    monkeypatch.setattr("footstats.scrapers.fixtures_fallback.FixturesFallbackClient",
+                        _FallbackDown)
     r = cd.generuj_system_draft(dry_run=True)
     assert r["ok"] is False and "niedost" in r["error"].lower()
 
