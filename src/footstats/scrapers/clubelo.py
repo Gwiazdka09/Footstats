@@ -31,6 +31,8 @@ from datetime import date
 
 import requests
 
+from footstats.utils.normalize import _norm_ascii
+
 log = logging.getLogger(__name__)
 
 _BASE = "http://api.clubelo.com"
@@ -49,7 +51,10 @@ def _pobierz_csv(url: str) -> str | None:
     """Surowy CSV spod URL. None przy dowolnym błędzie — źródło jest opcjonalne."""
     try:
         r = requests.get(url, headers={"User-Agent": _UA}, timeout=_TIMEOUT)
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, RuntimeError) as e:
+        # RuntimeError w zestawie celowo: tak sygnalizują blokadę m.in. guard sieciowy
+        # w testach i niektóre warstwy transportu. To źródło jest opcjonalne —
+        # nie ma prawa wywalić niczego, co je woła.
         log.warning("ClubElo %s nieosiągalne: %s", url, e)
         return None
     if r.status_code != 200:
@@ -153,6 +158,16 @@ def prob_z_rozkladu(wiersz: dict) -> dict | None:
         "bt": round(p_btts / suma * 100, 1),
         "o25": round(p_over / suma * 100, 1),
     }
+
+
+def klucz_meczu(gospodarz: str, goscie: str) -> tuple[str, str]:
+    """
+    Klucz meczu do łączenia z naszymi danymi.
+
+    STRICT `_norm_ascii`, nie `normalize_team_name` — to drugie zbija
+    "Manchester City" i "Manchester United" do wspólnego "manchester".
+    """
+    return (_norm_ascii(gospodarz), _norm_ascii(goscie))
 
 
 def pobierz_fixtures() -> list[dict]:

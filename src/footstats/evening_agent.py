@@ -297,13 +297,31 @@ def run_evening_agent(date_str: str | None = None) -> dict:
 
                 try:
                     from footstats.core.clv_tracker import record_closing_odds
+                    closing = None
                     fix_id = _find_fixture_id(home, away, fixtures)
                     if fix_id:
                         closing = _fetch_closing_odds(api_key, fix_id)
-                        if closing:
-                            record_closing_odds(pred_id, closing)
-                except (ImportError, ValueError, KeyError):
-                    pass
+
+                    # Fallback: football-data.co.uk. Ten CSV i tak jest pobierany przez
+                    # FootballDataSource (cache 6h) i ma kolumny closing Pinnacle —
+                    # czyli kurs zamknięcia za darmo, bez zużywania budżetu AF (100/dzień)
+                    # i również dla meczów, których AF już nie zwraca w liście dnia.
+                    # Bierzemy kurs GOSPODARZA, żeby zachować semantykę
+                    # `_fetch_closing_odds` i nie zepsuć porównywalności istniejących CLV.
+                    if not closing:
+                        from footstats.scrapers.closing_odds import kursy_zamkniecia
+                        kursy = kursy_zamkniecia(home, away, str(leg.get("data") or date_str))
+                        if kursy:
+                            closing = kursy.get("home")
+                            if closing:
+                                log.info(
+                                    "CLV dla %s vs %s z football-data.co.uk (%s), nie z AF",
+                                    home, away, kursy.get("zrodlo"),
+                                )
+                    if closing:
+                        record_closing_odds(pred_id, closing)
+                except (ImportError, ValueError, KeyError, OSError) as e:
+                    log.debug("CLV dla %s vs %s nieustalone: %s", home, away, e)
 
         # Zapisz per-leg wyniki do DB
         _save_coupon_legs(kupon["id"], updated_legs)

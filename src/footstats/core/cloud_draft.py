@@ -60,6 +60,60 @@ def _swiezosc_danych_system() -> dict:
         return {"stale_days": None, "stale": None}
 
 
+def _dolacz_sygnal_elo(nogi: list[dict]) -> int:
+    """
+    Dopisuje do każdej nogi prognozę ClubElo (`elo`) i flagę zgodności (`elo_zgoda`).
+
+    Zwraca liczbę nóg, dla których ClubElo znało mecz. Zero nie jest błędem —
+    ClubElo pokrywa głównie kluby europejskie, więc przy meczach Brasileirão/USL
+    pokrycie bywa zerowe i to jest normalne.
+
+    Graceful: cokolwiek pójdzie nie tak, draft leci dalej bez tego pola.
+    """
+    if not nogi:
+        return 0
+    try:
+        from footstats.scrapers.clubelo import klucz_meczu, pobierz_fixtures
+    except ImportError as e:
+        # Logujemy, bo cichy `return 0` już raz ukrył literówkę w nazwie importu —
+        # sygnał po prostu nie działał i nic tego nie zgłaszało.
+        log.warning("sygnal ClubElo niedostepny (import): %s", e)
+        return 0
+
+    try:
+        indeks = {
+            klucz_meczu(m["gospodarz"], m["goscie"]): m["prob"]
+            for m in pobierz_fixtures()
+        }
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as e:
+        # Sygnał porównawczy jest dodatkiem — jego awaria NIE MOŻE zmienić wyniku
+        # draftu na ok:False. Tak właśnie zepsuł 4 testy przy pierwszym podejściu.
+        log.debug("sygnal ClubElo pominiety: %s", e)
+        return 0
+    if not indeks:
+        return 0
+
+    _TIP_NA_KLUCZ = {"1": "pw", "X": "pr", "2": "pp", "BTTS": "bt", "Over 2.5": "o25"}
+    trafien = 0
+    for noga in nogi:
+        mecz = str(noga.get("mecz") or "")
+        if " vs " not in mecz:
+            continue
+        gosp, gosc = mecz.split(" vs ", 1)
+        prob_elo = indeks.get(klucz_meczu(gosp, gosc))
+        if not prob_elo:
+            continue
+        trafien += 1
+        noga["elo"] = prob_elo
+        klucz = _TIP_NA_KLUCZ.get(str(noga.get("tip")))
+        if klucz and klucz in prob_elo:
+            # „Zgoda" = ClubElo też daje temu typowi przewagę (>50% dla rynków
+            # dwustronnych, >33% dla 1X2). Celowo luźne — to sygnał, nie filtr.
+            prog = 33.0 if klucz in ("pw", "pr", "pp") else 50.0
+            noga["elo_zgoda"] = prob_elo[klucz] >= prog
+    return trafien
+
+
 def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
     """Lite draft System (requests-only). Zwraca słownik podsumowania.
 
@@ -146,12 +200,19 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
                     "liga": w.get("liga", ""), "data": w.get("data"),
                 })
 
+        # Niezależny punkt odniesienia: prognoza ClubElo (darmowa, bez klucza).
+        # ŚWIADOMIE nie wpływa na selekcję ani na λ — to sygnał OBOK modelu, żeby dało
+        # się porównać nasz typ z estymatorem ortogonalnym (Elo liczy siłę drużyn,
+        # nasze λ liczy historię goli). Rozjazd = powód, by przyjrzeć się meczowi.
+        elo_pokrycie = _dolacz_sygnal_elo(viable)
+
         if dry_run:
             return {
                 "ok": True, "dry_run": True, "model_source": model_source,
                 "fixtures_source": fixtures_source,
                 "candidates": len(wyniki), "after_league_filter": len(kandydaci),
                 "would_create": len(viable), "legs": viable[:50],
+                "elo_pokrycie": elo_pokrycie,
                 **_swiezosc_danych_system(),
             }
 
