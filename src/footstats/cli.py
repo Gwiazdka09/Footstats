@@ -168,13 +168,17 @@ def main():
     cache_kolejki: list = []
     cache_pewniaczki: list = []
 
-    # ── AI moduły (opcja AI) – ładuj jeśli dostępne ──────────────────
-    # OPCJA_AI_FOOTSTATS_PATCH
+    # ── AI moduły (opcje I/J) – ładuj jeśli dostępne ──────────────────
+    # Importy wskazywały na `ai_analyzer` i `scraper_kursy` — moduły top-level
+    # sprzed przeniesienia kodu do pakietu `footstats`. Nie istnieją w repo od tamtej
+    # pory, więc `except ImportError: pass` cicho ustawiał _ai_dostepne=False i opcje
+    # I/J w menu były martwe (zawsze "Brak modułów AI"). Same funkcje żyją — tylko
+    # pod nowymi ścieżkami, a ich sygnatury nie zmieniły się względem wywołań niżej.
     _ai_dostepne = False
     try:
-        from ai_analyzer import analizuj_mecz_ai  as _analizuj_ai   # noqa: F401
-        from ai_analyzer import wyswietl_analiza_ai as _pokaz_ai    # noqa: F401
-        from scraper_kursy import szukaj_kursy_meczu as _kursy_ai   # noqa: F401
+        from footstats.ai.analyzer import analizuj_mecz_ai as _analizuj_ai   # noqa: F401
+        from footstats.ai.output import wyswietl_analiza_ai as _pokaz_ai     # noqa: F401
+        from footstats.scrapers.kursy import szukaj_kursy_meczu as _kursy_ai  # noqa: F401
         _ai_dostepne = True
     except ImportError:
         pass
@@ -554,7 +558,7 @@ def main():
             # ── AI ANALIZA POJEDYNCZEGO MECZU ───────────────────────
             console.print()
             if not _ai_dostepne:
-                console.print("[red]Brak modułów AI. Sprawdź ai_client.py i ai_analyzer.py.[/red]")
+                console.print("[red]Brak modułów AI. Sprawdź footstats/ai/analyzer.py i ai/output.py.[/red]")
             else:
                 g, a = wybierz_druzyny(df_wyniki)
                 console.print()

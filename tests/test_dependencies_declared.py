@@ -58,8 +58,6 @@ _LOKALNE = {"footstats", "src", "tests", "scripts"}
 # Dopisanie czegos tutaj to deklaracja: "ta funkcja MOZE byc wylaczona na produkcji
 # i to jest OK". Jesli tak nie jest — zamiast wpisu dodaj zaleznosc do pyproject.toml.
 _OPCJONALNE = {
-    "ai_analyzer": "martwy import legacy CLI — modul nie istnieje w repo, _ai_dostepne zawsze False",
-    "scraper_kursy": "martwy import legacy CLI — modul nie istnieje w repo",
     "loguru": "logging_config ma pelny fallback na stdlib logging",
     "tabulate": "core/backtest.py ma wlasna implementacje zastepcza tabulate()",
     "feedparser": "scrapers/enriched.py — wzbogacanie RSS, nieobowiazkowe dla predykcji",
