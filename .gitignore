@@ -100,3 +100,7 @@ brain_graph.html
 
 UNUSED_FILES.md
 brain_graph.html
+
+# Inwentarz funkcji — migawka lokalna, generowana przez scripts/inwentarz_funkcji.py
+FUNCTIONS.md
+coverage.json
