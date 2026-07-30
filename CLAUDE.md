@@ -27,6 +27,7 @@ Ja = orchestrator. Workflow feature: subagent-driven-development (planner→code
 - `footstats-test-medic` (sonnet) — pytest triage: naprawia testy (nie kod prod), zgłasza bugi prod.
 - `footstats-calibration-reporter` (sonnet) — co 2-3 dni: calibration_monitor + flip-advisor, licznik settled → progi 20/88.
 - `footstats-ops-monitor` (sonnet) — daily: Cloud Run Jobs/Scheduler health (gcloud read-only), GREEN/AMBER/RED.
+- `footstats-postmatch-analyst` (sonnet) — po zakończonych meczach: rozlicza (też kupony papierowe), tworzy wnioski pomeczowe, klastruje powtarzalne przyczyny błędów. Analizuje TRAFIONE tak samo jak nietrafione. Domyślnie `--dry`, zapis do prod `ai_feedback` tylko za zgodą.
 
 ## Architecture (Pointers)
 - Structure: See `PROJECT_STRUCTURE.md`
