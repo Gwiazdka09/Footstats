@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv, set_key
+from dotenv import dotenv_values, load_dotenv, set_key
 from footstats.utils.console import console
 from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
@@ -237,10 +237,30 @@ def _wczytaj_lub_stworz_env() -> str:
     return klucz
 
 def _czytaj_wszystkie_klucze() -> dict:
-    """Czyta wszystkie klucze z .env. Zwraca dict {ENV_*: klucz|None}."""
-    load_dotenv(ENV_FILE, override=True)
+    """
+    Klucze API: pierwszeństwo ma środowisko, `.env` uzupełnia braki.
+
+    Wcześniej było tu `load_dotenv(ENV_FILE, override=True)`, co nadpisywało CAŁE
+    `os.environ` zawartością `.env` — nie tylko trzy klucze poniżej. Konsekwencje:
+
+    * w testach: wystarczyło, że dowolny test dotknął źródła danych (ta funkcja jest
+      wołana m.in. z `af_source`, `fetch_odds_af`, `fixtures_fallback`), i testowy
+      `FOOTSTATS_PASSWORD_HASH` / `JWT_SECRET` był podmieniany na wartości z `.env`
+      — kolejne logowania dostawały 401. Stąd 12 „losowych" failure w pełnej suicie,
+      których nie było przy uruchamianiu plików osobno.
+    * na produkcji: gdyby `.env` kiedykolwiek trafił do obrazu, przykrywałby
+      prawdziwe sekrety wstrzyknięte przez Cloud Run.
+
+    Teraz czytamy plik BEZ mutowania `os.environ` (12-factor: środowisko wygrywa).
+    """
+    z_pliku = dotenv_values(ENV_FILE) if ENV_FILE.exists() else {}
+
+    def _wartosc(nazwa: str) -> str | None:
+        surowa = os.getenv(nazwa) or z_pliku.get(nazwa) or ""
+        return surowa.strip().strip('"').strip("'") or None
+
     return {
-        ENV_FOOTBALL:  (os.getenv(ENV_FOOTBALL,  "") or "").strip().strip('"').strip("'") or None,
-        ENV_APISPORTS: (os.getenv(ENV_APISPORTS, "") or "").strip().strip('"').strip("'") or None,
-        ENV_BZZOIRO:   (os.getenv(ENV_BZZOIRO,   "") or "").strip().strip('"').strip("'") or None,
+        ENV_FOOTBALL:  _wartosc(ENV_FOOTBALL),
+        ENV_APISPORTS: _wartosc(ENV_APISPORTS),
+        ENV_BZZOIRO:   _wartosc(ENV_BZZOIRO),
     }

@@ -4,6 +4,30 @@ import pandas as pd
 import pytest
 from datetime import datetime, timedelta
 
+# ── Testowe dane logowania — USTAWIANE TU, NIE W POSZCZEGÓLNYCH PLIKACH ───────
+#
+# Dlaczego centralnie: dotąd każdy plik testowy robił u siebie
+# `os.environ.setdefault("FOOTSTATS_PASSWORD_HASH", bcrypt(...))` PRZED importem
+# `footstats.api.main`. Wystarczyło, że pierwszy zaimportowany plik tego NIE robił
+# (test_analyses_endpoint, test_api_integration_cache) — wtedy `config.py` swoim
+# `load_dotenv(.env)` wypełniał zmienną PRAWDZIWYM hashem, a późniejsze
+# `setdefault` w test_auth/test_api_routes stawały się no-opem. Efekt: logowanie
+# hasłem "testpass" dostawało 401 i 12 testów padało WYŁĄCZNIE w pełnej suicie,
+# przechodząc w izolacji.
+#
+# conftest.py jest importowany przed modułami testowymi, więc `setdefault` tutaj
+# wygrywa z `.env` (moduł ładuje je bez `override`), a jednocześnie NIE nadpisuje
+# wartości podanych świadomie w środowisku.
+os.environ.setdefault("JWT_SECRET", "testsecret1234567890abcdef12345678")
+os.environ.setdefault("FOOTSTATS_USER", "admin")
+os.environ.setdefault("ALLOWED_ORIGINS", "http://localhost:5173")
+if "FOOTSTATS_PASSWORD_HASH" not in os.environ:
+    import bcrypt as _bcrypt
+
+    os.environ["FOOTSTATS_PASSWORD_HASH"] = _bcrypt.hashpw(
+        b"testpass", _bcrypt.gensalt()
+    ).decode()
+
 # Hosty baz PRODUKCYJNYCH. Suita nie ma prawa ich dotknąć.
 _HOSTY_PROD = ("supabase.co", "supabase.com", "neon.tech")
 
