@@ -10,7 +10,6 @@ from footstats.utils.console import console
 from footstats.utils.helpers import _s
 from footstats.config import VERSION
 import footstats.export.pdf_font as _pdf_font_mod
-from footstats.scrapers.football_data import APIClient
 from footstats.core.importance import ImportanceIndex
 from footstats.core.value_bet import typy_zaklady
 from footstats.core.confidence import komentarz_analityka
@@ -31,37 +30,6 @@ def wyswietl_naglowek():
     )
     console.print(font_info)
     console.print()
-
-def wyswietl_menu_lig(api: APIClient) -> tuple:
-    """Dynamiczne menu: lista lig z API /v4/competitions (TIER_ONE)."""
-    console.print("[dim]Pobieram liste dostepnych lig z API...[/dim]")
-    ligi = api.pobierz_ligi_free()
-
-    t = Table(
-        title=f"[bold blue]Dostepne Ligi  [dim]({len(ligi)} rozgrywek - plan FREE)[/dim][/bold blue]",
-        box=box.ROUNDED, border_style="blue", show_lines=True
-    )
-    t.add_column("Nr",   style="bold cyan",  justify="center", width=4)
-    t.add_column("Liga", style="bold white", width=38)
-    t.add_column("Kraj", style="dim",        justify="center", width=14)
-    t.add_column("Kod",  style="dim cyan",   justify="center", width=5)
-    for i, liga in enumerate(ligi, start=1):
-        t.add_row(str(i), liga["nazwa"], liga["kraj"], liga["kod"])
-    console.print(t)
-    console.print("[dim yellow]  INFO: Ekstraklasa (Polska) dostepna tylko w planach platnych.[/dim yellow]\n")
-
-    while True:
-        wybor_str = Prompt.ask(f"[bold yellow]Numer ligi (1-{len(ligi)})[/bold yellow]", default="1")
-        try:
-            idx = int(wybor_str)
-            if 1 <= idx <= len(ligi):
-                liga = ligi[idx-1]
-                console.print(f"[dim]Wybrano: [bold]{liga['nazwa']}[/bold] "
-                               f"(kod: [cyan]{liga['kod']}[/cyan])[/dim]")
-                return liga["kod"], liga["nazwa"], liga["druzyny"]
-        except (ValueError, IndexError):
-            pass
-        console.print(f"[red]Wpisz liczbe 1-{len(ligi)}.[/red]")
 
 def wyswietl_tabele(df: pd.DataFrame, nazwa: str, importance: ImportanceIndex):
     t = Table(title=f"[bold blue]Tabela: {nazwa}[/bold blue]",

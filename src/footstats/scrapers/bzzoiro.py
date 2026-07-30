@@ -88,25 +88,6 @@ class BzzoiroClient:
                     time.sleep(delay)
         return None
 
-    def nadchodzace_tygodnia(self, liga_kod: str = None) -> list:
-        """
-        Pobiera nadchodzace mecze z nastepnych 7 dni.
-        Opcjonalnie filtruje po lidze (kod wewnetrzny).
-        Zwraca liste eventow z predykcjami ML.
-        """
-        data_od  = datetime.now().strftime("%Y-%m-%d")
-        data_do  = (datetime.now() + timedelta(days=PEWNIACZEK_DNI)).strftime("%Y-%m-%d")
-        params   = {"date_from": data_od, "date_to": data_do, "upcoming": "true"}
-
-        liga_id = None
-        if liga_kod:
-            liga_id = self._LIGA_IDS.get(liga_kod)
-        if liga_id:
-            params["league"] = liga_id
-
-        dane = self._get("/events/", params=params)
-        return dane.get("results", []) if dane else []
-
     def predykcja_meczu(self, event_id: int) -> dict | None:
         """
         Pobiera predykcje ML dla konkretnego meczu.

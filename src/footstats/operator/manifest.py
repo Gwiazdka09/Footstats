@@ -184,8 +184,3 @@ def iter_runnable() -> list[Capability]:
     return [c for c in CAPABILITIES if not c.interactive and not c.skip_reason]
 
 
-def by_id(cap_id: str) -> Capability | None:
-    for c in CAPABILITIES:
-        if c.id == cap_id:
-            return c
-    return None

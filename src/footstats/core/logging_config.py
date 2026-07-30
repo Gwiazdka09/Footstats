@@ -53,13 +53,6 @@ def setup_logging(json_sink: str = "logs/footstats.jsonl", level: str = "INFO") 
     )
 
 
-def get_logger(name: str):
-    """Get a logger instance. Falls back to stdlib if loguru unavailable."""
-    if HAS_LOGURU:
-        return loguru_logger.bind(name=name)
-    return logging.getLogger(name)
-
-
 # Optional: Prometheus metrics setup (stubs for now)
 try:
     from prometheus_client import Counter, Histogram
@@ -98,9 +91,6 @@ class MetricsCollector:
             self.request_count.labels(endpoint=endpoint, status=status).inc()
             self.request_latency.labels(endpoint=endpoint).observe(latency)
 
-    def record_scraper_error(self, scraper_name: str) -> None:
-        if self.enabled:
-            self.scraper_errors.labels(scraper=scraper_name).inc()
 
 
 # Global metrics instance

@@ -88,17 +88,6 @@ class APIFootball:
             self._valid = False
             return False, str(e)
 
-    def info_cache_i_budzet(self) -> str:
-        """Krotki opis cache i budzetu do wyswietlenia w menu."""
-        from footstats.utils.cache import af_budget_status, af_cache_info
-        bud  = af_budget_status()
-        info = af_cache_info()
-        kol  = "green" if not bud["ostrzezenie"] else ("yellow" if not bud["krytyczny"] else "red")
-        return (
-            f"[{kol}]{bud['pozostalo']}/{bud['limit']} req pozostalo[/{kol}] | "
-            f"Cache: {info['wpisy']} wpisow ({info['rozmiar_kb']}KB)"
-        )
-
     def _get(self, endpoint: str, params: dict = None,
              force_network: bool = False) -> dict | None:
         """
