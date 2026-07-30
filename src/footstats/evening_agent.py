@@ -404,6 +404,11 @@ def _print_summary_table(summary: dict) -> None:
 
 
 if __name__ == "__main__":
+    # Logi JSON tylko przy uruchomieniu jako job — `run_evening_agent` wolaja
+    # tez testy, a te nie maja powodu przestawiac globalnej konfiguracji logow.
+    from footstats.core.logging_config import skonfiguruj_logi_json
+    skonfiguruj_logi_json()
+
     parser = argparse.ArgumentParser(description="FootStats Evening Agent")
     parser.add_argument("--date", default=None, help="Data YYYY-MM-DD (default: dziś)")
     args = parser.parse_args()

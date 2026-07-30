@@ -404,6 +404,11 @@ def main():
     from dotenv import load_dotenv
     load_dotenv()
 
+    # Logi JSON — job leci w Cloud Run Jobs, gdzie plaski tekst nie da sie
+    # filtrowac po poziomie ani loggerze. Ten sam formatter co API.
+    from footstats.core.logging_config import skonfiguruj_logi_json
+    skonfiguruj_logi_json()
+
     args = _build_parser().parse_args()
 
     from footstats.core.bankroll import (

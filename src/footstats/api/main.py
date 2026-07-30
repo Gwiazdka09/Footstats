@@ -1,11 +1,9 @@
 """FootStats API — app factory with auth, CORS, rate limiting, and timeout."""
 import asyncio
-import json
 import logging
 import os
 import time
 import uuid
-from contextvars import ContextVar
 from pathlib import Path
 
 import sentry_sdk
@@ -22,7 +20,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from footstats.api.limiter import limiter
 from starlette.middleware.base import BaseHTTPMiddleware
 
-_request_id_var: ContextVar[str] = ContextVar("request_id", default="")
+from footstats.core.logging_config import request_id_var, skonfiguruj_logi_json
 
 load_dotenv()
 
@@ -39,21 +37,10 @@ if _sentry_dsn and _sentry_dsn.startswith("https://"):
         logging.getLogger(__name__).warning("Sentry init nieudane — kontynuuje bez monitoringu", exc_info=True)
 
 
-class _JsonFormatter(logging.Formatter):
-    def format(self, record: logging.LogRecord) -> str:
-        return json.dumps({
-            "level": record.levelname,
-            "msg": record.getMessage(),
-            "logger": record.name,
-            "time": self.formatTime(record),
-            "request_id": _request_id_var.get(""),
-        })
-
-
 class _RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         rid = request.headers.get("X-Request-ID") or str(uuid.uuid4())[:8]
-        _request_id_var.set(rid)
+        request_id_var.set(rid)
         response = await call_next(request)
         response.headers["X-Request-ID"] = rid
         return response
@@ -90,9 +77,7 @@ class _MetricsMiddleware(BaseHTTPMiddleware):
         return response
 
 
-_handler = logging.StreamHandler()
-_handler.setFormatter(_JsonFormatter())
-logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
+skonfiguruj_logi_json()
 
 from footstats.api.auth import router as auth_router
 from footstats.api.routes.admin_users import router as admin_users_router
