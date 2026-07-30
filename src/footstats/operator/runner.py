@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +39,37 @@ class RunResult:
         }
 
 
+def _komenda(cmd: list[str]) -> list[str]:
+    """
+    Podmienia gołe "python"/"python3" na `sys.executable`.
+
+    Bez tego capability odpalała się systemowym interpreterem, a nie tym z venva —
+    czyli bez zainstalowanych zależności projektu ("No module named 'rich'"),
+    mimo że w bieżącym procesie wszystko działa.
+    """
+    if cmd and cmd[0] in ("python", "python3"):
+        return [sys.executable, *cmd[1:]]
+    return list(cmd)
+
+
+def _env_z_pythonpath(env: dict[str, str] | None) -> dict[str, str]:
+    """
+    Środowisko podprocesu z gwarantowanym `src/` w PYTHONPATH.
+
+    Capabilities odpalają `python -m footstats.<modul>`, a pakiet mieszka w `src/`.
+    W obrazach Dockera PYTHONPATH=/app/src jest ustawiony, ale lokalnie (bez
+    instalacji editable) już nie — podproces dostawał wtedy
+    "No module named 'footstats'" i capability wyglądała na uszkodzoną,
+    choć problem był wyłącznie w ścieżce.
+    """
+    bazowe = dict(env if env is not None else os.environ)
+    src = str(PROJECT_ROOT / "src")
+    obecne = bazowe.get("PYTHONPATH", "")
+    if src not in obecne.split(os.pathsep):
+        bazowe["PYTHONPATH"] = f"{src}{os.pathsep}{obecne}" if obecne else src
+    return bazowe
+
+
 def _tail(text: str, max_chars: int = 800) -> str:
     text = (text or "").strip()
     if len(text) <= max_chars:
@@ -62,12 +95,12 @@ def run_capability(
     t0 = time.monotonic()
     try:
         proc = subprocess.run(
-            cap.cmd,
+            _komenda(cap.cmd),
             cwd=str(work),
             capture_output=True,
             text=True,
             timeout=cap.timeout_s,
-            env=env,
+            env=_env_z_pythonpath(env),
         )
         duration = time.monotonic() - t0
         ok = proc.returncode == 0

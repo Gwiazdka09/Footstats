@@ -10,6 +10,29 @@ pytest.importorskip("sentence_transformers")
 from src.footstats.ai.rag_embeddings import EmbeddingStore
 
 
+def _model_dostepny() -> bool:
+    """
+    Czy model embeddingów da się faktycznie załadować.
+
+    Sam `importorskip` nie wystarcza: pakiet `sentence_transformers` bywa
+    zainstalowany, a mimo to `SentenceTransformer("paraphrase-multilingual-
+    MiniLM-L12-v2")` próbuje POBRAĆ wagi z HuggingFace. Bez sieci (albo za guardem
+    sieciowym z conftest) wywala się to w środku testu, dając 9 czerwonych
+    zamiast uczciwego "pominięte — brak modelu".
+    """
+    try:
+        from src.footstats.ai.rag_embeddings import _get_embedding_model
+        return _get_embedding_model() is not None
+    except Exception:  # noqa: BLE001 — dowolna awaria = model niedostępny
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _model_dostepny(),
+    reason="model embeddingów niedostępny (brak sieci / wag w cache HuggingFace)",
+)
+
+
 class _SQLiteConn:
     def __init__(self, path: str) -> None:
         self._raw = sqlite3.connect(path)

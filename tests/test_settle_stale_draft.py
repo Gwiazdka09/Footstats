@@ -51,7 +51,12 @@ CREATE TABLE coupons (
     payout_pln       REAL,
     roi_pct          REAL,
     match_date_first TEXT,
-    user_id          INTEGER DEFAULT 1
+    user_id          INTEGER DEFAULT 1,
+    -- Dodane w J4 (kupony manualne, 2026-07-21). Bez tej kolumny
+    -- `coupon_settlement.settle_active_coupons` wywala sie na
+    -- "no such column: kupon_type" — fixture zostal w tyle za schematem prod.
+    kupon_type       TEXT,
+    bookmaker        TEXT
 );
 CREATE TABLE bankroll_state (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
