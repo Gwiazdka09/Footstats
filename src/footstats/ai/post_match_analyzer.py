@@ -69,13 +69,22 @@ def _zapisz_feedback(match_id: int, prediction_details: dict, reason: str) -> No
         feedback_id = row["id"]
 
     # Auto-embed for semantic RAG (non-blocking — failure doesn't break feedback write)
+    #
+    # RuntimeError JEST tu konieczny: sentence_transformers rzuca go przy ładowaniu
+    # modelu (brak urządzenia, nieudane pobranie wag z HuggingFace). Bez niego
+    # wyjątek przelatywał przez guard i wywalał CAŁY zapis feedbacku — dokładnie
+    # to, przed czym ten blok miał chronić. Złapane testem 2026-07-30.
+    #
+    # Poziom WARNING, nie DEBUG: gdy embedding pada, RAG przestaje się uczyć
+    # i nikt tego nie zauważa. Wpis jest jeden na rekord feedbacku, więc nie spamuje.
     try:
         from footstats.ai.rag_embeddings import EmbeddingStore
         store = EmbeddingStore()
         store.upsert(feedback_id, reason)
-    except (ImportError, OSError, ValueError, TypeError) as e:
-        # Log but don't fail — embedding is nice-to-have, not critical
-        log.debug(f"[RAG] Auto-embed failed for feedback_id={feedback_id}: {e}")
+    except (ImportError, OSError, ValueError, TypeError, RuntimeError) as e:
+        log.warning("[RAG] Auto-embed nieudany dla feedback_id=%s: %s — "
+                    "wniosek zapisany, ale nie trafi do wyszukiwania semantycznego",
+                    feedback_id, e)
 
 
 def pobierz_ostatnie_wnioski(n: int = 3) -> list[str]:
