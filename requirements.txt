@@ -12,9 +12,10 @@ bcrypt>=4.0
 slowapi>=0.1.9
 httpx>=0.27
 fastapi-mcp>=0.3,<0.5
-# Zaleznosc przechodnia fastapi-mcp — przypieta, bo nowsze `mcp` zmienilo
-# sygnature Server.__init__ i wywalalo import api.main (CI 2026-07-30).
-mcp>=1.0,<1.28
+# Zaleznosc przechodnia fastapi-mcp (tam: mcp>=1.12.0 bez gornej granicy).
+# <2.0  — mcp 2.0 zmienilo sygnature Server.__init__ i wywalalo import api.main.
+# >=1.28.1 — PYSEC-2026-3481/3482 (fix 1.27.2) i PYSEC-2026-3483 (fix 1.28.1).
+mcp>=1.28.1,<2.0
 groq>=0.4
 playwright>=1.40
 streamlit>=1.32
