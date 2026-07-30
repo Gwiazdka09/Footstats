@@ -3,4 +3,3 @@
 
 [index]
 # exclude_patterns = ["vendor/**", "dist/**"]
-

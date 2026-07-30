@@ -7,7 +7,6 @@ import json
 import os
 import sqlite3
 import logging
-from datetime import datetime
 
 # Konfiguracja logowania
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +17,7 @@ def _connect():
     db_path = os.path.join('data', 'footstats_backtest.db')
     if not os.path.exists(db_path):
         db_path = os.path.join('..', 'data', 'footstats_backtest.db')
-    
+
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
@@ -27,12 +26,12 @@ def fetch_dynamic_data():
     """Pobiera ostatnie wnioski z ai_feedback i tworzy węzły/krawędzie."""
     nodes = []
     edges = []
-    
+
     try:
         with _connect() as conn:
             # Pobierz 20 ostatnich lekcji dla bogatszego grafu
             query = """
-                SELECT f.id, f.reason_for_failure, f.created_at, 
+                SELECT f.id, f.reason_for_failure, f.created_at,
                        p.team_home, p.team_away, p.actual_result, p.match_date
                 FROM ai_feedback f
                 JOIN predictions p ON p.id = f.match_id
@@ -40,11 +39,11 @@ def fetch_dynamic_data():
                 LIMIT 20
             """
             rows = conn.execute(query).fetchall()
-            
+
             for row in rows:
                 lesson_id = f"lesson_{row['id']}"
                 match_label = f"{row['team_home']} vs {row['team_away']}"
-                
+
                 # Węzeł lekcji (Neon Pink Diamond)
                 nodes.append({
                     'id': lesson_id,
@@ -55,7 +54,7 @@ def fetch_dynamic_data():
                     'shape': 'diamond',
                     'font': {'size': 10, 'color': '#FF1493'}
                 })
-                
+
                 # Połączenie lekcji z bazą wiedzy
                 edges.append({
                     'from': 'ai_feedback_db',
@@ -64,7 +63,7 @@ def fetch_dynamic_data():
                     'width': 1,
                     'dashes': True
                 })
-                
+
                 # Dodaj węzły drużyn
                 for team in [row['team_home'], row['team_away']]:
                     team_id = f"team_{team.replace(' ', '_')}"
@@ -84,15 +83,15 @@ def fetch_dynamic_data():
                         'width': 0.5,
                         'arrows': 'none'
                     })
-                    
+
     except Exception as e:
         logger.error(f"Błąd danych dynamicznych: {e}")
-        
+
     return nodes, edges
 
 def create_brain_graph():
     """Generuje interaktywną mapę PREMIUM (Pełna Architektura + Live Data)"""
-    
+
     # 1. PEŁNA ARCHITEKTURA — szczegółowa, warstwowa (aktualna 2026-06-23).
     # Kolory = warstwa. Rozmiar = centralność. Kształt database = tabela Neon PG.
     C = {  # palety per warstwa
@@ -207,14 +206,14 @@ def create_brain_graph():
     <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ 
+        body {{
             width: 100vw; height: 100vh; overflow: hidden;
             font-family: 'Segoe UI', sans-serif;
             background: radial-gradient(circle at center, #1a1a2e 0%, #0a0e27 100%);
             color: #e0e0e0;
         }}
         #mynetwork {{ width: 100%; height: 100%; }}
-        
+
         #header {{
             position: absolute; top: 20px; left: 20px; z-index: 10;
             background: rgba(26, 26, 46, 0.9); padding: 20px;
@@ -223,7 +222,7 @@ def create_brain_graph():
         }}
         #header h1 {{ font-size: 24px; color: #FF1493; margin-bottom: 5px; letter-spacing: 1px; }}
         #header p {{ font-size: 12px; opacity: 0.7; }}
-        
+
         .legend {{
             position: absolute; bottom: 20px; right: 20px; z-index: 10;
             background: rgba(26, 26, 46, 0.9); padding: 20px;
@@ -235,7 +234,7 @@ def create_brain_graph():
         .legend-item {{ display: flex; align-items: center; margin-bottom: 6px; }}
         .dot {{ width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; }}
         .diamond {{ width: 12px; height: 12px; transform: rotate(45deg); margin-right: 10px; }}
-        
+
         .controls {{
             position: absolute; top: 20px; right: 20px; z-index: 10;
             display: flex; gap: 10px;
@@ -253,7 +252,7 @@ def create_brain_graph():
         <h1>SECOND MIND v3.6</h1>
         <p>Live Knowledge Graph & Architecture</p>
     </div>
-    
+
     <div class="controls">
         <button class="btn" onclick="network.fit()">FIT VIEW</button>
         <button class="btn" style="background:#4169E1" onclick="location.reload()">REFRESH DATA</button>
@@ -283,13 +282,13 @@ def create_brain_graph():
                 stabilization: {{ iterations: 150 }}
             }},
             interaction: {{ hover: true, tooltipDelay: 200, zoomView: true, dragView: true }},
-            nodes: {{ 
+            nodes: {{
                 font: {{ color: '#ffffff', size: 13, face: 'Segoe UI' }},
                 borderWidth: 2, shadow: {{ enabled: true, color: 'rgba(0,0,0,0.5)', size: 10 }}
             }},
-            edges: {{ 
+            edges: {{
                 arrows: {{ to: {{ enabled: true, scaleFactor: 0.5 }} }},
-                color: {{ inherit: 'from' }}, 
+                color: {{ inherit: 'from' }},
                 smooth: {{ type: 'continuous' }},
                 width: 1.5
             }}
@@ -302,7 +301,7 @@ def create_brain_graph():
     output_path = 'brain_graph.html'
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
-    
+
     print(f"[OK] Premium Visual Brain zaktualizowany: {output_path}")
     return output_path
 

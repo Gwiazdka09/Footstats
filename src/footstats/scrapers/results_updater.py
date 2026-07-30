@@ -92,11 +92,11 @@ def _liga_ids_dla_nazwy(league_str: str) -> list[int]:
     """
     # Ligi do śledzenia (tylko te będą odpytywane przez API w pierwszej kolejności)
     TRACKED_LEAGUES_NAMES = [
-        'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 
+        'Premier League', 'La Liga', 'Bundesliga', 'Serie A',
         'Ligue 1', 'Ekstraklasa', 'Eredivisie', 'Primeira Liga'
     ]
     tracked_ids = [lid for lid, name in _LIGI_IDS.items() if name in TRACKED_LEAGUES_NAMES]
-    
+
     if not league_str:
         return tracked_ids
 
@@ -115,10 +115,10 @@ def _liga_ids_dla_nazwy(league_str: str) -> list[int]:
     if best_id is not None and best_score >= 0.55:
         if best_id in tracked_ids:
             return [best_id]
-        
+
         log.debug("Liga '%s' (id=%d) znaleziona, ale nie jest w TRACKED_LEAGUES — pomijam API.", league_str, best_id)
         return []
-            
+
     # Nieznana liga — nie marnujemy limitu API na strzelanie w ciemno
     log.debug("Nieznana liga '%s' (best=%.2f) — pomijam API.", league_str, best_score)
     return []
@@ -363,7 +363,7 @@ def update_pending(
                 if verbose:
                     reason = "Limit API" if req_count >= 75 else "Brak w API"
                     print(f"  [SCRAPER FALLBACK] {p['team_home']} vs {p['team_away']} ({reason})...")
-                
+
                 wynik_found = get_match_result(p["team_home"], p["team_away"], match_date)
                 if wynik_found:
                     stats_found = {}  # Scraper nie dostarcza pełnych statystyk xG
@@ -508,7 +508,7 @@ def update_active_coupons(
             fixtures = []
             if req_count < 75:
                 fixtures = _get_fixtures_for_date(match_date[:10])
-            
+
             pending_mock = {"team_home": home, "team_away": away}
             wynik = _znajdz_wynik(pending_mock, fixtures)
 

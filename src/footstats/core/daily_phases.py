@@ -245,7 +245,7 @@ def _wzbogac_o_betbuilder(wyniki: list, pobierz_superbet: bool = False) -> None:
     console.print(f"[dim]BetBuilder Superbet: pobieranie kursow dla {len(mecze_input)} meczow (moze ~3min)...[/dim]")
     try:
         bb_data = pobierz_bb_dla_meczow(mecze_input, headless=True)
-    except Exception as e:  # noqa: broad-except — Playwright raises varied types
+    except Exception as e:  # noqa: BLE001 — Playwright raises varied types
         console.print(f"[yellow]BetBuilder Superbet error: {e}[/yellow]")
         return
 

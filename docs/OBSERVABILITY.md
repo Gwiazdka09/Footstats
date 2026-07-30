@@ -62,7 +62,7 @@ def ai_analiza_pewniaczki(...):
         }
     ):
         # Twój kod analizy...
-        
+
         # Loguj Groq call
         with langfuse.span(name="groq_api_call"):
             response = groq_client.chat.completions.create(
@@ -70,7 +70,7 @@ def ai_analiza_pewniaczki(...):
                 messages=[...],
                 temperature=0.7
             )
-            
+
         # Loguj output
         langfuse.event(
             name="ai_analysis_complete",

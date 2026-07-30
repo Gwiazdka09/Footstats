@@ -113,7 +113,7 @@ def _groq(prompt: str, max_tokens: int = 600) -> str | None:
     except FootStatsCircuitOpenError as e:
         logger.warning("[AI] %s", e)
         return None
-    except Exception as e:  # noqa: broad-except — Groq SDK raises varied types incl. APIStatusError
+    except Exception as e:  # noqa: BLE001 — Groq SDK raises varied types incl. APIStatusError
         err_str = str(e).lower()
         if "429" in err_str or "rate_limit" in err_str or "too many requests" in err_str:
             logger.warning("[AI] Groq RateLimitError (429) — zwracam None")

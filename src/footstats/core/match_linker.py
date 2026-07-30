@@ -99,7 +99,7 @@ def link_leg(
 
     placeholders = ",".join("?" for _ in window)
     with connect() as conn:
-        # nosec B608 — f-string wstawia WYŁĄCZNIE `placeholders`, czyli ciąg znaków "?"
+        # Bezpieczne: f-string wstawia WYŁĄCZNIE `placeholders`, czyli ciąg znaków "?"
         # wygenerowany z długości `window`. Żadna wartość od użytkownika nie trafia do
         # SQL-a: daty idą osobno przez sparametryzowane `tuple(window)`.
         rows = conn.execute(

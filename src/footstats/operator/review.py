@@ -57,7 +57,7 @@ def review_coupons(
         picks = _picks_text(legs, stake)
         try:
             ai_text = ai_sprawdz_kupon(picks, stawka=stake)
-        except Exception as exc:  # noqa: broad-except — AI SDK raises varied error types
+        except Exception as exc:  # noqa: BLE001 — AI SDK raises varied error types
             ai_text = f"Groq error: {exc}"
 
         results.append({

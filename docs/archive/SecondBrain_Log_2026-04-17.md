@@ -2,7 +2,7 @@
 
 #footstats #ai_feedback #kelly_calibration #rag
 
-**Data:** 2026-04-17 | **Godzina zakończenia:** ~01:35 CEST  
+**Data:** 2026-04-17 | **Godzina zakończenia:** ~01:35 CEST
 **Branch:** `main` | **Commit:** `57a24ca` (AI Feedback Loop + [NOT FOUND] fix)
 
 ---
@@ -17,14 +17,14 @@ Zaimplementowano **dwuwarstwową kalibrację stawki Kelly**:
 - **Warstwa 1:** hit-rate z ostatnich 10 kuponów → mnożnik `0.7` (słaba seria) / `1.0` (neutralna) / `1.1` (dobra)
 - **Warstwa 2:** forma bota (3x WIN/LOSE streak) — **nadrzędna** nad hit-rate
 
-Testy: `tests/test_calibration.py` — **11/11 PASS** (0.18s)  
+Testy: `tests/test_calibration.py` — **11/11 PASS** (0.18s)
 Kluczowy test: `test_forma_takes_priority_over_hitrate` — chroni przed regresją.
 
 ---
 
 ### ✅ Etap 7 — RAG / Pętla Feedbacku AI (ZAKOŃCZONY)
 
-Moduły: [[ai/post_match_analyzer.py]] | [[ai/analyzer.py]]  
+Moduły: [[ai/post_match_analyzer.py]] | [[ai/analyzer.py]]
 Tabela DB: `ai_feedback` (SQLite `data/footstats_backtest.db`)
 
 **Architektura pętli:**
@@ -54,7 +54,7 @@ Sekcja "WNIOSKI Z OSTATNICH PORAŻEK" w prompcie Groq
 3. Przechwycenie promptu (monkey-patch `Completions.create`) — sekcja **obecna w locie**
 
 **Wniosek AI #1 — Lekcja z ligi bułgarskiej:**
-> *FK Septemvri Sofia vs FK Spartak Varna (2026-04-16, typ: 2/gość, wynik: 1-0)*  
+> *FK Septemvri Sofia vs FK Spartak Varna (2026-04-16, typ: 2/gość, wynik: 1-0)*
 > „Głównym powodem błędu była **niedoszacowanie rywala**. AI nie uwzględniła aktualnej formy FK Septemvri Sofia. Rekomendacja: **uwzględnienie formy zespołów, kontuzji i statystyk meczowych** przy typowaniu meczów niższych lig bułgarskich."
 
 ---

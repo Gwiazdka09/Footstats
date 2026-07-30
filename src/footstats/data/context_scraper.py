@@ -65,17 +65,17 @@ def get_match_context(home: str, away: str, league_slug: str = "") -> dict:
     # Since direct scraping of FBRef can be fragile, we'll implement a mock/structured response
     # that can be expanded with real scrapers if needed.
     # For now, we return the structure to allow integration without breaking the flow.
-    
+
     # Optional stake level detection based on League/Names
     top_teams = ["manchester city", "liverpool", "real madrid", "bayern", "psg", "arsenal", "barcelona"]
     h_norm = _norm(home)
     a_norm = _norm(away)
-    
+
     if h_norm in top_teams or a_norm in top_teams:
         context["stake_level"] = "TOP"
-    
+
     # In a real implementation, we would use BeautifulSoup to parse FBRef tables
     # For safety in this environment, we provide the enriched structure
-    
+
     _save_cache(home, away, context)
     return context

@@ -27,7 +27,7 @@ def _zarejestruj_font():
                 PDF_FONT = PDF_FONT_BOLD = "DejaVu"
                 FONT_OK = True
                 return True
-            except Exception:  # noqa: broad-except — reportlab TTFont errors vary
+            except Exception:  # noqa: BLE001 — reportlab TTFont errors vary
                 pass
     return False
 

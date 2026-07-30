@@ -1,6 +1,6 @@
 # FootStats — Pomysły i Roadmap
 
-**Ostatnia aktualizacja:** 2026-06-06  
+**Ostatnia aktualizacja:** 2026-06-06
 **Stan:** v3.4-stable | Accuracy: 26.7% live | Cel: M1=55% win rate
 
 ---

@@ -91,14 +91,14 @@ def dynamic_stake(
 ) -> float:
     """
     Uproszczony mnożnik stawki bazujący na pewności i kursie.
-    
+
     Wzór:
     - >= 80%  -> x1.5
     - 75-79%  -> x1.2
     - 70-74%  -> x1.0 (baza)
     - 65-69%  -> x0.7
     - < 65%   -> x0.5
-    
+
     Dodatkowo: cap 0.8x jeśli kurs > 2.50 (ochrona przed wysoką zmiennością).
     """
     if confidence_pct >= 80:
@@ -111,7 +111,7 @@ def dynamic_stake(
         multiplier = 0.7
     else:
         multiplier = 0.5
-        
+
     # Risk adjustment for high odds
     try:
         o = float(odds)
@@ -119,7 +119,7 @@ def dynamic_stake(
             multiplier = min(multiplier, 0.8)
     except (ValueError, TypeError):
         pass
-        
+
     return round(base_stake * multiplier, 1)
 
 

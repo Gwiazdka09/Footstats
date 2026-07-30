@@ -41,22 +41,22 @@ def scrape_flashscore_match_details(match_id: str) -> Dict:
                 page = browser.new_page(user_agent=_UA)
                 page.goto(url, wait_until="networkidle", timeout=20000)
                 time.sleep(3)
-            
+
                 # Pobierz Składy (tam są absencje) - klikamy dla pewności
                 try: page.get_by_text("SKŁADY", exact=True).click(); time.sleep(2)
                 except (PWTimeout, RuntimeError, AttributeError) as e: logger.warning(f"Klik SKŁADY: {e}")
-            
+
                 content = page.content()
-            
+
                 # REGEX dla Sędziego: "Sędzia:</span><span.*?>([^<]+)</span>"
                 # Flashscore ma specyficzną strukturę, szukajmy po prostu 'Sędzia'
                 ref_match = re.search(r"Sędzia:.*?>(.*?)<", content, re.IGNORECASE | re.DOTALL)
                 if ref_match: result["referee"] = ref_match.group(1).split("(")[0].strip()
-            
+
                 # REGEX dla Stadionu
                 stad_match = re.search(r"Stadion:.*?>(.*?)<", content, re.IGNORECASE | re.DOTALL)
                 if stad_match: result["stadium"] = stad_match.group(1).split("(")[0].strip()
-            
+
                 # Absencje są trudniejsze regexem ze względu na listę, ale spróbujmy:
                 # Szukamy sekcji 'Nie zagra' i parsujemy bloki
                 missing_part = re.split(r"Nie zagra", content, flags=re.IGNORECASE)
@@ -71,7 +71,7 @@ def scrape_flashscore_match_details(match_id: str) -> Dict:
                             # Logika uproszczona: wszystko po tym słowie to absencje
                             # (Wersja interaktywna z Turn 60 była lepsza jeśli DOM działa)
                             pass
-            
+
                 # Jeśli Regex zawiódł, użyjmy prostej pętli po elementach
                 if not result["referee"]:
                     labels = page.locator(".wcl-infoLabel_grawU").all()

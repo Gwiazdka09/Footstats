@@ -126,7 +126,7 @@ def bezpieczna_funkcja(
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
-            except Exception as exc:  # noqa: broad-except — decorator wraps arbitrary functions
+            except Exception as exc:  # noqa: BLE001 — decorator wraps arbitrary functions
                 nazwa = opis or func.__name__
                 logger.log(log_poziom,
                     "Blad w [%s]: %s | args=%s",

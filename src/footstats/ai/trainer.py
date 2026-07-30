@@ -141,7 +141,7 @@ def ask_groq_trainer(report_text: str, n_matches: int) -> dict | None:
         except json.JSONDecodeError as e:
             log.warning("Groq SDK JSON error: %s", e)
             return None
-        except Exception as e:  # noqa: broad-except — Groq SDK raises varied APIError subtypes
+        except Exception as e:  # noqa: BLE001 — Groq SDK raises varied APIError subtypes
             log.error("Groq SDK error: %s", e)
             return None
 

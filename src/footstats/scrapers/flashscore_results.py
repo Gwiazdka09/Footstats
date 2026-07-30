@@ -60,7 +60,7 @@ def get_match_result(
     # d=0 (dzisiaj), d=-1 (wczoraj) itp.
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     diff = (date_obj - today).days
-    
+
     # Flashscore.mobi obsługuje zwykle około 7 dni wstecz/przód
     if abs(diff) > 7:
         log.info("Data %s jest poza zasięgiem Flashscore.mobi (offset %d).", match_date, diff)
@@ -112,18 +112,18 @@ def _parse_mobi_html(html: str, home: str, away: str) -> str | None:
     # Najpierw normalizujemy wejściowe nazwy
     nh = normalize_team_name(home)
     na = normalize_team_name(away)
-    
+
     # Szukamy wzorca: TEAM1 - TEAM2 <a ...>SCORE</a>
     # Wykorzystujemy fakt, że mobi ma bardzo powtarzalną strukturę
     lines = html.split("<br />")
-    
+
     best_match = None
     best_score = 0.0
-    
+
     for line in lines:
         if "match/" not in line:
             continue
-            
+
         # Wyciągnij tekst przed linkiem (drużyny) i w linku (wynik)
         # Przykład: <span>19:00</span>Vasteras SK - Hacken <a href="..." class="fin">3:3</a>
         m = re.search(r"</span>(.*?)\s*<a\s([^>]*)>(.*?)</a>", line)
@@ -141,32 +141,32 @@ def _parse_mobi_html(html: str, home: str, away: str) -> str | None:
 
             if " - " in teams_raw:
                 t_home_raw, t_away_raw = teams_raw.split(" - ", 1)
-                
+
                 # Porównaj fuzzy
                 s_h = SequenceMatcher(None, normalize_team_name(t_home_raw), nh).ratio()
                 s_a = SequenceMatcher(None, normalize_team_name(t_away_raw), na).ratio()
                 total_score = (s_h + s_a) / 2
-                
+
                 if total_score > 0.85:
                     print(f"  [FlashScore] Potencjalne dopasowanie: {t_home_raw} - {t_away_raw} ({score}) | sim={total_score:.2f}")
-                
+
                 if total_score > 0.85 and total_score > best_score:
                     # FlashScore zwraca "1-0" (myślnik) lub "1:0" (dwukropek)
                     norm_score = score.replace(":", "-").strip()
                     if norm_score not in ("-:-", "--") and re.match(r"^\d+-\d+", norm_score):
                         best_match = norm_score
                         best_score = total_score
-                        
+
     if best_match:
         log.info("Znaleziono wynik na FlashScore: %s vs %s -> %s (score=%.2f)", home, away, best_match, best_score)
         return best_match
-        
+
     return None
 
 if __name__ == "__main__":
     # Test lokalny
     logging.basicConfig(level=logging.INFO)
-    
+
     # Przykład z zgłoszenia: BK Häcken vs GAIS
     # (Załóżmy że grali wczoraj)
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")

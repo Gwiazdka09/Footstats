@@ -7,24 +7,24 @@ def test_same_market_conflicts():
     assert _para_sprzeczna("Mecz: 1", "Mecz: X") is True
     assert _para_sprzeczna("Mecz: 2", "Mecz: X") is True
     assert _para_sprzeczna("Mecz: 1", "Mecz: 1") is False  # Identical is not conflict
-    
+
     # Tak/Nie
     assert _para_sprzeczna("BTTS: Tak", "BTTS: Nie") is True
-    
+
     # Over/Under same market
     assert _para_sprzeczna("Liczba goli: powyżej 2.5", "Liczba goli: poniżej 1.5") is True
     assert _para_sprzeczna("Liczba goli: powyżej 2.5", "Liczba goli: powyżej 3.5") is True # Redundant (Rule 6)
 
 def test_cross_market_result_conflicts():
     # Draw No Bet vs Match Result
-    # DNB 1 means (Win 1 = win, Draw = push). 
-    # Mecz 2 means Away win. 
+    # DNB 1 means (Win 1 = win, Draw = push).
+    # Mecz 2 means Away win.
     # They are mutually exclusive.
     assert _para_sprzeczna("Draw No Bet: 1", "Mecz: 2") is True
     assert _para_sprzeczna("Draw No Bet: 1", "Mecz: X") is True
     assert _para_sprzeczna("Draw No Bet: 2", "Mecz: 1") is True
     assert _para_sprzeczna("Draw No Bet: 2", "Mecz: X") is True
-    
+
     # Double Chance vs Match Result
     assert _para_sprzeczna("Podwójna szansa: 1X", "Mecz: 2") is True
     assert _para_sprzeczna("Podwójna szansa: X2", "Mecz: 1") is True
@@ -33,7 +33,7 @@ def test_cross_market_result_conflicts():
 def test_compatible_cross_market():
     # DNB 1 and Mecz 1 are compatible
     assert _para_sprzeczna("Draw No Bet: 1", "Mecz: 1") is False
-    
+
     # Double Chance 1X and Mecz 1 are compatible
     assert _para_sprzeczna("Podwójna szansa: 1X", "Mecz: 1") is False
     assert _para_sprzeczna("Podwójna szansa: 1X", "Mecz: X") is False

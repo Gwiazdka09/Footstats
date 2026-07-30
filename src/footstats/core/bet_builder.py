@@ -27,47 +27,47 @@ def probability_matrix(lh: float, la: float, rho: float = -0.05, max_goals: int 
     Zazwyczaj rho = -0.05 zwiększa trochę wagę niskobramkowych remisów.
     """
     mat = np.zeros((max_goals + 1, max_goals + 1))
-    
+
     for h in range(max_goals + 1):
         for a in range(max_goals + 1):
             prob = _poisson_prob(h, lh) * _poisson_prob(a, la) * _dixon_coles_tau(h, a, lh, la, rho)
             mat[h, a] = max(0.0, prob)  # korekta ujemna
-            
+
     # Normalize matrix to 1.0 just in case top-end goals cut off residuals
     total = np.sum(mat)
     if total > 0:
         mat = mat / total
-        
+
     return mat
 
 def estimate_lambdas_from_probs(pw: float, pp: float, o25: float) -> tuple[float, float]:
     """Estymuje parametry lambda (home, away) aby minimalizować błąd względem podanych prawdopodobieństw z modelu (np. Bzzoiro)."""
     best_lh, best_la = 1.0, 1.0
     best_loss = 999.0
-    
+
     # Przeszukujemy bazowe wartości dla oczekiwanych goli
     lambdas = np.linspace(0.1, 3.5, 35)
     for lh in lambdas:
         for la in lambdas:
             mat = probability_matrix(lh, la, rho=-0.05)
-            
+
             sim_pw = np.sum(np.tril(mat, -1))
             sim_pp = np.sum(np.triu(mat, 1))
             sim_o25 = sum(mat[h, a] for h in range(7) for a in range(7) if h+a > 2.5)
-                    
+
             loss = (sim_pw - pw)**2 + (sim_pp - pp)**2 + (sim_o25 - o25)**2
             if loss < best_loss:
                 best_loss = loss
                 best_lh = lh
                 best_la = la
-                
+
     return round(float(best_lh), 2), round(float(best_la), 2)
 
 def get_card_suggestions(ref_avg_yellow: float | None) -> list[str]:
     """Zwraca sugestie zakładów na kartki na podstawie rygorystyczności sędziego."""
     if not ref_avg_yellow or ref_avg_yellow <= 0:
         return []
-    
+
     sugestie = []
     # Heurystyka na podstawie średniej ligowej/sędziowskiej
     if ref_avg_yellow > 4.5:
@@ -76,7 +76,7 @@ def get_card_suggestions(ref_avg_yellow: float | None) -> list[str]:
         sugestie.append(f"Powyżej 4.5 kartek (Sędzia avg: {ref_avg_yellow})")
     if ref_avg_yellow < 3.2:
         sugestie.append(f"Poniżej 4.5 kartek (Sędzia avg: {ref_avg_yellow})")
-    
+
     return sugestie
 
 def get_betbuilder_suggestions(lh: float, la: float, max_goals: int = 7, ref_avg_yellow: float | None = None) -> list[str]:
@@ -90,7 +90,7 @@ def get_betbuilder_suggestions(lh: float, la: float, max_goals: int = 7, ref_avg
 
     mat = probability_matrix(lh, la, max_goals=max_goals)
     sugestie = []
-    
+
     # 1. 1 & Over 1.5 (Gospodarz wygrywa + >1.5 goli w meczu)
     p_1_o15 = sum(mat[h, a] for h in range(max_goals+1) for a in range(max_goals+1) if h > a and h + a > 1.5)
     # 2. 1 & BTTS (Gospodarz wygrywa + Oba strzelą)
@@ -110,7 +110,7 @@ def get_betbuilder_suggestions(lh: float, la: float, max_goals: int = 7, ref_avg
         sugestie.append(f"2 & Over 1.5 (Szansa: {int(p_2_o15 * 100)}%)")
     if p_btts_o25 > 0.40:
         sugestie.append(f"BTTS & Over 2.5 (Szansa: {int(p_btts_o25 * 100)}%)")
-    if p_x_u35 > 0.25: 
+    if p_x_u35 > 0.25:
         sugestie.append(f"X & Under 3.5 (Szansa: {int(p_x_u35 * 100)}%)")
 
     # 6. Handicap -1 (Gospodarz wygrywa różnicą >= 2 goli)

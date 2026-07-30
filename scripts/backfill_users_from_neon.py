@@ -112,8 +112,10 @@ def main() -> None:
     col_list = ", ".join(cols)
 
     # Źródło: wszyscy userzy z Neona.
+    # Bezpieczne: `col_list` NIE pochodzi od użytkownika — to przecięcie kolumn obu
+    # baz przefiltrowane przez twardą allowlistę `_COPY_COLS` (patrz _cols_intersection).
     scur = src.cursor()
-    scur.execute(f"SELECT {col_list} FROM public.users ORDER BY username")
+    scur.execute(f"SELECT {col_list} FROM public.users ORDER BY username")  # nosec B608
     src_rows = scur.fetchall()
     src_by_user = {r[cols.index("username")]: r for r in src_rows}
 
@@ -154,8 +156,10 @@ def main() -> None:
 
     # ── APPLY ──────────────────────────────────────────────────────────────
     placeholders = ", ".join(["%s"] * len(cols))
+    # Bezpieczne: interpolowane są wyłącznie `col_list` (allowlista `_COPY_COLS`)
+    # i `placeholders` (same "%s"). Wartości idą osobno, sparametryzowane.
     insert_sql = (
-        f"INSERT INTO public.users ({col_list}) VALUES ({placeholders})"
+        f"INSERT INTO public.users ({col_list}) VALUES ({placeholders})"  # nosec B608
         f" ON CONFLICT (username) DO NOTHING"
     )
     inserted, skipped = 0, []

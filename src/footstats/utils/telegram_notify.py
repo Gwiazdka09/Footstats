@@ -141,7 +141,7 @@ def send_message_to_user(user_id: int, text: str) -> bool:
                 "SELECT telegram_chat_id FROM users WHERE id = ?", (user_id,)
             ).fetchone()
         chat_id = row["telegram_chat_id"] if row else None
-    except Exception:  # noqa: broad-except — powiadomienie nie może wywalić pipeline
+    except Exception:  # noqa: BLE001 — powiadomienie nie może wywalić pipeline
         return False
     if not chat_id:
         return False

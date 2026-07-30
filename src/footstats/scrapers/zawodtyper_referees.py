@@ -37,11 +37,11 @@ def fetch_referees_zawodtyper() -> None:
 
             content = page.content()
             browser.close()
-            
+
             soup = BeautifulSoup(content, "html.parser")
             tables = soup.find_all("table")
             logger.info(f"[ZawodTyper] Znaleziono {len(tables)} tabel. Parsowanie danych...")
-            
+
             ref_count = 0
             for tbl in tables:
                 parent = tbl.find_parent("div", class_="overflow-hidden")
@@ -51,7 +51,7 @@ def fetch_referees_zawodtyper() -> None:
                 header = grand_parent.find(["span"])
                 country_raw = header.text.strip().split(":")[0] if header else "Unknown"
                 country = COUNTRY_MAP.get(country_raw, country_raw)
-                
+
                 trs = tbl.find_all("tr")
                 # Pomijamy th (trs[0])
                 # Kolumny: L.P | Sędzia | M | F | K | Ż.K. | CZ.K.
@@ -63,7 +63,7 @@ def fetch_referees_zawodtyper() -> None:
                         matches_str = tds[2].text.strip()
                         yellows_str = tds[5].text.strip()
                         reds_str = tds[6].text.strip()
-                        
+
                         try:
                             m = int(matches_str)
                             y = int(yellows_str)
@@ -81,9 +81,9 @@ def fetch_referees_zawodtyper() -> None:
                                 ref_count += 1
                         except ValueError:
                             pass
-            
+
             logger.info(f"[ZawodTyper] Zaktualizowano pomyślnie {ref_count} sędziów z {len(tables)} lig.")
-            
+
     except (PlaywrightError, ValueError, RuntimeError) as e:
         logger.error(f"[ZawodTyper] Błąd scrape'owania: {e}")
 

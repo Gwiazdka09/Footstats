@@ -13,12 +13,13 @@ repos:
         args: ["--maxkb=2000"]
       - id: detect-private-key   # łapie wklejony klucz prywatny
 
-  # Lint (zgodny z CI: E9 składnia + F pyflakes)
+  # Lint (zgodny z CI). UWAGA: hook `ruff` sam wywołuje `ruff check`, więc podanie
+  # args: ["check"] robiło z tego NAZWĘ PLIKU → "E902 nie można odnaleźć" i hook
+  # nigdy nie zadziałał (wykryte 2026-07-30 po pierwszym realnym uruchomieniu).
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.19
     hooks:
-      - id: ruff
-        args: ["check"]
+      - id: ruff-check
 
   # SAST — bandit (MEDIUM+; konfiguracja jak w CI)
   - repo: https://github.com/PyCQA/bandit

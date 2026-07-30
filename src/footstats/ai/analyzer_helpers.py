@@ -265,7 +265,7 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
                     factors=faktory,
                     prob_home=pw, prob_draw=pr, prob_away=pp,
                 )
-            except Exception:  # noqa: broad-except — optional telemetry, never block pipeline
+            except Exception:  # noqa: BLE001 — optional telemetry, never block pipeline
                 pass
 
     if dane.get("top3"):

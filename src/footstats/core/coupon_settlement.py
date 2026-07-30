@@ -171,8 +171,11 @@ def _find_leg_result(
                 ).fetchone()
             if pred_row and pred_row["actual_result"]:
                 return pred_row["actual_result"]
-        except (OSError, ValueError, RuntimeError):
-            pass
+        except (OSError, ValueError, RuntimeError) as e:
+            # Kierunek jest bezpieczny (brak wyniku → kupon zostaje ACTIVE), ale awaria
+            # bazy w ścieżce rozliczeń nie może być niewidoczna — bez logu wygląda
+            # identycznie jak „mecz jeszcze nierozegrany".
+            log.warning("Odczyt predictions dla %s vs %s (%s) nieudany: %s", home, away, d, e)
 
     # Źródło 5: agregator multi-source (consensus) — dokłada football-data.co.uk (CSV)
     # + cross-walidowany FlashScore, niezależne od źródeł 1-4 (AF /fixtures + football-data.org
@@ -189,8 +192,10 @@ def _find_leg_result(
                         home, away, d, mdate,
                     )
                 return res
-    except (ImportError, OSError, ValueError, RuntimeError):
-        pass
+    except (ImportError, OSError, ValueError, RuntimeError) as e:
+        # jw. — cisza tutaj oznaczałaby, że konsensus multi-source „nie znalazł wyniku",
+        # podczas gdy realnie w ogóle nie zadziałał.
+        log.warning("Konsensus multi-source dla %s vs %s nieosiągalny: %s", home, away, e)
 
     return None
 

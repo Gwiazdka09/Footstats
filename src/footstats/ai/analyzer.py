@@ -37,7 +37,7 @@ def _get_langfuse() -> Langfuse | None:
                 secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
                 host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
             )
-        except Exception as e:  # noqa: broad-except
+        except Exception as e:  # noqa: BLE001
             logger.warning("Langfuse init error: %s", e)
             _langfuse = None
     return _langfuse
@@ -149,7 +149,7 @@ def _zapytaj_typera(prompt: str, max_tokens: int = 900) -> str:
             result = _kontynuuj_uciety_json(client, messages, result)
 
         return result
-    except Exception:  # noqa: broad-except
+    except Exception:  # noqa: BLE001
         return zapytaj_ai(prompt, max_tokens)
 
 
@@ -253,7 +253,7 @@ def analizuj_mecz_ai(
         kursy_tekst = "\nKURSY BUKMACHERSKIE: brak danych\n"
 
     rag_context = _pobierz_podobne_mecze(gospodarz, goscie)
-    
+
     prompt = build_mecz_prompt(
         gospodarz=gospodarz, goscie=goscie,
         p_wygrana=p_wygrana, p_remis=p_remis, p_przegrana=p_przegrana,
@@ -264,7 +264,7 @@ def analizuj_mecz_ai(
     )
 
     print(f"\n[AI] Analizuję: {gospodarz} vs {goscie}...")
-    
+
     surowa_odpowiedz = None
     lf = _get_langfuse()
     if lf:
@@ -274,7 +274,7 @@ def analizuj_mecz_ai(
                 gen.update(output=surowa_odpowiedz)
     else:
         surowa_odpowiedz = zapytaj_ai(prompt, max_tokens=500)
-        
+
     wynik = _wyciagnij_json(surowa_odpowiedz)
 
     # Dodaj metadane
@@ -477,7 +477,7 @@ def _buduj_opis_meczu(w: dict) -> str:
         linie.append(
             f"  FORMA_SOFA: {g[:8]}={sofa_g or '?'}  {a[:8]}={sofa_a or '?'}"
         )
-    
+
     # Rich Context: xG, Table, Absences
     ctx = w.get("match_context") or {}
     if ctx:
@@ -485,12 +485,12 @@ def _buduj_opis_meczu(w: dict) -> str:
         xg_a = ctx.get("away_xg_last3", [])
         if xg_h or xg_a:
             linie.append(f"  xG_LAST3: {g[:8]}={xg_h}  {a[:8]}={xg_a}")
-        
+
         pos_h = ctx.get("home_table_pos")
         pos_a = ctx.get("away_table_pos")
         if pos_h or pos_a:
             linie.append(f"  TABELA: {g[:8]}=#{pos_h or '?'}  {a[:8]}=#{pos_a or '?'}")
-            
+
         abs_h = ctx.get("home_absences", [])
         abs_a = ctx.get("away_absences", [])
         if abs_h or abs_a:
@@ -776,7 +776,7 @@ def oceń_kupon(legs: list[dict], kontekst: str = "") -> tuple[str, int]:
 
     try:
         reasoning = _zapytaj_typera(prompt, max_tokens=600)
-    except Exception:  # noqa: broad-except — LLM fallback, nie blokuj pipeline
+    except Exception:  # noqa: BLE001 — LLM fallback, nie blokuj pipeline
         return ("LLM niedostępny — pominięto scout filter.", _SCOUT_VETO_THRESHOLD)
 
     score = _SCOUT_VETO_THRESHOLD

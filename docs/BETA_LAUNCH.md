@@ -75,7 +75,7 @@ Tryb: caveman ultra. Bez wyjasnien, czyste zmiany. Projekt: F:\bot
    " ON CONFLICT (user_id) DO UPDATE"
    " SET balance=EXCLUDED.balance, updated_at=EXCLUDED.updated_at",
    (user_id, data.balance, now),
-   
+
    UWAGA: Nie wstawiaj `id` — niech PG uzyje SERIAL/sequence.
 
 3. Dodaj test tests/test_bankroll_api.py:
@@ -98,7 +98,7 @@ Tryb: caveman ultra. Bez wyjasnien, czyste zmiany. Projekt: F:\bot
    ```python
    import logging
    _log = logging.getLogger(__name__)
-   
+
    def _fetch_predictions() -> list:
        try:
            from footstats.scrapers.bzzoiro import BzzoiroClient
@@ -191,7 +191,7 @@ Zmien login i register:
 @limiter.limit("10/minute")
 def login(request: Request, req: LoginRequest):
 
-@router.post("/auth/register")  
+@router.post("/auth/register")
 @limiter.limit("5/minute")
 def register(request: Request, req: RegisterRequest):
 
@@ -237,7 +237,7 @@ W src/footstats/api/preview.html, w sekcji #login-overlay:
 
 Pod przyciskiem "Zaloguj" dodaj link:
 <p class="text-center text-sm text-slate-400 mt-4">
-  Nie masz konta? 
+  Nie masz konta?
   <span onclick="showRegister()" class="text-indigo-400 cursor-pointer hover:underline">Zaloz konto</span>
 </p>
 

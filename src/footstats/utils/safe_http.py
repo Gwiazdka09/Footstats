@@ -173,7 +173,7 @@ class BezpiecznePobieranie:
             self.bledy.append(f"{nazwa_f}: wyczerpany budzet AF")
             logger.critical("[%s] Wyczerpany budzet: %s", self.nazwa, e)
             raise  # budzet = krytyczny, nie tlumimy
-        except Exception as e:  # noqa: broad-except — API client fallback for arbitrary errors
+        except Exception as e:  # noqa: BLE001 — API client fallback for arbitrary errors
             self.bledy.append(f"{nazwa_f}: {type(e).__name__}")
             logger.error("[%s] Blad %s: %s", self.nazwa, nazwa_f, e, exc_info=True)
             return fallback

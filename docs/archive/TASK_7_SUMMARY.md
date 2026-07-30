@@ -70,8 +70,8 @@ Example Output:
 ```
 
 ### 5. Code Changes
-**File**: `src/footstats/core/backtest_engine.py`  
-**Commit**: `4ee4528`  
+**File**: `src/footstats/core/backtest_engine.py`
+**Commit**: `4ee4528`
 **Message**: `fix: backtest report now displays confidence filtering impact (skipped_low_confidence counter)`
 
 **Change**: Added 1 line to `print_report()` function

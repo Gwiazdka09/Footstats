@@ -30,7 +30,7 @@ def _ensure_clv_column() -> None:
             conn.execute(
                 "ALTER TABLE predictions ADD COLUMN clv_closing_odds REAL"
             )
-        except Exception:  # noqa: broad-except — DB-specific "column exists" errors vary by driver
+        except Exception:  # noqa: BLE001 — DB-specific "column exists" errors vary by driver
             pass
 
 

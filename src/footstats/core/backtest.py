@@ -222,9 +222,9 @@ def _sprawdz_auto_trening() -> None:
                         f"FootStats Auto-trening\n"
                         f"Zapisano {n} wynikow — Groq aktualizuje kalibracje w tle."
                     )
-            except Exception:  # noqa: broad-except — import+network errors vary
+            except Exception:  # noqa: BLE001 — import+network errors vary
                 pass
-    except Exception:  # noqa: broad-except — top-level guard for auto-training block
+    except Exception:  # noqa: BLE001 — top-level guard for auto-training block
         pass
 
 
@@ -419,7 +419,7 @@ def pobierz_kalibracje_backtest(dni: int = 90, min_n: int = 5) -> str:
     """
     try:
         stats = get_stats(days=dni)
-    except Exception:  # noqa: broad-except — DB/query errors, return empty string as fallback
+    except Exception:  # noqa: BLE001 — DB/query errors, return empty string as fallback
         return ""
 
     by_market = stats.get("by_market", {})

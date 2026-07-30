@@ -34,7 +34,7 @@ if _sentry_dsn and _sentry_dsn.startswith("https://"):
             traces_sample_rate=0.1,
             environment=os.environ.get("ENV", "production"),
         )
-    except Exception:  # noqa: broad-except — Sentry nie może blokować startu (RQ fork crash na Windows)
+    except Exception:  # noqa: BLE001 — Sentry nie może blokować startu (RQ fork crash na Windows)
         # np. lokalnie na Windows: integracja RQ wywala sie na multiprocessing fork context
         logging.getLogger(__name__).warning("Sentry init nieudane — kontynuuje bez monitoringu", exc_info=True)
 
@@ -314,7 +314,7 @@ def health() -> dict:
             ).fetchone()
             n = (row["n"] if row else 0) if hasattr(row, "keys") else (row[0] if row else 0)
         auth_ok = n > 0
-    except Exception:  # noqa: broad-except — health must never return 5xx
+    except Exception:  # noqa: BLE001 — health must never return 5xx
         pass
 
     try:
@@ -326,7 +326,7 @@ def health() -> dict:
             last_pred = row["last_pred"] if row else None
             if last_pred:
                 agent_ok = last_pred >= datetime.now() - timedelta(hours=26)
-    except Exception:  # noqa: broad-except — health must never return 5xx
+    except Exception:  # noqa: BLE001 — health must never return 5xx
         pass
 
     return {

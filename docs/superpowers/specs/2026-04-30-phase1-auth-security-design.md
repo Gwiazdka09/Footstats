@@ -1,5 +1,5 @@
 # Phase 1 – Auth + Security Design
-**Date:** 2026-04-30  
+**Date:** 2026-04-30
 **Scope:** FastAPI `src/footstats/api/` — JWT auth, CORS fix, rate limiting
 
 ---

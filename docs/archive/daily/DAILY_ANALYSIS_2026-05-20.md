@@ -41,7 +41,7 @@ Tryb: caveman ultra. Bez wyjasnien, czyste zmiany.
 Projekt: F:\bot (FootStats v3.4)
 
 TASK 1 — Version sync:
-- config.py:11 → VERSION = "v3.4-stable"  
+- config.py:11 → VERSION = "v3.4-stable"
 - CLAUDE.md:1 → "# FootStats v3.4-stable"
 
 TASK 2 — SQLite context managers:
@@ -53,7 +53,7 @@ na:
 
 dashboard.py:28 — zamien _conn() na context manager:
   @contextmanager
-  def _conn(db): 
+  def _conn(db):
       conn = sqlite3.connect(db); conn.row_factory = sqlite3.Row
       try: yield conn
       finally: conn.close()

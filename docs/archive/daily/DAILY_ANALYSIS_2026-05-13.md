@@ -22,7 +22,7 @@ for i in range(N):
     for j in range(N):
         M[i][j] = poisson.pmf(i, lambda_g) * poisson.pmf(j, lambda_a)
 ```
-**Problem**: O(N²) ~ 81 operacji na każdą predykcję  
+**Problem**: O(N²) ~ 81 operacji na każdą predykcję
 **Rozwiązanie**: Vectorize z numpy — zmniejsz 10x czasie wykonania
 
 #### b. **Form Analysis - Triple Nested Loop**
@@ -33,7 +33,7 @@ for team in teams:
         for match in matches:
             # Calculates impact...
 ```
-**Problem**: O(n³) kompleksowość dla ~500 drużyn  
+**Problem**: O(n³) kompleksowość dla ~500 drużyn
 **Rozwiązanie**: Precompute w DataFrame groupby
 
 #### c. **Lambda Optimizer Walk-Forward**
@@ -42,7 +42,7 @@ for team in teams:
 for _, row in df_wf.iterrows():
     hist = df[df["date"] < row["date"]]  # ← KAŻDA ITERACJA FILTRUJE CAŁĄ RAMKĘ
 ```
-**Problem**: O(n²) — dla 1000 meczów = 1M filtrów  
+**Problem**: O(n²) — dla 1000 meczów = 1M filtrów
 **Rozwiązanie**: Sort once + binary search, lub use Pandas rolling window
 
 ### 4. **Problemy z walidacją danych** 🟡
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS backtest (...) # bez referential integrity
 for wynik in wyniki:
     c = BzzoiroClient(klucz)  # Nowa instancja dla każdego!
 ```
-**Problem**: Może wysłać 100+ requestów bez delay  
+**Problem**: Może wysłać 100+ requestów bez delay
 **Rozwiązanie**: Implementować exponential backoff + retry queue
 
 #### b. **Football-Data.org (10 req/min)**
@@ -89,7 +89,7 @@ for wynik in wyniki:
 indeks = {}  # Zawiera wszystkie kursy dla ~2000 meczów na dzień
 # Nigdy nie jest czyszczony między invokacjami
 ```
-**Problem**: W production (24h loop) = 48MB wycieków/dobę  
+**Problem**: W production (24h loop) = 48MB wycieków/dobę
 **Rozwiązanie**: Użyć `__slots__` lub context manager
 
 ### 7. **Kalibracja Modelu — Problemy** 🟡
@@ -165,10 +165,10 @@ def test_daily_agent_memory_stable():
     import tracemalloc
     tracemalloc.start()
     initial = tracemalloc.get_traced_memory()[0]
-    
+
     for _ in range(100):
         daily_agent.run()
-    
+
     final = tracemalloc.get_traced_memory()[0]
     assert final - initial < 10 * 1024 * 1024
 ```
@@ -180,12 +180,12 @@ def test_daily_cycle_complete():
     # 1. Bzzoiro
     candidates = fetch_candidates(2)
     assert len(candidates) > 0
-    
+
     # 2. Predykcje
     for cand in candidates[:5]:
         pred = predict_match(cand['home'], cand['away'], df)
         assert 'lambda_g' in pred
-    
+
     # 3. Settlement
     settlements = check_settlement(7)  # 7 dni wstecz
     assert len(settlements) >= 0
@@ -225,5 +225,5 @@ def test_daily_cycle_complete():
 
 ---
 
-**Wygenerowano**: 2026-05-13 20:00  
+**Wygenerowano**: 2026-05-13 20:00
 **Status**: ✅ Analiza kompletna — czekam na zatwierdzenie zmian

@@ -8,7 +8,7 @@ Wklej poniższą treść do Claude, aby naprawić bazę i zamknąć checklistę:
 FootStats (SaaS do analizy meczów). Backend FastAPI, Baza PostgreSQL (Neon). System Multi-User z JWT.
 
 ## ISSUE: Migration Failure
-Podczas `python manage.py migrate` otrzymuję: `psycopg2.errors.ForeignKeyViolation`. 
+Podczas `python manage.py migrate` otrzymuję: `psycopg2.errors.ForeignKeyViolation`.
 Tabela `coupons` próbuje ustawić `user_id = 1` (w migracji v2), ale tabela `users` jest pusta, bo seedowanie admina następuje po wszystkich migracjach.
 
 ## TASKS:

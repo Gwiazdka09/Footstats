@@ -64,7 +64,7 @@ W db/migrations.py: napisz dual-dialect wrapper.
 - Zamiast DROP CONSTRAINT IF EXISTS → try/except lub detect dialect
 - Zamiast ALTER COLUMN → SQLite nie wspiera, uzyj recreate table pattern
 - Dodaj kolumne user_id do tabel: coupons, bankroll_state, bankroll_history w SQLite
-Test: python -c "from footstats.db.migrations import run_migrations; run_migrations()" 
+Test: python -c "from footstats.db.migrations import run_migrations; run_migrations()"
 
 KROK 3 — bankroll cleanup:
 Sprawdz kupon #12 (ACTIVE od 2026-04-19). Jesli mecz zakonczony → settle. Jesli nie → VOID.
