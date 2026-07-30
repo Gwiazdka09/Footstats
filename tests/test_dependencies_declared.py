@@ -58,7 +58,8 @@ _LOKALNE = {"footstats", "src", "tests", "scripts"}
 # Dopisanie czegos tutaj to deklaracja: "ta funkcja MOZE byc wylaczona na produkcji
 # i to jest OK". Jesli tak nie jest — zamiast wpisu dodaj zaleznosc do pyproject.toml.
 _OPCJONALNE = {
-    "loguru": "logging_config ma pelny fallback na stdlib logging",
+    # `loguru` zniknal 2026-07-30 razem z setup_logging() — byl jej jedynym
+    # uzyciem, a logi JSON i tak robi _JsonFormatter (api/main.py) na stdlib.
     "tabulate": "core/backtest.py ma wlasna implementacje zastepcza tabulate()",
     "feedparser": "scrapers/enriched.py — wzbogacanie RSS, nieobowiazkowe dla predykcji",
     "soccerdata": "data/historical_loader.py — jednorazowy import historii, uruchamiany recznie",

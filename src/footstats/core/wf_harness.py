@@ -62,12 +62,9 @@ class ModelFlags:
     w_bayesian: float = 0.5         # waga ramienia bayesian w blendzie modelu
 
 
-def _weighted_blend(a: dict, b: dict, wa: float, wb: float) -> dict:
-    """Ważona średnia dwóch dictów {pw,pr,pp} (procenty). Renormalizacja do 100."""
-    tot = wa + wb
-    out = {k: (a[k] * wa + b[k] * wb) / tot for k in ("pw", "pr", "pp")}
-    s = sum(out.values()) or 1.0
-    return {k: round(v / s * 100, 4) for k, v in out.items()}
+# _weighted_blend() usunieta 2026-07-30 — duplikat. Ramie Dixon-Coles blenduje
+# poisson_bayesian.blend_dixon_coles (wolane nizej z flags.w_bayesian), a ta
+# funkcja nigdy nie zostala podpieta.
 
 
 def predict_one(g, a, hist_prod, league, odds_h, odds_d, odds_a, flags) -> dict | None:

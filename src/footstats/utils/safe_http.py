@@ -3,7 +3,6 @@ safe_http.py — bezpieczne HTTP + wielokrokowe pobieranie (logowanie/retry).
 
 Wydzielone z `utils/logging.py` (dekompozycja grab-bag):
 - BezpiecznyHTTP: GET z retry/backoff i pełnym logowaniem statusów.
-- BezpiecznePobieranie: context manager wielu źródeł ligi (graceful per-krok).
 
 Re-eksportowane przez `utils/logging.py` dla kompatybilności importów.
 Logger: ten sam singleton "footstats" (`logging.getLogger`) — bez importu z
@@ -11,9 +10,8 @@ Logger: ten sam singleton "footstats" (`logging.getLogger`) — bez importu z
 """
 import logging as _logging
 import time
-from typing import Any, Callable
 
-from footstats.utils.exceptions import BladPolaczenia, BladBudzetu
+from footstats.utils.exceptions import BladPolaczenia
 
 logger = _logging.getLogger("footstats")
 
@@ -117,67 +115,8 @@ class BezpiecznyHTTP:
 
 # ── Pobieranie danych ligi – z obsługa błędów ─────────────────────
 
-class BezpiecznePobieranie:
-    """
-    Context manager dla wielokrokowego pobierania danych ligi.
-    Zapewnia ze nawet przy bledzie jednego zrodla program nie crashuje.
-
-    Uzycie:
-        with BezpiecznePobieranie("Serie A") as bp:
-            tabela = bp.wykonaj(api.tabela, "SA", fallback=None)
-            wyniki = bp.wykonaj(api.wyniki, "SA", 100, fallback=pd.DataFrame())
-        if bp.ma_bledy:
-            print(f"Ostrzezenia: {bp.bledy}")
-    """
-
-    def __init__(self, nazwa_ligi: str):
-        self.nazwa  = nazwa_ligi
-        self.bledy  = []
-        self._start = time.perf_counter()
-
-    def __enter__(self):
-        logger.info("Rozpoczynam pobieranie danych: %s", self.nazwa)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        dt = time.perf_counter() - self._start
-        if exc_type is not None:
-            logger.error("Krytyczny blad pobierania [%s] po %.1fs: %s",
-                         self.nazwa, dt, exc_val, exc_info=True)
-            return False  # nie tlumimy wyjatku
-        if self.bledy:
-            logger.warning("Pobieranie [%s] zakonczone z %d ostrzezeniami (%.1fs): %s",
-                           self.nazwa, len(self.bledy), dt, "; ".join(self.bledy[:3]))
-        else:
-            logger.info("Pobieranie [%s] zakonczone pomyslnie (%.1fs)", self.nazwa, dt)
-        return False
-
-    def wykonaj(self, func: Callable, *args, fallback=None, opis: str = "") -> Any:
-        """
-        Wykonuje func(*args) bezpiecznie.
-        Przy bledzie zapisuje go do self.bledy i zwraca fallback.
-        """
-        nazwa_f = opis or getattr(func, "__name__", str(func))
-        try:
-            wynik = func(*args)
-            if wynik is None:
-                self.bledy.append(f"{nazwa_f}: zwrocilo None")
-                logger.warning("[%s] %s zwrocilo None", self.nazwa, nazwa_f)
-                return fallback
-            return wynik
-        except BladPolaczenia as e:
-            self.bledy.append(f"{nazwa_f}: brak polaczenia")
-            logger.error("[%s] Brak polaczenia przy %s: %s", self.nazwa, nazwa_f, e)
-            return fallback
-        except BladBudzetu as e:
-            self.bledy.append(f"{nazwa_f}: wyczerpany budzet AF")
-            logger.critical("[%s] Wyczerpany budzet: %s", self.nazwa, e)
-            raise  # budzet = krytyczny, nie tlumimy
-        except Exception as e:  # noqa: BLE001 — API client fallback for arbitrary errors
-            self.bledy.append(f"{nazwa_f}: {type(e).__name__}")
-            logger.error("[%s] Blad %s: %s", self.nazwa, nazwa_f, e, exc_info=True)
-            return fallback
-
-    @property
-    def ma_bledy(self) -> bool:
-        return bool(self.bledy)
+# Klasa BezpiecznePobieranie usunieta 2026-07-30 — nigdy nie instancjonowana.
+# Byla re-eksportowana z utils/logging.py (kompatybilnosc wstecz) i to jedyne
+# odwolanie utrzymywalo ja przy zyciu w statystykach. Jej metoda wykonaj()
+# lapala `except Exception` i zwracala fallback — usuniecie kasuje jedno
+# z ostatnich szerokich lapan wyjatkow w projekcie.

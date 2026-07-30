@@ -1,57 +1,15 @@
 """
-logging_config.py – Structured JSON logging with loguru.
+logging_config.py – zbieranie metryk (Prometheus, opcjonalne).
 
-Setup:
-    from footstats.core.logging_config import setup_logging
-    setup_logging()
+Modul NIE konfiguruje juz logowania. Zawieral `setup_logging()` opartego na
+loguru, ale nikt go nie wolal, a logi JSON i tak produkuje `_JsonFormatter`
+(`api/main.py:42`) na czystym stdlib. Funkcja usunieta 2026-07-30 razem
+z jedynym uzyciem zaleznosci `loguru` w projekcie.
+
+DO ZROBIENIA: joby (`daily_agent` / `evening_agent`) nadal loguja plaskim
+tekstem — `_JsonFormatter` obsluguje wylacznie API. Wlasciwy fix to wyciagnac
+ten formatter do wspolnego modulu, a nie przywracac loguru.
 """
-
-import logging
-import sys
-from pathlib import Path
-
-try:
-    from loguru import logger as loguru_logger
-    HAS_LOGURU = True
-except ImportError:
-    HAS_LOGURU = False
-
-
-def setup_logging(json_sink: str = "logs/footstats.jsonl", level: str = "INFO") -> None:
-    """
-    Configure structured JSON logging with loguru.
-
-    Args:
-        json_sink: Path to JSON log file
-        level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    """
-    if not HAS_LOGURU:
-        logging.warning("[Logging] loguru not installed, using stdlib logging")
-        return
-
-    # Create logs directory
-    Path(json_sink).parent.mkdir(parents=True, exist_ok=True)
-
-    # Remove default handler
-    loguru_logger.remove()
-
-    # Add JSON sink (production)
-    loguru_logger.add(
-        json_sink,
-        format="{message}",
-        serialize=True,
-        level=level,
-        rotation="100 MB",
-        retention="7 days",
-    )
-
-    # Add console sink (colorized, development)
-    loguru_logger.add(
-        sys.stdout,
-        format="<level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>",
-        level=level,
-    )
-
 
 # Optional: Prometheus metrics setup (stubs for now)
 try:

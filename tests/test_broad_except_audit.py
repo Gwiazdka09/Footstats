@@ -79,8 +79,9 @@ BASELINE: dict[str, int] = {
     "utils/admin_user.py": 1,
     "utils/cache.py": 6,
     "utils/db.py": 1,  # best-effort cleanup martwej conn z puli (Neon idle timeout)
-    "utils/logging.py": 1,  # bezpieczna_funkcja decorator (wraps arbitrary fns)
-    "utils/safe_http.py": 1,  # BezpiecznePobieranie.wykonaj — API client fallback (z logging.py)
+    # utils/logging.py i utils/safe_http.py zniknely z baseline 2026-07-30:
+    # jedyne szerokie lapania byly w `bezpieczna_funkcja` i
+    # `BezpiecznePobieranie.wykonaj`, a obie usunieto jako martwy kod.
     "utils/telegram_notify.py": 1,
     "weekly_report.py": 4,
 }

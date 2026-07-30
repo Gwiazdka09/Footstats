@@ -27,12 +27,9 @@ ARCHITEKTURA LOGOWANIA:
 
 import logging
 import logging.handlers
-import functools
-import time
 import sys
 from pathlib import Path
 from datetime import datetime
-from typing import Callable
 
 # Re-export: symbole wydzielone do osobnych modułów (dekompozycja grab-bag).
 # Kompatybilność wstecz — istniejące `from footstats.utils.logging import
@@ -44,7 +41,6 @@ from footstats.utils.exceptions import (  # noqa: F401
 )
 from footstats.utils.safe_http import (  # noqa: F401
     BezpiecznyHTTP,
-    BezpiecznePobieranie,
 )
 
 # ── Konfiguracja ────────────────────────────────────────────────────
@@ -105,63 +101,11 @@ def inicjalizuj(log_file: Path = LOG_FILE,
     return logger
 
 
-# ════════════════════════════════════════════════════════════════════
-#  DEKORATORY OBSLUGI BLEDOW
-# ════════════════════════════════════════════════════════════════════
-
-def bezpieczna_funkcja(
-    fallback=None,
-    log_poziom: int = logging.ERROR,
-    opis: str = ""
-):
-    """
-    Dekorator: lapie WSZYSTKIE wyjatki, loguje je i zwraca fallback.
-
-    Przyklad:
-        @bezpieczna_funkcja(fallback=None, opis="parsowanie ML")
-        def _bzz_parse_prob(pred_ml): ...
-    """
-    def dekorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except Exception as exc:  # noqa: BLE001 — decorator wraps arbitrary functions
-                nazwa = opis or func.__name__
-                logger.log(log_poziom,
-                    "Blad w [%s]: %s | args=%s",
-                    nazwa, exc, _skroc_args(args, kwargs),
-                    exc_info=True
-                )
-                return fallback() if callable(fallback) else fallback
-        return wrapper
-    return dekorator
-
-
-def mierz_czas(prog_next: str = ""):
-    """
-    Dekorator: loguje czas wykonania funkcji na poziomie DEBUG.
-    Przyklad: @mierz_czas("pobieranie danych")
-    """
-    def dekorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            t0 = time.perf_counter()
-            wynik = func(*args, **kwargs)
-            dt = time.perf_counter() - t0
-            logger.debug("%s() zakonczona w %.3fs", func.__name__, dt)
-            return wynik
-        return wrapper
-    return dekorator
-
-
-def _skroc_args(args: tuple, kwargs: dict, max_len: int = 120) -> str:
-    """Bezpieczna reprezentacja argumentow (do logow)."""
-    try:
-        s = str(args[:2])[1:-1] + (", " + str(list(kwargs.keys())) if kwargs else "")
-        return s[:max_len] + "…" if len(s) > max_len else s
-    except (TypeError, AttributeError):
-        return "(nieczytelne args)"
+# Dekoratory bezpieczna_funkcja / mierz_czas oraz pomocnicze _skroc_args
+# usuniete 2026-07-30. bezpieczna_funkcja lapala WSZYSTKIE wyjatki i zwracala
+# fallback — dokladnie ten antywzorzec, ktorego pilnuja test_broad_except_audit
+# i test_silent_swallow_audit. Zero wolan w kodzie. mierz_czas byl nieuzywanym
+# licznikiem czasu, _skroc_args sluzylo wylacznie bezpiecznej_funkcji.
 
 
 # ── Cache – z logowaniem ────────────────────────────────────────────

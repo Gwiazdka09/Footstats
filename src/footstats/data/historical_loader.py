@@ -248,26 +248,10 @@ def _download_xgabora_matches() -> pd.DataFrame | None:
     return df
 
 
-def _download_xgabora_elo() -> pd.DataFrame | None:
-    cache_f = CACHE_DIR / "xgabora_elo.parquet"
-    if cache_f.exists():
-        age_days = (pd.Timestamp.now() - pd.Timestamp(cache_f.stat().st_mtime, unit="s")).total_seconds() / 86400
-        if age_days < 7:
-            return pd.read_parquet(cache_f)
-
-    raw = _get(XGABORA_ELO_URL, timeout=60)
-    if raw is None:
-        return None
-    try:
-        df = pd.read_csv(io.BytesIO(raw), encoding="utf-8", on_bad_lines="skip", low_memory=False)
-    except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as e:
-        log.warning("Błąd xgabora elo: %s", e)
-        return None
-    if df.empty:
-        return None
-
-    df.to_parquet(cache_f, index=False)
-    return df
+# _download_xgabora_elo() usunieta 2026-07-30 — nigdy nie wolana. Rankingi Elo
+# bierzemy ze scrapers/clubelo.py (swiezy feed, aktualizowany codziennie),
+# a nie z jednorazowego CSV w repo xgabora. Pobieranie MECZOW (_download_xgabora_matches)
+# zostaje — to zrodlo historii jest uzywane.
 
 
 def normalize_xgabora(df: pd.DataFrame) -> pd.DataFrame:

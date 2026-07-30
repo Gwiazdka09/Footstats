@@ -88,18 +88,10 @@ class BzzoiroClient:
                     time.sleep(delay)
         return None
 
-    def predykcja_meczu(self, event_id: int) -> dict | None:
-        """
-        Pobiera predykcje ML dla konkretnego meczu.
-
-        DEPRECATED: Funkcja zwracała ten sam wynik dla różnych event_id
-        (bug po stronie API Bzzoiro - cache/server). Używaj predykcje_tygodnia().
-        """
-        raise RuntimeError(
-            "BzzoiroClient.predykcja_meczu() jest DEPRECATED - "
-            "funkcja zwracała ten sam wynik dla różnych event_id (bug API Bzzoiro). "
-            "Używaj predykcje_tygodnia() zamiast tego."
-        )
+    # predykcja_meczu() usunieta 2026-07-30. Od dawna byla samym nagrobkiem —
+    # rzucala RuntimeError, bo API Bzzoiro oddawalo ten sam wynik dla roznych
+    # event_id (bug cache po ich stronie). Zero wolan w kodzie.
+    # Zamiennik: predykcje_tygodnia() ponizej.
 
     def predykcje_tygodnia(self, liga_kod: str = None) -> list:
         """

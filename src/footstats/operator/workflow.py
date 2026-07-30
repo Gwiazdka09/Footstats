@@ -43,13 +43,9 @@ class OperatorWorkflow:
             encoding="utf-8",
         )
 
-    def _load_state(self) -> dict:
-        if not STATE_FILE.exists():
-            return {}
-        try:
-            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {}
+    # _load_state() usunieta 2026-07-30 — nikt jej nie wolal. _save_state zostaje:
+    # STATE_FILE to jeden nadpisywany latest.json, czyli sygnalizator "co operator
+    # robil ostatnio", a nie log do wznawiania. Wznawianie nigdy nie powstalo.
 
     def _notify(self, text: str) -> None:
         try:

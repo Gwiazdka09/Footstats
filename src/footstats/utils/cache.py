@@ -219,37 +219,11 @@ def _af_budget_save(budzet: dict):
     except OSError as e:
         console.print(f"[yellow]Cache: zapis budżetu nieudany: {e}[/yellow]")
 
-def af_budget_use(endpoint: str = "") -> int:
-    """
-    Rejestruje uzycie jednego requesta API-Football.
-    Zwraca liczbe pozostalych reqow dziennie.
-    Rzuca wyjatkiem jesli budzet wyczerpany (< AF_BLOCK_THRESHOLD).
-    """
-    b = _af_budget_load()
-    b["uzyto"] = b.get("uzyto", 0) + 1
-    hist = b.get("historia", [])
-    hist.append({
-        "ts":       datetime.now().strftime("%H:%M:%S"),
-        "endpoint": endpoint[:60],
-    })
-    b["historia"] = hist[-50:]  # max 50 wpisow historii
-    _af_budget_save(b)
-
-    pozostalo = AF_BUDGET_DAILY - b["uzyto"]
-
-    if pozostalo < AF_BLOCK_THRESHOLD:
-        console.print(
-            f"[bold red]⛔ API-Football: krytycznie mało req pozostalo "
-            f"({pozostalo}/{AF_BUDGET_DAILY})! "
-            f"Blokuje automatyczne zapytania – uzyj cache lub poczekaj do polnocy.[/bold red]"
-        )
-        raise RuntimeError(f"AF budget exhausted: {pozostalo} remaining")
-    elif pozostalo < AF_WARN_THRESHOLD:
-        console.print(
-            f"[bold yellow]⚠️  API-Football: {pozostalo}/{AF_BUDGET_DAILY} req pozostalo "
-            f"na dzis. Oszczedzam – korzystam z cache.[/bold yellow]"
-        )
-    return pozostalo
+# af_budget_use() usunieta 2026-07-30 — zastapiona przez
+# utils/logging.bezpieczny_budget_use (typed BladBudzetu + pelne logowanie stanu).
+# Swap zrobiony w commicie 25f6bc92a, ale stara funkcja zostala; CHANGELOG:433
+# oznaczal ja jako "martwy w prod, kandydat do usuniecia". Ten sam plik budzetu
+# i te same progi, wiec liczniki sie nie rozjezdzaja.
 
 def af_budget_status() -> dict:
     """Zwraca aktualny status budzetu."""
