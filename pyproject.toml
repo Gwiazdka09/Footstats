@@ -17,6 +17,17 @@ dependencies = [
     "reportlab>=4.0",
     "fastapi>=0.110",
     "uvicorn>=0.29",
+    # pydantic i starlette to zaleznosci PRZECHODNIE fastapi, ale importujemy je
+    # WPROST (api/auth.py, api/main.py, core/data.py, core/response_cache.py).
+    # Deklarujemy jawnie — inaczej zmiana zaleznosci fastapi moze je zabrac.
+    "pydantic>=2.0",
+    "starlette>=0.37",
+    # BAZA, nie [scraper]: bs4 jest potrzebne rowniez w obrazie API, bo
+    # core/coupon_settlement.py woła scrapers/flashscore_results (fallback wynikow).
+    # Bylo tylko w [scraper] → Dockerfile.api (".[api]") go NIE mial, wiec fallback
+    # rozliczen cicho nie dzialal (import pod try/except → BeautifulSoup=None).
+    # Ten sam brak wywalal 3 testy understat na CI (job test instaluje bez [scraper]).
+    "beautifulsoup4>=4.12",
     "python-jose[cryptography]>=3.3",
     "bcrypt>=4.0",
     "slowapi>=0.1.9",
@@ -44,10 +55,16 @@ api = [
 ai = [
     "groq>=0.4",
     "langfuse>=2.0",
+    # Isotonic Regression w core/probability_calibrator.fit_calibrator().
+    # Nie byl zadeklarowany NIGDZIE (ani pyproject, ani requirements, ani Dockerfile),
+    # a import siedzi pod try/except ImportError → na produkcji refit kalibracji
+    # zawsze konczyl sie logiem "sklearn not available — calibrator skipped".
+    # Wolane z evening_agent.py:247 (obraz jobs ma [ai]), wiec [ai] wystarczy —
+    # obraz API pozostaje bez tej zaleznosci.
+    "scikit-learn>=1.3",
 ]
 scraper = [
     "playwright>=1.40",
-    "beautifulsoup4>=4.12",
 ]
 dev = [
     "pytest>=7.4",

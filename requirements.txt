@@ -1,3 +1,17 @@
+# requirements.txt — lustro zestawu zaleznosci PRODUKCYJNEGO obrazu.
+#
+# Zrodlem prawdy jest pyproject.toml. Ten plik odwzorowuje dokladnie to, co
+# instaluje Dockerfile.jobs:  ".[api,ai,scraper]"  (baza + te trzy extras).
+# Zadnego [dev] ani [dashboard] — to nie jedzie na produkcje.
+#
+# PO CO on istnieje: CI (`pip-audit -r requirements.txt`) skanuje CVE wlasnie tutaj.
+# Wczesniej plik zdryfowal od pyproject i brakowalo w nim m.in. beautifulsoup4,
+# psycopg2-binary, sentry-sdk, langfuse i tenacity — czyli CVE w tych paczkach
+# NIE bylyby wykryte, mimo ze leca na produkcje. Zgodnosc pilnuje teraz
+# tests/test_dependencies_declared.py — jesli dodasz zaleznosc do pyproject,
+# test spadnie dopoki nie dopiszesz jej rowniez tutaj.
+
+# ── baza (pyproject [project].dependencies) ──────────────────────────────────
 requests>=2.31
 pandas>=2.0
 numpy>=1.24
@@ -7,6 +21,9 @@ python-dotenv>=1.0
 reportlab>=4.0
 fastapi>=0.110
 uvicorn>=0.29
+pydantic>=2.0
+starlette>=0.37
+beautifulsoup4>=4.12
 python-jose[cryptography]>=3.3
 bcrypt>=4.0
 slowapi>=0.1.9
@@ -16,8 +33,16 @@ fastapi-mcp>=0.3,<0.5
 # <2.0  — mcp 2.0 zmienilo sygnature Server.__init__ i wywalalo import api.main.
 # >=1.28.1 — PYSEC-2026-3481/3482 (fix 1.27.2) i PYSEC-2026-3483 (fix 1.28.1).
 mcp>=1.28.1,<2.0
+tenacity>=8.0
+
+# ── [api] ────────────────────────────────────────────────────────────────────
+sentry-sdk[fastapi]>=2.0
+psycopg2-binary>=2.9
+
+# ── [ai] ─────────────────────────────────────────────────────────────────────
 groq>=0.4
+langfuse>=2.0
+scikit-learn>=1.3
+
+# ── [scraper] ────────────────────────────────────────────────────────────────
 playwright>=1.40
-streamlit>=1.32
-pytest>=7.4
-pytest-cov
