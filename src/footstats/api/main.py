@@ -361,10 +361,24 @@ def _mcp_enabled() -> bool:
 
 
 if _mcp_enabled():
-    from fastapi_mcp import FastApiMCP as _FastApiMCP
+    # MCP to opcjonalne narzędzie deweloperskie — jego awaria NIE MOŻE wywalić
+    # importu całego API. `mcp` jest zależnością PRZECHODNIĄ fastapi-mcp i nic jej
+    # nie trzymało: 2026-07-30 nowsze `mcp` zmieniło sygnaturę `Server.__init__`
+    # (przyjmuje już tylko `name`), a fastapi-mcp 0.4.0 wołało `Server(name, desc)`
+    # → TypeError przy imporcie → CI nie zebrało ANI JEDNEGO testu (10 collection
+    # errors, suita w ogóle nie ruszyła). Wersje są teraz przypięte w pyproject,
+    # ale ten guard zostaje, bo drift zdarzy się znowu.
+    try:
+        from fastapi_mcp import FastApiMCP as _FastApiMCP
 
-    _mcp = _FastApiMCP(app)
-    _mcp.mount_http()
+        _mcp = _FastApiMCP(app)
+        _mcp.mount_http()
+    except (ImportError, TypeError, AttributeError, ValueError) as _e:
+        # Logujemy głośno: brak /mcp to nie awaria produkcji, ale cisza tutaj
+        # oznaczałaby, że narzędzie po prostu zniknęło i nikt nie wie dlaczego.
+        logging.getLogger(__name__).warning(
+            "MCP (/mcp) niezamontowane — niezgodna wersja zaleznosci: %s", _e
+        )
 
 _dist = Path(__file__).parent.parent / "gui" / "dist"
 

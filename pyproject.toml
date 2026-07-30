@@ -21,7 +21,13 @@ dependencies = [
     "bcrypt>=4.0",
     "slowapi>=0.1.9",
     "httpx>=0.27",
-    "fastapi-mcp>=0.3",
+    "fastapi-mcp>=0.3,<0.5",
+    # `mcp` jest zaleznoscia PRZECHODNIA fastapi-mcp i nic jej nie trzymalo.
+    # 2026-07-30: nowsze `mcp` zmienilo sygnature `Server.__init__` (przyjmuje juz
+    # tylko `name`), a fastapi-mcp wola `Server(name, description)` -> TypeError
+    # przy imporcie api.main -> CI nie zebralo ANI JEDNEGO testu. Gorna granica
+    # trzyma wersje zgodna ze sprawdzona lokalnie (1.27.1).
+    "mcp>=1.0,<1.28",
     "tenacity>=8.0",
 ]
 
