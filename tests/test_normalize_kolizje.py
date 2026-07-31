@@ -115,6 +115,10 @@ def test_zadne_dwie_rozne_druzyny_z_datasetu_sie_nie_zlewaja():
     if not parquet.exists():
         pytest.skip("brak full_dataset.parquet")
 
+    # CI nie instaluje silnika parquet (pyarrow/fastparquet nie sa w [dev,api,ai]).
+    # Bez tego guardu test wywalal sie ImportError zamiast uczciwie sie pominac.
+    pytest.importorskip("pyarrow", reason="brak silnika parquet (pyarrow)")
+
     import pandas as pd
     df = pd.read_parquet(parquet, columns=["home", "away"])
     druzyny = sorted(set(df["home"]) | set(df["away"]))
@@ -125,3 +129,58 @@ def test_zadne_dwie_rozne_druzyny_z_datasetu_sie_nie_zlewaja():
 
     kolizje = {k: v for k, v in wg_normy.items() if len(v) > 1}
     assert not kolizje, f"rozne kluby o tej samej normalizacji: {kolizje}"
+
+
+# ── aliasy: plik NIE moze przeslaniac defaults ──────────────────────────────
+
+def test_stary_plik_mapowan_nie_przeslania_nowych_defaults(tmp_path, monkeypatch):
+    """REGRESJA (2026-07-31, znaleziona przez CI).
+
+    `_seed_mappings_file` tworzy team_mappings.json TYLKO gdy plik nie istnieje,
+    a `_load_mappings` czytal wylacznie ten plik. Skutek: kazdy alias dopisany
+    do `_DEFAULT_MAPPINGS` byl MARTWY na maszynie, ktora plik juz miala —
+    poprawka w kodzie nie zmieniala niczego po wdrozeniu.
+
+    Do tego plik nie jest w repo ani w obrazie Dockera, wiec kazde srodowisko
+    dopasowywalo nazwy inaczej: CI (swiezy seed) rozrozniało Manchester United
+    od City, lokalna maszyna ze starym plikiem — nie. Ten sam kod, dwa zachowania.
+    """
+    import footstats.utils.normalize as N
+
+    stary = tmp_path / "team_mappings.json"
+    stary.write_text('{"barca": "barcelona"}', encoding="utf-8")   # 1 wpis, bez manchester
+    monkeypatch.setattr(N, "_MAPPINGS_PATH", stary)
+    N.reload_mappings()
+    try:
+        mapowania = N._load_mappings()
+        assert "barca" in mapowania, "wpis z pliku zgubiony"
+        assert "manchester united" in mapowania, "defaults przeslonięte przez stary plik"
+    finally:
+        N.reload_mappings()
+
+
+def test_plik_nadpisuje_defaults_dla_tego_samego_klucza(tmp_path, monkeypatch):
+    """Plik sluzy do RECZNYCH nadpisan — dla wspolnego klucza wygrywa on."""
+    import footstats.utils.normalize as N
+
+    plik = tmp_path / "team_mappings.json"
+    plik.write_text('{"barca": "moja wlasna nazwa"}', encoding="utf-8")
+    monkeypatch.setattr(N, "_MAPPINGS_PATH", plik)
+    N.reload_mappings()
+    try:
+        assert N._load_mappings()["barca"] == "moja wlasna nazwa"
+    finally:
+        N.reload_mappings()
+
+
+def test_uszkodzony_plik_nie_kasuje_defaults(tmp_path, monkeypatch):
+    import footstats.utils.normalize as N
+
+    plik = tmp_path / "team_mappings.json"
+    plik.write_text("{niepoprawny", encoding="utf-8")
+    monkeypatch.setattr(N, "_MAPPINGS_PATH", plik)
+    N.reload_mappings()
+    try:
+        assert "manchester united" in N._load_mappings()
+    finally:
+        N.reload_mappings()

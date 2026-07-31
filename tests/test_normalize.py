@@ -1,4 +1,6 @@
 """tests/test_normalize.py — testy dla utils.normalize.normalize_team_name"""
+import pytest
+
 from footstats.utils.normalize import normalize_team_name, reload_mappings
 
 
@@ -42,14 +44,21 @@ def test_keeps_united_suffix():
     sklejało Manchester United z Manchester City (similarity 1.00) przy progu
     rozliczeń 0.6 — wynik jednego meczu mógł rozliczyć kupon na drugi.
     Szczegóły i pełen zestaw przypadków: tests/test_normalize_kolizje.py.
+
+    `use_mappings=False` — sprawdzamy SAMĄ logikę sufiksów. Z włączonymi
+    aliasami wynik zależy od `_DEFAULT_MAPPINGS` ("manchester united" -> "man utd")
+    i test mówiłby o dwóch rzeczach naraz.
     """
-    assert normalize_team_name("Manchester United") == "manchester united"
+    assert normalize_team_name("Manchester United", use_mappings=False) == "manchester united"
 
 def test_keeps_city_suffix():
-    assert normalize_team_name("Manchester City") == "manchester city"
+    assert normalize_team_name("Manchester City", use_mappings=False) == "manchester city"
 
-def test_united_i_city_to_rozne_kluby():
-    assert normalize_team_name("Manchester United") != normalize_team_name("Manchester City")
+@pytest.mark.parametrize("use_mappings", [True, False])
+def test_united_i_city_to_rozne_kluby(use_mappings):
+    """Niezmiennik ważniejszy od dokładnego stringa: MUSZĄ się różnić w obu trybach."""
+    assert (normalize_team_name("Manchester United", use_mappings=use_mappings)
+            != normalize_team_name("Manchester City", use_mappings=use_mappings))
 
 def test_keeps_name_without_suffix():
     assert normalize_team_name("Arsenal") == "arsenal"

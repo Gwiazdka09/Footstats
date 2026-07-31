@@ -153,14 +153,34 @@ def _seed_mappings_file() -> None:
 
 @lru_cache(maxsize=1)
 def _load_mappings() -> dict[str, str]:
-    """Ładuje team_mappings.json (cached). Tworzy plik z defaults jeśli nie istnieje."""
+    """Aliasy drużyn: `_DEFAULT_MAPPINGS` jako baza, plik JSON jako nadpisanie.
+
+    Wcześniej czytany był WYŁĄCZNIE plik. Ponieważ `_seed_mappings_file()` tworzy
+    go tylko gdy nie istnieje, każdy nowy alias dopisany do `_DEFAULT_MAPPINGS`
+    był MARTWY na każdej maszynie, która plik już miała — poprawka w kodzie
+    nie zmieniała niczego po wdrożeniu.
+
+    Efekt uboczny: `data/team_mappings.json` nie jest w repo ani w obrazie
+    Dockera, więc każde środowisko dopasowywało nazwy inaczej. CI (świeży seed,
+    pełne defaults) rozróżniało Manchester United od City, a lokalna maszyna
+    ze starym plikiem 28-wpisowym — nie. Ten sam kod, dwa zachowania.
+
+    Scalanie czyni to deterministycznym: defaults zawsze obowiązują, a plik
+    służy do ręcznych nadpisań i dopisków użytkownika.
+    """
+    scalone = {
+        _strip_diacritics(k).lower(): v.lower()
+        for k, v in _DEFAULT_MAPPINGS.items()
+    }
     _seed_mappings_file()
     try:
         data = json.loads(_MAPPINGS_PATH.read_text(encoding="utf-8"))
-        # Normalizuj klucze mappingów (lowercase bez diakrytyków)
-        return {_strip_diacritics(k).lower(): v.lower() for k, v in data.items()}
-    except (json.JSONDecodeError, OSError):
-        return {k: v for k, v in _DEFAULT_MAPPINGS.items()}
+        scalone.update({
+            _strip_diacritics(k).lower(): v.lower() for k, v in data.items()
+        })
+    except (json.JSONDecodeError, OSError, AttributeError):
+        pass
+    return scalone
 
 
 def normalize_team_name(name: str, use_mappings: bool = True) -> str:
