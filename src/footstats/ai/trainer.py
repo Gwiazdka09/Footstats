@@ -282,8 +282,12 @@ def _print_lessons(lessons: dict) -> None:
         print("\n  KALIBRACJA RYNKÓW:")
         for rynek, kal in kalibracja.items():
             kor = kal.get("korekta_pewnosci", 0)
-            sign = "+" if kor >= 0 else ""
-            print(f"    {rynek:<12}: {sign}{kor:+d}%  {kal.get('komentarz', '')}")
+            # `:+.0f`, nie `:+d` — Groq zwraca korekty takze jako float, a `:+d`
+            # rzuca wtedy ValueError. Ten sam blad naprawiono juz w
+            # get_kalibracja_inject() (tam wywalal CALY krok Groq), ale tutaj
+            # zostal — `--show` wysypywalo sie na tych samych danych.
+            # Recznego `sign` nie ma: `:+` sam dokleja znak, wczesniej dawalo "++5%".
+            print(f"    {rynek:<12}: {kor:+.0f}%  {kal.get('komentarz', '')}")
 
     nowe_zasady = lessons.get("nowe_zasady_kuponow", [])
     if nowe_zasady:
