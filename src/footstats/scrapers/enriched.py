@@ -219,6 +219,21 @@ def _bzz_get(path: str, params: dict = None) -> dict | None:
     return None
 
 
+def _pierwsze_nie_none(*wartosci):
+    """Pierwsza wartosc rozna od None — NIE pierwsza prawdziwa.
+
+    Wczesniej bylo tu `a or b or c`, co traktowalo xG rowne **0.0 jako brak
+    danych**: mecz, w ktorym druzyna nie oddala rywalowi zadnej sytuacji,
+    wypadal ze sredniej xG straconych. Efekt byl odwrotny do prawdy — idealny
+    wystep defensywny PODNOSIL srednia straconych, bo zostawaly w niej tylko
+    mecze z niezerowym xG. Ten sam mechanizm zanizal xG strzelone przy 0.0.
+    """
+    for w in wartosci:
+        if w is not None:
+            return w
+    return None
+
+
 def pobierz_forme_xg(nazwa_druzyny: str, ostatnie_n: int = 5) -> dict | None:
     """
     Pobiera formę xG z ostatnich N meczów przez Bzzoiro API.
@@ -268,12 +283,12 @@ def pobierz_forme_xg(nazwa_druzyny: str, ostatnie_n: int = 5) -> dict | None:
         stats   = ev.get("stats") or {}
 
         if jest_g:
-            xgf = stats.get("home_xg") or stats.get("xg_home") or ev.get("home_xg")
-            xga = stats.get("away_xg") or stats.get("xg_away") or ev.get("away_xg")
+            xgf = _pierwsze_nie_none(stats.get("home_xg"), stats.get("xg_home"), ev.get("home_xg"))
+            xga = _pierwsze_nie_none(stats.get("away_xg"), stats.get("xg_away"), ev.get("away_xg"))
             prz = ev.get("away_team", {}).get("name", "?") if isinstance(ev.get("away_team"), dict) else "?"
         else:
-            xgf = stats.get("away_xg") or stats.get("xg_away") or ev.get("away_xg")
-            xga = stats.get("home_xg") or stats.get("xg_home") or ev.get("home_xg")
+            xgf = _pierwsze_nie_none(stats.get("away_xg"), stats.get("xg_away"), ev.get("away_xg"))
+            xga = _pierwsze_nie_none(stats.get("home_xg"), stats.get("xg_home"), ev.get("home_xg"))
             prz = ev.get("home_team", {}).get("name", "?") if isinstance(ev.get("home_team"), dict) else "?"
 
         wpis = {
