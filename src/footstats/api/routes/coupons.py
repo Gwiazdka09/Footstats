@@ -10,7 +10,7 @@ from typing import List, Optional, Union
 import footstats.config as cfg
 import psycopg2
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from footstats.api.auth import require_admin, require_auth
 from footstats.core import match_linker
@@ -90,17 +90,27 @@ class KellyRequest(BaseModel):
     selections: List[SelectionItem]
 
 
+# Prawdopodobienstwa jako UŁAMKI 0-1, nie procenty — tak wysyla GUI
+# (MarketsPanel.jsx / BetBuilderPanel.jsx dziela przez 100).
+#
+# Granice sa tu po to, zeby procenty konczyly sie bledem 422, a nie cichym
+# smieciem: `estimate_lambdas_from_probs` startuje z best_loss=999, wiec przy
+# wejsciu 70.0 ZADNA kombinacja lambd nie poprawia straty i funkcja zwraca
+# nietkniete (1.0, 1.0) — katalog rynkow wychodzi bez sensu, a HTTP to 200.
+_PROB = Field(ge=0.0, le=1.0, description="Prawdopodobienstwo jako ulamek 0-1")
+
+
 class BetBuilderRequest(BaseModel):
-    prob_home_win: float
-    prob_away_win: float
-    prob_over_25: float
+    prob_home_win: float = _PROB
+    prob_away_win: float = _PROB
+    prob_over_25: float = _PROB
     selected: List[str] = []
 
 
 class MarketsRequest(BaseModel):
-    prob_home_win: float
-    prob_away_win: float
-    prob_over_25: float
+    prob_home_win: float = _PROB
+    prob_away_win: float = _PROB
+    prob_over_25: float = _PROB
     odds: dict = {}
 
 
