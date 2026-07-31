@@ -31,11 +31,25 @@ def test_removes_sc_prefix():
 
 # ── Sufiksy ────────────────────────────────────────────────────────────────
 
-def test_removes_united_suffix():
-    assert normalize_team_name("Manchester United") == "manchester"
+def test_removes_fc_suffix():
+    """Skrót formy prawnej to szum — obcinamy."""
+    assert normalize_team_name("Arsenal FC") == "arsenal"
 
-def test_removes_city_suffix():
-    assert normalize_team_name("Manchester City") == "manchester"
+def test_keeps_united_suffix():
+    """ODWRÓCONE 2026-07-31 — wcześniej ten test asertował "manchester".
+
+    `United` i `City` to człony TOŻSAMOŚCI klubu, nie szum. Ich obcinanie
+    sklejało Manchester United z Manchester City (similarity 1.00) przy progu
+    rozliczeń 0.6 — wynik jednego meczu mógł rozliczyć kupon na drugi.
+    Szczegóły i pełen zestaw przypadków: tests/test_normalize_kolizje.py.
+    """
+    assert normalize_team_name("Manchester United") == "manchester united"
+
+def test_keeps_city_suffix():
+    assert normalize_team_name("Manchester City") == "manchester city"
+
+def test_united_i_city_to_rozne_kluby():
+    assert normalize_team_name("Manchester United") != normalize_team_name("Manchester City")
 
 def test_keeps_name_without_suffix():
     assert normalize_team_name("Arsenal") == "arsenal"

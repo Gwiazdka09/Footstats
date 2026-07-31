@@ -34,12 +34,40 @@ _PREFIXES = {
     "atletico", "sporting", "deportivo",  # tylko gdy pierwszy token
 }
 
-# Sufiksy usuwane z KOŃCA nazwy (case-insensitive, całe słowo)
+# Sufiksy usuwane z KOŃCA nazwy (case-insensitive, całe słowo).
+#
+# Tylko SZUM — skróty formy prawnej klubu. Nic, co odróżnia dwa kluby od siebie.
 _SUFFIXES = {
     "fc", "fk", "ac", "sc", "sk", "sv", "if", "bk", "gf",
-    "cf", "bc", "ut", "city", "town", "united", "rovers",
-    "athletic", "athletics", "wanderers", "hotspur",
+    "cf", "bc", "ut",
 }
+
+# Człony, które NALEŻĄ do tożsamości klubu — nigdy ich nie obcinamy.
+#
+# Do 2026-07-31 siedziały w `_SUFFIXES` i były wycinane jak szum, przez co:
+#   Manchester United -> "manchester" == Manchester City -> "manchester"
+#   Dundee United     -> "dundee"     == Dundee FC       -> "dundee"
+# `team_similarity` dawało wtedy 1.00, a próg w rozliczeniach to 0.6
+# (`evening_agent.py:87`) — wynik jednego meczu mógł rozliczyć kupon na drugi.
+# Przed pomyłką ratowała tylko punktacja parowa, czyli przypadek.
+_ROZROZNIAJACE = {
+    "city", "town", "united", "rovers", "wanderers",
+    "athletic", "athletics", "hotspur", "albion", "county",
+}
+
+# Skróty tych samych członów — "Dundee Utd" to nadal Dundee United.
+# Bez tego reguła "różne człony = różne kluby" rozdzielałaby klub od jego
+# własnego skrótu.
+_ROZ_SKROTY = {"utd": "united", "athl": "athletic", "wdrs": "wanderers"}
+
+
+def _czlony_rozrozniajace(tokeny: set[str]) -> set[str]:
+    """Człony tożsamości klubu z tokenów, ze skrótami sprowadzonymi do formy pełnej."""
+    return {
+        _ROZ_SKROTY.get(t, t)
+        for t in tokeny
+        if _ROZ_SKROTY.get(t, t) in _ROZROZNIAJACE
+    }
 
 # Znaki zamieniane przed normalizacją: litery diakrytyczne → ASCII
 _DIACRITICS_MAP = str.maketrans({
@@ -208,6 +236,22 @@ def team_similarity(a: str, b: str) -> float:
 
     if na == nb:
         return 1.0
+
+    # Ta sama baza + RÓŻNE człony odróżniające = różne kluby.
+    #
+    # Bez tej reguły "manchester united" i "manchester city" dostają 0.81 od
+    # SequenceMatcher (wspólny przedrostek "manchester " przeważa), czyli powyżej
+    # progu rozliczeń 0.6. Samo zdjęcie sufiksów z `_SUFFIXES` tego NIE załatwia.
+    #
+    # Fail-closed: przy wątpliwości wolimy nie rozliczyć i to zauważyć, niż
+    # rozliczyć kupon wynikiem cudzego meczu. Legalne aliasy ("Bolton" jako
+    # Bolton Wanderers) dopisuje się jawnie do `team_mappings.json`.
+    tokeny_a, tokeny_b = set(na.split()), set(nb.split())
+    roz_a, roz_b = _czlony_rozrozniajace(tokeny_a), _czlony_rozrozniajace(tokeny_b)
+    baza_a = {t for t in tokeny_a if _ROZ_SKROTY.get(t, t) not in _ROZROZNIAJACE}
+    baza_b = {t for t in tokeny_b if _ROZ_SKROTY.get(t, t) not in _ROZROZNIAJACE}
+    if roz_a != roz_b and baza_a == baza_b:
+        return 0.0
 
     def _initials(s: str) -> str:
         return "".join(w[0] for w in s.split() if w)
