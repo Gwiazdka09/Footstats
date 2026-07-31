@@ -1,14 +1,31 @@
 [run]
 source = src/footstats
+
+# Lista `omit` to DECYZJA, nie fakt techniczny — kod stad nie znika, tylko
+# przestaje byc widoczny w liczbie pokrycia. Trzymaj ja jak najkrotsza.
+#
+# 2026-07-31: zdjete cztery pliki, ktore NIE powinny byc niemierzone:
+#   core/quick_picks.py        — sciezka predykcji; to tu siedzial bug 3 z Cel B
+#                                ("cala galaz Poisson cicho pomijana, predykcje
+#                                 = Bzzoiro-ML zamiast naszego modelu")
+#   core/weekly_picks.py       — druga sciezka generowania typow
+#   scrapers/results_updater.py     — rozliczanie wynikow
+#   scrapers/flashscore_results.py  — fallback rozliczen
+# Wykluczenie ich sprawialo, ze pokrycie milczalo dokladnie tam, gdzie
+# najbardziej boli.
+#
+# Co zostaje wykluczone i DLACZEGO:
+#   * scrapery Playwright — wymagaja przegladarki, testowane e2e osobno,
+#   * interaktywne petle CLI i dashboard Streamlit — wejscie uzytkownika,
+#   * eksport PDF — renderowanie binarne,
+#   * `__main__` / scheduler — cienkie wrappery na argparse.
 omit =
     src/footstats/scrapers/base_playwright.py
     src/footstats/scrapers/superbet.py
     src/footstats/scrapers/flashscore_match.py
-    src/footstats/scrapers/flashscore_results.py
     src/footstats/scrapers/form_scraper.py
     src/footstats/scrapers/lineup_scraper.py
     src/footstats/scrapers/zawodtyper_referees.py
-    src/footstats/scrapers/results_updater.py
     src/footstats/scrapers/kursy.py
     src/footstats/daily_agent.py
     src/footstats/daily_agent_scheduler.py
@@ -20,8 +37,6 @@ omit =
     src/footstats/__main__.py
     src/footstats/utils/logging.py
     src/footstats/utils/telegram_notify.py
-    src/footstats/core/weekly_picks.py
-    src/footstats/core/quick_picks.py
     src/footstats/core/pattern_analyzer.py
     src/footstats/data/context_scraper.py
     src/footstats/data/historical_loader.py
