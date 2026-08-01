@@ -60,6 +60,28 @@ _ROZROZNIAJACE = {
 # własnego skrótu.
 _ROZ_SKROTY = {"utd": "united", "athl": "athletic", "wdrs": "wanderers"}
 
+# Znaczniki drużyn rezerw i młodzieżowych.
+#
+# `team_similarity` dawało parze ("Legia", "Legia II") wynik 0.80 — regułą
+# token-prefix, tą samą, która słusznie dopasowuje ("Legia Warszawa", "Legia").
+# Progi w produkcji są niżej: 0.70 w `_znajdz_wynik`, 0.6 w `evening_agent`,
+# więc rezerwy przechodziły jako pierwszy zespół. Rezerwy grają zwykle w ten
+# sam weekend, więc oba mecze bywają w tej samej puli wyników.
+#
+# Samo podobieństwo nazw tego nie rozstrzygnie — potrzebny osobny znacznik.
+#
+# Czego tu NIE MA i dlaczego:
+#   * "juniors" — "Boca Juniors" to pierwszy zespół, nie młodzież;
+#   * "atletico" — rozdzieliłoby "Club Atletico Boca Juniors" od "Boca Juniors"
+#     (Sevilla Atletico zostaje na aliasach w team_mappings.json).
+_ZNACZNIKI_REZERW = {
+    "ii", "iii", "iv", "b", "c",
+    "u18", "u19", "u20", "u21", "u23",
+    "res", "reserve", "reserves", "rezerwy",
+    "youth", "academy", "castilla", "amateure",
+    "jong",          # holenderskie rezerwy: Jong Ajax, Jong PSV
+}
+
 
 def _czlony_rozrozniajace(tokeny: set[str]) -> set[str]:
     """Człony tożsamości klubu z tokenów, ze skrótami sprowadzonymi do formy pełnej."""
@@ -275,6 +297,14 @@ def team_similarity(a: str, b: str) -> float:
     # rozliczyć kupon wynikiem cudzego meczu. Legalne aliasy ("Bolton" jako
     # Bolton Wanderers) dopisuje się jawnie do `team_mappings.json`.
     tokeny_a, tokeny_b = set(na.split()), set(nb.split())
+
+    # Rezerwy/młodzież to osobny zespół. Rozstrzygamy PRZED regułami skrótów,
+    # bo to właśnie one dawały "Legia II" 0.80 wobec "Legia" — patrz komentarz
+    # przy `_ZNACZNIKI_REZERW`. Różne znaczniki (II vs III) też znaczą różne
+    # zespoły; identyczne przechodzą dalej do normalnego porównania.
+    if (tokeny_a & _ZNACZNIKI_REZERW) != (tokeny_b & _ZNACZNIKI_REZERW):
+        return 0.0
+
     roz_a, roz_b = _czlony_rozrozniajace(tokeny_a), _czlony_rozrozniajace(tokeny_b)
     baza_a = {t for t in tokeny_a if _ROZ_SKROTY.get(t, t) not in _ROZROZNIAJACE}
     baza_b = {t for t in tokeny_b if _ROZ_SKROTY.get(t, t) not in _ROZROZNIAJACE}

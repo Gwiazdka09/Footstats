@@ -12,7 +12,7 @@ import os
 from rich.console import Console
 
 from footstats.scrapers.api_football import fetch_odds_af
-from footstats.utils.normalize import normalize_team_name
+from footstats.utils.normalize import normalize_team_name, team_similarity
 
 log = logging.getLogger(__name__)
 console = Console()
@@ -588,6 +588,32 @@ def _oblicz_roznica_modeli(wyniki: list) -> None:
 
 # ── Faza final: enrichment składów/sędziego ──────────────────────────────────
 
+# Próg luźnego dopasowania fixture'a. 0.80 to wynik, jaki `team_similarity`
+# daje legalnemu skrótowi nazwy ("Legia" ~ "Legia Warszawa"), więc niżej schodzić
+# nie ma po co, a wyżej odcięlibyśmy właśnie te warianty.
+_PROG_FIXTURE = 0.80
+
+
+def _dopasuj_luzno(idx: dict, gospodarz: str, goscie: str) -> dict | None:
+    """Najlepszy fixture dla pary drużyn, gdy dopasowanie dokładne zawiodło.
+
+    Wcześniej sprawdzany był podciąg (`gh in fh or fh in gh`), przez co "Legia"
+    łapała fixture "Legia II" — a rezerwy grają zwykle w ten sam weekend, więc
+    oba mecze bywają w jednej puli. Kandydat dostawał wtedy skład i sędziego
+    z cudzego spotkania i wchodziło to do selekcji jako dane pewne.
+
+    `team_similarity` zna znaczniki rezerw i zwraca dla nich 0.0. Bierzemy
+    NAJLEPSZE dopasowanie, nie pierwsze napotkane — kolejność `idx` to kolejność
+    odpowiedzi API, więc "pierwsze" bywało loterią.
+    """
+    najlepszy, najlepszy_wynik = None, 0.0
+    for (fh, fa), f in idx.items():
+        wynik = min(team_similarity(gospodarz, fh), team_similarity(goscie, fa))
+        if wynik >= _PROG_FIXTURE and wynik > najlepszy_wynik:
+            najlepszy, najlepszy_wynik = f, wynik
+    return najlepszy
+
+
 def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
     """
     Faza final: dla każdego kandydata pobiera składy i sędziego z API-Football.
@@ -647,10 +673,7 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
 
         fixture = idx.get((gh, ga))
         if fixture is None:
-            for (fh, fa), f in idx.items():
-                if (gh in fh or fh in gh) and (ga in fa or fa in ga):
-                    fixture = f
-                    break
+            fixture = _dopasuj_luzno(idx, k.get("gospodarz", ""), k.get("goscie", ""))
         if fixture is None:
             continue
 
