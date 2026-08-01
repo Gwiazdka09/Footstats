@@ -99,14 +99,14 @@ jobs:
 
       # --cov-fail-under: floor anty-regresyjny. UWAGA: mierz na CI (Linux/py3.11),
       # NIE lokalnie (Win/py3.12) — CI skipuje więcej testów (opt-deps) → niższe %.
-      # Historia: 56 (start) → 60 → 64 (2026-07-30).
-      # Lokalnie 67.0%, ostatni pomiar CI był o ~0.45 pp nizszy od lokalnego,
-      # wiec realnie ~66.5%. Prog 64 zostawia ~2.5 pp zapasu.
-      # Cel docelowy 80% (jak mypy w lint) — zostalo ~1600 instrukcji.
+      # Historia: 56 (start) → 60 → 64 (2026-07-30) → 72 (2026-08-01).
+      # Lokalnie 74.95%, ostatni pomiar CI był o ~0.45 pp nizszy od lokalnego,
+      # wiec realnie ~74.5%. Prog 72 zostawia ~2.5 pp zapasu.
+      # Cel docelowy 80% (jak mypy w lint) — zostalo ~700 instrukcji.
       - name: Run tests + coverage gate
         run: >
           python -m pytest tests/ --tb=short
-          --cov=src/footstats --cov-report=term-missing --cov-fail-under=64
+          --cov=src/footstats --cov-report=term-missing --cov-fail-under=72
 
       - name: Check imports
         run: python -c "import footstats; print('Import OK')"
