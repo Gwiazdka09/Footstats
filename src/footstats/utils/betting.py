@@ -116,6 +116,28 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
             return 1 if goals > val else 0
         return 1 if goals < val else 0
 
+    # Gole druzyny w zapisie POLSKIM: "GOSPODARZ STRZELI 0.5+" / "GOŚĆ STRZELI 1.5+".
+    # Tak generuje je `bet_builder.py` (linie 150-154) — a rozliczanie znalo tylko
+    # zapis "GOSPODARZ OVER 0.5" nizej. Dwa slowniki, obslugiwany jeden, wiec typ
+    # na ten rynek NIGDY nie dostawal `tip_correct`: nie liczyl sie jako rozliczony,
+    # nie wchodzil do statystyk trafnosci i NIE STAWAL SIE LEKCJA w petli uczenia.
+    # W bazie lezala predykcja #8 z gotowym wynikiem "2-0" i pustym tip_correct.
+    #
+    # "strzeli 0.5+" = WIECEJ NIZ 0.5 gola, czyli co najmniej jeden — identycznie
+    # jak "OVER 0.5". Zapis z plusem to konwencja bukmacherska.
+    # Sufiks "(Szansa: 78%)" doklejany przez bet_builder jest odcinany.
+    tip_bez_nawiasu = re.sub(r"\(.*?\)", "", tip).strip()
+    team_pl = re.match(
+        r"^(GOSPODARZ|GOŚCIE|GOSCIE|GOŚĆ|GOSC)\s+STRZEL\w*\s+(\d+\.\d+|\d+)\+?$",
+        tip_bez_nawiasu,
+    )
+    if team_pl:
+        if home_g is None or away_g is None:
+            return None
+        strona, val = team_pl.group(1), float(team_pl.group(2))
+        goals = home_g if strona == "GOSPODARZ" else away_g
+        return 1 if goals > val else 0
+
     # Gole druzyny nazwane (BetBuilder): "GOSPODARZ OVER 0.5" / "GOŚĆ OVER 1.5".
     # MUSI byc przed generycznym Over/Under (ten liczy TOTAL, nie gole druzyny).
     team_named = re.match(r"^(GOSPODARZ|GOŚĆ|GOSC)\s+(OVER|UNDER)\s+(\d+\.\d+|\d+)$", tip)
