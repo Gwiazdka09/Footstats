@@ -71,10 +71,35 @@ def _wynik_z_fixture(fixture: dict) -> tuple[str, str, str] | None:
     return home, away, wynik
 
 
+def _dopasowanie(home: str, away: str, fh: str, fa: str) -> float:
+    """Podobienstwo pary druzyn — SLABSZA ze stron, nie srednia.
+
+    Srednia pozwalala jednemu idealnemu trafieniu przepchnac zle dopasowanie
+    drugiej strony:
+
+        kupon "Legia - Lech Poznan"  vs  fixture "Legia - Lechia Gdansk"
+        1.00 + 0.58 = srednia 0.79 >= 0.6  ->  PRZECHODZILO
+
+    Lech Poznan i Lechia Gdansk to dwa rozne kluby Ekstraklasy, oba grajace
+    z Legia, wiec kupon rozliczal sie wynikiem cudzego meczu. To samo lapalo
+    "Rapid - Altach" na fixture "Rapid - Austria Wien" (0.67).
+
+    `min` wymaga, zeby OBIE strony przeszly prog — tak samo jak w daily_phases,
+    api_football, daily_agent i sofascore_odds. Prog zostaje `_PROG_PARY`,
+    zmienia sie tylko to, ze nie da sie go obejsc jedna dobra polowa.
+    """
+    return min(_similar(home, fh), _similar(away, fa))
+
+
+# Prog dopasowania pary druzyn do fixture'a. Zostaje na historycznej wartosci
+# 0.6, zeby nie ruszac kalibracji — poprawka dotyczy SPOSOBU liczenia, nie progu.
+_PROG_PARY = 0.6
+
+
 def _find_result(home: str, away: str, fixtures: list[dict]) -> str | None:
     """
     Fuzzy-match drużyn w liście fixtures API-Football.
-    Zwraca wynik '2-1' lub None gdy brak dopasowania (próg similarności >= 0.6).
+    Zwraca wynik '2-1' lub None gdy brak dopasowania (obie strony >= _PROG_PARY).
     """
     best_score = 0.0
     best_result: str | None = None
@@ -83,8 +108,8 @@ def _find_result(home: str, away: str, fixtures: list[dict]) -> str | None:
         if not parsed:
             continue
         fh, fa, wynik = parsed
-        score = (_similar(home, fh) + _similar(away, fa)) / 2
-        if score > best_score and score >= 0.6:
+        score = _dopasowanie(home, away, fh, fa)
+        if score > best_score and score >= _PROG_PARY:
             best_score = score
             best_result = wynik
     return best_result
@@ -154,7 +179,7 @@ def _find_fixture_id(home: str, away: str, fixtures: list[dict]) -> int | None:
         if not parsed:
             continue
         fh, fa, _ = parsed
-        if (_similar(home, fh) + _similar(away, fa)) / 2 >= 0.6:
+        if _dopasowanie(home, away, fh, fa) >= _PROG_PARY:
             return fix.get("fixture", {}).get("id")
     return None
 

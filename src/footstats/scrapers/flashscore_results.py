@@ -14,7 +14,11 @@ try:
 except ImportError:
     BeautifulSoup = None  # type: ignore[assignment, misc]
     _BS4_OK = False
-from footstats.utils.normalize import normalize_team_name, team_similarity
+from footstats.utils.normalize import (
+    PROG_DOPASOWANIA_MECZU,
+    normalize_team_name,
+    team_similarity,
+)
 
 log = logging.getLogger(__name__)
 
@@ -149,14 +153,30 @@ def _parse_mobi_html(html: str, home: str, away: str) -> str | None:
                 # i daje tam 0.0, więc odrzucenie wynika z reguły, nie ze zbiegu
                 # okoliczności. Ten sam back-door naprawiono w `_znajdz_wynik_fdb`
                 # (commit 0cc413c10), gdzie próg 0.70 REALNIE przepuszczał kolizję.
+                # Para liczona przez `min`, NIE przez średnią. Średnia pozwalała
+                # jednemu idealnemu trafieniu przepchnąć złe dopasowanie drugiej
+                # strony:
+                #
+                #   "Standard - Cercle Brugge" vs mecz "Standard - Club Brugge"
+                #   1.00 + 0.75 = średnia 0.88 > 0.85  ->  ROZLICZAŁO
+                #
+                # Cercle i Club Brugge to dwa różne kluby z Brugii, oba w BEL
+                # First Division A. Wymiana SequenceMatcher na `team_similarity`
+                # tego NIE załatwiła — uśrednianie było osobną drogą do błędu.
+                #
+                # Próg zszedł z 0.85 na `PROG_DOPASOWANIA_MECZU` (0.80), bo `min`
+                # przy 0.85 odciąłby dopasowania POPRAWNE: "Mechelen" ↔ "KV
+                # Mechelen" to dokładnie 0.80 (reguła token-prefix). Przy 0.80
+                # przyjmujemy tylko dopasowania wynikające z reguły (dokładne /
+                # alias / skrót / inicjały), nie z przypadkowego podobieństwa liter.
                 s_h = team_similarity(t_home_raw, home)
                 s_a = team_similarity(t_away_raw, away)
-                total_score = (s_h + s_a) / 2
+                total_score = min(s_h, s_a)
 
-                if total_score > 0.85:
+                if total_score >= PROG_DOPASOWANIA_MECZU:
                     print(f"  [FlashScore] Potencjalne dopasowanie: {t_home_raw} - {t_away_raw} ({score}) | sim={total_score:.2f}")
 
-                if total_score > 0.85 and total_score > best_score:
+                if total_score >= PROG_DOPASOWANIA_MECZU and total_score > best_score:
                     # FlashScore zwraca "1-0" (myślnik) lub "1:0" (dwukropek)
                     norm_score = score.replace(":", "-").strip()
                     if norm_score not in ("-:-", "--") and re.match(r"^\d+-\d+", norm_score):

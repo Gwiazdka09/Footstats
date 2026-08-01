@@ -133,6 +133,110 @@ def test_similarity_liczone_w_jednym_miejscu(plik: Path):
     )
 
 
+# Funkcje liczące podobieństwo nazw drużyn.
+_SIMILARITY = {"team_similarity", "_similar", "_similarity", "_dopasowanie"}
+
+
+def _srednie_podobienstw(drzewo: ast.AST) -> list[int]:
+    """Znajduje `(sim(a,b) + sim(c,d)) / 2` — uśrednianie dwóch podobieństw.
+
+    Średnia pozwala jednemu idealnemu trafieniu przepchnąć złe dopasowanie
+    drugiej strony: 1.00 + 0.58 daje 0.79, czyli powyżej progu 0.6, mimo że
+    druga drużyna go nie przeszła. Tak "Legia – Lech Poznań" rozliczało się
+    wynikiem meczu "Legia – Lechia Gdańsk".
+
+    Wykrywa też wariant PRZEZ ZMIENNE:
+
+        s_h = team_similarity(...)
+        s_a = team_similarity(...)
+        total = (s_h + s_a) / 2          # <- tak umknął `flashscore_results`
+
+    Pierwsza wersja tego strażnika patrzyła tylko na wywołania wprost w wyrażeniu
+    i dlatego przegapiła szóste miejsce tego samego błędu.
+
+    Poprawnie: `min(...)` — obie strony muszą przejść próg.
+    """
+    z_podobienstwa: set[str] = set()
+
+    for w in ast.walk(drzewo):
+        if isinstance(w, ast.Assign) and isinstance(w.value, ast.Call):
+            fn = w.value.func
+            nazwa = getattr(fn, "id", "") or getattr(fn, "attr", "")
+            if nazwa in _SIMILARITY:
+                for cel in w.targets:
+                    if isinstance(cel, ast.Name):
+                        z_podobienstwa.add(cel.id)
+
+    def _jest_sim(w: ast.AST) -> bool:
+        if isinstance(w, ast.Call):
+            return (getattr(w.func, "id", "") in _SIMILARITY
+                    or getattr(w.func, "attr", "") in _SIMILARITY)
+        return isinstance(w, ast.Name) and w.id in z_podobienstwa
+
+    trafienia = []
+    for w in ast.walk(drzewo):
+        if not (isinstance(w, ast.BinOp) and isinstance(w.op, ast.Div)):
+            continue
+        lewy = w.left
+        if (isinstance(lewy, ast.BinOp) and isinstance(lewy.op, ast.Add)
+                and _jest_sim(lewy.left) and _jest_sim(lewy.right)):
+            trafienia.append(w.lineno)
+    return trafienia
+
+
+@pytest.mark.parametrize("plik", _pliki(), ids=_wzgledna)
+def test_brak_usredniania_podobienstw(plik: Path):
+    """Średnia z pary maskuje złe dopasowanie jednej ze stron."""
+    trafienia = _srednie_podobienstw(ast.parse(plik.read_text(encoding="utf-8")))
+
+    assert not trafienia, (
+        f"{_wzgledna(plik)}: uśrednianie dwóch podobieństw (linie {trafienia}). "
+        f"Użyj min(...) — obie drużyny muszą przejść próg, inaczej jedno idealne "
+        f"trafienie przepycha dopasowanie do meczu z inną drużyną."
+    )
+
+
+def test_strażnik_wykrywa_usrednianie():
+    """Audyt, który nic nie wykrywa, to zielone światło bez pokrycia."""
+    kod = ("def f(h, a, fh, fa):\n"
+           "    return (team_similarity(h, fh) + team_similarity(a, fa)) / 2\n")
+
+    assert _srednie_podobienstw(ast.parse(kod)) == [2]
+
+
+def test_strażnik_nie_zglasza_min():
+    kod = ("def f(h, a, fh, fa):\n"
+           "    return min(team_similarity(h, fh), team_similarity(a, fa))\n")
+
+    assert _srednie_podobienstw(ast.parse(kod)) == []
+
+
+def test_strażnik_nie_zglasza_zwyklego_dzielenia():
+    kod = "def f(x, y):\n    return (x + y) / 2\n"
+
+    assert _srednie_podobienstw(ast.parse(kod)) == []
+
+
+def test_strażnik_wykrywa_usrednianie_przez_zmienne():
+    """Tak umknął `flashscore_results` pierwszej wersji tego strażnika."""
+    kod = ("def f(h, a, fh, fa):\n"
+           "    s_h = team_similarity(fh, h)\n"
+           "    s_a = team_similarity(fa, a)\n"
+           "    return (s_h + s_a) / 2\n")
+
+    assert _srednie_podobienstw(ast.parse(kod)) == [4]
+
+
+def test_strażnik_nie_myli_zmiennych_niepodobienstwowych():
+    """Zmienne o podobnych nazwach, ale z innego źródła, to nie ten wzorzec."""
+    kod = ("def f(a, b):\n"
+           "    s_h = len(a)\n"
+           "    s_a = len(b)\n"
+           "    return (s_h + s_a) / 2\n")
+
+    assert _srednie_podobienstw(ast.parse(kod)) == []
+
+
 def test_strażnik_wykrywa_wzorzec():
     """Audyt, który nic nie wykrywa, to zielone światło bez pokrycia."""
     kod = (

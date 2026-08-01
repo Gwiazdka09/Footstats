@@ -85,13 +85,24 @@ def _znajdz_wynik_fdb(home: str, away: str, matches: list[dict]) -> str | None:
     United mógł zostać rozliczony wynikiem Manchesteru City. `team_similarity`
     daje tam 0.50 i blokuje dopasowanie, a jednocześnie poprawnie łapie warianty
     skrócone (0.80).
+
+    DRUGA POPRAWKA: para liczona jest przez `min`, nie przez ŚREDNIĄ. Poprzednia
+    wersja uśredniała, więc jedno idealne trafienie przepychało złe dopasowanie
+    drugiej strony:
+
+        kupon "Legia - Lech Poznan"  vs  mecz "Legia - Lechia Gdansk"
+        1.00 + 0.58 = srednia 0.79 >= 0.70  ->  ROZLICZALO
+
+    Lech Poznan i Lechia Gdansk to dwa rozne kluby Ekstraklasy, oba grajace
+    z Legia. Wymiana `SequenceMatcher` na `team_similarity` (wyzej) tego NIE
+    zalatwila — usrednianie bylo osobna droga do tego samego bledu.
     """
     best_score = 0.0
     best_result: str | None = None
     for m in matches:
         fh = m.get("homeTeam", {}).get("name", "")
         fa = m.get("awayTeam", {}).get("name", "")
-        score = (team_similarity(home, fh) + team_similarity(away, fa)) / 2
+        score = min(team_similarity(home, fh), team_similarity(away, fa))
         if score >= 0.70 and score > best_score:
             ft = m.get("score", {}).get("fullTime", {})
             hg, ag = ft.get("home"), ft.get("away")
