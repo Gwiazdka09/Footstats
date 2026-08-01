@@ -42,6 +42,28 @@ _APISPORTS_LIGI = {
     179: {"kod": "SPO", "nazwa": "Scottish Premiership",   "kraj": "Scotland",    "druzyny": 12},
 }
 
+def _blad_konta(data) -> str | None:
+    """Komunikat bledu z tresci odpowiedzi api-sports, albo None gdy jej brak.
+
+    api-sports zglasza problemy Z KONTEM przy HTTP 200, w polu `errors`:
+      {"errors": {"access": "Your account is suspended..."}, "response": []}
+      {"errors": {"token": "Error/Missing application key"}}
+      {"errors": {"requests": "You have reached the request limit for the day"}}
+
+    Uwaga na typ: przy poprawnej odpowiedzi `errors` bywa PUSTA LISTA `[]`,
+    a nie pustym slownikiem — dlatego liczy sie prawdziwosciowosc, nie `is None`.
+    Odpowiedz nie bedaca slownikiem (proxy, strona bledu) tez jest bledem.
+    """
+    if not isinstance(data, dict):
+        return "odpowiedz nie jest obiektem JSON"
+    errors = data.get("errors")
+    if not errors:
+        return None
+    if isinstance(errors, dict):
+        return "; ".join(f"{k}: {v}" for k, v in errors.items())
+    return str(errors)
+
+
 class APIFootball:
     """
     Klient api-sports.io (API-Football).
@@ -64,7 +86,21 @@ class APIFootball:
             r = requests.get(f"{self.BASE}/status",
                              headers=self.headers, timeout=15)
             if r.status_code == 200:
-                d    = r.json().get("response", {})
+                surowe = r.json()
+
+                # Zawieszone konto / zly klucz wracaja jako HTTP 200 z `errors`,
+                # a `response` jest wtedy PUSTA LISTA. Wczesniej kod robil na niej
+                # `.get()` i leciał nieprzechwyconym AttributeError — a
+                # `SourceManager` tego nie lapie, wiec CLI padalo przy starcie.
+                blad = _blad_konta(surowe)
+                if blad:
+                    self._valid = False
+                    return False, blad
+
+                d = surowe.get("response") or {}
+                if not isinstance(d, dict):
+                    self._valid = False
+                    return False, "nieoczekiwany format odpowiedzi /status"
                 used = d.get("requests", {}).get("current", 0)
                 lim  = d.get("requests", {}).get("limit_day", 100)
                 self._req_today = used
@@ -142,6 +178,23 @@ class APIFootball:
 
             if r.status_code == 200:
                 data = r.json()
+
+                # api-sports NIE uzywa kodow HTTP do problemow z kontem —
+                # zawieszenie, zly klucz i przekroczony plan wracaja jako
+                # HTTP 200 z {"errors": {...}, "response": []}. Bez tej kontroli
+                # pusta odpowiedz szla do cache na 24h (awaria konta psula dane
+                # jeszcze dlugo po jej usunieciu), a wolajacy bral `response: []`
+                # za "brak meczow dzis". Patrz `_blad_konta`.
+                blad = _blad_konta(data)
+                if blad:
+                    self._valid = False
+                    console.print(
+                        f"[bold red]API-Football odrzucil zapytanie (HTTP 200): {blad}[/bold red]\n"
+                        "[dim]Sprawdz konto na dashboard.api-football.com — "
+                        "to nie jest chwilowa awaria sieci.[/dim]"
+                    )
+                    return None
+
                 # Sprawdz stare dane przed zapisem
                 stare = _af_load_disk_cache().get(cache_key, {}).get("data")
                 _af_cache_set(cache_key, data, stare)
