@@ -98,10 +98,16 @@ def get_user_by_email(email: str) -> Optional[dict]:
 def _verify_password(plain: str, hashed: str) -> bool:
     """bcrypt.checkpw odporne na uszkodzony hash (np. seed placeholder 'changeme'
     z migracji na świeżej DB). Zły salt → ValueError; łapiemy i zwracamy False,
-    inaczej logowanie kończy się 500 zamiast 401 (audyt 2026-07-27)."""
+    inaczej logowanie kończy się 500 zamiast 401 (audyt 2026-07-27).
+
+    `AttributeError` dołożone obronnie: schemat ma `password_hash TEXT NOT NULL`,
+    więc None nie powinno tu trafić — ale gdyby trafiło (ręczna edycja bazy,
+    nieudana migracja), `None.encode()` dałoby 500 zamiast 401, czyli dokładnie
+    to, przed czym ten guard powstał.
+    """
     try:
         return bcrypt.checkpw(plain.encode(), hashed.encode())
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, AttributeError):
         return False
 
 
