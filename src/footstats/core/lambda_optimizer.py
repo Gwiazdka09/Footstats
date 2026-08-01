@@ -255,9 +255,15 @@ def run_calibration(n_matches: int = 200, verbose: bool = True) -> dict:
     correct_1x2 = 0
     total_1x2   = 0
 
-    dates_arr = df["date"].values
+    # `Series.searchsorted`, NIE `np.searchsorted` na `.values`. To drugie dostaje
+    # tablice datetime64 i skalar Timestamp, czego numpy nie porownuje:
+    #   TypeError: '<' not supported between instances of 'int' and 'Timestamp'
+    # Kolumna `date` w full_dataset.parquet jest wlasnie typu datetime64[ns], wiec
+    # `run_calibration` wywalalo sie na KAZDYM realnym uruchomieniu, zanim
+    # cokolwiek policzylo. Series zna typy pandas i robi to poprawnie.
+    daty = df["date"]
     for _, row in df_wf.iterrows():
-        cutoff = int(np.searchsorted(dates_arr, row["date"], side="left"))
+        cutoff = int(daty.searchsorted(row["date"], side="left"))
         hist = df.iloc[:cutoff]
         result = _predict_lambdas(hist, row["home"], row["away"])
         if result is None:
