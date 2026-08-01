@@ -12,7 +12,11 @@ import os
 from rich.console import Console
 
 from footstats.scrapers.api_football import fetch_odds_af
-from footstats.utils.normalize import normalize_team_name, team_similarity
+from footstats.utils.normalize import (
+    PROG_DOPASOWANIA_MECZU,
+    normalize_team_name,
+    team_similarity,
+)
 
 log = logging.getLogger(__name__)
 console = Console()
@@ -588,12 +592,6 @@ def _oblicz_roznica_modeli(wyniki: list) -> None:
 
 # ── Faza final: enrichment składów/sędziego ──────────────────────────────────
 
-# Próg luźnego dopasowania fixture'a. 0.80 to wynik, jaki `team_similarity`
-# daje legalnemu skrótowi nazwy ("Legia" ~ "Legia Warszawa"), więc niżej schodzić
-# nie ma po co, a wyżej odcięlibyśmy właśnie te warianty.
-_PROG_FIXTURE = 0.80
-
-
 def _dopasuj_luzno(idx: dict, gospodarz: str, goscie: str) -> dict | None:
     """Najlepszy fixture dla pary drużyn, gdy dopasowanie dokładne zawiodło.
 
@@ -609,7 +607,7 @@ def _dopasuj_luzno(idx: dict, gospodarz: str, goscie: str) -> dict | None:
     najlepszy, najlepszy_wynik = None, 0.0
     for (fh, fa), f in idx.items():
         wynik = min(team_similarity(gospodarz, fh), team_similarity(goscie, fa))
-        if wynik >= _PROG_FIXTURE and wynik > najlepszy_wynik:
+        if wynik >= PROG_DOPASOWANIA_MECZU and wynik > najlepszy_wynik:
             najlepszy, najlepszy_wynik = f, wynik
     return najlepszy
 

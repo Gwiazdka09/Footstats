@@ -83,6 +83,15 @@ _ZNACZNIKI_REZERW = {
 }
 
 
+# Próg dopasowania drużyn do konkretnego meczu (fixture'a) u dostawcy danych.
+#
+# 0.80 to wynik, jaki `team_similarity` daje legalnemu skrótowi nazwy
+# ("Legia" ~ "Legia Warszawa") — niżej schodzić nie ma po co, a wyżej odcięłoby
+# właśnie te warianty. Wspólny dla wszystkich miejsc szukających fixture'a, żeby
+# nie rozjechał się po modułach tak, jak rozjechało się samo dopasowywanie.
+PROG_DOPASOWANIA_MECZU = 0.80
+
+
 def _czlony_rozrozniajace(tokeny: set[str]) -> set[str]:
     """Człony tożsamości klubu z tokenów, ze skrótami sprowadzonymi do formy pełnej."""
     return {

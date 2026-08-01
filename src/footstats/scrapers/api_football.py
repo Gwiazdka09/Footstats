@@ -10,7 +10,11 @@ from footstats.utils.logging import bezpieczny_budget_use, BladBudzetu
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
 from footstats.config import ENV_APISPORTS, _czytaj_wszystkie_klucze
-from footstats.utils.normalize import normalize_team_name
+from footstats.utils.normalize import (
+    PROG_DOPASOWANIA_MECZU,
+    normalize_team_name,
+    team_similarity,
+)
 
 # ================================================================
 #  MODUL 4b – API-FOOTBALL (api-sports.io) v2.7
@@ -430,30 +434,34 @@ class APIFootball:
         """
         Szuka fixture_id meczu home vs away w dniu `data` przez /fixtures?date=.
 
-        Fuzzy match nazw drużyn (normalizacja + substring dwukierunkowy). Cache
-        wyniku odbywa się na poziomie _get (jeden request /fixtures na dzień,
-        reużywany dla wielu meczów tego samego dnia).
+        Dopasowanie przez `team_similarity` (próg `PROG_DOPASOWANIA_MECZU`), NIE po
+        podciągu. Podciąg uznawał rezerwy za pierwszy zespół — "Legia" łapała
+        "Legia II" — a stąd biorą się KURSY i statystyki meczu. Rezerwy grają
+        zwykle w ten sam dzień, więc oba mecze bywają w jednej odpowiedzi.
+
+        Zwracany jest NAJLEPSZY kandydat, nie pierwszy napotkany: kolejność
+        odpowiedzi API to nie ranking trafności.
+
+        Cache wyniku odbywa się na poziomie _get (jeden request /fixtures na
+        dzień, reużywany dla wielu meczów tego samego dnia).
         """
         dane = self._get("/fixtures", {"date": data[:10]})
         if not dane:
             return None
 
-        n_home = normalize_team_name(home)
-        n_away = normalize_team_name(away)
-
+        najlepszy_id, najlepszy_wynik = None, 0.0
         for m in dane.get("response", []):
             teams = m.get("teams", {})
-            fh = normalize_team_name(_s(teams.get("home", {}).get("name", "")))
-            fa = normalize_team_name(_s(teams.get("away", {}).get("name", "")))
-            if not fh or not fa:
+            fh = _s(teams.get("home", {}).get("name", ""))
+            fa = _s(teams.get("away", {}).get("name", ""))
+            if not normalize_team_name(fh) or not normalize_team_name(fa):
                 continue
 
-            home_match = fh == n_home or fh in n_home or n_home in fh
-            away_match = fa == n_away or fa in n_away or n_away in fa
-            if home_match and away_match:
-                return m.get("fixture", {}).get("id")
+            wynik = min(team_similarity(home, fh), team_similarity(away, fa))
+            if wynik >= PROG_DOPASOWANIA_MECZU and wynik > najlepszy_wynik:
+                najlepszy_id, najlepszy_wynik = m.get("fixture", {}).get("id"), wynik
 
-        return None
+        return najlepszy_id
 
 
 def _parse_odd(raw: str | float | None) -> float | None:

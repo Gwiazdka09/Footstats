@@ -17,7 +17,11 @@ from datetime import datetime
 
 from rich.panel import Panel
 
-from footstats.utils.normalize import normalize_team_name
+from footstats.utils.normalize import (
+    PROG_DOPASOWANIA_MECZU,
+    normalize_team_name,
+    team_similarity,
+)
 from footstats.core.checkpoint import save_predictions_batch, cleanup_old_checkpoints
 from footstats.daily_agent_output import (  # noqa: F401  re-export (ścieżki + patch-targety)
     LOGS_DIR,
@@ -220,12 +224,22 @@ def _znajdz_mecz(mecz_str: str, indeks: dict) -> dict | None:
     if (ng, na) in indeks:
         return indeks[(ng, na)]
 
-    # 2. Częściowe dopasowanie (substring w obu kierunkach)
+    # 2. Dopasowanie luźne przez `team_similarity`, NIE po podciągu.
+    #
+    # Podciąg uznawał rezerwy za pierwszy zespół ("Legia" łapała "Legia II"),
+    # a stąd `_weryfikuj_noge` bierze RZECZYWISTY KURS podmieniany w nodze
+    # (anty-halucynacja Groq). Noga dostawała wtedy kurs z cudzego meczu
+    # i przechodziła weryfikację jako poprawna.
+    #
+    # Bierzemy NAJLEPSZE dopasowanie, nie pierwsze napotkane — kolejność
+    # indeksu to kolejność odpowiedzi Bzzoiro, nie ranking trafności.
+    najlepszy, najlepszy_wynik = None, 0.0
     for (ig, ia), dane in indeks.items():
-        if (ng in ig or ig in ng) and (na in ia or ia in na):
-            return dane
+        wynik = min(team_similarity(ng, ig), team_similarity(na, ia))
+        if wynik >= PROG_DOPASOWANIA_MECZU and wynik > najlepszy_wynik:
+            najlepszy, najlepszy_wynik = dane, wynik
 
-    return None
+    return najlepszy
 
 
 def _weryfikuj_noge(z: dict, indeks: dict, usuniete: list[str]) -> dict | None:
