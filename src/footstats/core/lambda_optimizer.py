@@ -61,7 +61,12 @@ def load_calibration() -> tuple[float, float]:
             fa = max(CAL_MIN, min(CAL_MAX, fa))
             _cache = {"factor_home": fh, "factor_away": fa}
             return fh, fa
-        except (OSError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError, AttributeError, TypeError):
+            # AttributeError/TypeError: plik z POPRAWNYM JSON-em, ale zlym typem
+            # na wierzchu ("[]", '"tekst"', "123") — `.get()` wtedy wybucha.
+            # Kontrakt z docstringa mowi "uszkodzony -> (1.0, 1.0)", a ta sciezka
+            # jest w goracej czesci predykcji: wyjatek stad zatrzymalby liczenie
+            # wszystkich meczow, zamiast zejsc na model bez kalibracji.
             return 1.0, 1.0
 
 
