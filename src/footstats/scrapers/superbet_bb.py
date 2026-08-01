@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 from footstats.betbuilder import Typ
 from footstats.scrapers.base_playwright import SUPERBET_CONFIG as _CFG, zamknij_popup
+from footstats.utils.normalize import ZNACZNIKI_REZERW, normalize_team_name
 
 logger = logging.getLogger(__name__)
 
@@ -111,14 +112,55 @@ def _slugify(name: str) -> str:
     return name.lower().strip().replace(" ", "-").replace("_", "-")
 
 
+def _warianty_slugu(nazwa: str) -> list[list[str]]:
+    """Człony nazwy (≥3 znaki) w formie surowej i znormalizowanej.
+
+    Dwa warianty, bo slug Superbetu bywa pełny ("manchester-united") albo
+    skrócony ("man-utd") — normalizacja zna oba zapisy.
+    """
+    warianty = []
+    for wersja in (nazwa, normalize_team_name(nazwa)):
+        czlony = [c for c in _slugify(wersja).split("-") if len(c) >= 3]
+        if czlony and czlony not in warianty:
+            warianty.append(czlony)
+    return warianty
+
+
+def _slug_pasuje(href: str, nazwa: str) -> bool:
+    """Czy URL opisuje mecz TEJ drużyny.
+
+    Wymaga WSZYSTKICH członów nazwy, nie 6 pierwszych znaków. Prefiks 6-znakowy
+    dawał "manche" zarówno dla Manchester United, jak i Manchester City, więc
+    dowolny mecz Manchesteru spełniał warunek "obie drużyny w URL-u".
+
+    Odrzuca też URL-e z członem rezerw, którego nie ma w nazwie drużyny —
+    "legia-ii-warszawa" to nie Legia Warszawa.
+    """
+    h = href.lower()
+    warianty = _warianty_slugu(nazwa)
+    if not warianty:
+        return False
+
+    wlasne = {c for w in warianty for c in w}
+    czlony_url = set(re.split(r"[-/]", h))
+    if (czlony_url & ZNACZNIKI_REZERW) - wlasne:
+        return False
+
+    return any(all(czlon in h for czlon in wariant) for wariant in warianty)
+
+
 def znajdz_url_meczu(page: Page, dom: str, gost: str) -> str | None:
     """
     Searches Superbet via /wyszukaj?query={dom}.
     Returns /kursy/pilka-nozna/{slug} URL matching both teams, or None.
+
+    Zwraca None, gdy nie znaleziono meczu OBU drużyn. Wcześniej ostatnią deską
+    ratunku było `return hrefs[0]` — pierwszy wynik wyszukiwania, jakikolwiek by
+    nie był. Jego kursy trafiały potem do wyniku pod kluczem "Dom vs Gost",
+    czyli podpisane nazwą meczu, którego nie dotyczyły. Brak kursów jest zawsze
+    lepszy niż kursy z cudzego meczu.
     """
     query  = dom.replace(" ", "+")
-    dom_s  = _slugify(dom)[:6]
-    gost_s = _slugify(gost)[:6]
     src    = f"{SUPERBET_URL}/wyszukaj?query={query}"
 
     try:
@@ -133,22 +175,12 @@ def znajdz_url_meczu(page: Page, dom: str, gost: str) -> str | None:
         )
         logger.info("[BB] Search '%s' → %d wyników", dom, len(hrefs))
 
-        # Best: both teams in URL
+        # Wymagane OBIE drużyny. Dawny fallback "sam gospodarz" nie sprawdzał,
+        # z kim ten mecz jest — wystarczyło, że Legia gra tego dnia z kimkolwiek.
         for href in hrefs:
-            h = href.lower()
-            if dom_s in h and gost_s in h:
+            if _slug_pasuje(href, dom) and _slug_pasuje(href, gost):
                 logger.info("[BB] Mecz (obie): %s", href)
                 return href
-
-        # Fallback: home team only
-        for href in hrefs:
-            if dom_s in href.lower():
-                logger.info("[BB] Mecz (dom): %s", href)
-                return href
-
-        if hrefs:
-            logger.info("[BB] Pierwszy wynik: %s", hrefs[0])
-            return hrefs[0]
 
     except (RuntimeError, AttributeError) as e:
         logger.warning("[BB] Błąd search: %s", e)

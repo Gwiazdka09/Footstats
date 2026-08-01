@@ -74,7 +74,7 @@ _ROZ_SKROTY = {"utd": "united", "athl": "athletic", "wdrs": "wanderers"}
 #   * "juniors" — "Boca Juniors" to pierwszy zespół, nie młodzież;
 #   * "atletico" — rozdzieliłoby "Club Atletico Boca Juniors" od "Boca Juniors"
 #     (Sevilla Atletico zostaje na aliasach w team_mappings.json).
-_ZNACZNIKI_REZERW = {
+ZNACZNIKI_REZERW = {
     "ii", "iii", "iv", "b", "c",
     "u18", "u19", "u20", "u21", "u23",
     "res", "reserve", "reserves", "rezerwy",
@@ -309,9 +309,9 @@ def team_similarity(a: str, b: str) -> float:
 
     # Rezerwy/młodzież to osobny zespół. Rozstrzygamy PRZED regułami skrótów,
     # bo to właśnie one dawały "Legia II" 0.80 wobec "Legia" — patrz komentarz
-    # przy `_ZNACZNIKI_REZERW`. Różne znaczniki (II vs III) też znaczą różne
+    # przy `ZNACZNIKI_REZERW`. Różne znaczniki (II vs III) też znaczą różne
     # zespoły; identyczne przechodzą dalej do normalnego porównania.
-    if (tokeny_a & _ZNACZNIKI_REZERW) != (tokeny_b & _ZNACZNIKI_REZERW):
+    if (tokeny_a & ZNACZNIKI_REZERW) != (tokeny_b & ZNACZNIKI_REZERW):
         return 0.0
 
     roz_a, roz_b = _czlony_rozrozniajace(tokeny_a), _czlony_rozrozniajace(tokeny_b)
