@@ -21,6 +21,7 @@ from __future__ import annotations
 import pytest
 
 import footstats.daily_agent as da
+import footstats.scrapers.sofascore_odds as so
 from footstats.scrapers.api_football import APIFootball
 
 # Pary: (nazwa w naszych danych, nazwa rezerw u dostawcy)
@@ -133,3 +134,32 @@ def test_mecz_brak_dopasowania_to_none():
 
 def test_mecz_pusty_indeks():
     assert da._znajdz_mecz("Legia vs Lech Poznan", {}) is None
+
+
+# ── sofascore_odds._names_match ─────────────────────────────────────────────
+#
+# Znalezione przez `test_dopasowanie_nazw_audyt.py`, nie ręcznie — piąte
+# miejsce tej samej rodziny. Służy do wskazania wydarzenia, z którego pobierane
+# są KURSY z SofaScore.
+
+@pytest.mark.parametrize("pierwszy,rezerwy", REZERWY)
+def test_sofascore_rezerwy_nie_pasuja(pierwszy, rezerwy):
+    assert so._names_match(rezerwy, pierwszy) is False
+
+
+def test_sofascore_wariant_nazwy_pasuje():
+    assert so._names_match("Legia Warszawa", "Legia") is True
+
+
+def test_sofascore_ta_sama_nazwa_pasuje():
+    assert so._names_match("Lech Poznan", "Lech Poznan") is True
+
+
+def test_sofascore_inna_druzyna_nie_pasuje():
+    assert so._names_match("Arka Gdynia", "Legia") is False
+
+
+@pytest.mark.parametrize("a,b", [("", "Legia"), ("Legia", ""), ("FC", "Legia")])
+def test_sofascore_pusta_nazwa_nie_pasuje_do_niczego(a, b):
+    """Po normalizacji "FC" to pusty string — nie może pasować do wszystkiego."""
+    assert so._names_match(a, b) is False

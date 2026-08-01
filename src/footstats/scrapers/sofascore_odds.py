@@ -26,7 +26,11 @@ from footstats.scrapers.form_scraper import (
     _sofa_session,
     find_team_id,
 )
-from footstats.utils.normalize import normalize_team_name
+from footstats.utils.normalize import (
+    PROG_DOPASOWANIA_MECZU,
+    normalize_team_name,
+    team_similarity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,11 +128,15 @@ def _parse_markets(odds_json: dict) -> dict:
 
 # ── Wyszukiwanie meczu ────────────────────────────────────────────────────────
 def _names_match(team_name: str, away: str) -> bool:
-    """Fuzzy match nazw drużyn (po normalizacji)."""
-    n1, n2 = normalize_team_name(team_name), normalize_team_name(away)
-    if not n1 or not n2:
+    """Czy to ta sama drużyna — przez `team_similarity`, NIE po podciągu.
+
+    Podciąg (`n1 in n2 or n2 in n1`) uznawał rezerwy za pierwszy zespół:
+    "legia" jest podciągiem "legia ii". Stąd wskazywane jest wydarzenie,
+    z którego pobierane są KURSY, więc pomyłka wchodziła prosto do kuponu.
+    """
+    if not normalize_team_name(team_name) or not normalize_team_name(away):
         return False
-    return n1 == n2 or n1 in n2 or n2 in n1
+    return team_similarity(team_name, away) >= PROG_DOPASOWANIA_MECZU
 
 
 def _find_event_id(page, team_id: int, away: str, data: str) -> Optional[int]:
