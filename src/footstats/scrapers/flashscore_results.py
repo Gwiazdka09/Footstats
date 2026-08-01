@@ -6,7 +6,6 @@ Ulepszona wersja: korzysta z Flashscore.mobi (lekka wersja HTML) i lepszej norma
 import re
 import logging
 import requests
-from difflib import SequenceMatcher
 from datetime import datetime, timedelta
 from pathlib import Path
 try:
@@ -108,10 +107,9 @@ def _parse_mobi_html(html: str, home: str, away: str) -> str | None:
     Parsuje HTML z wersji mobi w poszukiwaniu meczu.
     Struktura: <span>19:00</span>Home - Away <a ...>2:1</a><br />
     """
-    # Używamy regex na liniach dla szybkości i prostoty
-    # Najpierw normalizujemy wejściowe nazwy
-    nh = normalize_team_name(home)
-    na = normalize_team_name(away)
+    # Używamy regex na liniach dla szybkości i prostoty.
+    # Nazw NIE normalizujemy tutaj — robi to `team_similarity` niżej, razem
+    # z regułami tożsamości klubu (człony United/City, aliasy, skróty).
 
     # Szukamy wzorca: TEAM1 - TEAM2 <a ...>SCORE</a>
     # Wykorzystujemy fakt, że mobi ma bardzo powtarzalną strukturę
@@ -142,9 +140,17 @@ def _parse_mobi_html(html: str, home: str, away: str) -> str | None:
             if " - " in teams_raw:
                 t_home_raw, t_away_raw = teams_raw.split(" - ", 1)
 
-                # Porównaj fuzzy
-                s_h = SequenceMatcher(None, normalize_team_name(t_home_raw), nh).ratio()
-                s_a = SequenceMatcher(None, normalize_team_name(t_away_raw), na).ratio()
+                # Porównaj fuzzy — `team_similarity`, NIE surowy SequenceMatcher.
+                #
+                # Surowy SequenceMatcher dawał dla Manchester United / Manchester City
+                # 0.83 przy progu 0.85: bezpiecznie, ale marginesem 0.02 i wyłącznie
+                # przypadkiem — nic w tej liczbie nie mówi o tożsamości klubu.
+                # `team_similarity` zna człony odróżniające (United/City/Town/...)
+                # i daje tam 0.0, więc odrzucenie wynika z reguły, nie ze zbiegu
+                # okoliczności. Ten sam back-door naprawiono w `_znajdz_wynik_fdb`
+                # (commit 0cc413c10), gdzie próg 0.70 REALNIE przepuszczał kolizję.
+                s_h = team_similarity(t_home_raw, home)
+                s_a = team_similarity(t_away_raw, away)
                 total_score = (s_h + s_a) / 2
 
                 if total_score > 0.85:
