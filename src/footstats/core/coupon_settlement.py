@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 from footstats.core import match_linker
 from footstats.utils.betting import oblicz_tip_correct
-from footstats.utils.normalize import normalize_team_name
+from footstats.utils.normalize import normalize_team_name, team_similarity
 
 # Kupony ACTIVE bez wyniku po tylu dniach (legi z nieobsługiwanych lig/friendly)
 # oznaczamy VOID, żeby nie blokowały na zawsze i nie liczyły się do accuracy/M1.
@@ -71,21 +71,27 @@ def _get_matches_fdb(fdb_key: str, date_str: str) -> list[dict]:
 
 
 def _znajdz_wynik_fdb(home: str, away: str, matches: list[dict]) -> str | None:
-    """Fuzzy-match meczu w danych z football-data.org. Zwraca 'HG-AG' lub None."""
-    from difflib import SequenceMatcher
+    """Fuzzy-match meczu w danych z football-data.org. Zwraca 'HG-AG' lub None.
+
+    Używa `team_similarity`, a NIE surowego `SequenceMatcher` na znormalizowanych
+    nazwach. Poprzednia wersja robiła to drugie i miała dwie wady naraz:
+
+      Legia / Legia Warszawa              0.53 -> poprawny wariant GUBIONY
+      Manchester United / Manchester City 0.83 -> FAŁSZYWE dopasowanie (>=0.70)
+      Dundee United / Dundee FC           0.82 -> FAŁSZYWE dopasowanie
+
+    Drugi przypadek jest groźny: to źródło omijało całą ochronę przed kolizją
+    nazw dodaną do `team_similarity` (commit 24cefa674), więc kupon na Manchester
+    United mógł zostać rozliczony wynikiem Manchesteru City. `team_similarity`
+    daje tam 0.50 i blokuje dopasowanie, a jednocześnie poprawnie łapie warianty
+    skrócone (0.80).
+    """
     best_score = 0.0
     best_result: str | None = None
     for m in matches:
         fh = m.get("homeTeam", {}).get("name", "")
         fa = m.get("awayTeam", {}).get("name", "")
-        nh = normalize_team_name(home)
-        nfh = normalize_team_name(fh)
-        na = normalize_team_name(away)
-        nfa = normalize_team_name(fa)
-        score = (
-            SequenceMatcher(None, nh, nfh).ratio()
-            + SequenceMatcher(None, na, nfa).ratio()
-        ) / 2
+        score = (team_similarity(home, fh) + team_similarity(away, fa)) / 2
         if score >= 0.70 and score > best_score:
             ft = m.get("score", {}).get("fullTime", {})
             hg, ag = ft.get("home"), ft.get("away")
