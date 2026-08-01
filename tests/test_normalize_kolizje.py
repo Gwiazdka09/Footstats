@@ -184,3 +184,34 @@ def test_uszkodzony_plik_nie_kasuje_defaults(tmp_path, monkeypatch):
         assert "manchester united" in N._load_mappings()
     finally:
         N.reload_mappings()
+
+
+# ── krotkie i puste nazwy nie moga pasowac do wszystkiego ───────────────────
+
+@pytest.mark.parametrize("krotka", ["A", "X", "B", "AC", "FC", "SV"])
+def test_krotka_nazwa_nie_pasuje_do_dowolnego_klubu(krotka):
+    """REGRESJA (2026-07-31): `all()` po pustym generatorze zwracalo True.
+
+    Filtr `if len(ta) >= 3` siedzial W GENERATORZE reguly token-prefix, wiec dla
+    nazwy bez tokenow >=3 znakow warunek byl spelniony pusto i funkcja zwracala
+    0.80 wobec DOWOLNEJ nazwy. Przy progu 0.6 (rozliczenia) i 0.70
+    (`_znajdz_wynik`) obcieta nazwa w kuponie dopasowalaby sie do pierwszego
+    lepszego meczu z listy.
+
+    "FC"/"AC"/"SV" to same prefiksy — normalizuja sie do PUSTEGO stringa.
+    """
+    for klub in ("Legia Warszawa", "Manchester United", "Barcelona", "Raków"):
+        assert team_similarity(krotka, klub) < PROG_ROZLICZEN, (
+            f"{krotka!r} pasuje do {klub!r} z wynikiem "
+            f"{team_similarity(krotka, klub):.2f}"
+        )
+
+
+def test_pusta_nazwa_nie_pasuje_do_niczego():
+    assert team_similarity("", "Legia") == 0.0
+    assert team_similarity("Legia", "") == 0.0
+
+
+def test_skroty_literowe_nadal_dzialaja():
+    """Regula inicjalow ma przetrwac — PSG to Paris Saint-Germain."""
+    assert team_similarity("PSG", "Paris Saint Germain") >= PROG_ROZLICZEN

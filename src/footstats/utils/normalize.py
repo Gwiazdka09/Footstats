@@ -257,6 +257,14 @@ def team_similarity(a: str, b: str) -> float:
     if na == nb:
         return 1.0
 
+    # Pusta nazwa po normalizacji nie moze pasowac do niczego.
+    # "FC" / "AC" to same prefiksy — po ich zdjeciu zostaje "", a regula
+    # token-prefix nizej zwracala wtedy 0.80 wobec DOWOLNEJ nazwy (patrz komentarz
+    # przy `_znaczace`). Przy progu rozliczen 0.6 obcieta nazwa w kuponie
+    # dopasowalaby sie do pierwszego lepszego meczu z listy.
+    if not na or not nb:
+        return 0.0
+
     # Ta sama baza + RÓŻNE człony odróżniające = różne kluby.
     #
     # Bez tej reguły "manchester united" i "manchester city" dostają 0.81 od
@@ -274,16 +282,40 @@ def team_similarity(a: str, b: str) -> float:
         return 0.0
 
     def _initials(s: str) -> str:
-        return "".join(w[0] for w in s.split() if w)
+        """Inicjały — TYLKO dla nazw wielowyrazowych.
 
-    if na == _initials(nb) or nb == _initials(na):
+        Dla jednowyrazowej nazwy inicjały to jedna litera, co dopasowywało
+        "B" do "Barcelona" z wynikiem 0.85 (i "L" do "Legia", itd.). Skrót ma
+        sens dopiero przy 2+ słowach: "PSG" ↔ "Paris Saint Germain".
+        """
+        slowa = s.split()
+        return "".join(w[0] for w in slowa) if len(slowa) >= 2 else ""
+
+    ini_a, ini_b = _initials(na), _initials(nb)
+    if (ini_b and na == ini_b) or (ini_a and nb == ini_a):
         return 0.85
 
     tokens_a = na.split()
     tokens_b = nb.split()
-    if all(any(tb.startswith(ta) for tb in tokens_b) for ta in tokens_a if len(ta) >= 3):
+
+    # Reguła token-prefix: każdy ZNACZĄCY token (>=3 znaki) jednej nazwy ma
+    # przedrostek w drugiej ("Man United" ~ "Manchester United").
+    #
+    # `_znaczace` musi być NIEPUSTE. Wcześniej filtr `if len(ta) >= 3` siedział
+    # w generatorze, więc dla nazwy bez tokenów >=3 znaków `all()` leciało po
+    # pustym generatorze i zwracało True — a funkcja 0.80 wobec DOWOLNEJ nazwy.
+    # Skutek: "A", "X", a nawet "FC" (normalizuje się do "") pasowały do
+    # wszystkiego powyżej progu rozliczeń 0.6 i progu 0.70 w `_znajdz_wynik`.
+    znaczace_a = [t for t in tokens_a if len(t) >= 3]
+    znaczace_b = [t for t in tokens_b if len(t) >= 3]
+
+    if znaczace_a and all(
+        any(tb.startswith(ta) for tb in tokens_b) for ta in znaczace_a
+    ):
         return 0.80
-    if all(any(ta.startswith(tb) for ta in tokens_a) for tb in tokens_b if len(tb) >= 3):
+    if znaczace_b and all(
+        any(ta.startswith(tb) for ta in tokens_a) for tb in znaczace_b
+    ):
         return 0.80
 
     return SequenceMatcher(None, na, nb).ratio()
