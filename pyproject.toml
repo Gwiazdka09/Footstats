@@ -43,7 +43,7 @@ dependencies = [
     # PYSEC-2026-3481 i -3482, a PYSEC-2026-3483 jest naprawione dopiero w 1.28.1.
     # Pierwsza wersja tego przypiecia miala `<1.28` i zablokowala projekt na
     # podatnym 1.27.1 — pip-audit w CI slusznie to zlapal.
-    "mcp>=1.28.1,<2.0",
+    "mcp>=1.28.1,<3.0",
     "tenacity>=8.0",
 ]
 
