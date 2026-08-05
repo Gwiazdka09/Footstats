@@ -1,15 +1,19 @@
 """Status and config endpoints."""
+import hmac
 import json
+import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import footstats.config as cfg
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from footstats.api.auth import require_auth
 from footstats.utils.db import connect as _connect
 
 router = APIRouter(prefix="/api", tags=["status"])
+_log = logging.getLogger(__name__)
 
 
 @router.get("/status")
@@ -81,3 +85,117 @@ def get_bot_config(user_id: int = Depends(require_auth)):
         "pewniaczek_prog": cfg.PEWNIACZEK_PROG,
         "ostatnie_n": cfg.OSTATNIE_N,
     }
+
+
+# ── Monitor pipeline'u ────────────────────────────────────────────────────
+#
+# DLACZEGO TUTAJ, A NIE W JOBIE: 30.07-02.08 joby Cloud Run stały na uszkodzonym
+# obrazie i nikt nie zauważył tego przez TRZY DNI — wykonania raportowały
+# "Completed" bez liczników, bo kontener w ogóle nie wstawał. Monitor wpięty
+# w job, który monitoruje, milczałby dokładnie wtedy, gdy jest potrzebny.
+#
+# Ten endpoint żyje na serwisie API (osobny kontener, zdrowy przez całą awarię)
+# i pyta o SKUTEK, nie o proces: "czy w bazie przybywa predykcji". Dzięki temu
+# łapie każdą przyczynę naraz — obraz, klucz, limit API, sieć, błąd kodu.
+
+# Doba + 2h marginesu na opóźniony start joba (final 11:00, evening 23:00).
+_MAX_WIEK_PREDYKCJI_H = 26.0
+
+# Predykcje bez wyniku starsze niż okno `update_pending` (2 dni) NIGDY nie
+# rozliczą się same. Rosnąca sterta = pobieranie wyników padło.
+_MAX_ZALEGLOSCI = 10
+
+
+def _sprawdz_cron_secret(podany: str) -> None:
+    """Wspólna bramka dla endpointów /cron/*.
+
+    `not oczekiwany` jest tu krytyczne: `hmac.compare_digest("", "")` zwraca True,
+    więc deploy bez zmiennej CRON_SECRET otwierałby endpoint dla każdego, kto
+    wyśle pusty nagłówek.
+    """
+    oczekiwany = os.getenv("CRON_SECRET", "")
+    if not oczekiwany or not hmac.compare_digest(podany, oczekiwany):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+@router.post("/cron/pipeline-health")
+def pipeline_health(
+    x_cron_secret: str = Header(default=""),
+    max_wiek_h: float = _MAX_WIEK_PREDYKCJI_H,
+    max_zaleglosci: int = _MAX_ZALEGLOSCI,
+) -> dict:
+    """Sprawdza, czy pipeline nadal produkuje. Alarm na Telegram tylko gdy ŹLE.
+
+    Cisza przy zdrowym stanie jest celowa — alarm wysyłany codziennie
+    "wszystko gra" przestaje być czytany po tygodniu.
+    """
+    _sprawdz_cron_secret(x_cron_secret)
+
+    powody: list[str] = []
+    wiek_h: float | None = None
+    nierozliczone = 0
+
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT MAX(created_at) AS ostatnia FROM predictions"
+            ).fetchone()
+            ostatnia = row["ostatnia"] if row else None
+
+            if ostatnia is None:
+                powody.append("brak jakichkolwiek predykcji w bazie")
+            else:
+                wiek_h = round((datetime.now() - ostatnia).total_seconds() / 3600, 1)
+                if wiek_h > max_wiek_h:
+                    powody.append(
+                        f"brak nowych predykcji od {wiek_h:.0f}h (próg {max_wiek_h:.0f}h)"
+                    )
+
+            row2 = conn.execute(
+                "SELECT COUNT(*) AS n FROM predictions"
+                " WHERE tip_correct IS NULL AND match_date < ?",
+                ((datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d"),),
+            ).fetchone()
+            nierozliczone = (row2["n"] if row2 else 0) or 0
+            if nierozliczone > max_zaleglosci:
+                powody.append(
+                    f"{nierozliczone} predykcji bez rozliczenia starszych niż 2 dni"
+                    f" (próg {max_zaleglosci}) — pobieranie wyników mogło paść"
+                )
+    except Exception as e:  # noqa: BLE001 — monitor milczący przy własnej awarii
+        # jest gorszy niż jego brak: sygnalizujemy problem zamiast zwracać 500,
+        # bo 500 uruchamia retry Schedulera i zapętla alarm.
+        powody.append(f"nie udało się odpytać bazy: {e}")
+
+    ok = not powody
+    alarm_wyslany = False
+    if not ok:
+        alarm_wyslany = _wyslij_alarm(powody, wiek_h, nierozliczone)
+        _log.error("pipeline-health NIEZDROWY: %s", "; ".join(powody))
+
+    return {
+        "ok": ok,
+        "wiek_predykcji_h": wiek_h,
+        "nierozliczone": nierozliczone,
+        "powody": powody,
+        "alarm_wyslany": alarm_wyslany,
+    }
+
+
+def _wyslij_alarm(powody: list[str], wiek_h: float | None, nierozliczone: int) -> bool:
+    """Jedna wiadomość ze WSZYSTKIMI powodami — nie osobna na każdy."""
+    try:
+        from footstats.utils.telegram_notify import _send
+
+        lista = "\n".join(f"• {p}" for p in powody)
+        tekst = (
+            "<b>⚠️ FootStats: pipeline nie produkuje</b>\n\n"
+            f"{lista}\n\n"
+            f"<i>wiek najnowszej predykcji: "
+            f"{f'{wiek_h:.0f}h' if wiek_h is not None else 'brak danych'} | "
+            f"nierozliczonych: {nierozliczone}</i>"
+        )
+        return bool(_send(tekst))
+    except Exception as e:  # noqa: BLE001 — brak Telegrama nie może ukryć wyniku
+        _log.error("pipeline-health: alarm niewyslany: %s", e)
+        return False
