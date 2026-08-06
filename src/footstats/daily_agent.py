@@ -602,6 +602,26 @@ def main():
     except (ImportError, AttributeError):
         pass
 
+    # -- Dziennik kalibracyjny: zapisz KAŻDĄ ocenę modelu PRZED filtrami ──────
+    #
+    # Filtry niżej istnieją po to, żeby wybrać co OBSTAWIĆ, i słusznie są ostre:
+    # 2026-08-05 z 46 kandydatów zostało 0 (blacklista lig 46→3, EV/Kelly 3→0).
+    # Ale kalibracja modelu potrzebuje czegoś innego — wszystkich przewidywań
+    # wraz z wynikami, niezależnie od opłacalności. Zapis dopiero po filtrach
+    # oznaczał, że model widzi wyłącznie ~5% własnych ocen i nigdy nie dowie się,
+    # czy jego prawdopodobieństwa są trafne.
+    #
+    # Osobna tabela `model_log` — patrz `core/kalibracja_log.py`. Zero wpływu na
+    # kupony i na statystyki selekcji liczone z `predictions`.
+    try:
+        from footstats.core.kalibracja_log import zapisz_partie
+        n_kal = zapisz_partie(wyniki, zrodlo=args.faza or "final")
+        if n_kal:
+            console.print(f"[dim]Dziennik kalibracyjny: zapisano {n_kal} ocen modelu[/dim]")
+    except (ImportError, OSError, RuntimeError) as e:
+        # Dziennik to obserwacja, nie warunek działania — nie może zabić runu.
+        log.warning("Dziennik kalibracyjny pominięty: %s", e)
+
     # -- Pre-filtr tokenów: odrzuca mecze bez pełnej nazwy drużyny lub ligi ──
     n_przed_token = len(wyniki)
     wyniki = _pre_filtruj_tokenow(wyniki)
