@@ -1,0 +1,44 @@
+# cloudbuild_api.yaml — build obrazu serwisu API (Dockerfile.api).
+#
+# Po co plik w repo: `gcloud builds submit --tag` używa domyślnego `Dockerfile`,
+# a my potrzebujemy `Dockerfile.api`. Bez tego pliku ręczny build pada na
+# "Invalid value for [source]: Dockerfile required when specifying --tag"
+# (zweryfikowane realnym buildem 2026-08-06).
+#
+# Normalnie API deployuje się SAMO z maina przez `.github/workflows/cd.yml`.
+# Ten plik jest zapasową ścieżką na wypadek, gdy CD nie zadziała — a zdarzyło
+# się to 2026-08-06: dwa commity nie wywołały builda i endpoint nie trafił na
+# produkcję, przez co świeżo utworzone zadanie Schedulera dostawało 404.
+#
+# Użycie:
+#   gcloud builds submit --config cloudbuild_api.yaml \
+#     --substitutions=_TAG=$(git rev-parse HEAD) .
+#
+# Potem podmiana obrazu w serwisie (osobny, świadomy krok — zmienia PRODUKCJĘ):
+#   gcloud run deploy footstats-api --region=europe-west1 --image <IMAGE>:<TAG>
+#
+# Tag = pełny SHA commita, tak samo jak robi to CD — dzięki temu widać wprost,
+# która rewizja serwisu odpowiada któremu stanowi repo.
+
+substitutions:
+  _IMAGE: europe-west1-docker.pkg.dev/footstats-495009/footstats/footstats-api
+  # NIE używać wbudowanego $SHORT_SHA — przy `builds submit` z katalogu lokalnego
+  # jest pusty (wypełnia go tylko trigger z repo), więc tag wychodzi "obraz:"
+  # i build pada na "could not parse reference".
+  _TAG: manual
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=Dockerfile.api
+      - --tag=${_IMAGE}:${_TAG}
+      - .
+
+images:
+  - ${_IMAGE}:${_TAG}
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s

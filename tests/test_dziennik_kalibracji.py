@@ -256,3 +256,21 @@ def test_nierozliczalny_wynik_nie_zapisuje_trafnosci(baza, wynik, typ):
     kalibracje, a wiersz wygladalby na rozliczony i nie wrocilby do kolejki."""
     assert kl.zapisz_wynik(5, wynik, model_tip=typ) is False
     assert baza["conn"].zawierajace("UPDATE model_log") == []
+
+
+# ── tabela musi powstac zanim ktokolwiek o nia zapyta ──────────────────────
+#
+# REGRESJA 2026-08-06: `init_kalibracja_log()` odpalal sie WYLACZNIE w
+# `zapisz_partie` (czyli w dziennym jobie). Endpoint `/cron/kalibracja-rozlicz`
+# wolal `pobierz_nierozliczone` jako pierwszy i dostawal
+# `relation "model_log" does not exist` -> HTTP 500 z golym tracebackiem.
+
+def test_pobieranie_tworzy_tabele_gdy_brak(monkeypatch):
+    """Czytelnik nie moze zakladac, ze ktos inny juz utworzyl tabele."""
+    wolania = []
+    monkeypatch.setattr(kl, "init_kalibracja_log", lambda: wolania.append("init"))
+    monkeypatch.setattr(kl, "_connect", lambda *a, **k: _Conn())
+
+    kl.pobierz_nierozliczone()
+
+    assert wolania == ["init"]

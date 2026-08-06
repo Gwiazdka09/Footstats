@@ -1,6 +1,8 @@
 """Status and config endpoints."""
 import hmac
 import json
+
+import psycopg2
 import logging
 import os
 from datetime import datetime, timedelta
@@ -219,7 +221,9 @@ def cron_kalibracja_rozlicz(
         raport = rozlicz_dziennik(dni_wstecz=dni_wstecz, dry_run=dry_run)
         _log.info("cron_kalibracja_rozlicz: %s", raport)
         return {"ok": True, **raport}
-    except (ValueError, KeyError, RuntimeError, OSError) as e:
-        # Scheduler musi zobaczyc blad — HTTP 200 ukrylby awarie.
+    except (ValueError, KeyError, RuntimeError, OSError, psycopg2.Error) as e:
+        # Scheduler musi zobaczyc blad — HTTP 200 ukrylby awarie. `psycopg2.Error`
+        # w krotce, bo bez niej brak tabeli konczyl sie golym tracebackiem
+        # zamiast czytelnego komunikatu (2026-08-06).
         _log.error("cron_kalibracja_rozlicz blad: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

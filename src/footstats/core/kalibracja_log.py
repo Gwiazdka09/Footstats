@@ -160,6 +160,12 @@ def pobierz_nierozliczone(dni_wstecz: int = 14) -> list[dict]:
     """
     from datetime import datetime, timedelta
 
+    # Tabela moze jeszcze nie istniec: `init` odpala sie w `zapisz_partie`, czyli
+    # w dziennym jobie, a rozliczanie bywa pierwszym, ktory tu zaglada. Bez tego
+    # endpoint /cron/kalibracja-rozlicz dostawal `relation "model_log" does not
+    # exist` i konczyl HTTP 500 (2026-08-06).
+    init_kalibracja_log()
+
     granica = (datetime.now() - timedelta(days=dni_wstecz)).strftime("%Y-%m-%d")
     with _connect() as conn:
         rows = conn.execute(
