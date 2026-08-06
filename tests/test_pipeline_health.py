@@ -259,3 +259,66 @@ def test_status_wysylki_raportowany(srodowisko):
     srodowisko["conn"] = _Conn(wiek_h=72.0)
 
     assert _sprawdz().json()["alarm_wyslany"] is True
+
+
+# ── /cron/kalibracja-rozlicz ───────────────────────────────────────────────
+#
+# Dziennik kalibracyjny bez rozliczania zbiera oceny, ktorych nikt nie ocenia.
+# Endpoint odpalany codziennie przez Schedulera, po jobie evening.
+
+def test_rozliczanie_wymaga_sekretu(srodowisko):
+    r = client.post("/api/cron/kalibracja-rozlicz", headers={"X-Cron-Secret": "zly"})
+
+    assert r.status_code == 401
+
+
+def test_rozliczanie_zwraca_raport(srodowisko, monkeypatch):
+    import footstats.core.kalibracja_rozlicz as kr
+    monkeypatch.setattr(kr, "rozlicz_dziennik",
+                        lambda **kw: {"sprawdzone": 5, "rozliczone": 3,
+                                      "bez_wyniku": 2, "bledy": 0})
+
+    dane = client.post("/api/cron/kalibracja-rozlicz",
+                       headers={"X-Cron-Secret": SEKRET}).json()
+
+    assert dane["rozliczone"] == 3
+    assert dane["ok"] is True
+
+
+def test_rozliczanie_przekazuje_okno(srodowisko, monkeypatch):
+    import footstats.core.kalibracja_rozlicz as kr
+    przekazane = {}
+    monkeypatch.setattr(kr, "rozlicz_dziennik",
+                        lambda **kw: przekazane.update(kw) or {"sprawdzone": 0})
+
+    client.post("/api/cron/kalibracja-rozlicz?dni_wstecz=30",
+                headers={"X-Cron-Secret": SEKRET})
+
+    assert przekazane["dni_wstecz"] == 30
+
+
+def test_rozliczanie_dry_run(srodowisko, monkeypatch):
+    """Podglad przed zapisem — ta sama zasada co przy kuponach."""
+    import footstats.core.kalibracja_rozlicz as kr
+    przekazane = {}
+    monkeypatch.setattr(kr, "rozlicz_dziennik",
+                        lambda **kw: przekazane.update(kw) or {"sprawdzone": 0})
+
+    client.post("/api/cron/kalibracja-rozlicz?dry_run=true",
+                headers={"X-Cron-Secret": SEKRET})
+
+    assert przekazane["dry_run"] is True
+
+
+def test_awaria_rozliczania_to_500_a_nie_cisza(srodowisko, monkeypatch):
+    """Scheduler musi zobaczyc blad — HTTP 200 ukrylby awarie."""
+    import footstats.core.kalibracja_rozlicz as kr
+
+    def wybucha(**kw):
+        raise RuntimeError("baza padla")
+
+    monkeypatch.setattr(kr, "rozlicz_dziennik", wybucha)
+
+    r = client.post("/api/cron/kalibracja-rozlicz", headers={"X-Cron-Secret": SEKRET})
+
+    assert r.status_code == 500

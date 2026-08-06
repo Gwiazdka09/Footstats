@@ -199,3 +199,27 @@ def _wyslij_alarm(powody: list[str], wiek_h: float | None, nierozliczone: int) -
     except Exception as e:  # noqa: BLE001 — brak Telegrama nie może ukryć wyniku
         _log.error("pipeline-health: alarm niewyslany: %s", e)
         return False
+
+
+@router.post("/cron/kalibracja-rozlicz")
+def cron_kalibracja_rozlicz(
+    x_cron_secret: str = Header(default=""),
+    dni_wstecz: int = 14,
+    dry_run: bool = False,
+) -> dict:
+    """Dopisuje wyniki do dziennika kalibracji (`model_log`).
+
+    Osobny trigger od rozliczania kuponow: kupony scigaja sie z czasem i maja
+    okno 2-3 dni, dziennik nadrabia zaleglosci szerszym oknem. Patrz
+    `core/kalibracja_rozlicz.py`.
+    """
+    _sprawdz_cron_secret(x_cron_secret)
+    try:
+        from footstats.core.kalibracja_rozlicz import rozlicz_dziennik
+        raport = rozlicz_dziennik(dni_wstecz=dni_wstecz, dry_run=dry_run)
+        _log.info("cron_kalibracja_rozlicz: %s", raport)
+        return {"ok": True, **raport}
+    except (ValueError, KeyError, RuntimeError, OSError) as e:
+        # Scheduler musi zobaczyc blad — HTTP 200 ukrylby awarie.
+        _log.error("cron_kalibracja_rozlicz blad: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
