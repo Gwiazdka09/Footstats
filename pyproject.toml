@@ -10,6 +10,14 @@ requires-python = ">=3.11"
 dependencies = [
     "requests>=2.31",
     "pandas>=2.0",
+    # BAZA, nie extra: `pandas.read_parquet` nie ma wbudowanego czytnika — bez
+    # pyarrow leci ImportError. Nie bylo tego NIGDZIE, a lokalnie dziala, bo
+    # pyarrow wchodzi przy okazji innych pakietow. W obrazach prod nie wchodzilo,
+    # wiec `load_cached()` wywalalo sie w kazdym kontenerze, a quick_picks lapie
+    # to pod except i cicho schodzi z Poissona-DC na Bzzoiro-ML: dataset jechal
+    # do obu obrazow i ani razu nie dal sie odczytac (sprawdzone 2026-08-07 na
+    # realnych obrazach footstats-api i footstats-jobs).
+    "pyarrow>=15.0",
     "numpy>=1.24",
     "scipy>=1.11",
     "rich>=13.0",

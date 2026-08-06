@@ -14,6 +14,8 @@
 # ── baza (pyproject [project].dependencies) ──────────────────────────────────
 requests>=2.31
 pandas>=2.0
+# Silnik parquet dla pandas — patrz komentarz w pyproject.toml.
+pyarrow>=15.0
 numpy>=1.24
 scipy>=1.11
 rich>=13.0
