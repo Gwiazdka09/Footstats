@@ -1,0 +1,113 @@
+name: Weekly dataset refresh
+
+# Dociąga świeże kolejki do `data/hist_cache/full_dataset.parquet` i otwiera PR.
+#
+# PO CO: ten parquet karmi Poissona-DC w `quick_picks`, `lambda_optimizer`
+# i walk-forward, a do produkcji jedzie WPIECZONY w obrazy Cloud Run
+# (Dockerfile.api / Dockerfile.jobs). Cloud Run ma system plików tylko do
+# odczytu, więc dataset nie może odświeżać się sam w runtime — jedyna droga
+# prowadzi przez commit i przebudowę obrazu.
+#
+# Bez tego zadania odświeżenie zależało od tego, czy ktoś sobie przypomni:
+# 2026-08-07 dane urywały się na 2026-05-24, czyli model typował cały start
+# sezonu, nie widziawszy z niego ani jednego meczu.
+#
+# PR zamiast pushu na main: zmiana danych treningowych ma być świadomie
+# przejrzana (ile meczów doszło, czy nie ubyło), a nie wjeżdżać na produkcję
+# w nocy. Merge PR-a uruchamia `cd.yml` (obraz API).
+#
+# UWAGA: `cd.yml` przebudowuje TYLKO serwis API. Obrazu jobów
+# (`footstats-final` / `footstats-evening`) nie rusza — po merge trzeba
+# osobno: `gcloud builds submit --config cloudbuild_jobs.yaml ...`.
+
+on:
+  schedule:
+    - cron: '30 4 * * 1'   # poniedziałek 04:30 UTC — po weekendowych kolejkach
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas pyarrow requests
+
+      # Cache per sezon (`fdco_<liga>_<sezon>.parquet`) nie jest w repo, więc
+      # runner pobiera wszystkie sezony od zera. To ~90 małych CSV-ek.
+      - name: Refresh dataset
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "src")
+          import pandas as pd
+          from footstats.data.historical_loader import download_all, CACHE_DIR
+
+          plik = CACHE_DIR / "full_dataset.parquet"
+          przed = pd.read_parquet(plik) if plik.exists() else pd.DataFrame()
+          po = download_all()
+
+          n_przed, n_po = len(przed), len(po)
+          maks = po["date"].max() if n_po else "brak"
+          print(f"::notice::dataset {n_przed} -> {n_po} meczow, ostatni {maks}")
+
+          # Zbiór historyczny może tylko rosnąć (poza korektami źródła). Nagły
+          # spadek znaczy, że któreś źródło padło albo okno sezonów się zsunęło —
+          # taki plik nie ma prawa trafić do PR-a, bo model straciłby historię.
+          if n_przed and n_po < n_przed * 0.98:
+              sys.exit(f"BLAD: dataset skurczyl sie {n_przed} -> {n_po}")
+          PY
+
+      # Świadomie bez gotowej akcji "create-pull-request": to zadanie ma prawo
+      # zapisu do repo, więc im mniej obcego kodu w tym kroku, tym lepiej.
+      # `git` i `gh` są na runnerze standardowo.
+      - name: Open PR with refreshed dataset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PLIK=data/hist_cache/full_dataset.parquet
+          if git diff --quiet -- "$PLIK"; then
+            echo "::notice::brak nowych meczow — nic do zrobienia"
+            exit 0
+          fi
+
+          BRANCH=chore/dataset-refresh
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add "$PLIK"
+          git commit -m "chore(dane): cotygodniowe odswiezenie full_dataset.parquet"
+          git push --force-with-lease origin "$BRANCH"
+
+          # Gdy PR z poprzedniego tygodnia wisi niezmergowany, push wystarczy.
+          if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "chore(dane): odswiezenie datasetu historycznego" \
+              --body "$(cat <<'BODY'
+          Automatyczne odświeżenie `full_dataset.parquet` z football-data.co.uk.
+
+          Liczby (przed → po, ostatni mecz) są w logu kroku *Refresh dataset*.
+
+          Po merge `cd.yml` przebuduje obraz **API**. Obraz **jobów** trzeba
+          przebudować osobno:
+
+          ```
+          gcloud builds submit --config cloudbuild_jobs.yaml \
+            --substitutions=_TAG=$(git rev-parse HEAD) .
+          ```
+          BODY
+          )"
+          fi

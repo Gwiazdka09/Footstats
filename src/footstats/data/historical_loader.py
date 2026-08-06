@@ -1,18 +1,25 @@
 """
 historical_loader.py – pobiera i normalizuje dane historyczne z trzech źródeł:
-  1. football-data.co.uk  (CSV per sezon, Eredivisie + inne)
-  2. football-data.co.uk  (nowy format "new/", Ekstraklasa)
-  3. xgabora GitHub       (226k meczów 2000-2025 + Elo ratings)
+  1. football-data.co.uk  (CSV per sezon: ENG/GER/ESP/ITA/FRA/NED/BEL/SCO)
+  2. football-data.co.uk  (nowy format "new/": Ekstraklasa, AUT-Bundesliga)
+  3. xgabora GitHub       (226k meczów 2000-2025) — NIE w domyślnym zakresie,
+     bo nazywa ligi kodami ("E0") zamiast pełnych nazw jak reszta datasetu
 
 Użycie:
     from footstats.data.historical_loader import download_all, load_cached
 
-    df = download_all()          # pobiera i cache'uje
+    df = download_all()          # pobiera i cache'uje (pełny zakres produkcyjny)
     df = load_cached()           # tylko z dysku (szybkie)
+
+`download_all()` bez argumentów odtwarza dokładnie ten skład, który leży
+w `data/hist_cache/full_dataset.parquet` i jedzie do obrazów Cloud Run
+(patrz `Dockerfile.jobs` / `Dockerfile.api`) — dzięki temu odświeżenie danych
+jest jednym wywołaniem i nie da się nim przypadkiem okroić zbioru.
 """
 
 import io
 import logging
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -25,11 +32,43 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 BASE_FDCO = "https://www.football-data.co.uk"
 
-# Sezony do pobrania (format YYYY/YY → "2324")
-FDCO_SEASONS = [
-    "2526", "2425", "2324", "2223", "2122",
-    "2021", "1920", "1819", "1718", "1617",
-]
+# Ile sezonów trzymamy w datasecie: trwający + 10 rozegranych do końca.
+# Nie 10 łącznie — wtedy start nowego sezonu (w którym jest kilkanaście meczów)
+# wypychałby z okna cały sezon rozegrany, czyli refresh dokładałby 34 mecze
+# kosztem 2566. Liczba pełnych sezonów ma być stała przez cały rok.
+LICZBA_SEZONOW = 11
+
+# Plik trwającego sezonu dopisuje kolejki co tydzień, więc cache musi wygasać.
+# Sezony zamknięte są niezmienne — ich cache zostaje na zawsze (patrz
+# `_cache_wazny`), inaczej każdy przebieg ciągnąłby ~80 plików CSV bez powodu.
+TTL_BIEZACY_SEZON_H = 12
+
+
+def kod_sezonu(dzien: date | None = None) -> str:
+    """Kod sezonu football-data.co.uk dla danego dnia ("2627" = sezon 2026/27).
+
+    Sezon leży na przełomie lat kalendarzowych. Za granicę bierzemy lipiec:
+    football-data publikuje plik nowego sezonu jeszcze przed pierwszą kolejką,
+    a rozgrywki startują w lipcu/sierpniu.
+    """
+    d = dzien or date.today()
+    rok = d.year if d.month >= 7 else d.year - 1
+    return f"{rok % 100:02d}{(rok + 1) % 100:02d}"
+
+
+def ostatnie_sezony(ile: int = LICZBA_SEZONOW, dzien: date | None = None) -> list[str]:
+    """Kody `ile` ostatnich sezonów, od bieżącego wstecz.
+
+    Liczone z daty, nie z literału. Poprzednia wersja była listą wpisaną na
+    sztywno i skończyła się na "2526" — 2026-08-07 dataset urywał się więc na
+    maju, a model typował mecze sezonu, którego nie widział ani razu.
+    """
+    rok = 2000 + int(kod_sezonu(dzien)[:2])
+    return [f"{(rok - i) % 100:02d}{(rok - i + 1) % 100:02d}" for i in range(ile)]
+
+
+# Zachowane dla zgodności z kodem, który importuje stałą.
+FDCO_SEASONS = ostatnie_sezony()
 
 # Ligi z plików sezonowych (kod → (kod_pliku, nazwa_ligi))
 FDCO_LEAGUES = {
@@ -140,18 +179,34 @@ def _download_fdco_season(league_code: str, season: str) -> pd.DataFrame | None:
     return out.dropna(subset=["home", "away", "hg", "ag"])
 
 
+def _cache_wazny(cache_f: Path, sezon: str) -> bool:
+    """Czy plik cache można wziąć z dysku zamiast pobierać.
+
+    Sezon zamknięty: zawsze. Sezon trwający: tylko w granicach TTL — inaczej
+    dataset zamarza na kolejce, na której akurat pierwszy raz go pobrano.
+    """
+    if not cache_f.exists():
+        return False
+    if sezon != kod_sezonu():
+        return True
+    wiek_h = (
+        pd.Timestamp.now() - pd.Timestamp(cache_f.stat().st_mtime, unit="s")
+    ).total_seconds() / 3600
+    return wiek_h < TTL_BIEZACY_SEZON_H
+
+
 def download_fdco_seasons(
     leagues: list[str] | None = None,
     seasons: list[str] | None = None,
 ) -> pd.DataFrame:
     """Pobiera ligi sezonowe z football-data.co.uk."""
     leagues = leagues or list(FDCO_LEAGUES.keys())
-    seasons = seasons or FDCO_SEASONS
+    seasons = seasons or ostatnie_sezony()
     frames = []
     for lg in leagues:
         for s in seasons:
             cache_f = CACHE_DIR / f"fdco_{lg}_{s}.parquet"
-            if cache_f.exists():
+            if _cache_wazny(cache_f, s):
                 frames.append(pd.read_parquet(cache_f))
                 continue
             df = _download_fdco_season(lg, s)
@@ -543,28 +598,36 @@ def download_all(
     fdco_leagues: list[str] | None = None,
     fdco_seasons: list[str] | None = None,
     fdco_new_countries: list[str] | None = None,
-    include_xgabora: bool = True,
+    include_xgabora: bool = False,
     include_xg: bool = False,
     xg_leagues: list[str] | None = None,
     xg_seasons: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Pobiera dane ze wszystkich źródeł i łączy w jeden DataFrame.
-    Domyślnie: Eredivisie (10 sezonów) + Ekstraklasa + xgabora.
+
+    Domyślny zakres = dokładnie to, z czego zbudowany jest `full_dataset.parquet`
+    na produkcji: 8 lig sezonowych + Ekstraklasa + austriacka Bundesliga,
+    ostatnie `LICZBA_SEZONOW` sezonów, BEZ xgabora.
+
+    Wcześniej domyślne były `["N1"]` + `["POL"]` + xgabora, więc odświeżenie
+    danych wywołaniem bez argumentów ścinało dataset z 10 lig do 2 i dokładało
+    źródło nazywające ligi kodami ("E0" zamiast "ENG-Premier League") — ten sam
+    mecz trafiał do zbioru dwa razy, pod dwiema nazwami ligi.
     """
     frames = []
 
     print("[HistLoader] Pobieram football-data.co.uk (sezony)...")
     df_fdco = download_fdco_seasons(
-        leagues=fdco_leagues or ["N1"],
-        seasons=fdco_seasons or FDCO_SEASONS,
+        leagues=fdco_leagues or list(FDCO_LEAGUES.keys()),
+        seasons=fdco_seasons or ostatnie_sezony(),
     )
     if not df_fdco.empty:
         print(f"  -> {len(df_fdco)} meczow (fdco_season)")
         frames.append(df_fdco)
 
     print("[HistLoader] Pobieram football-data.co.uk (nowy format)...")
-    df_new = download_fdco_new(countries=fdco_new_countries or ["POL"])
+    df_new = download_fdco_new(countries=fdco_new_countries or list(FDCO_NEW_LEAGUES.keys()))
     if not df_new.empty:
         print(f"  -> {len(df_new)} meczow (fdco_new)")
         frames.append(df_new)
