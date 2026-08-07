@@ -91,17 +91,47 @@ LIGI_POISSON_TOP5: dict[str, str] = {
 }
 
 # ── Liga Edge Filter ─────────────────────────────────────────────────────────
-# Ligi z danymi Poissona (Understat top-5 + Ekstraklasa + inne z historią)
+#
+# Ligi obecne w `data/hist_cache/full_dataset.parquet` → nazwy, pod jakimi
+# widzi je źródło predykcji. TYLKO dla nich Poisson ma z czego liczyć λ.
+#
+# Po co osobna mapa zamiast wpisania nazw wprost do whitelisty: oba zbiory
+# rozjechały się po cichu. Dataset ma belgijską ligę jako "BEL-First Division A"
+# (2805 meczów), whitelist znała ją wyłącznie jako "Jupiler Pro League",
+# a źródło nazywa ją "Pro League" — belgijski mecz przeszedł przez przebieg
+# 07.08 i wypadł na samej nazwie, mimo pełnej historii. Szkockiej nie było
+# w whiteliście w ogóle. `tests/test_whitelist_pokrycie_datasetu.py` wiąże te
+# zbiory: nowa liga w parquecie bez wpisu tutaj = czerwony test.
+#
+# Warianty szkocki i austriacki wpisane "na zapas" — obie ligi wystartowały
+# pod koniec lipca, ale żaden ich mecz nie przeszedł jeszcze przez pipeline,
+# więc dokładnego zapisu źródła nie znamy. Nadmiarowy alias nic nie psuje
+# (whitelist to test przynależności), brakujący kosztuje całą ligę.
+LIGI_DATASET_ALIASY: dict[str, tuple[str, ...]] = {
+    "ENG-Premier League":   ("Premier League", "ENG-Premier League"),
+    "ESP-La Liga":          ("La Liga", "ESP-La Liga"),
+    "GER-Bundesliga":       ("Bundesliga", "GER-Bundesliga"),
+    "ITA-Serie A":          ("Serie A", "ITA-Serie A"),
+    "FRA-Ligue 1":          ("Ligue 1", "FRA-Ligue 1"),
+    "NED-Eredivisie":       ("Eredivisie", "NED-Eredivisie"),
+    "POL-Ekstraklasa":      ("Ekstraklasa", "PKO BP Ekstraklasa", "POL-Ekstraklasa"),
+    "BEL-First Division A": ("Pro League", "Jupiler Pro League", "Belgian Pro League",
+                             "First Division A", "BEL-First Division A"),
+    "SCO-Premiership":      ("Premiership", "Scottish Premiership", "SCO-Premiership"),
+    "AUT-Bundesliga":       ("Austrian Bundesliga", "Admiral Bundesliga", "AUT-Bundesliga"),
+}
+
+# Ligi, dla których przepuszczamy kandydatów. Aliasy datasetu dochodzą sumą
+# zbiorów — inaczej dopisanie ligi do danych znów mogłoby minąć się z filtrem.
+# Pozostałe pozycje to ligi BEZ historii w parquecie: Poisson ich nie policzy,
+# predykcja przyjdzie z Bzzoiro-ML i będzie tak oznaczona (`model_source`).
+# Zostają świadomie — to wciąż materiał do nauki, tylko cudzego modelu.
 LIGI_WHITELIST: frozenset[str] = frozenset({
-    "Premier League", "ENG-Premier League",
-    "La Liga", "ESP-La Liga",
-    "Bundesliga", "GER-Bundesliga",
-    "Ligue 1", "FRA-Ligue 1",
-    "Serie A", "ITA-Serie A",
-    "PKO BP Ekstraklasa", "Ekstraklasa",
-    "Eredivisie",
+    *(alias for aliasy in LIGI_DATASET_ALIASY.values() for alias in aliasy),
+    # Poniżej WYŁĄCZNIE ligi bez historii w parquecie — nazwy lig z danymi
+    # trzymamy w jednym miejscu (LIGI_DATASET_ALIASY), żeby nie mogły się
+    # rozjechać po raz drugi.
     "Primeira Liga",
-    "Jupiler Pro League",
     "Super Lig",
     "Championship",
     "Serie B",
