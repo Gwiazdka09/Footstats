@@ -127,7 +127,21 @@ def test_zadne_dwie_rozne_druzyny_z_datasetu_sie_nie_zlewaja():
     for d in druzyny:
         wg_normy.setdefault(normalize_team_name(d), []).append(d)
 
-    kolizje = {k: v for k, v in wg_normy.items() if len(v) > 1}
+    def _ten_sam_zapis(nazwy: list[str]) -> bool:
+        """Czy to jeden klub zapisany niekonsekwentnie, czy dwa różne kluby.
+
+        Źródło bywa niechlujne w samej wielkości liter i spacjach — dataset
+        po rozszerzeniu na 40 lig (2026-08-07) ma i "Colon Santa Fe",
+        i "Colon Santa FE". To ten sam argentyński klub, więc sklejenie ich
+        jest POPRAWNE, a nie kolizją. Test pilnuje czegoś innego: żeby dwa
+        RÓŻNE kluby nie dostały wspólnej normalizacji.
+        """
+        return len({" ".join(n.split()).casefold() for n in nazwy}) == 1
+
+    kolizje = {
+        k: v for k, v in wg_normy.items()
+        if len(v) > 1 and not _ten_sam_zapis(v)
+    }
     assert not kolizje, f"rozne kluby o tej samej normalizacji: {kolizje}"
 
 

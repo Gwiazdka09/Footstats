@@ -73,11 +73,16 @@ def test_ligi_keyword_case_insensitive():
 # ── FAZA 17.4: egzekwowanie whitelist ────────────────────────────────────
 
 def test_ligi_spoza_whitelist_odrzucone():
-    # Allsvenskan/Veikkausliiga nie są w whitelist → odrzuć (gdy enforce=True).
-    # (Botola Pro dodane do whitelist 2026-06-19 — patrz test_whitelist_active_leagues.)
+    """Liga, dla której nie mamy historii, nie ma po co wchodzić do pipeline'u.
+
+    Przykłady zmienione 2026-08-07: były tu Allsvenskan i Veikkausliiga, ale
+    dataset urósł do 40 lig i obie doszły razem z danymi (`FDCO_NEW_LEAGUES`),
+    więc slusznie przechodzą. K League i NPL Queensland nie są dostępne
+    u żadnego z naszych dostawców historii — patrz `LIGI_DATASETU`.
+    """
     kandydaci = [
-        {"liga": "Allsvenskan", "gospodarz": "Malmö"},
-        {"liga": "Veikkausliiga", "gospodarz": "HJK"},
+        {"liga": "K League 1", "gospodarz": "Ulsan"},
+        {"liga": "NPL Queensland", "gospodarz": "Brisbane"},
     ]
     result = _pre_filtruj_ligi(kandydaci)
     assert result == []

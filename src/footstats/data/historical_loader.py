@@ -70,23 +70,76 @@ def ostatnie_sezony(ile: int = LICZBA_SEZONOW, dzien: date | None = None) -> lis
 # Zachowane dla zgodności z kodem, który importuje stałą.
 FDCO_SEASONS = ostatnie_sezony()
 
-# Ligi z plików sezonowych (kod → (kod_pliku, nazwa_ligi))
+# Ligi z plików sezonowych (kod football-data.co.uk → nazwa w datasecie).
+# Rozszerzone 2026-08-07: przez rok braliśmy 8 z 22 dostępnych, więc Poisson
+# nie miał historii dla większości meczów, jakie w ogóle podaje źródło predykcji.
+# Niższe klasy (E1-EC, SC1-SC3, D2, I2, SP2, F2) też mają wartość: drużyny
+# spadają i awansują, a bez nich beniaminek startuje bez ani jednego meczu.
 FDCO_LEAGUES = {
-    "N1":  "NED-Eredivisie",
-    "D1":  "GER-Bundesliga",
     "E0":  "ENG-Premier League",
-    "SP1": "ESP-La Liga",
+    "E1":  "ENG-Championship",
+    "E2":  "ENG-League One",
+    "E3":  "ENG-League Two",
+    "EC":  "ENG-National League",
+    "SC0": "SCO-Premiership",
+    "SC1": "SCO-Championship",
+    "SC2": "SCO-League One",
+    "SC3": "SCO-League Two",
+    "D1":  "GER-Bundesliga",
+    "D2":  "GER-2. Bundesliga",
     "I1":  "ITA-Serie A",
+    "I2":  "ITA-Serie B",
+    "SP1": "ESP-La Liga",
+    "SP2": "ESP-Segunda Division",
     "F1":  "FRA-Ligue 1",
-    "B1":  "BEL-First Division A",   # Belgia: format sezonowy (brak w /new/)
-    "SC0": "SCO-Premiership",        # Szkocja: format sezonowy (brak w /new/)
+    "F2":  "FRA-Ligue 2",
+    "N1":  "NED-Eredivisie",
+    "B1":  "BEL-First Division A",
+    "P1":  "POR-Primeira Liga",
+    "T1":  "TUR-Super Lig",
+    "G1":  "GRE-Super League",
 }
 
-# Ligi z nowego formatu (jeden plik zbiorczy z całą historią)
+# Kraje z nowego formatu (jeden plik zbiorczy z całą historią).
+# Wartość to nazwa ZAPASOWA — używana tylko, gdy w pliku nie ma kolumny
+# `League`. Normalnie nazwa ligi idzie z pliku, bo część krajów trzyma
+# w jednym pliku kilka rozgrywek (ARG: Liga Profesional + Copa,
+# SWZ: Super League + Challenge League).
 FDCO_NEW_LEAGUES = {
     "POL": "POL-Ekstraklasa",
     "AUT": "AUT-Bundesliga",
+    "ARG": "ARG-Liga Profesional",
+    "BRA": "BRA-Serie A",
+    "CHN": "CHN-Super League",
+    "DNK": "DNK-Superliga",
+    "FIN": "FIN-Veikkausliiga",
+    "IRL": "IRL-Premier Division",
+    "JPN": "JPN-J1 League",
+    "MEX": "MEX-Liga MX",
+    "NOR": "NOR-Eliteserien",
+    "ROU": "ROU-Superliga",
+    "RUS": "RUS-Premier League",
+    "SWE": "SWE-Allsvenskan",
+    "SWZ": "SWZ-Super League",
+    "USA": "USA-MLS",
 }
+
+
+def _nazwa_ligi_new(country_code: str, liga_z_pliku: str | None) -> str:
+    """Nazwa ligi dla wiersza z pliku `new/`: "SWZ-Super League".
+
+    Źródło zostawia w nazwach końcowe spacje ('Superliga '), przez co ta sama
+    liga potrafi wystąpić jako dwie różne — stąd `strip()`. Pusta nazwa cofa
+    się do mapy krajów, żeby nigdy nie powstało samo "SWZ-".
+    """
+    # `pd.isna` osobno: pusta komórka wraca z pandas jako NaN, a NaN jest
+    # prawdziwościowo PRAWDZIWY — `or ""` go nie złapie i powstałoby "POL-nan".
+    if liga_z_pliku is None or pd.isna(liga_z_pliku):
+        return FDCO_NEW_LEAGUES.get(country_code, country_code)
+    nazwa = str(liga_z_pliku).strip()
+    if not nazwa:
+        return FDCO_NEW_LEAGUES.get(country_code, country_code)
+    return f"{country_code}-{nazwa}"
 
 XGABORA_MATCHES_URL = (
     "https://raw.githubusercontent.com/xgabora/"
@@ -162,7 +215,8 @@ def _download_fdco_season(league_code: str, season: str) -> pd.DataFrame | None:
         ("AvgH",  "AvgD",  "AvgA"),
         ("WHH",   "WHD",   "WHA"),
     ]:
-        if h_col in df.columns:
+        # Komplet trzech kolumn — patrz komentarz w `_download_fdco_new`.
+        if {h_col, d_col, a_col} <= set(df.columns):
             out["odds_h"] = pd.to_numeric(df[h_col], errors="coerce")
             out["odds_d"] = pd.to_numeric(df[d_col], errors="coerce")
             out["odds_a"] = pd.to_numeric(df[a_col], errors="coerce")
@@ -170,7 +224,7 @@ def _download_fdco_season(league_code: str, season: str) -> pd.DataFrame | None:
 
     # Over 2.5
     for oh, ou in [("B365>2.5", "B365<2.5"), ("BbAv>2.5", "BbAv<2.5"), ("Avg>2.5", "Avg<2.5")]:
-        if oh in df.columns:
+        if {oh, ou} <= set(df.columns):
             out["odds_over25"]  = pd.to_numeric(df[oh], errors="coerce")
             out["odds_under25"] = pd.to_numeric(df[ou], errors="coerce")
             break
@@ -234,8 +288,12 @@ def _download_fdco_new(country_code: str) -> pd.DataFrame | None:
 
     out = pd.DataFrame()
     out["date"]    = df["Date"].apply(_parse_date)
-    out["league"]  = FDCO_NEW_LEAGUES.get(country_code, country_code)
-    out["season"]  = df.get("Season", "").astype(str)
+    # Nazwa ligi Z PLIKU: część krajów trzyma w jednym pliku kilka rozgrywek
+    # (ARG, SWZ), więc etykieta per kod kraju wrzucałaby drugą klasę pod nazwę
+    # pierwszej — cichy fałsz w kolumnie, po której filtrujemy i raportujemy.
+    kolumna_ligi = df["League"] if "League" in df.columns else pd.Series([None] * len(df))
+    out["league"]  = [_nazwa_ligi_new(country_code, x) for x in kolumna_ligi]
+    out["season"]  = df["Season"].astype(str) if "Season" in df.columns else ""
     out["home"]    = df["Home"].str.strip()
     out["away"]    = df["Away"].str.strip()
     out["hg"]      = pd.to_numeric(df.get("HG"), errors="coerce")
@@ -243,12 +301,15 @@ def _download_fdco_new(country_code: str) -> pd.DataFrame | None:
     out["result"]  = df.get("Res", "")
 
     # Kursy (format "new" używa B365CH/B365CD/B365CA lub AvgCH itd.)
+    # Komplet TRZECH kolumn, nie tylko pierwszej: część plików `new/` ma kurs
+    # gospodarza bez kursu gościa, a sprawdzanie samego `h_col` kończyło się
+    # `KeyError: 'B365CA'`, które przerywało pobieranie całego kraju.
     for h_col, d_col, a_col in [
         ("B365CH", "B365CD", "B365CA"),
         ("AvgCH",  "AvgCD",  "AvgCA"),
         ("MaxCH",  "MaxCD",  "MaxCA"),
     ]:
-        if h_col in df.columns:
+        if {h_col, d_col, a_col} <= set(df.columns):
             out["odds_h"] = pd.to_numeric(df[h_col], errors="coerce")
             out["odds_d"] = pd.to_numeric(df[d_col], errors="coerce")
             out["odds_a"] = pd.to_numeric(df[a_col], errors="coerce")

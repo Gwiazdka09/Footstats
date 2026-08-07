@@ -107,18 +107,62 @@ LIGI_POISSON_TOP5: dict[str, str] = {
 # pod koniec lipca, ale żaden ich mecz nie przeszedł jeszcze przez pipeline,
 # więc dokładnego zapisu źródła nie znamy. Nadmiarowy alias nic nie psuje
 # (whitelist to test przynależności), brakujący kosztuje całą ligę.
+LIGI_DATASETU: tuple[str, ...] = (
+    # football-data.co.uk, pliki sezonowe
+    "ENG-Premier League", "ENG-Championship", "ENG-League One", "ENG-League Two",
+    "ENG-National League",
+    "SCO-Premiership", "SCO-Championship", "SCO-League One", "SCO-League Two",
+    "GER-Bundesliga", "GER-2. Bundesliga",
+    "ITA-Serie A", "ITA-Serie B",
+    "ESP-La Liga", "ESP-Segunda Division",
+    "FRA-Ligue 1", "FRA-Ligue 2",
+    "NED-Eredivisie", "BEL-First Division A",
+    "POR-Primeira Liga", "TUR-Super Lig", "GRE-Super League",
+    # football-data.co.uk, pliki `new/`
+    "POL-Ekstraklasa", "AUT-Bundesliga",
+    "ARG-Liga Profesional", "ARG-Copa De La Liga Profesional",
+    "BRA-Serie A", "CHN-Super League", "DNK-Superliga", "FIN-Veikkausliiga",
+    "IRL-Premier Division", "JPN-J1 League", "MEX-Liga MX", "NOR-Eliteserien",
+    "ROU-Superliga", "RUS-Premier League", "SWE-Allsvenskan",
+    "SWZ-Super League", "SWZ-Challenge League", "USA-MLS",
+)
+
+# Nazwy, pod którymi widzi te ligi ŹRÓDŁO PREDYKCJI — tylko tam, gdzie różnią
+# się od samej nazwy po prefiksie kraju. Zebrane z realnych wierszy `model_log`
+# tam, gdzie mecz danej ligi już przez pipeline przeszedł; reszta na zapas.
+_ALIASY_ZRODLA: dict[str, tuple[str, ...]] = {
+    "BEL-First Division A": ("Pro League", "Jupiler Pro League", "Belgian Pro League"),
+    "SCO-Premiership":      ("Scottish Premiership",),
+    "AUT-Bundesliga":       ("Austrian Bundesliga", "Admiral Bundesliga"),
+    "POL-Ekstraklasa":      ("PKO BP Ekstraklasa",),
+    "CHN-Super League":     ("Chinese Super League",),
+    "DNK-Superliga":        ("Danish Superliga",),
+    "BRA-Serie A":          ("Brasileirão Serie A", "Brasileirao Serie A"),
+    "ARG-Liga Profesional": ("Liga Profesional de Fútbol", "Liga Profesional de Futbol"),
+    "POR-Primeira Liga":    ("Liga Portugal Betclic", "Liga Portugal"),
+    "USA-MLS":              ("MLS", "Major League Soccer"),
+    "RUS-Premier League":   ("Russian Premier League",),
+    "GRE-Super League":     ("Greek Super League",),
+    "SWZ-Super League":     ("Swiss Super League",),
+    "TUR-Super Lig":        ("Süper Lig",),
+    "ESP-Segunda Division": ("LaLiga 2",),
+    "GER-2. Bundesliga":    ("2. Bundesliga",),
+}
+
+
+def _aliasy_ligi(liga: str) -> tuple[str, ...]:
+    """Pełna nazwa z datasetu + nazwa bez prefiksu kraju + warianty źródła.
+
+    Nazwa bez prefiksu bywa niejednoznaczna („Premier League" to Anglia ORAZ
+    Rosja, „Super League" to Grecja ORAZ Szwajcaria). Dla whitelisty to bez
+    znaczenia — sprawdza przynależność, więc oba warianty i tak przechodzą.
+    """
+    krotka = liga.split("-", 1)[1] if "-" in liga else liga
+    return tuple(dict.fromkeys((liga, krotka, *_ALIASY_ZRODLA.get(liga, ()))))
+
+
 LIGI_DATASET_ALIASY: dict[str, tuple[str, ...]] = {
-    "ENG-Premier League":   ("Premier League", "ENG-Premier League"),
-    "ESP-La Liga":          ("La Liga", "ESP-La Liga"),
-    "GER-Bundesliga":       ("Bundesliga", "GER-Bundesliga"),
-    "ITA-Serie A":          ("Serie A", "ITA-Serie A"),
-    "FRA-Ligue 1":          ("Ligue 1", "FRA-Ligue 1"),
-    "NED-Eredivisie":       ("Eredivisie", "NED-Eredivisie"),
-    "POL-Ekstraklasa":      ("Ekstraklasa", "PKO BP Ekstraklasa", "POL-Ekstraklasa"),
-    "BEL-First Division A": ("Pro League", "Jupiler Pro League", "Belgian Pro League",
-                             "First Division A", "BEL-First Division A"),
-    "SCO-Premiership":      ("Premiership", "Scottish Premiership", "SCO-Premiership"),
-    "AUT-Bundesliga":       ("Austrian Bundesliga", "Admiral Bundesliga", "AUT-Bundesliga"),
+    liga: _aliasy_ligi(liga) for liga in LIGI_DATASETU
 }
 
 # Ligi, dla których przepuszczamy kandydatów. Aliasy datasetu dochodzą sumą
