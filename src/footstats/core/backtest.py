@@ -70,7 +70,10 @@ def init_db() -> None:
                 coupon_id            INTEGER REFERENCES coupons(id),
                 prob_home            REAL,
                 prob_draw            REAL,
-                prob_away            REAL
+                prob_away            REAL,
+                -- Ktory model policzyl te predykcje: 'poisson-dc' albo 'bzzoiro-ml'.
+                -- Puste = nie wiadomo (predykcja sprzed wprowadzenia stempla).
+                model_source         TEXT NOT NULL DEFAULT ''
             );
             CREATE INDEX IF NOT EXISTS idx_match_date  ON predictions(match_date);
             CREATE INDEX IF NOT EXISTS idx_tip_correct ON predictions(tip_correct);
@@ -107,6 +110,7 @@ def save_prediction(
     prob_home:            float | None = None,
     prob_draw:            float | None = None,
     prob_away:            float | None = None,
+    model_source:         str = "",
 ) -> int:
     """
     Zapisuje typ AI przed meczem. Zwraca id nowo utworzonego rekordu.
@@ -138,13 +142,13 @@ def save_prediction(
                 (match_date, team_home, team_away, league,
                  ai_tip, ai_confidence, ai_reasoning, odds,
                  kupon_type, kodeks_rules_checked, prompt_version, factors,
-                 prob_home, prob_draw, prob_away)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+                 prob_home, prob_draw, prob_away, model_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
             """,
             (match_date, team_home, team_away, league,
              ai_tip, ai_confidence, ai_reasoning, odds,
              kupon_type, rules_json, prompt_version, factors_json,
-             prob_home, prob_draw, prob_away),
+             prob_home, prob_draw, prob_away, model_source),
         ).fetchone()
         return row["id"]
 

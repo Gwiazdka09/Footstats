@@ -326,6 +326,14 @@ def szybkie_pewniaczki_2dni(
             # P3/C: `rag.pobierz_rag_kontekst` przepuszcza wyłącznie "POISSON" —
             # bez tego pola kontekst RAG nigdy nie trafiał do promptu Groq.
             "metoda":     "POISSON" if poisson_blend else "ML",
+            # Stempel modelu, ktory REALNIE policzyl ten wynik. Trafia do
+            # `predictions.model_source` (backtest.save_prediction). Bez niego
+            # nie da sie odroznic predykcji Poissona-DC od Bzzoiro-ML, a przez
+            # brak pyarrow w obrazach prod (do 2026-08-07) wszystko, co jest
+            # w bazie, pochodzi z fallbacku — mimo ze mierzone bylo jako "nasz
+            # model". Per mecz, nie globalnie: Poisson potrafi odpasc na
+            # pojedynczej parze bez historii, a reszta stawki liczy sie normalnie.
+            "model_source": "poisson-dc" if poisson_blend else "bzzoiro-ml",
             "wynik_g":    wg,
             "wynik_a":    wa,
             "odds":         odds,

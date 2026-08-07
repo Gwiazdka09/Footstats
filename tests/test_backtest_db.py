@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS predictions (
     coupon_id            INTEGER,
     prob_home            REAL,
     prob_draw            REAL,
-    prob_away            REAL
+    prob_away            REAL,
+    model_source         TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS ai_feedback (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

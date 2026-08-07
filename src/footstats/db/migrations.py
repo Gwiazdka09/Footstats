@@ -142,6 +142,16 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "ALTER TABLE coupons ADD COLUMN IF NOT EXISTS bookmaker TEXT",
                 ],
             ),
+            (
+                10,
+                "add_model_source_to_predictions",
+                [
+                    "ALTER TABLE predictions ADD COLUMN model_source TEXT NOT NULL DEFAULT ''",
+                    "UPDATE predictions SET model_source = 'bzzoiro-ml' WHERE model_source = ''",
+                    "CREATE INDEX IF NOT EXISTS idx_predictions_model_source"
+                    " ON predictions(model_source)",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -239,6 +249,23 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                 "add_bookmaker_to_coupons",
                 [
                     "ALTER TABLE coupons ADD COLUMN IF NOT EXISTS bookmaker TEXT",
+                ],
+            ),
+            # Do 2026-08-07 obrazy produkcyjne nie mialy pyarrow, wiec
+            # `load_cached()` wywalalo sie w kazdym kontenerze, a quick_picks
+            # cicho schodzil z Poissona-DC na Bzzoiro-ML. KAZDY wiersz istniejacy
+            # w chwili tej migracji pochodzi wiec z fallbacku — stad backfill.
+            # WHERE jest istotne: przy re-runie nie wolno przestemplowac
+            # predykcji Poissona na Bzzoiro.
+            (
+                10,
+                "add_model_source_to_predictions",
+                [
+                    "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS model_source"
+                    " TEXT NOT NULL DEFAULT ''",
+                    "UPDATE predictions SET model_source = 'bzzoiro-ml' WHERE model_source = ''",
+                    "CREATE INDEX IF NOT EXISTS idx_predictions_model_source"
+                    " ON predictions(model_source)",
                 ],
             ),
         ]

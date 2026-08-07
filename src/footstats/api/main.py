@@ -130,7 +130,10 @@ def _init_db() -> None:
                 prompt_version       TEXT NOT NULL DEFAULT '',
                 factors              TEXT NOT NULL DEFAULT '[]',
                 match_stats          TEXT,
-                coupon_id            INTEGER REFERENCES coupons(id)
+                coupon_id            INTEGER REFERENCES coupons(id),
+                -- Ktory model policzyl predykcje: 'poisson-dc' albo 'bzzoiro-ml'.
+                -- Puste = nie wiadomo. Migracja 10 uzupelnia stare wiersze.
+                model_source         TEXT NOT NULL DEFAULT ''
             );
             CREATE INDEX IF NOT EXISTS idx_match_date  ON predictions(match_date);
             CREATE INDEX IF NOT EXISTS idx_tip_correct ON predictions(tip_correct);

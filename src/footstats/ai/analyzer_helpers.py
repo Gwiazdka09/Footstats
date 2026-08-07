@@ -264,6 +264,9 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
                     prompt_version="v5_json",
                     factors=faktory,
                     prob_home=pw, prob_draw=pr, prob_away=pp,
+                    # Stempel modelu z quick_picks. Pusty tylko dla ścieżek,
+                    # które go nie ustawiają — lepsze niż zgadywanie źródła.
+                    model_source=w.get("model_source", ""),
                 )
             except Exception:  # noqa: BLE001 — optional telemetry, never block pipeline
                 pass

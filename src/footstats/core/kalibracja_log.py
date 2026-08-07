@@ -62,13 +62,25 @@ def init_kalibracja_log() -> None:
                 model_tip      TEXT,
                 actual_result  TEXT,
                 tip_correct    INTEGER,
-                zrodlo         TEXT
+                zrodlo         TEXT,
+                -- `zrodlo` to FAZA pipeline'u (final/evening), a to jest MODEL:
+                -- 'poisson-dc' albo 'bzzoiro-ml'. Bez tego dziennik miesza oceny
+                -- dwoch roznych modeli w jednej krzywej kalibracyjnej, a przez
+                -- brak pyarrow w obrazach prod (do 2026-08-07) dokladnie to
+                -- groziloby przy pierwszym cofnieciu sie do fallbacku.
+                model_source   TEXT NOT NULL DEFAULT ''
             );
             CREATE INDEX IF NOT EXISTS idx_model_log_mecz
                 ON model_log (team_home, team_away, match_date);
             CREATE INDEX IF NOT EXISTS idx_model_log_pending
                 ON model_log (tip_correct, match_date);
         """)
+        # Tabela mogla powstac przed wprowadzeniem kolumny — CREATE IF NOT EXISTS
+        # jej wtedy nie doda. Osobny, idempotentny ALTER (PostgreSQL 9.6+).
+        conn.execute(
+            "ALTER TABLE model_log ADD COLUMN IF NOT EXISTS model_source"
+            " TEXT NOT NULL DEFAULT ''"
+        )
 
 
 def _argmax_1x2(pw: float, pr: float, pp: float) -> str:
@@ -115,14 +127,14 @@ def zapisz_ocene(kandydat: dict, zrodlo: str = "final") -> int | None:
             INSERT INTO model_log
                 (match_date, league, team_home, team_away,
                  prob_home, prob_draw, prob_away, prob_over25, prob_btts,
-                 lambda_h, lambda_a, model_tip, zrodlo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+                 lambda_h, lambda_a, model_tip, zrodlo, model_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
             """,
             (data, str(kandydat.get("liga") or ""), home, away,
              float(pw), float(pr), float(pp),
              kandydat.get("o25"), kandydat.get("bt"),
              kandydat.get("lambda_h"), kandydat.get("lambda_a"),
-             tip, zrodlo),
+             tip, zrodlo, str(kandydat.get("model_source") or "")),
         ).fetchone()
         return row["id"] if row else None
 
