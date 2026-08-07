@@ -50,6 +50,49 @@ def _macierz(lambda_g: float, lambda_a: float, N: int) -> tuple:
     return (pw, pr, pp, btts, over25_raw, int(idx[0]), int(idx[1]), top5_data)
 
 
+# Mapa "nazwa znormalizowana → nazwa z historii", trzymana w `df.attrs`.
+#
+# Nie jako dodatkowe KOLUMNY: `predict_match` dostaje zwykle wycinek ramki,
+# więc zapis kolumny leci na widok i pandas słusznie krzyczy
+# SettingWithCopyWarning — cache mógłby się nie utrwalić, a przy 50 meczach
+# dziennie normalizacja 30k+ wierszy za każdym razem to czysta strata.
+# `attrs` to oficjalny worek na metadane ramki i nie rusza jej danych.
+_ATR_MAPA = "_footstats_mapa_nazw"
+
+
+def _kanoniczne_nazwy(df_mecze: pd.DataFrame, g: str, a: str) -> tuple[str, str]:
+    """Nazwy obu drużyn tak, jak zapisuje je historia.
+
+    Źródło predykcji i źródło historii piszą inaczej ("Górnik Zabrze" vs
+    "Gornik Zabrze", "SC Cambuur" vs "Cambuur"). Reszta `predict_match` —
+    maska meczów i słownik sił z `_oblicz_sile_wazona` — operuje na nazwach
+    Z RAMKI, więc tłumaczymy raz tutaj, zamiast łatać każde użycie osobno.
+
+    Nazwa nierozpoznana wraca bez zmian: dalszy kod i tak potraktuje ją jako
+    brak historii, a podstawianie czegokolwiek liczyłoby λ z cudzych meczów.
+
+    Świadomie BEZ dopasowania rozmytego: `team_similarity` daje 0.800 zarówno
+    dla ("Wisła Kraków", "Wisla") jak i ("Wisła Płock", "Wisla") — żaden próg
+    nie rozdzieli tych dwóch klubów, a pomyłka psuje λ po cichu, bo nic nie pada.
+    """
+    from footstats.utils.normalize import normalize_team_name
+
+    mapa = df_mecze.attrs.get(_ATR_MAPA)
+    if mapa is None:
+        mapa = {}
+        for kolumna in ("gospodarz", "goscie"):
+            for oryginal in df_mecze[kolumna].dropna().unique():
+                nazwa = str(oryginal).strip()
+                if nazwa:
+                    mapa.setdefault(normalize_team_name(nazwa), nazwa)
+        df_mecze.attrs[_ATR_MAPA] = mapa
+
+    return (
+        mapa.get(normalize_team_name(g), g),
+        mapa.get(normalize_team_name(a), a),
+    )
+
+
 def predict_match(
     g: str, a: str,
     df_mecze: pd.DataFrame,
@@ -95,9 +138,12 @@ def predict_match(
     jest_single  = klasyfikacja.get("single", False)
 
     # ── Zbierz mecze do analizy ──────────────────────────────────────
+    # `g_h`/`a_h` = nazwy w zapisie historii; `g`/`a` zostają nietknięte, bo
+    # wracają w wyniku i po nich rozliczane są potem kupony.
+    g_h, a_h = _kanoniczne_nazwy(df_mecze, g, a)
     maska = (
-        (df_mecze["gospodarz"] == g) | (df_mecze["goscie"] == g) |
-        (df_mecze["gospodarz"] == a) | (df_mecze["goscie"] == a)
+        df_mecze["gospodarz"].isin((g_h, a_h))
+        | df_mecze["goscie"].isin((g_h, a_h))
     )
     df_f = df_mecze[maska].tail(OSTATNIE_N)
 
@@ -125,15 +171,15 @@ def predict_match(
             "atak": avg_atak, "obrona": avg_obr,
             "gole_sr": avg_gsr, "strac_sr": avg_strac, "forma_pkt": avg_forma
         }
-        sg = sily_all.get(g, syntetyczna)
-        sa = sily_all.get(a, syntetyczna)
+        sg = sily_all.get(g_h, syntetyczna)
+        sa = sily_all.get(a_h, syntetyczna)
         srednia = srednia_all
         df_f    = df_f_all   # do confidence
     else:
         sily, srednia = _oblicz_sile_wazona(df_f)
-        if g not in sily or a not in sily:
+        if g_h not in sily or a_h not in sily:
             return None
-        sg, sa = sily[g], sily[a]
+        sg, sa = sily[g_h], sily[a_h]
 
     # ── Lambda bazowa ────────────────────────────────────────────────
     lambda_g = max(0.05,
