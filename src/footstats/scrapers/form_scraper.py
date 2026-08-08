@@ -72,12 +72,28 @@ def _save_cache(key: str, data: dict):
 
 
 # ── Playwright-based SofaScore API ────────────────────────────────────────────
+# SofaScore blokuje po adresie IP: z Cloud Run KAŻDE żądanie wraca 403, także
+# przez Playwright ze stealth (sprawdzone 2026-08-08 — z domowego IP działa).
+# Po pierwszym 403 nie ma sensu uruchamiać przeglądarki dla kolejnych drużyn:
+# w przebiegu z 7 kandydatami to było ~90 s zmarnowane na pewne niepowodzenie.
+# Flaga procesu, nie trwała — każdy nowy przebieg sprawdza od nowa.
+_SOFA_ZABLOKOWANY = False
+
+
+def sofascore_zablokowany() -> bool:
+    """Czy w tym procesie SofaScore odrzucił nas już blokadą adresu IP."""
+    return _SOFA_ZABLOKOWANY
+
+
 def _sofa_fetch(page, path: str) -> Optional[dict]:
     """Pobiera JSON z SofaScore API przez nawigację przeglądarki (omija 403/CORS)."""
+    global _SOFA_ZABLOKOWANY
     url = f"{SOFA_BASE}{path}"
     try:
         response = page.goto(url, wait_until="domcontentloaded", timeout=12000)
         if response is None or response.status >= 400:
+            if response is not None and response.status in (401, 403, 429):
+                _SOFA_ZABLOKOWANY = True
             # 404 = brak danych (np. brak kontuzji) — nie logujemy jako błąd
             if response and response.status != 404:
                 logger.info(f"[SofaScore] HTTP {response.status}: {path}")
@@ -263,6 +279,91 @@ def get_form_sofascore(team_id: int, team_name: str, page=None) -> dict:
 
 
 # ── FlashScore fallback ───────────────────────────────────────────────────────
+# Wyszukiwarka FlashScore. Zwraca czysty JSON i NIE wymaga przeglądarki —
+# w odróżnieniu od strony `/search/?q=`, która od 2026-08 oddaje HTTP 404.
+# `lang-id=1` to angielski: nazwy wracają w ASCII, jak w naszym datasecie
+# (przy innych językach dostawaliśmy m.in. hebrajski zapis nazw klubów).
+FLASHSCORE_SZUKAJ = (
+    "https://s.livesport.services/api/v2/search/"
+    "?q={q}&lang-id=1&project-id=2&project-type-id=1&type-ids=1,2,3,4"
+)
+_TYP_DRUZYNA = 2
+_SPORT_PILKA = "soccer"
+
+
+def _najlepsza_druzyna(nazwa: str, wyniki: list) -> Optional[dict]:
+    """Wybiera drużynę piłkarską najlepiej pasującą do `nazwa`, albo None.
+
+    Wyszukiwarka miesza dyscypliny (jest koszykówka), zawodników i turnieje,
+    a zespoły rezerw mają TEN SAM slug co pierwsza drużyna, tylko inne id —
+    dlatego odsiew po typie i sporcie, a wybór po `team_similarity`, które
+    odrzuca rezerwy po znacznikach ("II", "U21").
+    """
+    from footstats.utils.normalize import (
+        PROG_DOPASOWANIA_MECZU,
+        normalize_team_name,
+        team_similarity,
+    )
+
+    n = normalize_team_name(nazwa)
+    najlepszy, najlepsza_ocena = None, 0.0
+    for w in wyniki or []:
+        if not isinstance(w, dict) or not w.get("id") or not w.get("url"):
+            continue
+        if (w.get("type") or {}).get("id") != _TYP_DRUZYNA:
+            continue
+        if str((w.get("sport") or {}).get("name", "")).lower() != _SPORT_PILKA:
+            continue
+        ocena = team_similarity(n, normalize_team_name(w.get("name") or ""))
+        if ocena > najlepsza_ocena:
+            najlepszy, najlepsza_ocena = w, ocena
+    return najlepszy if najlepsza_ocena >= PROG_DOPASOWANIA_MECZU else None
+
+
+def _ta_sama_druzyna(szukana: str, gospodarz: str, gosc: str) -> bool:
+    """Czy `szukana` to gospodarz tego meczu (True) czy gość (False).
+
+    Porównanie obu stron i wybór lepszej: sprawdzanie tylko gospodarza dawało
+    fałszywe "u siebie" przy zbliżonych nazwach, a wtedy gole i wynik lądowały
+    po odwrotnej stronie i forma wychodziła na opak.
+    """
+    from footstats.utils.normalize import normalize_team_name, team_similarity
+
+    n = normalize_team_name(szukana)
+    do_gospodarza = team_similarity(n, normalize_team_name(gospodarz))
+    do_goscia = team_similarity(n, normalize_team_name(gosc))
+    return do_gospodarza >= do_goscia
+
+
+def _url_wynikow_flashscore(druzyna: dict) -> Optional[str]:
+    """Adres listy wyników drużyny.
+
+    Ścieżka POLSKA `/druzyna/`: angielskie `/team/` zwraca 404 i to była druga
+    połowa buga, przez którą scraper nie znajdował nikogo.
+    """
+    slug, ident = (druzyna or {}).get("url"), (druzyna or {}).get("id")
+    if not slug or not ident:
+        return None
+    return f"https://www.flashscore.pl/druzyna/{slug}/{ident}/wyniki/"
+
+
+def _szukaj_druzyny_flashscore(team_name: str) -> Optional[dict]:
+    """Odpytuje wyszukiwarkę i zwraca najlepiej pasującą drużynę."""
+    import requests
+
+    url = FLASHSCORE_SZUKAJ.format(q=quote(team_name))
+    try:
+        odp = requests.get(
+            url, timeout=20,
+            headers={"User-Agent": _UA, "Referer": "https://www.flashscore.pl/"},
+        )
+        odp.raise_for_status()
+        return _najlepsza_druzyna(team_name, odp.json())
+    except (requests.RequestException, ValueError, TypeError) as e:
+        logger.info(f"[FlashScore] Wyszukiwarka nie odpowiedziala dla {team_name}: {e}")
+        return None
+
+
 def get_form_flashscore(team_name: str, page=None) -> Optional[dict]:
     """Pobiera formę z FlashScore (zapasowo gdy SofaScore nie działa)."""
     if not PLAYWRIGHT_OK:
@@ -276,26 +377,17 @@ def get_form_flashscore(team_name: str, page=None) -> Optional[dict]:
         p, browser, page = sess
 
     result = _empty_form(team_name, "flashscore")
-    search_url = f"https://www.flashscore.pl/search/?q={quote(team_name)}"
 
     try:
-        page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
-        time.sleep(2)
-
-        team_url = None
-        links = page.query_selector_all("a[href*='/team/']")
-        for link in links:
-            text = link.inner_text().strip()
-            href = link.get_attribute("href") or ""
-            if team_name.lower()[:5] in text.lower() and "/team/" in href:
-                team_url = "https://www.flashscore.pl" + href if href.startswith("/") else href
-                break
-
-        if not team_url:
+        # Drużyny szukamy przez API, nie skrobiąc strony wyszukiwania — ta od
+        # 2026-08 zwraca 404, a API oddaje czysty JSON bez uruchamiania kolejnej
+        # nawigacji w przeglądarce.
+        druzyna = _szukaj_druzyny_flashscore(team_name)
+        results_url = _url_wynikow_flashscore(druzyna) if druzyna else None
+        if not results_url:
             logger.info(f"[FlashScore] Nie znaleziono: {team_name}")
             return None
 
-        results_url = team_url.rstrip("/") + "/wyniki/"
         page.goto(results_url, wait_until="domcontentloaded", timeout=20000)
         time.sleep(2)
 
@@ -316,7 +408,11 @@ def get_form_flashscore(team_name: str, page=None) -> Optional[dict]:
                 gh = int(sh_el.inner_text().strip())
                 ga = int(sa_el.inner_text().strip())
 
-                is_home = team_name.lower()[:5] in home_name.lower()
+                # Po podobieństwie nazw, nie po pięciu pierwszych znakach:
+                # prefiks mylił kluby z tego samego miasta ("Wisla Krakow"
+                # i "Wisla Plock" dzielą pierwsze pięć liter), przez co gole
+                # trafiały na złą stronę i cała forma wychodziła odwrotnie.
+                is_home = _ta_sama_druzyna(team_name, home_name, away_name)
                 gf = gh if is_home else ga
                 gc = ga if is_home else gh
                 opp = away_name if is_home else home_name
@@ -356,24 +452,24 @@ def pobierz_forme(team_name: str) -> dict:
     if not PLAYWRIGHT_OK:
         return _empty_form(team_name, "brak playwright")
 
-    sess = _sofa_session()
-    if sess is None:
-        return _empty_form(team_name, "błąd sesji")
-    p, browser, page = sess
+    # Gdy SofaScore już odrzucił nas blokadą IP, pomijamy go od razu — kolejne
+    # uruchomienie przeglądarki skończy się tym samym 403.
+    if not sofascore_zablokowany():
+        sess = _sofa_session()
+        if sess is None:
+            return _empty_form(team_name, "błąd sesji")
+        p, browser, page = sess
 
-    try:
-        # SofaScore
-        tid = find_team_id(team_name, page)
-        if tid:
-            data = get_form_sofascore(tid, team_name, page)
-            if data.get("form"):
-                return data
-            logger.info(f"[Form] SofaScore: brak zakończonych meczów dla {team_name}")
-
-        # FlashScore fallback (nowa sesja, stara już skompromitowana)
-    finally:
-        browser.close()
-        p.stop()
+        try:
+            tid = find_team_id(team_name, page)
+            if tid:
+                data = get_form_sofascore(tid, team_name, page)
+                if data.get("form"):
+                    return data
+                logger.info(f"[Form] SofaScore: brak zakończonych meczów dla {team_name}")
+        finally:
+            browser.close()
+            p.stop()
 
     data_fs = get_form_flashscore(team_name)
     if data_fs and data_fs.get("form"):
