@@ -94,7 +94,11 @@ def test_rozne_wielkosci_liter_i_diakrytyki():
     ("Malmo FF", "malmo ff"),          # FF nie jest na liscie — zostaje
 ])
 def test_szumowe_sufiksy_obcinane(nazwa, oczekiwane):
-    assert normalize_team_name(nazwa) == oczekiwane
+    # `use_mappings=False`, bo ten test sprawdza SAMO obcinanie sufiksow, nie
+    # koncowa forme kanoniczna. Po dopisaniu aliasu "bayern munchen" ->
+    # "bayern munich" (dataset pisze po angielsku) test pekal na zmianie, ktora
+    # go nie dotyczy — i pekalby przy kazdym kolejnym aliasie.
+    assert normalize_team_name(nazwa, use_mappings=False) == oczekiwane
 
 
 def test_prefiks_fc_nadal_obcinany():
