@@ -233,19 +233,33 @@ def _download_fdco_season(league_code: str, season: str) -> pd.DataFrame | None:
     return out.dropna(subset=["home", "away", "hg", "ag"])
 
 
+def _koniec_sezonu(sezon: str) -> pd.Timestamp:
+    """Data, po której plik sezonu jest już kompletny.
+
+    Rozgrywki kończą się do czerwca, więc lipiec roku zamykającego sezon
+    ("2526" → lipiec 2026) to bezpieczny próg.
+    """
+    return pd.Timestamp(year=2000 + int(sezon[2:]), month=7, day=1)
+
+
 def _cache_wazny(cache_f: Path, sezon: str) -> bool:
     """Czy plik cache można wziąć z dysku zamiast pobierać.
 
-    Sezon zamknięty: zawsze. Sezon trwający: tylko w granicach TTL — inaczej
-    dataset zamarza na kolejce, na której akurat pierwszy raz go pobrano.
+    Sezon trwający: tylko w granicach TTL — inaczej dataset zamarza na kolejce,
+    na której akurat pierwszy raz go pobrano.
+
+    Sezon zamknięty: tylko gdy plik powstał PO jego zakończeniu. Sam fakt, że
+    sezon się skończył, nie znaczy, że mamy komplet — pliki pobrane w kwietniu
+    2026 uznawaliśmy za niezmienne, przez co Premier League, Bundesliga
+    i Eredivisie urwały się na 2026-03-22 i traciły ~2 miesiące, które u źródła
+    były dostępne (znalezione 2026-08-08).
     """
     if not cache_f.exists():
         return False
+    zapisany = pd.Timestamp(cache_f.stat().st_mtime, unit="s")
     if sezon != kod_sezonu():
-        return True
-    wiek_h = (
-        pd.Timestamp.now() - pd.Timestamp(cache_f.stat().st_mtime, unit="s")
-    ).total_seconds() / 3600
+        return zapisany >= _koniec_sezonu(sezon)
+    wiek_h = (pd.Timestamp.now() - zapisany).total_seconds() / 3600
     return wiek_h < TTL_BIEZACY_SEZON_H
 
 

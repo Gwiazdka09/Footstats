@@ -125,6 +125,46 @@ def test_biezacy_sezon_swiezy_cache_nie_pobiera(tmp_path, monkeypatch) -> None:
     assert len(df) == 1
 
 
+def test_cache_zamknietego_sezonu_pobrany_W_TRAKCIE_jest_odswiezany(tmp_path, monkeypatch) -> None:
+    """Sezon zamknięty ≠ komplet meczów, gdy plik pobrano w trakcie jego trwania.
+
+    Bug znaleziony 2026-08-08: reguła „niebieżący sezon jest niezmienny"
+    zamrażała pliki zapisane w kwietniu, gdy sezon 2025/26 jeszcze się toczył.
+    Trzy ligi urwały się na 2026-03-22, tracąc ~2 miesiące, które u źródła są:
+    Premier League 63 dni, Bundesliga 55, Eredivisie 56.
+
+    Cache sezonu zamkniętego jest wiarygodny tylko wtedy, gdy powstał PO jego
+    zakończeniu — stąd próg na lipcu roku, w którym sezon się kończył.
+    """
+    monkeypatch.setattr(hl, "CACHE_DIR", tmp_path)
+    cache_f = tmp_path / "fdco_D1_2526.parquet"
+    _pusty_wynik().to_parquet(cache_f, index=False)
+    # Kwiecień 2026 — sezon 2025/26 był wtedy w trakcie.
+    w_trakcie = pd.Timestamp("2026-04-05")
+    import os
+    os.utime(cache_f, (w_trakcie.timestamp(), w_trakcie.timestamp()))
+
+    wolania: list = []
+    monkeypatch.setattr(hl, "_download_fdco_season",
+                        lambda lg, s: (wolania.append((lg, s)), _pusty_wynik())[1])
+    hl.download_fdco_seasons(leagues=["D1"], seasons=["2526"])
+    assert wolania == [("D1", "2526")], "niekompletny cache sezonu nie zostal odswiezony"
+
+
+def test_cache_pobrany_PO_sezonie_zostaje(tmp_path, monkeypatch) -> None:
+    """Plik zapisany po zakończeniu rozgrywek jest już kompletny — nie ruszamy."""
+    monkeypatch.setattr(hl, "CACHE_DIR", tmp_path)
+    cache_f = tmp_path / "fdco_D1_2526.parquet"
+    _pusty_wynik().to_parquet(cache_f, index=False)
+    po_sezonie = pd.Timestamp("2026-07-15")
+    import os
+    os.utime(cache_f, (po_sezonie.timestamp(), po_sezonie.timestamp()))
+
+    monkeypatch.setattr(hl, "_download_fdco_season",
+                        lambda lg, s: pytest.fail("kompletny cache pobrany ponownie"))
+    assert len(hl.download_fdco_seasons(leagues=["D1"], seasons=["2526"])) == 1
+
+
 def test_zamkniety_sezon_nie_wygasa(tmp_path, monkeypatch) -> None:
     """Sezon rozegrany do końca już się nie zmieni — cache ma być wieczny.
 
