@@ -106,10 +106,21 @@ def env(monkeypatch):
 
 # ── brak klucza / brak danych ───────────────────────────────────────────────
 
-def test_brak_klucza_konczy_bez_zapytan(monkeypatch, capsys):
+def test_brak_klucza_nie_bije_do_api_ale_nie_konczy(env, monkeypatch, capsys):
+    """Bez klucza pomijamy API, ale rozliczanie leci dalej samym scraperem.
+
+    Wcześniej funkcja wychodziła tutaj z `{"updated": 0, ...}` — a że konto
+    API-Football jest zawieszone od 01.08.2026, FlashScore jest jedyną
+    działającą drogą. Patrz `test_rozliczanie_bez_api_football.py`.
+    """
     monkeypatch.setattr(ru, "_get_api_key", lambda: None)
+    env["pending"] = [_pending(offset=-1)]
+    env["scraper"] = None  # scraper tez nic nie znajduje
+
     wynik = ru.update_pending()
-    assert wynik == {"updated": 0, "not_found": 0, "errors": 0}
+
+    assert wynik == {"updated": 0, "not_found": 1, "errors": 0}
+    assert env["zapytania_date"] == [], "API odpytane mimo braku klucza"
     assert "Brak APISPORTS_KEY" in capsys.readouterr().out
 
 
