@@ -184,7 +184,16 @@ def calibrate_candidates(kandydaci: list[dict]) -> list[dict]:
     Does not mutate original ai_confidence so Groq reasoning is unchanged.
     """
     for k in kandydaci:
-        conf = k.get("ai_confidence") or k.get("pewnosc_pct", 0)
+        # Brak pola ≠ pewność zerowa. Domyślne `0` wstawiało
+        # `pewnosc_kalibrowana = 0.0` KAŻDEMU kandydatowi z `quick_picks`
+        # (nie mają ani `ai_confidence`, ani `pewnosc_pct` — niosą płaskie
+        # pw/pr/pp/bt/o25), przez co filtr value bet liczył im EV = −100%
+        # i odrzucał komplet przy każdym uruchomieniu.
+        conf = k.get("ai_confidence")
+        if conf is None:
+            conf = k.get("pewnosc_pct")
+        if conf is None:
+            continue  # nie ma czego kalibrować — niech oceni je filtr per rynek
         if isinstance(conf, float) and conf <= 1.0:
             conf = conf * 100  # already fractional
         k["pewnosc_kalibrowana"] = calibrate_confidence(float(conf))

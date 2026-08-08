@@ -30,41 +30,131 @@ def kelly_fraction(prob: float, odds: float) -> float:
     return max(0.0, (prob * odds - 1.0) / (odds - 1.0))
 
 
+# Rynek w słowniku `odds` → pole z prawdopodobieństwem modelu (w procentach).
+# `None` znaczy "dopełnienie Over 2.5" — kandydat nie niesie osobnego pola dla Under.
+RYNKI_KANDYDATA: tuple[tuple[str, str | None], ...] = (
+    ("home",       "pw"),
+    ("draw",       "pr"),
+    ("away",       "pp"),
+    ("over_2_5",   "o25"),
+    ("under_2_5",  None),
+    ("btts",       "bt"),
+)
+
+
+def _prawdopodobienstwo_rynku(kandydat: dict, pole: str | None) -> float | None:
+    """Szansa modelu na dany rynek, jako ułamek. `None` gdy kandydat jej nie niesie."""
+    if pole is None:
+        over = kandydat.get("o25")
+        return None if over is None else (100.0 - float(over)) / 100.0
+    wartosc = kandydat.get(pole)
+    return None if wartosc is None else float(wartosc) / 100.0
+
+
+def _najlepszy_rynek(kandydat: dict) -> tuple[str, float, float, float] | None:
+    """Rynek o najwyższym EV: (nazwa, kurs, EV%, Kelly%).
+
+    Każdy rynek liczony ze SWOJEJ pary (szansa modelu, kurs tego rynku).
+    Wcześniej brany był maksymalny kurs ze słownika i mnożony przez jedną
+    ogólną pewność kandydata — czyli szansa jednego wyniku szła z kursem
+    zupełnie innego. Przy 60% na gospodarza i kursie 7.41 na gościa dawało to
+    EV +344% i przepuszczało śmieci jako "value bet".
+    """
+    odds = kandydat.get("odds")
+    if not isinstance(odds, dict):
+        return None
+
+    najlepszy = None
+    for rynek, pole in RYNKI_KANDYDATA:
+        kurs = odds.get(rynek)
+        if not isinstance(kurs, (int, float)) or not 1.0 < kurs < 50.0:
+            continue
+        prob = _prawdopodobienstwo_rynku(kandydat, pole)
+        if prob is None:
+            continue
+        ev = calculate_ev(prob, float(kurs))
+        if najlepszy is None or ev > najlepszy[2]:
+            najlepszy = (rynek, float(kurs), ev, kelly_fraction(prob, float(kurs)) * 100.0)
+    return najlepszy
+
+
+def _jedyny_kurs(kandydat: dict) -> float | None:
+    """Kurs kandydata, gdy da się go sparować z jedną pewnością BEZ zgadywania.
+
+    Warstwa AI podaje albo `kurs` wprost, albo `odds` kluczowane etykietą typu
+    ("1"/"X"/"2") zamiast nazwą rynku. Jedna wartość = parowanie jednoznaczne.
+    Kilka wartości i jedna pewność — nie wiadomo, którego wyniku dotyczy, więc
+    zwracamy None; branie maksimum było właśnie tym błędem, który naprawiamy.
+    """
+    kurs = kandydat.get("kurs")
+    if isinstance(kurs, (int, float)) and kurs > 1.0:
+        return float(kurs)
+
+    odds = kandydat.get("odds")
+    if isinstance(odds, dict):
+        wartosci = [v for v in odds.values()
+                    if isinstance(v, (int, float)) and 1.0 < v < 50.0]
+        if len(wartosci) == 1:
+            return float(wartosci[0])
+    return None
+
+
+def _ocena_pojedynczego_kursu(
+    kandydat: dict,
+) -> tuple[str, float, float, float] | None:
+    """Ścieżka warstwy AI: jedna pewność + jeden kurs, bez słownika rynków."""
+    kurs = _jedyny_kurs(kandydat)
+    if kurs is None:
+        return None
+
+    # Jawne sprawdzenie None: skalibrowane 0.0 (lub pct=0) to realna ocena,
+    # NIE sygnał "brak" — `or` mylił kiedyś 0.0 z brakiem i fabrykował 50%.
+    conf_kal = kandydat.get("pewnosc_kalibrowana")
+    if conf_kal is not None:
+        prob = float(conf_kal)
+    else:
+        pct = kandydat.get("pewnosc_pct")
+        if pct is None:
+            return None
+        prob = float(pct) / 100.0
+
+    return ("kurs", float(kurs), calculate_ev(prob, float(kurs)),
+            kelly_fraction(prob, float(kurs)) * 100.0)
+
+
 def filter_value_bets(
     kandydaci: list[dict],
     min_ev_pct: float = MIN_EV_PCT,
     min_kelly_pct: float = MIN_KELLY_PCT,
 ) -> list[dict]:
-    """
-    Remove candidates where EV < min_ev_pct OR Kelly < min_kelly_pct.
-    Candidates without odds data are kept (can't compute EV).
+    """Zostawia kandydatów z realnym edge: EV ≥ progu ORAZ Kelly ≥ progu.
+
+    Kandydat oceniany po SWOIM najlepszym rynku — para (szansa modelu, kurs
+    tego samego rynku). Bez kursów zostaje (nie ma czego liczyć, a odrzucenie
+    byłoby zgadywaniem).
     """
     wynik = []
     for k in kandydaci:
-        # Explicit None-check: calibrated=0.0 (lub pct=0) to realna wartość, NIE
-        # sygnał "brak" — wcześniej `or` mylił 0.0 z brakiem i fabrykował 50%.
-        conf_kal = k.get("pewnosc_kalibrowana")
-        if conf_kal is not None:
-            conf = float(conf_kal)
-        else:
-            pct = k.get("pewnosc_pct")
-            conf = (float(pct) if pct is not None else 50.0) / 100.0
-        odds = _get_best_odds(k)
-        if odds is None:
-            wynik.append(k)  # no odds data — keep
+        ocena = _najlepszy_rynek(k) or _ocena_pojedynczego_kursu(k)
+        if ocena is None:
+            wynik.append(k)  # brak kursów — zostaw
             continue
-        ev = calculate_ev(conf, float(odds))
-        kf = kelly_fraction(conf, float(odds)) * 100.0  # as %
-        # Bez mutacji wejścia — nowy dict (immutability; brak side-effectu na
-        # współdzielonych dict-ach predykcji, w tym odrzuconych kandydatach).
+        rynek, _kurs, ev, kf = ocena
         if ev >= min_ev_pct and kf >= min_kelly_pct:
+            # Bez mutacji wejścia — nowy dict (brak side-effectu na
+            # współdzielonych dict-ach predykcji, w tym odrzuconych kandydatach).
             wynik.append({**k, "ev_value_pct": round(ev, 2),
-                          "kelly_fraction_pct": round(kf, 3)})
+                          "kelly_fraction_pct": round(kf, 3),
+                          "value_rynek": rynek})
     return wynik
 
 
 def _get_best_odds(kandydat: dict) -> float | None:
-    """Extract best odds from candidate (Bzzoiro odds dict or direct kurs field)."""
+    """Najwyższy kurs kandydata. NIE używać do liczenia EV — patrz `_najlepszy_rynek`.
+
+    Zostaje dla wywołań spoza filtra (raporty, podgląd), gdzie chodzi
+    wyłącznie o rząd wielkości kursu, a nie o parowanie z prawdopodobieństwem.
+    """
     odds_dict = kandydat.get("odds") or {}
     if isinstance(odds_dict, dict):
         vals = [v for v in odds_dict.values() if isinstance(v, (int, float)) and 1.0 < v < 50.0]
