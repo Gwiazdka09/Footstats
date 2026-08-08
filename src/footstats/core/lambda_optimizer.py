@@ -105,8 +105,27 @@ def save_calibration(
         "clamped_away":  factor_a != round(bias_a, 4),
     }
 
+    # MERGE, nie nadpisanie. W tym pliku mieszkają też wyniki, których ta
+    # funkcja nie liczy: `ab_test_weights`, `selected_weights` (dziś 70/30
+    # Poisson), `calibration_note`, `per_league_notes`, `n_settled`. Zapis od
+    # zera kasował je bezpowrotnie, przez co bano się w ogóle uruchamiać
+    # rekalibrację — a factory stały na n=1996 przy 139 102 dostępnych meczach.
+    istniejace: dict = {}
+    if CALIBRATION_PATH.exists():
+        try:
+            wczytane = json.loads(CALIBRATION_PATH.read_text(encoding="utf-8"))
+            if isinstance(wczytane, dict):
+                istniejace = wczytane
+        except (OSError, ValueError):
+            # Uszkodzony plik nie może zamrozić factorów na zawsze — piszemy
+            # świeże wartości i tracimy tylko to, czego i tak nie dało się odczytać.
+            istniejace = {}
+
     CALIBRATION_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CALIBRATION_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    CALIBRATION_PATH.write_text(
+        json.dumps({**istniejace, **payload}, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
     invalidate_cache()
     return payload
 
