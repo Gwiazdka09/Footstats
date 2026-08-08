@@ -235,7 +235,15 @@ def retrieve_relevant_lessons(query_context: str, k: int = 5, min_score: float =
         logger.debug(f"[RAG] Retrieved {len(lessons)} lessons (top-{k}, min_score={min_score})")
         return lessons
 
-    except (OSError, ValueError, TypeError) as e:
+    except (ImportError, OSError, ValueError, TypeError) as e:
+        # ImportError JEST tu potrzebny: obrazy produkcyjne nie mają
+        # `sentence-transformers` (torch ciągnie gigabajty i zimny start Cloud Run
+        # dla 128 krótkich lekcji — świadoma decyzja z 09.08.2026). Bez tego
+        # wyjątek leciał wyżej, gdzie `analyzer.py` łapał go swoim
+        # `except (ImportError, ...)` i przerywał CAŁY blok feedbacku — więc
+        # prompt nie dostawał nawet lekcji chronologicznych, które żadnej
+        # dodatkowej zależności nie potrzebują. Pusta lista = wołający schodzi
+        # na `pobierz_ostatnie_wnioski`.
         import logging
         logger = logging.getLogger(__name__)
         logger.debug(f"[RAG] Semantic retrieval failed: {e}")
