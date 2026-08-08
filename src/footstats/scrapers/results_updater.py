@@ -280,10 +280,16 @@ def update_pending(
 
     Zwraca: {"updated": N, "not_found": M, "errors": K}
     """
+    # Brak klucza NIE konczy sprawy: fallback FlashScore (`get_match_result`)
+    # nie potrzebuje go wcale, a konto API-Football jest zawieszone od
+    # 01.08.2026 — wiec to wlasnie scraper jest dzis jedyna dzialajaca droga.
+    # Wczesniejsze wyjscie tutaj zatrzymywalo rozliczanie CALKOWICIE: predykcje
+    # zostawaly z `tip_correct = NULL`, a raport mowil "0 zaktualizowanych",
+    # czyli dokladnie to samo co "nie bylo czego rozliczac".
     api_key = _get_api_key()
     if not api_key:
-        print("[ResultsUpdater] Brak APISPORTS_KEY w .env — pomijam auto-update.")
-        return {"updated": 0, "not_found": 0, "errors": 0}
+        print("[ResultsUpdater] Brak APISPORTS_KEY — jade samym FlashScore"
+              " (bez statystyk: rozne, kartki).")
 
     from footstats.core.backtest import get_pending_results, update_result, init_db
     init_db()
@@ -328,17 +334,19 @@ def update_pending(
         # mecze z lig poza _LIGI_IDS (np. eliminacje MŚ) razem ze statystykami
         # (rożne, kartki), czego FlashScore fallback nie dostarcza.
         date_cache_key = ("__ALL__", match_date)
-        if date_cache_key not in fixtures_cache and req_count < 75:
+        if api_key and date_cache_key not in fixtures_cache and req_count < 75:
             fixtures_cache[date_cache_key] = _fetch_fixtures_by_date(api_key, match_date)
             req_count += 1
             time.sleep(0.5)
 
-        wynik_data = _znajdz_wynik(p, fixtures_cache.get(date_cache_key, []), api_key)
-        if wynik_data:
-            wynik_found, stats_found = wynik_data
+        if api_key:
+            wynik_data = _znajdz_wynik(p, fixtures_cache.get(date_cache_key, []), api_key)
+            if wynik_data:
+                wynik_found, stats_found = wynik_data
 
         # Fuzzy-dopasowanie nazwy ligi do listy API-Football
-        league_ids_to_try = [] if wynik_found else _liga_ids_dla_nazwy(league_str)
+        league_ids_to_try = ([] if (wynik_found or not api_key)
+                             else _liga_ids_dla_nazwy(league_str))
 
         for league_id in league_ids_to_try:
             cache_key = (match_date, league_id)
