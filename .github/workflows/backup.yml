@@ -24,10 +24,12 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
 
-      # Prod data = Neon (PostgreSQL). pg_dump off-site do GCS (redundancja PITR Neona).
-      # Neon = PG17; apt-default daje pg_dump 16 → "server version mismatch". Instaluj
-      # postgresql-client-17 z oficjalnego repo pgdg (wrapper /usr/bin/pg_dump bierze najnowszy).
-      - name: Install postgresql-client 17 (Neon = PG17)
+      # Prod data = PostgreSQL wskazany przez sekret DATABASE_URL (od 20.07.2026
+      # Supabase, wcześniej Neon). pg_dump off-site do GCS jako redundancja PITR
+      # dostawcy. apt-default daje pg_dump 16 → "server version mismatch" na PG17,
+      # więc bierzemy postgresql-client-17 z oficjalnego repo pgdg; nowszy pg_dump
+      # obsługuje też starsze serwery, więc zmiana dostawcy tego kroku nie rusza.
+      - name: Install postgresql-client 17
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
@@ -37,16 +39,19 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
 
-      - name: Run Neon backup
+      - name: Run prod DB backup
         env:
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
         run: bash scripts/backup_db.sh
 
+      # Oba prefiksy: `prod_` to dzisiejsze zrzuty, `neon_` to te sprzed zmiany
+      # nazwy (20.07.2026 prod przeszedł na Supabase). Sam `neon_` zostawiałby
+      # nowe pliki w koszyku na zawsze — koszt rósłby po cichu.
       - name: Prune backups older than 30 days
         run: |
           CUTOFF=$(date -u -d '30 days ago' +%Y%m%d)
           gcloud storage ls gs://${{ secrets.BUCKET_NAME }}/backups/ \
-            | grep -E "neon_[0-9]" \
+            | grep -E "(prod|neon)_[0-9]" \
             | while read f; do
                 FDATE=$(echo "$f" | grep -oP '\d{8}')
                 if [[ "$FDATE" < "$CUTOFF" ]]; then
