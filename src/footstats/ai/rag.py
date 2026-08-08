@@ -107,8 +107,15 @@ def pobierz_rag_wzorce(
         parts: list[str] = []
         params: list = []
         for _label, factor_list, tip in specs:
+            # `json_array_elements_text`, nie `json_each`: to drugie jest ze
+            # SQLite'a i na produkcyjnym PostgreSQL wywalało się na
+            # "function json_each(text) does not exist". Cała funkcja siedzi pod
+            # `except Exception: return ""`, więc RAG po prostu zawsze milczał —
+            # objaw nie do odróżnienia od "za mało danych historycznych".
+            # `factors` to kolumna TEXT, stąd rzutowanie na json.
             exists_parts = [
-                "EXISTS (SELECT 1 FROM json_each(factors) WHERE value = ?)"
+                "EXISTS (SELECT 1 FROM json_array_elements_text(factors::json) v"
+                " WHERE v = ?)"
                 for _ in factor_list
             ]
             tip_clause = "AND ai_tip = ?" if tip else ""

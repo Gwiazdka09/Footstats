@@ -19,10 +19,23 @@ class HeurystaZmeczeniaRotacji:
        (co matematycznie zwieksza expected goals przeciwnika)
     """
 
+    # Kolumny z datą meczu w kolejności zaufania. `data_full` niesie godzinę
+    # (liczy się przy progu 72 h), `data`/`date` to sam dzień.
+    _KOLUMNY_DATY = ("data_full", "data", "date")
+
     def __init__(self, df_mecze: pd.DataFrame):
         self.df = df_mecze.copy() if df_mecze is not None else pd.DataFrame()
-        if not self.df.empty and "data_full" in self.df.columns:
-            self.df["_dt"] = self.df["data_full"].apply(_parse_date)
+        # Wcześniej WYŁĄCZNIE `data_full` — a produkcyjna ścieżka (`quick_picks`
+        # → `adapt_to_prod_schema`) daje `data`/`date` i nigdy `data_full`.
+        # Bez `_dt` `analiza` wychodziła od razu, więc tagi ZMECZENIE i ROTACJA
+        # nie zapaliły się ani razu (0 na 400 meczów, pomiar 09.08.2026) — a brak
+        # tagu wygląda dokładnie tak samo jak „drużyna wypoczęta".
+        if self.df.empty:
+            return
+        for kolumna in self._KOLUMNY_DATY:
+            if kolumna in self.df.columns:
+                self.df["_dt"] = self.df[kolumna].apply(_parse_date)
+                break
 
     def _mecze_druzyny(self, druzyna: str) -> pd.DataFrame:
         if self.df.empty:
@@ -52,14 +65,19 @@ class HeurystaZmeczeniaRotacji:
             return wynik
         mecze_d = mecze_d.dropna(subset=["_dt"])
 
-        # 🔄 ROTACJA: mecz CL w oknie +/- ROTACJA_DNI
+        # 🔄 ROTACJA: mecz CL w oknie +/- ROTACJA_DNI.
+        # Warunek na obecność kolumny jest tu WPROST, bo `df.get(kol, seria)`
+        # z zapasową serią o świeżym RangeIndex porównywało się po niedopasowanym
+        # indeksie — działało tylko dlatego, że wychodziło z tego samo False.
+        # Dataset football-data nie ma rozgrywek pucharowych, więc bez kolumny
+        # `competition` ta gałąź po prostu nie ma z czego się zapalić.
         okno_s = data_meczu - timedelta(days=ROTACJA_DNI)
         okno_e = data_meczu + timedelta(days=ROTACJA_DNI)
         mecze_cl = mecze_d[
             (mecze_d["_dt"] >= okno_s) &
             (mecze_d["_dt"] <= okno_e) &
-            (mecze_d.get("competition", pd.Series(["?"]*len(mecze_d))) == "CL")
-        ]
+            (mecze_d["competition"] == "CL")
+        ] if "competition" in mecze_d.columns else mecze_d.iloc[0:0]
         if not mecze_cl.empty:
             wynik["rotacja"]      = True
             wynik["mnoznik_atak"] *= ROTACJA_KARA
