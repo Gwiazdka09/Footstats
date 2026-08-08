@@ -18,7 +18,13 @@ ENV/
 !.env.example
 
 # ── Dane (DB backtest)
-/data/
+# Wzorzec z gwiazdką, nie `/data/`: git nie potrafi odzyskać pliku, którego
+# KATALOG jest wykluczony, więc negacja poniżej działa tylko przy `/data/*`.
+/data/*
+# Aliasy nazw drużyn to KOD, nie dane wyjściowe: bez nich model nie skojarzy
+# "Borussia Dortmund" ze swoim "Dortmund" w datasecie. Ignorowane razem z /data/
+# leżały tylko na dysku dewelopera, a produkcja startowała z domyślnej garstki.
+!/data/team_mappings.json
 
 # ── Logi i pliki tymczasowe
 logs/

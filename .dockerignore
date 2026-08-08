@@ -16,6 +16,9 @@ data/footstats_backtest.db
 # WYWALAL build ("not found", plik wyciety z kontekstu) — zweryfikowane 2026-07-29.
 data/hist_cache/
 !data/hist_cache/full_dataset.parquet
+# Aliasy nazw drużyn — ta sama historia co parquet: bez nich nazwa ze źródła nie
+# trafia w dataset, więc mecz wypada z λ Poissona i z formy.
+!data/team_mappings.json
 .vscode/
 .git/
 .github/

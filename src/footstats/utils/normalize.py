@@ -106,6 +106,17 @@ _DIACRITICS_MAP = str.maketrans({
     "ó": "o", "ś": "s", "ź": "z", "ż": "z",
     "Ą": "a", "Ć": "c", "Ę": "e", "Ł": "l", "Ń": "n",
     "Ó": "o", "Ś": "s", "Ź": "z", "Ż": "z",
+    # Litery nierozk\u0142adalne przez NFKD \u2014 niemieckie, nordyckie, tureckie, ba\u0142ka\u0144skie.
+    # NFKD rozk\u0142ada tylko znaki z\u0142o\u017cone z litery i znaku \u0142\u0105cz\u0105cego (\u00fc \u2192 u + \u00a8).
+    # Litery B\u0118D\u0104CE osobnymi znakami przechodz\u0105 przez ni\u0105 nietkni\u0119te i dopiero
+    # filtr `[^a-z0-9 ]` zamienia je w SPACJ\u0118 \u2014 a spacja rozbija nazw\u0119 na cz\u0142ony
+    # i zabija dopasowanie: "Preu\u00dfen M\u00fcnster" \u2192 "preu en munster".
+    "\u00df": "ss", "\u1e9e": "ss",
+    "\u00f8": "o", "\u00d8": "o", "\u00e6": "ae", "\u00c6": "ae",
+    "\u0153": "oe", "\u0152": "oe",
+    "\u0111": "d", "\u0110": "d", "\u00f0": "d", "\u00d0": "d",
+    "\u00fe": "th", "\u00de": "th",
+    "\u0131": "i", "\u0130": "i", "\u014b": "n", "\u0127": "h",
     "-": " ", "_": " ", ".": " ", "'": "", "\u2019": "",
 })
 
@@ -269,9 +280,13 @@ def normalize_team_name(name: str, use_mappings: bool = True) -> str:
 
 
 def _norm_ascii(s: str) -> str:
-    """Normalizuje tekst: Unicode → ASCII, lowercase, tylko alfanumeryczne."""
-    s = str(s)
-    s = unicodedata.normalize("NFKD", s)
+    """Normalizuje tekst: Unicode → ASCII, lowercase, tylko alfanumeryczne.
+
+    Przechodzi przez tę samą mapę co `normalize_team_name` — inaczej `ascii/ignore`
+    kasuje ß i ø BEZ ŚLADU ("Preußen" → "preuen"), a ta funkcja paruje właśnie
+    nazwy drużyn z The Odds API z nazwami z datasetu.
+    """
+    s = _strip_diacritics(str(s))
     s = s.encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9 ]", "", s.lower()).strip()
 

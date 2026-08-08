@@ -163,6 +163,21 @@ def _get(url: str, timeout: int = 30) -> bytes | None:
         return None
 
 
+def _czytaj_csv(raw: bytes) -> pd.DataFrame:
+    """CSV ze źródła → ramka, z UTF-8 przed latin-1.
+
+    Kolejność jest tu całą treścią: `latin-1` dekoduje KAŻDY bajt bez wyjątku,
+    więc plik w UTF-8 nie padał, tylko wchodził przekręcony ("PreuÃen MÃ¼nster"
+    zamiast "Preußen Münster"). Przekręcona nazwa nie dopasuje się do niczego,
+    czyli mecz przepada dla λ Poissona i dla formy — cicho, bez śladu w logach.
+    Fallback zostaje, bo archiwalne sezony u źródła NAPRAWDĘ są w cp1252/latin-1.
+    """
+    try:
+        return pd.read_csv(io.BytesIO(raw), encoding="utf-8", on_bad_lines="skip")
+    except UnicodeDecodeError:
+        return pd.read_csv(io.BytesIO(raw), encoding="latin-1", on_bad_lines="skip")
+
+
 def _parse_date(s: str) -> pd.Timestamp | None:
     for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d", "%d.%m.%Y"):
         try:
@@ -180,7 +195,7 @@ def _download_fdco_season(league_code: str, season: str) -> pd.DataFrame | None:
     if raw is None:
         return None
     try:
-        df = pd.read_csv(io.BytesIO(raw), encoding="latin-1", on_bad_lines="skip")
+        df = _czytaj_csv(raw)
     except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as e:
         log.warning("Błąd parsowania %s: %s", url, e)
         return None
@@ -293,7 +308,7 @@ def _download_fdco_new(country_code: str) -> pd.DataFrame | None:
     if raw is None:
         return None
     try:
-        df = pd.read_csv(io.BytesIO(raw), encoding="latin-1", on_bad_lines="skip")
+        df = _czytaj_csv(raw)
     except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as e:
         log.warning("Błąd parsowania %s: %s", url, e)
         return None

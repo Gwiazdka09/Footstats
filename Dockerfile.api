@@ -31,6 +31,11 @@ COPY --from=gui-build /gui/dist ./src/footstats/gui/dist
 # ten COPY wywala build ("not found", plik wycięty z kontekstu).
 COPY data/hist_cache/full_dataset.parquet ./data/hist_cache/full_dataset.parquet
 
+# Aliasy nazw drużyn. Bez tego pliku `normalize.py` zapisuje w kontenerze swoje
+# `_DEFAULT_MAPPINGS` i rusza dalej — czyli obraz działa, tylko nie zna nazw
+# przejrzanych ręcznie (cała Bundesliga z The Odds API) i gubi te mecze.
+COPY data/team_mappings.json ./data/team_mappings.json
+
 RUN uv pip install --system ".[api]" && mkdir -p /app/data
 
 RUN addgroup --system app && adduser --system --ingroup app app \

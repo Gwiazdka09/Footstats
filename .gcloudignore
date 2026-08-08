@@ -19,6 +19,9 @@ logs/
 !/data/hist_cache/
 /data/hist_cache/*
 !/data/hist_cache/full_dataset.parquet
+# Aliasy nazw drużyn — `COPY` w obu Dockerfile'ach wywali build, jeśli plik nie
+# wejdzie do build-contextu (ten sam mechanizm co przy parquecie).
+!/data/team_mappings.json
 tests/
 scratch/
 *.pdf

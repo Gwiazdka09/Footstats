@@ -77,23 +77,48 @@ PLIK_MAPOWAN = Path(__file__).resolve().parents[1] / "data" / "team_mappings.jso
 #   Cambridge/Gold Coast/JEF United Chiba/Magic United/Oxford United ~ DC United
 #     — "DC United" przyciągało KAŻDY klub z członem "United"; to sam artefakt
 #       krótkiej nazwy w datasecie, nie podobieństwo klubów.
+#
+# NIEMIECKIE (dopisane 09.08.2026): wzięte z The Odds API, a nie z dziennika —
+# kalendarz Bundesligi jest znany PRZED pierwszą kolejką, więc nie było powodu
+# czekać z nimi do meczu. Wszystkie to skrót nazwy po stronie datasetu
+# ("Borussia Dortmund" → "Dortmund"), nie inny klub.
+# ODRZUCONE z tej samej listy: FC Viktoria Köln 1904 (≠ 1. FC Köln),
+# TSG Hoffenheim II (rezerwy), oraz kluby spoza datasetu: FC Energie Cottbus,
+# 1. FC Saarbrücken, Hallescher FC, Rot-Weiss Essen, SC Verl, Alemannia Aachen,
+# Waldhof Mannheim, SG Sonnenhof Großaspach.
 ALIASY_RECZNE: dict[str, str] = {
     "accrington stanley":      "accrington",
     "america mineiro":         "america mg",
+    "arminia bielefeld":       "bielefeld",
     "athletico":               "athletico pr",
-    "bod glimt":               "bodo glimt",
+    "borussia dortmund":       "dortmund",
+    "borussia monchengladbach": "mgladbach",
     "bristol rovers":          "bristol rvs",
     "crewe alexandra":         "crewe",
     "de graafschap":           "graafschap",
+    "dynamo dresden":          "dresden",
+    "eintracht braunschweig":  "braunschweig",
+    "eintracht frankfurt":     "ein frankfurt",
     "estoril praia":           "estoril",
     "estudiantes de la plata": "estudiantes l p",
+    "1 fc kaiserslautern":     "kaiserslautern",
+    "1 fc koln":               "koln",
+    "1 fc nurnberg":           "nurnberg",
     "bayern munchen":          "bayern munich",
     "fagiano okayama":         "okayama",
+    "fsv mainz 05":            "mainz",
+    "hamburger":               "hamburg",
+    "hannover 96":             "hannover",
+    "hertha berlin":           "hertha",
+    "karlsruher":              "karlsruhe",
     "kyoto sanga":             "kyoto",
     "machida zelvia":          "machida",
+    "msv duisburg":            "duisburg",
     "nottingham forest":       "nottm forest",
     "preston north end":       "preston",
     "sheffield wednesday":     "sheffield weds",
+    "tsv 1860 munchen":        "munich 1860",
+    "wehen wiesbaden":         "wehen",
 }
 
 
