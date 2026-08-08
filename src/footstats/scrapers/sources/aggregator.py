@@ -4,9 +4,11 @@ aggregator.py — agregacja i porównanie wyników z wielu źródeł ResultsSour
 compare(): grupuje mecze po znormalizowanym kluczu (home, away) ze WSZYSTKICH
 źródeł i flaguje rozjazdy (FT/HT) między nimi — sygnał wiarygodności.
 consensus_result(): wynik do settlement fallback gdy główne źródło (API-Football)
-nie pokrywa meczu — preferuje źródło z danymi HT.
+nie pokrywa meczu — głosowanie źródeł, fail-closed przy remisie.
 """
 from __future__ import annotations
+
+import logging
 
 from footstats.scrapers.sources.af_source import APIFootballSource
 from footstats.scrapers.sources.footballdata_source import FootballDataSource
@@ -14,6 +16,8 @@ from footstats.scrapers.sources.flashscore_source import FlashScoreSource
 from footstats.scrapers.sources.thesportsdb_source import TheSportsDBSource
 from footstats.scrapers.sources.base import MatchData, ResultsSource
 from footstats.utils.normalize import normalize_team_name
+
+logger = logging.getLogger(__name__)
 
 
 def get_sources() -> list[ResultsSource]:
@@ -110,23 +114,56 @@ def _porownaj_grupe(matches: list[MatchData]) -> dict:
 
 def consensus_result(home: str, away: str, date: str) -> str | None:
     """
-    Wynik meczu do settlement fallback — z pierwszego dostępnego źródła,
-    preferując źródło z danymi półczasu (HT) gdy dostępne.
-    None gdy żadne źródło nie ma wyniku FT dla tego meczu.
+    Wynik meczu do settlement fallback — REALNY konsensus źródeł.
+
+    Wcześniej brany był po prostu pierwszy kandydat z listy, więc gdy dwa
+    źródła podawały różne wyniki tego samego meczu, wygrywało to, które akurat
+    było wcześniej — i nikt się o rozbieżności nie dowiadywał. Kupon rozliczony
+    cudzym wynikiem wyglada identycznie jak rozliczony poprawnie.
+
+    Teraz głosowanie po wyniku FT:
+      * większość wygrywa, ale rozjazd i tak trafia do logu;
+      * remis głosów → None, czyli kupon zostaje ACTIVE. Fail-closed, ta sama
+        zasada co przy dopasowywaniu nazw: lepiej nie rozliczyć i zauważyć,
+        niż rozliczyć źle.
+
+    Rozjazd samego HT nie blokuje — wynik FT jest wtedy i tak jednoznaczny.
     """
     dane = fetch_all(date)
     key = match_key(home, away)
 
-    kandydaci: list[MatchData] = []
-    for matches in dane.values():
-        for m in matches:
-            if match_key(m.home, m.away) == key and m.to_result_str() is not None:
-                kandydaci.append(m)
-
+    kandydaci: list[MatchData] = [
+        m
+        for matches in dane.values()
+        for m in matches
+        if match_key(m.home, m.away) == key and m.to_result_str() is not None
+    ]
     if not kandydaci:
         return None
 
-    # Preferuj kandydata z HT, inaczej pierwszy dostępny.
-    z_ht = [m for m in kandydaci if m.ht_home is not None and m.ht_away is not None]
-    wybrany = z_ht[0] if z_ht else kandydaci[0]
-    return wybrany.to_result_str()
+    # Głosy po samym FT — HT to szczegół, nie powód do odrzucenia meczu.
+    glosy: dict[tuple[int, int], list[MatchData]] = {}
+    for m in kandydaci:
+        glosy.setdefault((m.ft_home, m.ft_away), []).append(m)  # type: ignore[arg-type]
+
+    if len(glosy) > 1:
+        opis = " vs ".join(
+            f"{ft[0]}-{ft[1]} ({', '.join(sorted(x.source for x in grupa))})"
+            for ft, grupa in sorted(glosy.items(), key=lambda p: -len(p[1]))
+        )
+        logger.warning("Rozjazd zrodel dla %s vs %s (%s): %s", home, away, date, opis)
+
+        najliczniejsze = sorted(glosy.values(), key=len, reverse=True)
+        if len(najliczniejsze[0]) == len(najliczniejsze[1]):
+            logger.warning(
+                "Rozjazd nierozstrzygniety dla %s vs %s — nie rozliczam, "
+                "kupon zostaje otwarty", home, away,
+            )
+            return None
+        zwyciezcy = najliczniejsze[0]
+    else:
+        zwyciezcy = next(iter(glosy.values()))
+
+    # W obrębie zwycięskiego wyniku preferuj wariant z półczasem.
+    z_ht = [m for m in zwyciezcy if m.ht_home is not None and m.ht_away is not None]
+    return (z_ht[0] if z_ht else zwyciezcy[0]).to_result_str()
