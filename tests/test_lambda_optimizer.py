@@ -35,12 +35,18 @@ def plik_kalibracji(tmp_path, monkeypatch):
 
 
 def _hist(*mecze) -> pd.DataFrame:
-    """(home, away, hg, ag) -> DataFrame w schemacie walk-forward."""
+    """(home, away, hg, ag) -> DataFrame w schemacie walk-forward.
+
+    Kolumny `date` i `league` doszly, gdy `_predict_lambdas` przestal liczyc
+    lambde wlasnym wzorem i zaczal wolac produkcyjne `predict_match` — ono
+    sortuje historie po dacie i liczy sily wzgledem ligi.
+    """
     wiersze = []
-    for home, away, hg, ag in mecze:
+    for i, (home, away, hg, ag) in enumerate(mecze):
         wynik = "H" if hg > ag else ("A" if ag > hg else "D")
         wiersze.append({"home": home, "away": away, "hg": hg, "ag": ag,
-                        "result": wynik})
+                        "result": wynik, "league": "TEST-Liga",
+                        "date": pd.Timestamp("2025-01-01") + pd.Timedelta(days=i)})
     return pd.DataFrame(wiersze)
 
 
@@ -245,17 +251,28 @@ def test_lepsza_forma_gospodarza_podnosi_jego_lambde():
     assert lh_forma > lh_baza
 
 
-def test_korekta_formy_ograniczona():
-    """Skrajna roznica formy nie moze rozjechac lambd — korekta ma twarde limity."""
+def test_skrajna_roznica_formy_nie_rozjezdza_lambd():
+    """Nawet przy druzynie wygrywajacej 5:0 co mecz lambda ma zostac realna.
+
+    Wczesniej pilnowal tego twardy limit korekty formy [0.7, 1.4] w prywatnym
+    estymatorze. Ten estymator zniknal — `_predict_lambdas` wola dzis
+    produkcyjne `predict_match` — wiec test pilnuje SKUTKU, nie mechanizmu:
+    lambda ma zostac w zakresie, ktory Poisson potrafi sensownie zamienic na
+    rozklad wynikow.
+    """
     skrajne = _hist(
         *[("Legia", f"R{i}", 5, 0) for i in range(10)],
         *[(f"S{i}", "Lech", 5, 1) for i in range(10)],
     )
-    lh, la = lo._predict_lambdas(skrajne, "Legia", "Lech")
-    baza_lh = 5.0
 
-    assert lh <= baza_lh * 1.4 + 0.01, "korekta przekroczyla gorny limit 1.4"
-    assert la >= 1.0 / 1.4 - 0.01, "korekta przekroczyla dolny limit"
+    wynik = lo._predict_lambdas(skrajne, "Legia", "Lech")
+
+    assert wynik is not None
+    lh, la = wynik
+    # Dolna granica to podloga z `predict_match` (`max(0.05, ...)`) — druzyna
+    # przegrywajaca 0:5 co mecz ma prawo do lambdy przy samej podlodze.
+    assert 0.05 <= lh < 8.0, f"lambda gospodarza poza skala: {lh}"
+    assert 0.05 <= la < 8.0, f"lambda goscia poza skala: {la}"
 
 
 # ── injury_correction ───────────────────────────────────────────────────────

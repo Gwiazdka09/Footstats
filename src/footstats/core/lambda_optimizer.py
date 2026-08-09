@@ -154,17 +154,41 @@ def _forma(hist: pd.DataFrame, team: str, n: int = 5) -> float:
 
 
 def _predict_lambdas(hist: pd.DataFrame, home: str, away: str) -> tuple[float, float] | None:
-    """Zwraca (lambda_h, lambda_a) z korekta formy lub None jeśli za mało danych."""
-    lh = _lambda_from_hist(hist, home, as_home=True)
-    la = _lambda_from_hist(hist, away, as_home=False)
-    if lh is None or la is None:
-        return None
+    """λ dokładnie taka, jaką policzy PRODUKCJA — z `predict_match`.
 
-    fh = _forma(hist, home)
-    fa = _forma(hist, away)
-    ratio = (fh + 0.1) / (fa + 0.1)
-    corr  = min(max(ratio ** 0.3, 0.7), 1.4)
-    return lh * corr, la / corr
+    Wcześniej liczyło to własny wzór (`_lambda_from_hist` + korekta formy),
+    a wyliczone z niego factory stosowane są w `predict_match`, czyli do λ
+    z zupełnie innego równania. Kalibracja korygowała więc obciążenie funkcji,
+    która w produkcji nic nie liczy. Zmierzone 09.08.2026 na 477 meczach:
+
+        λ z `predict_match`: bias 1.0453 / 0.9722
+        factory z pliku:     0.9715 / 0.9545
+        po ich nałożeniu:    1.0759 / 1.0185   ← GORZEJ niż bez korekty
+
+    To także tłumaczy, czemu rekalibracja na 19 727 meczach zamiast 1996 nie
+    ruszyła krzywej niezawodności: mierzyła nie tę funkcję.
+
+    `use_calibration=False` jest tu obowiązkowe — mierzenie λ z już nałożoną
+    korektą to sprzężenie zwrotne, w którym bias zbiega do 1.0 niezależnie od
+    tego, czy model jest dobry.
+    """
+    from footstats.core.poisson import predict_match
+
+    # `predict_match` mówi schematem produkcyjnym (gospodarz/goscie/gole_g/...),
+    # a `run_calibration` pracuje na schemacie angielskim z loadera.
+    kolumny = {"home": "gospodarz", "away": "goscie", "hg": "gole_g",
+               "ag": "gole_a", "date": "data"}
+    df = hist.rename(columns={k: v for k, v in kolumny.items() if k in hist.columns})
+
+    try:
+        wynik = predict_match(home, away, df, use_xg=False, use_calibration=False)
+    except (KeyError, ValueError, TypeError, IndexError):
+        # Kalibracja przechodzi przez tysiące meczów; jedna ułomna ramka
+        # (brakująca kolumna, pusty wycinek) nie może przerwać całego przebiegu.
+        return None
+    if not wynik:
+        return None
+    return wynik["lambda_g"], wynik["lambda_a"]
 
 
 # Pozycje wg SofaScore: F=napastnik, M=pomocnik, D=obrońca, G=bramkarz.

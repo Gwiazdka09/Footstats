@@ -309,7 +309,12 @@ def test_korekta_ignoruje_defensywnych():
 # ── walk-forward: λ z historii ──────────────────────────────────────────────
 
 def _historia(n: int, gole_dom: float = 2.0, gole_wyj: float = 1.0) -> pd.DataFrame:
+    """Kolumny `date` i `league` sa wymagane, odkad `_predict_lambdas` wola
+    produkcyjne `predict_match` (sortuje historie po dacie, liczy sily
+    wzgledem ligi) zamiast wlasnego wzoru."""
     return pd.DataFrame({
+        "date": pd.date_range("2025-01-01", periods=n, freq="7D"),
+        "league": ["TEST-Liga"] * n,
         "home": ["Legia"] * n,
         "away": ["Lech"] * n,
         "hg": [gole_dom] * n,
@@ -350,8 +355,16 @@ def test_predykcja_wymaga_obu_druzyn():
     assert lo._predict_lambdas(_historia(3), "Legia", "Lech") is None
 
 
-def test_predykcja_koryguje_o_forme():
-    lh, la = lo._predict_lambdas(_historia(10), "Legia", "Lech")
+def test_predykcja_oddaje_przewage_gospodarza():
+    """Legia wygrywa 2:1 co mecz — λ gospodarza ma być wyraźnie wyższa.
 
-    assert lh > 2.0, "lepsza forma gospodarza ma podnosić jego λ"
-    assert la < 1.0
+    Wcześniej test pilnował konkretnych progów korekty formy (`ratio ** 0.3`)
+    z prywatnego estymatora. Ten estymator zniknął: `_predict_lambdas` woła dziś
+    produkcyjne `predict_match`, żeby kalibracja mierzyła TĘ λ, którą naprawdę
+    liczy produkcja. Pilnujemy więc kierunku, nie wzoru.
+    """
+    wynik = lo._predict_lambdas(_historia(10), "Legia", "Lech")
+
+    assert wynik is not None
+    lh, la = wynik
+    assert lh > la, "gospodarz wygrywajacy kazdy mecz ma miec wyzsza lambde"
