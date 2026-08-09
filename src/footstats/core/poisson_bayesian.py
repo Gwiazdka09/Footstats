@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import poisson
 
-from footstats.config import MAX_GOLE, BONUS_DOMOWY
+from footstats.config import BONUS_DOMOWY, DC_RHO, MAX_GOLE, USE_DC_TAU
 
 _log = logging.getLogger(__name__)
 
@@ -20,6 +20,54 @@ _N_RECENT = 5
 # Bayesian prior strength: 1 = fully trust data, 0 = fully trust prior
 # Higher value = more shrinkage toward league average (safer for small samples)
 _PRIOR_WEIGHT = 3.0  # equivalent to 3 "pseudo-matches" at league average
+
+
+def tau_dixon_coles(
+    h: int, a: int, lam_h: float, lam_a: float, rho: float
+) -> float:
+    """Współczynnik korekty Dixona-Colesa (1997) dla jednego wyniku.
+
+    Niezależne rozkłady Poissona źle opisują mecze o niskim wyniku: 0-0 i 1-1
+    padają CZĘŚCIEJ, a 1-0 i 0-1 RZADZIEJ, niż wychodzi z iloczynu. τ mnoży
+    dokładnie te cztery pola, resztę macierzy zostawia nietkniętą:
+
+        τ(0,0) = 1 - λ·μ·ρ      τ(0,1) = 1 + λ·ρ
+        τ(1,0) = 1 + μ·ρ        τ(1,1) = 1 - ρ
+
+    ρ < 0 przesuwa masę na remisy niskie. Obcinamy do zera od dołu, bo przy
+    dużych λ i mocnym ρ wzór potrafi zejść poniżej — a ujemne prawdopodobieństwo
+    zepsułoby cały rozkład.
+    """
+    if rho == 0.0:
+        return 1.0
+    if h == 0 and a == 0:
+        return max(0.0, 1.0 - lam_h * lam_a * rho)
+    if h == 0 and a == 1:
+        return max(0.0, 1.0 + lam_h * rho)
+    if h == 1 and a == 0:
+        return max(0.0, 1.0 + lam_a * rho)
+    if h == 1 and a == 1:
+        return max(0.0, 1.0 - rho)
+    return 1.0
+
+
+def macierz_dixon_coles(lam_h: float, lam_a: float, rho: float = 0.0) -> np.ndarray:
+    """Macierz prawdopodobieństw wyników, z korektą τ i renormalizacją.
+
+    `rho=0.0` daje dokładnie dotychczasowy iloczyn zewnętrzny — dzięki temu
+    włączenie flagi jest jedyną różnicą, a wyłączona flaga nie zmienia nic.
+    """
+    pmf_h = poisson.pmf(np.arange(MAX_GOLE), lam_h)
+    pmf_a = poisson.pmf(np.arange(MAX_GOLE), lam_a)
+    M = np.outer(pmf_h, pmf_a)
+
+    if rho != 0.0:
+        for h in range(min(2, MAX_GOLE)):
+            for a in range(min(2, MAX_GOLE)):
+                M[h, a] *= tau_dixon_coles(h, a, lam_h, lam_a, rho)
+
+    suma = M.sum()
+    return M / suma if suma > 0 else M
 
 
 def _compute_ratings(
@@ -128,14 +176,9 @@ def predict_match_bayesian(
     lambda_h = max(0.05, home_att * (away_def / league_away) * home_advantage)
     lambda_a = max(0.05, away_att * (home_def_val / league_home))
 
-    # Prediction matrix
-    N = MAX_GOLE
-    pmf_h = poisson.pmf(np.arange(N), lambda_h)
-    pmf_a = poisson.pmf(np.arange(N), lambda_a)
-    M = np.outer(pmf_h, pmf_a)
-    M_sum = M.sum()
-    if M_sum > 0:
-        M /= M_sum
+    # Macierz wynikow. `USE_DC_TAU` wylaczone -> rho=0 -> dokladnie poprzedni
+    # iloczyn zewnetrzny, bez zadnej roznicy numerycznej.
+    M = macierz_dixon_coles(lambda_h, lambda_a, DC_RHO if USE_DC_TAU else 0.0)
 
     pw = float(np.sum(np.tril(M, -1)))   # home win
     pr = float(np.trace(M))               # draw

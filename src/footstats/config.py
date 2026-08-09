@@ -58,6 +58,33 @@ AGENT_KELLY_FRACTION = 4    # bezpieczny fractional Kelly: f*/4 (bardziej konser
 USE_DIXON_COLES = os.getenv("USE_DIXON_COLES", "1").strip() not in ("0", "false", "False", "")
 W_BAYESIAN      = float(os.getenv("W_BAYESIAN", "0.5"))   # waga ramienia DC (0=classic, 1=pelny DC)
 
+# ── P4 (09.08.2026): korekta τ Dixona-Colesa — DOMYSLNIE WYLACZONA ──
+# Ramie nazywane dotad "Dixon-Coles" liczylo `np.outer(pmf_h, pmf_a)`, czyli dwa
+# NIEZALEZNE rozklady Poissona. Cala tresc pracy Dixona i Colesa (1997) to
+# obserwacja, ze przy niskich wynikach ta niezaleznosc nie zachodzi: 0-0 i 1-1
+# padaja czesciej, a 1-0 i 0-1 rzadziej. Bez tej korekty model zaniza remis,
+# a remis to jeden z trzech rynkow, na ktorych gramy.
+#
+# ZMIERZONE 09.08.2026 walk-forwardem na 600 meczach (Bundesliga, PL, La Liga,
+# Serie A), historia zawsze sprzed daty meczu:
+#
+#     rho    Brier     log-loss   trafnosc   sr. P(remis)   [realnie remisow: 25.0%]
+#     0.00   0.6833    1.1328     45.5%      18.5%
+#    -0.13   0.6803    1.1342     45.5%      20.6%
+#    -0.25   0.6789    1.1396     45.5%      22.6%
+#    -0.40   0.6786    1.1500     44.8%      25.1%
+#
+# Wniosek: tau poprawia Brier o grosze i PSUJE log-loss, a przy rho, ktore
+# doprowadza sredni remis do realnych 25%, spada tez trafnosc. Innymi slowy
+# model zaniza remisy nie dlatego, ze zle liczy zaleznosc niskich wynikow, tylko
+# dlatego, ze nie umie wskazac, KTORE mecze skoncza sie remisem. To problem
+# rozdzielczosci, nie kalibracji — tau go nie rozwiazuje.
+#
+# Dlatego flaga zostaje WYLACZONA. Kod jest, pomiar jest, nie trzeba go
+# powtarzac; wlaczyc ma sens dopiero, gdy model zyska realna rozdzielczosc.
+USE_DC_TAU = os.getenv("USE_DC_TAU", "0").strip() not in ("0", "false", "False", "")
+DC_RHO     = float(os.getenv("DC_RHO", "-0.13"))
+
 # ── C2 / Cel B bug 2: override REALNEGO tipu Groq argmaxem modelu ──
 # Gdy Groq wybierze 1X2 o prob modelu <15% → podmiana na argmax (konserwatywny).
 # FLIP ON 2026-07-06: walidacja zebrana (104 settled) — model argmax 60% vs Groq 48%
