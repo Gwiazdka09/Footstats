@@ -59,6 +59,76 @@ def _macierz(lambda_g: float, lambda_a: float, N: int) -> tuple:
 # `attrs` to oficjalny worek na metadane ramki i nie rusza jej danych.
 _ATR_MAPA = "_footstats_mapa_nazw"
 
+# Klucz cache tabeli sił ligowych — liczenie jej dla każdego meczu z osobna
+# przy 40 ligach i 139k meczów kosztowałoby więcej niż cała reszta predykcji.
+_ATR_SILY_LIG = "_footstats_sily_ligowe"
+
+
+def _sila_ligowa_on() -> bool:
+    """Czy λ ma się liczyć wobec ligi (env `SILA_LIGOWA`).
+
+    Domyślnie WŁĄCZONE po pomiarze walk-forward na dwóch niezależnych próbach:
+    Brier 0.6557→0.6089 (4 ligi top) i 0.6639→0.6142 (6 innych lig), przy
+    0.6001/0.5924 dla rynku. Escape-hatch `SILA_LIGOWA=0` wraca do starej λ.
+    """
+    import os
+    return os.getenv("SILA_LIGOWA", "1").strip().lower() not in ("0", "false", "no", "")
+
+
+def _liga_pary(df_f: pd.DataFrame) -> str | None:
+    """Liga, w której ta para realnie gra — najczęstsza w jej ostatnich meczach."""
+    if "league" not in df_f.columns or df_f.empty:
+        return None
+    ligi = df_f["league"].dropna()
+    return str(ligi.mode().iloc[0]) if not ligi.empty else None
+
+
+def _baza_ligowa(
+    df_mecze: pd.DataFrame, df_f: pd.DataFrame, g_h: str, a_h: str
+) -> tuple[float, float, dict, dict] | None:
+    """(λ bazowa gospodarza, λ bazowa gościa, siły g, siły a) wobec ligi.
+
+    None, gdy tej drogi nie da się przejść uczciwie: brak flagi, brak kolumny
+    `league`, brak historii którejś drużyny w tej lidze. Wtedy `predict_match`
+    wraca do starej ścieżki — gorsza λ jest lepsza niż żadna.
+
+    BEZ `BONUS_DOMOWY`: średnia goli gospodarzy w lidze JUŻ zawiera atut
+    własnego boiska, więc mnożenie przez niego liczyłoby go drugi raz.
+    """
+    if not _sila_ligowa_on():
+        return None
+    liga = _liga_pary(df_f)
+    if liga is None:
+        return None
+
+    cache = df_mecze.attrs.setdefault(_ATR_SILY_LIG, {})
+    if liga not in cache:
+        from footstats.core.form import sily_ligowe
+        cache[liga] = sily_ligowe(df_mecze[df_mecze["league"] == liga])
+    wynik = cache[liga]
+    if not wynik:
+        return None
+
+    tabela, sr_dom, sr_wyj = wynik
+    if g_h not in tabela or a_h not in tabela:
+        return None
+
+    sg_l, sa_l = tabela[g_h], tabela[a_h]
+    baza_g = sg_l["atak_dom"] * sa_l["obrona_wyj"] * sr_dom
+    baza_a = sa_l["atak_wyj"] * sg_l["obrona_dom"] * sr_wyj
+
+    # Kształt zgodny ze starą ścieżką — reszta `predict_match` (opis, pola
+    # wyjściowe `sila_at_*`) czyta te same klucze i nie musi o niczym wiedzieć.
+    def _zgodny(s: dict, atak: str, obrona: str) -> dict:
+        return {"atak": s[atak], "obrona": s[obrona], "mecze": s["mecze"],
+                "gole_sr": round(s[atak] * sr_dom, 2),
+                "strac_sr": round(s[obrona] * sr_wyj, 2),
+                "forma_pkt": 0.0}
+
+    return (baza_g, baza_a,
+            _zgodny(sg_l, "atak_dom", "obrona_dom"),
+            _zgodny(sa_l, "atak_wyj", "obrona_wyj"))
+
 
 def _kanoniczne_nazwy(df_mecze: pd.DataFrame, g: str, a: str) -> tuple[str, str]:
     """Nazwy obu drużyn tak, jak zapisuje je historia.
@@ -182,20 +252,26 @@ def predict_match(
         sg, sa = sily[g_h], sily[a_h]
 
     # ── Lambda bazowa ────────────────────────────────────────────────
+    # Dwie drogi do (baza_g, baza_a). Ligowa jest lepsza i zmierzona, ale
+    # potrzebuje kolumny `league` i historii obu drużyn w tej lidze — czego
+    # nie ma np. przy meczach reprezentacji. Brak któregokolwiek warunku cofa
+    # do starej drogi, bo gorsza λ jest lepsza niż żadna.
+    baza = _baza_ligowa(df_mecze, df_f, g_h, a_h)
+    if baza is not None:
+        baza_g, baza_a, sg, sa = baza
+    else:
+        baza_g = sg["atak"] * sa["obrona"] * srednia * BONUS_DOMOWY
+        baza_a = sa["atak"] * sg["obrona"] * srednia
+
     lambda_g = max(0.05,
-        sg["atak"]
-        * sa["obrona"]
-        * srednia
-        * BONUS_DOMOWY
+        baza_g
         * importance_g["bonus_atak"]
         * heurystyka_g["mnoznik_atak"]
         * h2h_g["mnoznik_atak"]
         / heurystyka_a["mnoznik_obr"]
     )
     lambda_a = max(0.05,
-        sa["atak"]
-        * sg["obrona"]
-        * srednia
+        baza_a
         * importance_a["bonus_atak"]
         * heurystyka_a["mnoznik_atak"]
         * h2h_a["mnoznik_atak"]

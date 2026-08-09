@@ -32,6 +32,62 @@ def _wagi_mecze(df_mecze: pd.DataFrame) -> pd.Series:
             wagi.append(0.5)
     return pd.Series(wagi, index=df_mecze.index)
 
+# Ile ostatnich meczów drużyny (osobno u siebie i na wyjeździe) wchodzi do ratingu.
+# 30 wybrane pomiarem: 15 jest za szumne, 60 zaczyna ciągnąć nieaktualną formę.
+OKNO_LIGOWE = 30
+
+# Poniżej tylu meczów rating jest szumem udającym wiedzę — drużyna wypada.
+MIN_MECZOW_LIGOWYCH = 6
+
+
+def sily_ligowe(
+    df_liga: pd.DataFrame, okno: int = OKNO_LIGOWE
+) -> tuple[dict, float, float] | None:
+    """Siła każdej drużyny WOBEC LIGI: {atak_dom, atak_wyj, obrona_dom, obrona_wyj}.
+
+    Zwraca `(tabela, srednia_goli_gospodarzy, srednia_goli_gosci)` albo None,
+    gdy z ramki nie da się nic policzyć.
+
+    DLACZEGO wobec ligi, a nie wobec własnej próbki: `_oblicz_sile_wazona`
+    liczy `atak = gole / srednia`, gdzie `srednia` pochodzi z TEJ SAMEJ garstki
+    meczów, którą dostała. Drużyna dużo strzelająca dzieli więc swoje gole przez
+    średnią, którą sama zawyżyła — sygnał się kasuje i ratingi ściągają do 1.0.
+    To jest źródło braku rozdzielczości modelu: predykcje różnią się od siebie
+    mniej, niż różnią się drużyny.
+
+    DLACZEGO osobno dom i wyjazd: średnia goli gospodarzy już zawiera atut
+    własnego boiska. Mnożenie wyniku jeszcze raz przez `BONUS_DOMOWY` liczyłoby
+    go drugi raz.
+
+    Zmierzone walk-forwardem na dwóch niezależnych próbach — Brier 0.6557→0.6089
+    (4 ligi top) i 0.6639→0.6142 (6 innych lig), przy 0.6001/0.5924 dla rynku.
+    """
+    wymagane = {"gospodarz", "goscie", "gole_g", "gole_a"}
+    if df_liga is None or df_liga.empty or not wymagane.issubset(df_liga.columns):
+        return None
+
+    sr_dom = float(df_liga["gole_g"].mean())
+    sr_wyj = float(df_liga["gole_a"].mean())
+    if not (sr_dom > 0 and sr_wyj > 0):
+        return None  # liga bez goli — każdy iloraz byłby dzieleniem przez zero
+
+    tabela: dict[str, dict] = {}
+    for druzyna in set(df_liga["gospodarz"]) | set(df_liga["goscie"]):
+        dom = df_liga[df_liga["gospodarz"] == druzyna].tail(okno)
+        wyj = df_liga[df_liga["goscie"] == druzyna].tail(okno)
+        if len(dom) + len(wyj) < MIN_MECZOW_LIGOWYCH:
+            continue
+        tabela[druzyna] = {
+            "atak_dom":   float(dom["gole_g"].mean()) / sr_dom if len(dom) else 1.0,
+            "atak_wyj":   float(wyj["gole_a"].mean()) / sr_wyj if len(wyj) else 1.0,
+            "obrona_dom": float(dom["gole_a"].mean()) / sr_wyj if len(dom) else 1.0,
+            "obrona_wyj": float(wyj["gole_g"].mean()) / sr_dom if len(wyj) else 1.0,
+            "mecze":      len(dom) + len(wyj),
+        }
+
+    return (tabela, sr_dom, sr_wyj) if tabela else None
+
+
 def _oblicz_sile_wazona(df_mecze: pd.DataFrame) -> tuple:
     sr_g    = df_mecze["gole_g"].mean()
     sr_a    = df_mecze["gole_a"].mean()
