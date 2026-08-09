@@ -1,0 +1,35 @@
+{
+  "wzorce": {
+    "PATENT->1": {
+      "n": 280,
+      "trafien": 166
+    },
+    "ZEMSTA->2": {
+      "n": 201,
+      "trafien": 103
+    },
+    "TWIERDZA->1": {
+      "n": 804,
+      "trafien": 459
+    },
+    "ZEMSTA->1": {
+      "n": 131,
+      "trafien": 50
+    },
+    "PATENT+TWIERDZA->1": {
+      "n": 107,
+      "trafien": 68
+    },
+    "PATENT->2": {
+      "n": 31,
+      "trafien": 8
+    },
+    "TWIERDZA->2": {
+      "n": 171,
+      "trafien": 65
+    }
+  },
+  "n_meczow": 1458,
+  "min_probek": 30,
+  "zbudowano_do": "2026-08-06"
+}

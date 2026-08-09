@@ -29,6 +29,11 @@ COPY data/team_mappings.json ./data/team_mappings.json
 # co API, więc muszą znać te same factory.
 COPY data/model_calibration.json ./data/model_calibration.json
 
+# Wzorce czynnik→typ z historii — jedyne paliwo warstwy RAG. Własnych
+# rozliczonych predykcji z czynnikami jest ZERO i będzie tak tygodniami,
+# więc bez tego pliku `pobierz_rag_wzorce` zwraca pusty string zawsze.
+COPY data/rag_wzorce_historyczne.json ./data/rag_wzorce_historyczne.json
+
 # Zależności: api (sentry/psycopg2) + ai (groq/langfuse) + scraper (playwright/bs4).
 # NIE tylko [api] — daily_agent/evening potrzebują groq (Groq) i bs4 (scraper sędziów).
 RUN uv pip install --system ".[api,ai,scraper]" \

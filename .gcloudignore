@@ -23,6 +23,7 @@ logs/
 # wejdzie do build-contextu (ten sam mechanizm co przy parquecie).
 !/data/team_mappings.json
 !/data/model_calibration.json
+!/data/rag_wzorce_historyczne.json
 tests/
 scratch/
 *.pdf

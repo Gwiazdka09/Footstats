@@ -41,6 +41,10 @@ COPY data/team_mappings.json ./data/team_mappings.json
 # lokalnie opisują wtedy inny model niż ten, który liczy predykcje na produkcji.
 COPY data/model_calibration.json ./data/model_calibration.json
 
+# Wzorce RAG — ten obraz też liczy predykcje (`/cron/draft`), więc potrzebuje
+# tego samego paliwa co joby.
+COPY data/rag_wzorce_historyczne.json ./data/rag_wzorce_historyczne.json
+
 RUN uv pip install --system ".[api]" && mkdir -p /app/data
 
 RUN addgroup --system app && adduser --system --ingroup app app \

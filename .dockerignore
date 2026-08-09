@@ -21,6 +21,8 @@ data/hist_cache/
 !data/team_mappings.json
 # Kalibracja λ — bez pliku kontener liczy z neutralnym (1.0, 1.0).
 !data/model_calibration.json
+# Wzorce RAG — jedyne paliwo tej warstwy, patrz komentarz w .gitignore.
+!data/rag_wzorce_historyczne.json
 .vscode/
 .git/
 .github/

@@ -150,13 +150,30 @@ def _analizuj_groq(
     if not ai_groq_dostepny():
         _blad("Brak GROQ_API_KEY w .env")
     console.print("[dim]Groq: analizuję i buduję kupony...[/dim]")
-    return ai_analiza_pewniaczki(
-        wyniki,
-        pobierz_forme=False,
-        cel_wygrana_a=cel_wygrana_a,
-        cel_wygrana_b=cel_wygrana_b,
-        stawka=stawka,
-    )
+    try:
+        return ai_analiza_pewniaczki(
+            wyniki,
+            pobierz_forme=False,
+            cel_wygrana_a=cel_wygrana_a,
+            cel_wygrana_b=cel_wygrana_b,
+            stawka=stawka,
+        )
+    except (RuntimeError, OSError, ValueError) as e:
+        # Brak warstwy AI degraduje przebieg, ale go NIE zabija. Kroki przed tym
+        # miejscem już się wykonały i zapisały: rozliczenie wyników, analiza
+        # porażek (lekcje) i kupony System paper-trading. Przerwanie wyrzucałoby
+        # to do kosza i oznaczało cały dzień jako nieudany — a paliwo do nauki
+        # właśnie przybyło. Zmierzone 09.08.2026: dwa przebiegi stracone przez
+        # jedną odmowę Groqa (413), zero predykcji obu dni.
+        #
+        # GŁOŚNO, bo cicha degradacja jest gorsza od awarii: `logger.error`
+        # trafia do Cloud Logging, więc monitoring to zobaczy.
+        log.error("[Agent] Warstwa AI niedostepna (%s) — pomijam kupony Groq. "
+                  "Rozliczenie, lekcje i kupony System sa juz zapisane.", e)
+        console.print(f"[red]Groq niedostępny: {e}[/red]")
+        console.print("[yellow]Przebieg degraduje do części modelowej "
+                      "— kupony AI pominięte.[/yellow]")
+        return {}
 
 
 # ── Krok 4: Weryfikacja halucynacji ──────────────────────────────────────────

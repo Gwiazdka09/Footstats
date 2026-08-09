@@ -121,7 +121,14 @@ def test_pobierz_rag_wzorce_formats_output_correctly():
 
 
 def test_pobierz_rag_wzorce_skips_below_min_n():
-    """n < min_n → wynik nie pojawia się w output."""
+    """n < min_n → własne dane odpadają, wchodzi zapas historyczny.
+
+    Wcześniej test wymagał tu pustego stringa. Od 09.08.2026 brak WŁASNYCH
+    danych sięga po `data/rag_wzorce_historyczne.json` — bo rozliczonych
+    predykcji z niepustymi `factors` jest na produkcji ZERO i będzie tak
+    tygodniami. Bez tablicy ta funkcja milczałaby zawsze.
+    Wersję „nie ma nic nigdzie" pokrywa test poniżej.
+    """
     with patch("footstats.ai.rag._connect") as mock_conn, \
          patch("footstats.ai.rag.init_db"):
         mock_ctx = MagicMock()
@@ -133,7 +140,23 @@ def test_pobierz_rag_wzorce_skips_below_min_n():
         mock_conn.return_value = mock_ctx
 
         result = pobierz_rag_wzorce(["PATENT", "TWIERDZA"], ai_tip="1", min_n=3)
-        assert result == ""
+
+        # Wynik pochodzi z historii, nie z podstawionych 2/2 i 1/1.
+        assert "2/2" not in result and "1/1" not in result
+
+
+def test_pobierz_rag_wzorce_pusto_gdy_brak_wszedzie():
+    """Brak własnych danych I brak tablicy historycznej → pusty string."""
+    with patch("footstats.ai.rag._connect") as mock_conn, \
+         patch("footstats.ai.rag.init_db"), \
+         patch("footstats.core.wzorce_historyczne.wczytaj_tablice", return_value={}):
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__ = MagicMock(return_value=mock_ctx)
+        mock_ctx.__exit__ = MagicMock(return_value=False)
+        mock_ctx.execute.return_value.fetchall.return_value = [{"n": 1, "hits": 1}]
+        mock_conn.return_value = mock_ctx
+
+        assert pobierz_rag_wzorce(["PATENT"], ai_tip="1", min_n=3) == ""
 
 
 def test_pobierz_rag_wzorce_max_3_results():

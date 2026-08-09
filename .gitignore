@@ -30,6 +30,10 @@ ENV/
 # dekoracją — a pomiary robione lokalnie opisują wtedy INNY model niż ten,
 # który realnie liczy predykcje na produkcji.
 !/data/model_calibration.json
+# Wzorce czynnik→typ z historii. To jedyne paliwo warstwy RAG: własnych
+# rozliczonych predykcji z czynnikami jest na produkcji ZERO i będzie tak
+# tygodniami. Bez tego pliku `pobierz_rag_wzorce` zwraca pusty string.
+!/data/rag_wzorce_historyczne.json
 
 # ── Logi i pliki tymczasowe
 logs/
