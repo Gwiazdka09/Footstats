@@ -97,6 +97,50 @@ class TestAwariaNieZabijaPrzebiegu:
 
         assert client._groq("prompt") is None
 
+    def test_413_ponawia_z_krotszym_promptem(self, monkeypatch):
+        """Szacunek tokenow jest zgrubny — po odmowie pytamy zrodlo prawdy.
+
+        Bez tego caly dzienny przebieg przepada przez jedno zapytanie; dokladnie
+        to zdarzylo sie 09.08.2026 DWA razy, bo mnoznik znakow na token byl za
+        optymistyczny (3 zamiast realnych ~1.4).
+        """
+        class _Blad(Exception):
+            pass
+
+        dlugosci: list[int] = []
+
+        def _pierwsze_za_duze(klucz, prompt, max_tokens):
+            dlugosci.append(len(prompt))
+            if len(dlugosci) == 1:
+                raise _Blad("Error code: 413 - Request too large")
+            return "odpowiedz"
+
+        monkeypatch.setenv("GROQ_API_KEY", "klucz")
+        monkeypatch.setattr(client, "_groq_call_impl", _pierwsze_za_duze)
+
+        wynik = client._groq("X" * 30_000, max_tokens=1500)
+
+        assert wynik == "odpowiedz"
+        assert len(dlugosci) == 2, "nie ponowiono zapytania"
+        assert dlugosci[1] < dlugosci[0] / 1.5, "prompt nie zostal realnie skrocony"
+
+    def test_413_ponawia_tylko_raz(self, monkeypatch):
+        """Seria odmow nie moze ciac promptu w nieskonczonosc."""
+        class _Blad(Exception):
+            pass
+
+        proby: list[int] = []
+
+        def _zawsze_za_duze(klucz, prompt, max_tokens):
+            proby.append(len(prompt))
+            raise _Blad("Error code: 413 - Request too large")
+
+        monkeypatch.setenv("GROQ_API_KEY", "klucz")
+        monkeypatch.setattr(client, "_groq_call_impl", _zawsze_za_duze)
+
+        assert client._groq("X" * 30_000) is None
+        assert len(proby) == 2, f"powinny byc dokladnie 2 proby, bylo {len(proby)}"
+
 
 class TestIntegracja:
     def test_zapytaj_ai_przycina_zanim_wysle(self, monkeypatch):

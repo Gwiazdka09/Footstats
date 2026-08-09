@@ -114,9 +114,13 @@ _TPM_DOMYSLNY = 6000
 # Zapas na niedoszacowanie licznika tokenów po stronie dostawcy.
 _MARGINES_TOKENOW = 200
 
-# Polski tekst z diakrytykami tokenizuje się gorzej niż angielski — 3 znaki na
-# token to celowo pesymistyczne przybliżenie, żeby guard nie przepuścił za dużo.
-_ZNAKOW_NA_TOKEN = 3
+# ZMIERZONE na realnym promptcie produkcyjnym (09.08.2026): Groq naliczył 8957
+# tokenów przy prompcie, który mieścił się w budżecie 4300 liczonym po 3 znaki
+# na token — czyli realny stosunek to ~1.4 znaku na token, nie 3. Powód: polskie
+# diakrytyki, gęste liczby i emoji (🏅⚔️😫🔄) w opisach meczów; emoji potrafi
+# zająć 3-4 tokeny przy jednym-dwóch znakach. Przy 3 guard przepuścił prompt
+# nietknięty i job padł drugi raz na tym samym 413.
+_ZNAKOW_NA_TOKEN = float(os.getenv("AI_ZNAKOW_NA_TOKEN", "1.4"))
 
 
 def tpm_dla_modelu(model: str) -> int:
@@ -126,7 +130,7 @@ def tpm_dla_modelu(model: str) -> int:
 
 def szacuj_tokeny(tekst: str) -> int:
     """Zgrubna liczba tokenów. Celowo zawyża — pomyłka w drugą stronę to 413."""
-    return len(tekst) // _ZNAKOW_NA_TOKEN + 1
+    return int(len(tekst) / _ZNAKOW_NA_TOKEN) + 1
 
 
 def dopasuj_do_budzetu(prompt: str, budzet_tokenow: int) -> str:
@@ -144,7 +148,7 @@ def dopasuj_do_budzetu(prompt: str, budzet_tokenow: int) -> str:
     # `szacuj_tokeny` zaokrągla w górę (+1), więc budżet znakowy liczymy od
     # `budzet - 1`. Bez tego wynik wychodzi o jeden token ponad limit — a to
     # dokładnie ten jeden token, przez który dostaje się 413.
-    dostepne = max(0, (budzet_tokenow - 1) * _ZNAKOW_NA_TOKEN - len(znacznik))
+    dostepne = max(0, int((budzet_tokenow - 1) * _ZNAKOW_NA_TOKEN) - len(znacznik))
     glowa = dostepne * 2 // 3          # opisy meczów są na początku — zostaw więcej
     ogon = dostepne - glowa
 
@@ -157,10 +161,13 @@ def dopasuj_do_budzetu(prompt: str, budzet_tokenow: int) -> str:
     return przyciety
 
 
-def _groq(prompt: str, max_tokens: int = 600) -> str | None:
+def _groq(prompt: str, max_tokens: int = 600, _proba_ponowna: bool = False) -> str | None:
     """
     Odpytuje Groq API z exponential backoff. Zwraca tekst lub None.
     Obsługuje RateLimitError gracefully i circuit breaker.
+
+    `_proba_ponowna` pilnuje, żeby skrócenie promptu po 413 zdarzyło się RAZ —
+    inaczej seria odmów mogłaby ciąć prompt w nieskończoność.
     """
     klucz = os.getenv("GROQ_API_KEY", "").strip()
     if not klucz:
@@ -178,6 +185,18 @@ def _groq(prompt: str, max_tokens: int = 600) -> str | None:
         return None
     except Exception as e:  # noqa: BLE001 — Groq SDK raises varied types incl. APIStatusError
         err_str = str(e).lower()
+        if "413" in err_str or "request too large" in err_str:
+            # Szacunek tokenów jest zgrubny z definicji — tokenizera Groqa nie
+            # mamy lokalnie. Zamiast ufać własnej arytmetyce, bierzemy odpowiedź
+            # od źródła prawdy: skoro odmówił, tniemy o połowę i próbujemy raz.
+            # Bez tego cały dzienny przebieg przepada przez jedno zapytanie
+            # (dwie takie awarie 09.08.2026).
+            if _proba_ponowna:
+                logger.error("[AI] Groq 413 nawet po skroceniu promptu — poddaje sie")
+                return None
+            krotszy = dopasuj_do_budzetu(prompt, szacuj_tokeny(prompt) // 2)
+            logger.warning("[AI] Groq 413 — ponawiam z promptem krotszym o polowe")
+            return _groq(krotszy, max_tokens, _proba_ponowna=True)
         if "429" in err_str or "rate_limit" in err_str or "too many requests" in err_str:
             logger.warning("[AI] Groq RateLimitError (429) — zwracam None")
         else:

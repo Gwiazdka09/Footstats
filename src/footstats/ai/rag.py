@@ -141,9 +141,29 @@ def pobierz_rag_wzorce(
                 acc = round(hits / n * 100)
                 wyniki.append(f"{label}->{tip}: {hits}/{n}({acc}%)")
 
-        return " | ".join(wyniki[:3])
+        if wyniki:
+            return " | ".join(wyniki[:3])
+
+        # Brak WŁASNYCH danych → historia. Na produkcji 09.08.2026 było
+        # 0 rozliczonych predykcji z niepustymi `factors`, więc ta funkcja
+        # zwracała pusty string i robiłaby tak tygodniami (~4 predykcje dziennie
+        # × 29% szansy na czynnik). Tablica z 139 102 meczów daje te same liczby
+        # od razu. Kolejność jest celowa: własne predykcje opisują TEN model
+        # i TĘ warstwę selekcji, więc mają pierwszeństwo; historia to zapas.
+        return _wzorce_z_historii(factors, ai_tip)
 
     except Exception:  # noqa: BLE001 — DB/query errors, return empty string as fallback
+        return _wzorce_z_historii(factors, ai_tip)
+
+
+def _wzorce_z_historii(factors: list[str], ai_tip: str | None) -> str:
+    """Wzorce z tablicy historycznej. Puste, gdy tablicy nie ma albo nic nie pasuje."""
+    if not factors or not ai_tip:
+        return ""
+    try:
+        from footstats.core.wzorce_historyczne import formatuj_wzorce, wczytaj_tablice
+        return formatuj_wzorce(wczytaj_tablice(), factors, ai_tip)
+    except (ImportError, OSError, ValueError):
         return ""
 
 
