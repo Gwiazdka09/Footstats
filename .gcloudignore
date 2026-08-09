@@ -22,6 +22,7 @@ logs/
 # Aliasy nazw drużyn — `COPY` w obu Dockerfile'ach wywali build, jeśli plik nie
 # wejdzie do build-contextu (ten sam mechanizm co przy parquecie).
 !/data/team_mappings.json
+!/data/model_calibration.json
 tests/
 scratch/
 *.pdf

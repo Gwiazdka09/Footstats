@@ -36,6 +36,11 @@ COPY data/hist_cache/full_dataset.parquet ./data/hist_cache/full_dataset.parquet
 # przejrzanych ręcznie (cała Bundesliga z The Odds API) i gubi te mecze.
 COPY data/team_mappings.json ./data/team_mappings.json
 
+# Kalibracja λ. Bez tego pliku `load_calibration()` zwraca neutralne (1.0, 1.0)
+# i cała warstwa kalibracji jest w kontenerze dekoracją — a pomiary robione
+# lokalnie opisują wtedy inny model niż ten, który liczy predykcje na produkcji.
+COPY data/model_calibration.json ./data/model_calibration.json
+
 RUN uv pip install --system ".[api]" && mkdir -p /app/data
 
 RUN addgroup --system app && adduser --system --ingroup app app \

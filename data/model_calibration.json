@@ -1,0 +1,57 @@
+{
+  "factor_home": 1.0158,
+  "factor_away": 0.9795,
+  "bias_raw_home": 1.015829,
+  "bias_raw_away": 0.979517,
+  "n_matches": 2983,
+  "acc_1x2_pct": 47.3,
+  "updated_at": "2026-08-09T08:14:33Z",
+  "safety_rail": [
+    0.85,
+    1.15
+  ],
+  "clamped_home": false,
+  "clamped_away": false,
+  "n_settled": 67,
+  "global_accuracy_pct": 32.8,
+  "ab_test_weights": [
+    {
+      "poisson": 0.3,
+      "bzzoiro": 0.7,
+      "log_loss": 1.0741,
+      "acc_pct": 32.8
+    },
+    {
+      "poisson": 0.45,
+      "bzzoiro": 0.55,
+      "log_loss": 1.0271,
+      "acc_pct": 32.8,
+      "note": "poprzednie"
+    },
+    {
+      "poisson": 0.5,
+      "bzzoiro": 0.5,
+      "log_loss": 1.0128,
+      "acc_pct": 34.3
+    },
+    {
+      "poisson": 0.6,
+      "bzzoiro": 0.4,
+      "log_loss": 0.9859,
+      "acc_pct": 34.3
+    },
+    {
+      "poisson": 0.7,
+      "bzzoiro": 0.3,
+      "log_loss": 0.961,
+      "acc_pct": 34.3,
+      "note": "wybrane"
+    }
+  ],
+  "selected_weights": {
+    "poisson": 0.7,
+    "bzzoiro": 0.3
+  },
+  "calibration_note": "Accuracy plaska 34.3% od 50/50 - bottleneck to model nie wagi. 70/30 optymalne pod log-loss (-7% vs 45/55).",
+  "per_league_notes": "International Friendly Games: Poisson=1.00 (jedyna liga z 15+ samples)"
+}

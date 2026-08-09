@@ -25,6 +25,10 @@ COPY data/hist_cache/full_dataset.parquet ./data/hist_cache/full_dataset.parquet
 # tylko brak predykcji, ale i kupon, którego nikt nie zamknie.
 COPY data/team_mappings.json ./data/team_mappings.json
 
+# Kalibracja λ — joby liczą draft i predykcje wieczorne tym samym modelem
+# co API, więc muszą znać te same factory.
+COPY data/model_calibration.json ./data/model_calibration.json
+
 # Zależności: api (sentry/psycopg2) + ai (groq/langfuse) + scraper (playwright/bs4).
 # NIE tylko [api] — daily_agent/evening potrzebują groq (Groq) i bs4 (scraper sędziów).
 RUN uv pip install --system ".[api,ai,scraper]" \
