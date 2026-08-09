@@ -7,7 +7,7 @@ import logging
 import os
 import requests
 from dotenv import load_dotenv
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import RetryError, retry, stop_after_attempt, wait_exponential
 from footstats.core.circuit_breaker import groq_circuit, ollama_circuit
 from footstats.core.exceptions import FootStatsCircuitOpenError
 
@@ -94,6 +94,69 @@ def _groq_call_impl(klucz: str, prompt: str, max_tokens: int) -> str:
     return resp.choices[0].message.content
 
 
+# ── Budżet tokenów: limit TPM dotyczy SUMY wejścia i wyjścia ──────────────────
+# 09.08.2026 job `footstats-final` padł na:
+#   413 - Request too large for model `llama-3.1-8b-instant`, Limit 6000, Requested 8957
+# Nikt nie pilnował rozmiaru promptu, a `AI_TPM_LIMIT` miał domyślnie 8000 —
+# wartość niezgodną z domyślnym modelem. Prompt urósł, bo naprawiony filtr
+# value-bet zaczął przepuszczać kandydatów (32 → 15 zamiast 0), więc opisów
+# meczów zrobiło się realnie więcej. Limit trzeba znać PER MODEL i sprawdzać
+# PRZED wysłaniem — odmowa kosztuje cały dzienny przebieg.
+_TPM_MODELI = {
+    "llama-3.1-8b-instant":    6000,
+    "llama-3.3-70b-versatile": 12000,
+    "openai/gpt-oss-120b":     8000,
+}
+# Model spoza tabeli dostaje najostrożniejszy limit: lepiej wysłać za mało,
+# niż zebrać 413 i stracić przebieg.
+_TPM_DOMYSLNY = 6000
+
+# Zapas na niedoszacowanie licznika tokenów po stronie dostawcy.
+_MARGINES_TOKENOW = 200
+
+# Polski tekst z diakrytykami tokenizuje się gorzej niż angielski — 3 znaki na
+# token to celowo pesymistyczne przybliżenie, żeby guard nie przepuścił za dużo.
+_ZNAKOW_NA_TOKEN = 3
+
+
+def tpm_dla_modelu(model: str) -> int:
+    """Limit tokenów na minutę dla modelu (wejście + wyjście łącznie)."""
+    return _TPM_MODELI.get(model, _TPM_DOMYSLNY)
+
+
+def szacuj_tokeny(tekst: str) -> int:
+    """Zgrubna liczba tokenów. Celowo zawyża — pomyłka w drugą stronę to 413."""
+    return len(tekst) // _ZNAKOW_NA_TOKEN + 1
+
+
+def dopasuj_do_budzetu(prompt: str, budzet_tokenow: int) -> str:
+    """Skraca prompt do budżetu, zachowując POCZĄTEK i KONIEC.
+
+    Instrukcja zadania stoi na początku, a wymagany format odpowiedzi na końcu —
+    ucięcie któregokolwiek zamienia odpowiedź w śmieci. Wycinamy więc środek,
+    gdzie siedzą opisy kolejnych meczów, i zostawiamy jawny znacznik: model musi
+    wiedzieć, że czegoś nie dostał, inaczej dopowie sobie brakujące.
+    """
+    if szacuj_tokeny(prompt) <= budzet_tokenow:
+        return prompt
+
+    znacznik = "\n\n[…część meczów pominięta, bo prompt przekraczał limit modelu…]\n\n"
+    # `szacuj_tokeny` zaokrągla w górę (+1), więc budżet znakowy liczymy od
+    # `budzet - 1`. Bez tego wynik wychodzi o jeden token ponad limit — a to
+    # dokładnie ten jeden token, przez który dostaje się 413.
+    dostepne = max(0, (budzet_tokenow - 1) * _ZNAKOW_NA_TOKEN - len(znacznik))
+    glowa = dostepne * 2 // 3          # opisy meczów są na początku — zostaw więcej
+    ogon = dostepne - glowa
+
+    przyciety = prompt[:glowa] + znacznik + (prompt[-ogon:] if ogon else "")
+    logger.error(
+        "[AI] Prompt przekraczal budzet (%d > %d tokenow) — przyciety do %d. "
+        "Zmniejsz liczbe opisywanych meczow albo dlugosc lekcji.",
+        szacuj_tokeny(prompt), budzet_tokenow, szacuj_tokeny(przyciety),
+    )
+    return przyciety
+
+
 def _groq(prompt: str, max_tokens: int = 600) -> str | None:
     """
     Odpytuje Groq API z exponential backoff. Zwraca tekst lub None.
@@ -146,7 +209,12 @@ def _ollama(prompt: str) -> str | None:
     except FootStatsCircuitOpenError as e:
         logger.warning("[AI] %s", e)
         return None
-    except (requests.RequestException, ValueError) as e:
+    except (RetryError, requests.RequestException, ValueError) as e:
+        # `RetryError` MUSI tu być: tenacity opakowuje porażkę w swój typ, spoza
+        # listy `requests`. Bez tego 09.08.2026 wyjątek przeleciał przez
+        # `zapytaj_ai` i wywalił CAŁY dzienny przebieg (`exit(1)`, zero
+        # predykcji) — zamiast zdegradować się do braku odpowiedzi. Ollamy nie
+        # ma w kontenerze i nigdy nie będzie, więc to ścieżka gwarantowana.
         logger.error("[AI] Ollama błąd po 3 retry: %s", e)
         return None
 
@@ -159,6 +227,14 @@ def zapytaj_ai(prompt: str, max_tokens: int = 600) -> str:
     Rzuca RuntimeError jeśli oba zawodzą.
     """
     groq_tokens = effective_max_tokens(max_tokens)  # auto-skala pod wybrany model
+
+    # Limit TPM obejmuje wejście I wyjście, więc budżet promptu to limit modelu
+    # minus zarezerwowane wyjście i margines. Sprawdzamy PRZED wysłaniem: odmowa
+    # 413 kosztuje cały przebieg, a nie jedno zapytanie.
+    budzet = tpm_dla_modelu(GROQ_MODEL) - groq_tokens - _MARGINES_TOKENOW
+    if budzet > 0:
+        prompt = dopasuj_do_budzetu(prompt, budzet)
+
     if AI_PREFER_LOCAL and _ollama_available():
         odpowiedz = _ollama(prompt)
         if odpowiedz:
