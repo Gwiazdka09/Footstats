@@ -350,6 +350,14 @@ def run_calibration(n_matches: int = 200, verbose: bool = True) -> dict:
 
 if __name__ == "__main__":
     import argparse
+
+    # Konsola Windows startuje w cp1250, a raport konczy sie strzalka "→".
+    # Bez tego CAlA kalibracja liczyla sie poprawnie, zapisywala plik, po czym
+    # wywalala sie `UnicodeEncodeError` na OSTATNIM `print` — wygladalo to jak
+    # nieudany przebieg, mimo ze wynik byl juz na dysku. Tylko dla CLI: import
+    # modulu przez API nie ma prawa ruszac globalnego stdout.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="FootStats Lambda Optimizer — kalibracja Poisson")
     parser.add_argument("--n",       type=int, default=200, help="Liczba ostatnich meczów do kalibracji (domyślnie: 200)")
     parser.add_argument("--quiet",   action="store_true",   help="Pomiń logi")
