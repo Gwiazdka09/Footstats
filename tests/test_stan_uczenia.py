@@ -119,3 +119,75 @@ def test_skrypt_parsuje_sie_i_ma_main():
     drzewo = ast.parse(SKRYPT.read_text(encoding="utf-8"))
     nazwy = {w.name for w in ast.walk(drzewo) if isinstance(w, ast.FunctionDef)}
     assert {"main", "raport_predykcji", "raport_lekcji", "raport_wzorcow"} <= nazwy
+
+
+# ── Dziennik kalibracyjny (model_log) ─────────────────────────────────────────
+#
+# PO CO TE TESTY: raport pytał wyłącznie `predictions`, czyli tabelę zapisywaną
+# DOPIERO po filtrach wartości. 2026-08-13 na produkcji: `kandydaci=45,
+# po filtrach=0` — zero predykcji trzeci dzień z rzędu, więc raport pokazywał
+# pętlę jako martwą. W tym samym czasie `model_log` zebrał 202 oceny modelu,
+# z czego 105 rozliczonych (poisson-dc 65.2%, bzzoiro-ml 50.0%). Dane były,
+# tylko nikt ich nie czytał.
+
+
+def test_dziennik_czyta_model_log_a_nie_predictions():
+    """Sedno: `predictions` gubi dni z zerem kuponów, `model_log` nie."""
+    conn = _Conn([[{"model_source": "poisson-dc", "wpisow": 23,
+                    "rozliczone": 23, "trafione": 15}]])
+
+    stan_uczenia.raport_dziennika(conn)
+
+    sql = conn.zapytania[0]
+    assert "model_log" in sql, "raport dalej pyta tylko `predictions`"
+    assert "predictions" not in sql
+
+
+def test_dziennik_liczy_skutecznosc_per_model(capsys):
+    conn = _Conn([[
+        {"model_source": "poisson-dc", "wpisow": 23, "rozliczone": 23, "trafione": 15},
+        {"model_source": "bzzoiro-ml", "wpisow": 179, "rozliczone": 82, "trafione": 41},
+    ]])
+
+    wynik = stan_uczenia.raport_dziennika(conn)
+
+    assert wynik["poisson-dc"]["rozliczone"] == 23
+    wyjscie = capsys.readouterr().out
+    assert "65.2%" in wyjscie, "brak skutecznosci poisson-dc (15/23)"
+    assert "50.0%" in wyjscie, "brak skutecznosci bzzoiro-ml (41/82)"
+
+
+def test_dziennik_bez_rozliczen_nie_dzieli_przez_zero(capsys):
+    """Świeży model ma 0 rozliczonych — raport ma to pokazać, nie wybuchnąć."""
+    conn = _Conn([[{"model_source": "poisson-dc", "wpisow": 10,
+                    "rozliczone": 0, "trafione": 0}]])
+
+    stan_uczenia.raport_dziennika(conn)
+
+    assert "poisson-dc" in capsys.readouterr().out
+
+
+def test_dziennik_pusty_mowi_ze_to_awaria_a_nie_brak_paliwa(capsys):
+    """Rozróżnienie, które kosztowało trzy dni: pusty `model_log` to awaria.
+
+    `predictions` bywa puste legalnie (filtry odrzuciły wszystko). `model_log`
+    zapisuje się PRZED filtrami, więc pustka oznacza, że job nie doszedł do
+    modelu — i tak ma być zaraportowana.
+    """
+    conn = _Conn([[]])
+
+    stan_uczenia.raport_dziennika(conn)
+
+    wyjscie = capsys.readouterr().out.lower()
+    assert "awaria" in wyjscie
+
+
+def test_gotowosc_liczy_z_dziennika_gdy_ten_ma_wiecej(capsys):
+    """Werdykt ma używać większej próby — inaczej czekamy na dane, które mamy."""
+    stan_uczenia.raport_gotowosci(
+        {"poisson-dc": {"rozliczone": 10}},
+        dziennik={"poisson-dc": {"rozliczone": 23}},
+    )
+
+    wyjscie = capsys.readouterr().out
+    assert "23" in wyjscie, "gotowosc zignorowala wieksza probe z model_log"

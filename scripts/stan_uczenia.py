@@ -90,14 +90,57 @@ def raport_wzorcow(conn) -> None:
         print("    To NIE jest awaria — to brak paliwa.")
 
 
-def raport_gotowosci(pred: dict) -> None:
-    """Ile brakuje do werdyktu `porownaj_modele`."""
+def raport_dziennika(conn) -> dict:
+    """Skuteczność z `model_log` — dziennika zapisywanego PRZED filtrami wartości.
+
+    PO CO OSOBNO OD `predictions`: tamta tabela dostaje wiersz dopiero wtedy, gdy
+    mecz przejdzie filtry i nadaje się do obstawienia. 2026-08-13 produkcja:
+    `kandydaci=45, po filtrach=0` — trzeci dzień z rzędu zero predykcji, więc
+    raport pokazywał pętlę jako martwą. `model_log` w tym samym tygodniu zebrał
+    202 oceny, z czego 105 rozliczonych. Dane były, tylko nikt ich nie czytał.
+    """
+    wiersze = _licz(conn, """
+        SELECT model_source,
+               COUNT(*) AS wpisow,
+               COUNT(actual_result) AS rozliczone,
+               COALESCE(SUM(tip_correct), 0) AS trafione
+        FROM model_log
+        GROUP BY model_source
+        ORDER BY wpisow DESC
+    """)
+    print("\n=== DZIENNIK MODELU (model_log — przed filtrami) ===")
+    if not wiersze:
+        print("  PUSTY — to AWARIA, nie brak paliwa.")
+        print("  `model_log` zapisuje się przed filtrami, więc pustka znaczy,")
+        print("  że przebieg nie doszedł nawet do oceny modelu.")
+        return {}
+
+    print(f"{'model':14} {'wpisow':>7} {'rozliczone':>11} {'trafione':>9} {'skutecznosc':>12}")
+    for w in wiersze:
+        rozl = w["rozliczone"] or 0
+        skut = f"{100.0 * w['trafione'] / rozl:.1f}%" if rozl else "—"
+        print(f"{str(w['model_source'] or '(brak)'):14} {w['wpisow']:7}"
+              f" {rozl:11} {w['trafione']:9} {skut:>12}")
+    return {w["model_source"]: w for w in wiersze}
+
+
+def raport_gotowosci(pred: dict, dziennik: dict | None = None) -> None:
+    """Ile brakuje do werdyktu `porownaj_modele`.
+
+    Liczy z WIĘKSZEJ z dwóch prób. `predictions` widzi wyłącznie mecze, które
+    przeszły filtry wartości, więc samo z siebie każe czekać na dane, które
+    już mamy w `model_log` (10 vs 23 rozliczonych dla poisson-dc na 13.08).
+    """
+    dziennik = dziennik or {}
     print("\n=== GOTOWOŚĆ DO WERDYKTU ===")
     for model in ("poisson-dc", "bzzoiro-ml"):
-        n = pred.get(model, {}).get("rozliczone", 0)
+        n_pred = pred.get(model, {}).get("rozliczone", 0)
+        n_dzien = dziennik.get(model, {}).get("rozliczone", 0)
+        n = max(n_pred, n_dzien)
+        zrodlo = "model_log" if n_dzien > n_pred else "predictions"
         brakuje = max(0, MIN_ROZLICZONYCH - n)
         stan = "gotowe" if not brakuje else f"brakuje {brakuje}"
-        print(f"  {model:12} rozliczonych {n:4} / {MIN_ROZLICZONYCH} — {stan}")
+        print(f"  {model:12} rozliczonych {n:4} / {MIN_ROZLICZONYCH} — {stan} ({zrodlo})")
 
 
 def main() -> None:
@@ -107,7 +150,8 @@ def main() -> None:
         pred = raport_predykcji(conn)
         raport_lekcji(conn)
         raport_wzorcow(conn)
-        raport_gotowosci(pred)
+        dziennik = raport_dziennika(conn)
+        raport_gotowosci(pred, dziennik)
 
 
 if __name__ == "__main__":

@@ -8,9 +8,10 @@
 
 > **🎯 KIERUNEK 2026-07-27:** produkt zostaje na **użytek prywatny + beta-testerzy (znajomi)**. Priorytet = **żeby bot się uczył** (pętla predykcja→settle→kalibracja→RAG). Zero monetyzacji, zero publicznego launchu. Plan wykonawczy → sekcja `🎯 PLAN P0-P3` niżej.
 
-**Aktualizacja:** 2026-07-27 · v3.4-stable
-**Accuracy:** offline **51.8%** (WF A/B, DC W=0.5) | live: **data-starved — 6 settled na Supabase** (historia 171/104 uwięziona w Neonie do 1.08)
-**Cel M1:** 55% win rate · **Suite:** 1656 testów zebranych (23 integracyjne wymagają żywej DB)
+**Aktualizacja:** 2026-08-13 · v3.4-stable
+**Accuracy (live, `model_log` 13.08):** **poisson-dc 65.2%** (15/23) · bzzoiro-ml 50.0% (41/82) — próba mała, ale poisson-dc realnie gra i prowadzi
+**Accuracy (offline):** Brier 0.6064 po fiksie rozdzielczości (było 0.6454); rynek 0.5912 — **wciąż nad nami**
+**Cel M1:** 55% win rate · **Suite:** 4336 testów
 **LIVE:** pipeline **PC-off w chmurze** — Cloud Run Jobs (final 11:00 + evening 23:00) + Scheduler (draft 07:30, settle 06:00/21:30). Szczegóły → `docs/cloud_migration.md`.
 **⚠️ INCYDENT 27.07 (naprawiony):** redeploy zgubił env Cloud Run (`JWT_SECRET` itd.) → login zwracał 500 udający „złe hasło". Fix: rev 00313-mf5 + malformed-hash guard (401 nie 500) + `/mcp` off w prod + CD re-asertuje krytyczne sekrety + LoginView rozróżnia błąd serwera/limit/sieć od złych danych. Audyt auth: 6 znalezisk, rdzeń szczelny.
 **⚠️ INCYDENT 14-20.07 (naprawiony 07-20):** potrójna awaria — Neon quota-block → **DB = Supabase free** (session pooler); image jobów bez `footstats.data` (`.gcloudignore` fix); kupon=None crash. **Luka w danych 14-20.07** (zero predykcji/settled). Dane 1-17.07 uwięzione w Neonie do **1.08**. Szczegóły → `CHANGELOG.md` 07-20.
@@ -25,10 +26,17 @@
 
 | # | Zadanie | Kod | Blokada | Status |
 |---|---------|-----|---------|--------|
-| **P0** | **Model musi realnie grać live** — rebuild+redeploy `footstats-jobs` z parquetem **ORAZ parquet do `Dockerfile.api`** (draft chodzi na serwisie) → Poisson-DC zamiast `bzzoiro-ml` | **A** | brak (można od razu; najlepszy timing = powrót lig klubowych ~poł. sierpnia) | ⏳ |
-| **P1** | **Pętla settle→kalibracja** — `calibration_monitor.py` + `flip_advisor` co 2-3 dni, licznik settled → progi flipów (`SELECTION_MIN_CONF`, `LEAGUE_GATING`, `CALIBRATION_ENABLED`) | — | wymaga danych (P2) | ⏳ |
-| **P2** | **Więcej danych → lepsze λ** — backfill Neon→Supabase `predictions`+`coupons` + rotacja hasła Neon | **B** | **1.08** (reset quota Neon) | ⏳ |
-| **P3** | **RAG feedback domyka sygnał** — fix pustych `factors` (`pred` sub-dict pusty w quick_picks `wyniki` → `wyciagnij_faktory` puste) | **C** | brak — data-independent, TDD, do zrobienia od razu | ⏳ |
+| **P0** | **Model musi realnie grać live** — parquet w obrazach jobów i API → Poisson-DC zamiast `bzzoiro-ml` | **A** | — | ✅ **ZROBIONE 13.08** — 29 ocen `poisson-dc` w `model_log`, 23 rozliczone, 65.2% |
+| **P1** | **Pętla settle→kalibracja** — `calibration_monitor.py` + `flip_advisor` co 2-3 dni → progi flipów | — | brakuje **7** rozliczonych poisson-dc do progu 30 | ⏳ blisko |
+| **P2** | **Więcej danych → lepsze λ** — backfill Neon→Supabase `predictions`+`coupons` + rotacja hasła Neon | **B** | decyzja usera (quota Neon zresetowana 1.08) | ⏳ |
+| **P3** | **RAG feedback domyka sygnał** — puste `factors` | **C** | — | ✅ **KOD OK** (`fac15410d`), patrz werdykt niżej |
+
+### ✅ P3 — werdykt 13.08: to NIE był bug
+Sprawdzone odtworzeniem łańcucha offline na tych samych 18 meczach co na produkcji → **0/18 tagów, identycznie jak live**. Czyli zapis działa, sygnały po prostu milczą:
+- Historia JEST (Nagoya Grampus: 227 meczów u siebie, H2H 20).
+- TWIERDZA wymaga serii ≥5 bez porażki u siebie (`FORTRESS_MECZE=5`); grane drużyny miały serie **0, 1, 2, 3**.
+- Na losowej próbce 300 meczów tagi zapalają się w **31.7%** (TWIERDZA 65, PATENT 19, ZEMSTA 16, ZMĘCZENIE 5) — mechanizm żyje.
+- **Wniosek:** wąskim gardłem jest LICZBA predykcji, nie kod. Przy 18 predykcjach zero tagów mieści się w normie.
 
 ### P0 / A — szczegóły
 > **KOREKTA 2026-07-29:** sam rebuild jobów **NIE wystarczy**. `/cron/draft` — czyli to, co tworzy kupony System (dane walidacyjne) — chodzi na **serwisie** `footstats-api`, a `Dockerfile.api` **nie kopiuje parquetu** (robi to tylko `Dockerfile.jobs`). Potwierdzone dry-runem na prodzie 29.07: `model_source: bzzoiro-ml`. Żeby Poisson-DC grał w OBU ścieżkach, parquet (562 KB) musi trafić też do `Dockerfile.api` — albo draft trzeba przenieść do joba.
@@ -81,7 +89,7 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 ### 🐞 Znalezione przy J1-J4 (osobne taski, NIE blokują dziennika)
 - **CSS cascade-layer bug (app-wide):** `gui/src/index.css` `button {color:inherit;background:transparent}` jest POZA `@layer` → w Tailwind v4 bije utility-klasy, więc `text-*`/`bg-*` na KAŻDYM `<button>` się nie stosują (przyciski bezbarwne). Obejście w dzienniku: inline `style var()`. Fix globalny = owinąć reset w `@layer base` + pełna regresja wizualna przycisków.
 - ~~**Auto-settle hybryda „co mamy — my":**~~ ✅ ZROBIONE (match-linking A+C wyżej). Zostaje decyzja enablement `/cron/settle-manual`.
-- **Testy dotykają prod Neon:** import `api/routes/coupons` przy zbiórce testów próbuje realnego połączenia do martwego Neona (`config.py` `load_dotenv override` → `DATABASE_URL` z `.env`). Pre-existing. Fix: marker `@pytest.mark.integration` + test-DB (patrz P0 dług testowy).
+- **Testy widzą prod przez `.env`:** `config.py` robi `load_dotenv` → `DATABASE_URL` z `.env` (dziś Supabase, nie martwy Neon). Guard w `tests/conftest.py` **przerywa całą suitę**, gdy URL wskazuje prod — to zadziałało i zadziałać ma. Zostaje uciążliwość: na Windowsie `$env:DATABASE_URL=""` kasuje zmienną zamiast ustawić pustą, więc guard i tak czyta `.env`. Docelowo marker `@pytest.mark.integration` + test-DB; doraźnie patrz „Dług testowy" w Następnych krokach.
 
 ---
 
@@ -102,8 +110,8 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 > STOP na nowe λ aż zbierzemy świeże settled — zmiana teraz zaciemnia czy fixy działają.
 > **Zbieranie leci PC-niezależnie** (cloud draft 07:30 + settle) — brak wąskiego gardła danych.
 
-- [ ] **🆕 1.08 (twarda data — reset quota Neon):** backfill Neon → Supabase (`pg_dump`: predictions/coupons/bankroll/**users z hasłami**) + **rotacja hasła Neon** (wisiało plaintext w env Cloud Run) + decyzja czy Neon kasować. Bez backfillu licznik settled i konta userów = od zera.
-- [ ] **Co kilka dni:** `python scripts/calibration_monitor.py` (DB read-only) — System vs Pipeline, czy accuracy ruszyła, licznik settled. Ma per-liga + **flip-advisor** (`core/flip_advisor.py`): rekomenduje czy flipnąć `SELECTION_MIN_CONF` i które ligi do `LEAGUE_GATING` (<50%, n≥8). *(Sensowne dopiero po backfillu 1.08 — świeży Supabase ma 0 settled.)*
+- [ ] **⏰ ZALEGŁE — termin 1.08 minął (quota Neon zresetowana):** backfill Neon → Supabase (`pg_dump`: predictions/coupons/bankroll/**users z hasłami**) + **rotacja hasła Neon** (wisiało plaintext w env Cloud Run) + decyzja czy Neon kasować. Czeka na decyzję usera. Stan Neona: 317 kuponów / 354 bankroll / 11 userów.
+- [ ] **Co kilka dni:** `python scripts/stan_uczenia.py` (read-only) — licznik do werdyktu, teraz z `model_log`. Uzupełniająco `scripts/calibration_monitor.py` + flip-advisor (`core/flip_advisor.py`): rekomenduje flip `SELECTION_MIN_CONF` i ligi do `LEAGUE_GATING` (<50%, n≥8).
 - [ ] **D3 — pełna decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled z zapisanym prob. Zwaliduj że guard pomaga, dostrój próg. (D3 cz.1+2 prob+guard ZROBIONE 06-22.)
 - [ ] **Po ~88 settled → D2 auto-refit sam** (delta +30 od n_train); gdy krzywa zdrowa → włącz `CALIBRATION_ENABLED=1`.
 - [x] ~~**DECYZJA (nie bug):** Bzzoiro etykietuje towarzyskie kadr jako "World Cup 2026" → whitelist MŚ (D1a).~~ **Wygasło 07-20** — MŚ zakończone 19.07; wraca ewentualnie przy Euro/kadrach.
@@ -170,13 +178,19 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
-## 📋 Następne kroki
+## 📋 Następne kroki (zweryfikowane na produkcji 2026-08-13)
 
-1. **P3 / C (TERAZ):** fix pustych `factors` — data-independent, TDD, nic nie blokuje.
-2. **P0 / A (sierpień, przy restarcie lig):** rebuild+redeploy `footstats-jobs` z parquetem → Poisson-DC gra live.
-3. **P2 / B (1.08):** backfill Neon→Supabase `predictions`+`coupons` + rotacja hasła Neon.
-4. **P1 (po backfillu):** `calibration_monitor.py` co 2-3 dni → po ~88 settled D2 auto-refit → `CALIBRATION_ENABLED=1`; D3 decyzja; flip `SELECTION_MIN_CONF` + `LEAGUE_GATING`.
-5. **Pasywne przez cały czas:** pipeline leci PC-niezależnie, zbiera settled. Budżet AF 100/dzień.
+1. **Dobić 7 rozliczonych poisson-dc** → próg 30 → `scripts/porownaj_modele.py` wydaje werdykt Poisson-DC vs bzzoiro-ml. Licznik: `python scripts/stan_uczenia.py`.
+2. **Zweryfikować CLV po najbliższym wieczornym przebiegu.** Kolumna `clv_closing_odds` powstała 13.08 08:46 UTC, job `footstats-evening` (23:00) od tego czasu jeszcze nie chodził → **0/228 wypełnionych to stan oczekiwany, nie awaria**. Jeśli po przebiegu dalej 0 — wtedy to bug.
+3. **P2 / B — decyzja usera:** backfill Neon→Supabase (`predictions`/`coupons`/`users`) + rotacja hasła Neon (wisiało plaintext w env Cloud Run).
+4. **Lekcje jednostronne** — `_pobierz_porazki` bierze wyłącznie `tip_correct = 0`, więc RAG uczy się tylko z porażek (82 porażki / 49 trafień). Rozszerzyć o trafienia.
+5. **Pasywne:** pipeline leci PC-niezależnie. `model_log` zbiera oceny NAWET w dni z zerem kuponów (13.08: `kandydaci=45, po filtrach=0`, a mimo to 10 wpisów w dzienniku).
+
+### 🔍 Ustalone 13.08 — nie zgubić
+- **`model_log` to główne źródło danych o modelu**, nie `predictions`. Ta druga dostaje wiersz dopiero PO filtrach wartości, więc w dni z zerem kuponów jest pusta i udaje martwą pętlę. `scripts/stan_uczenia.py` czyta już obie.
+- **Filtry zjadają wszystko od 11.08** (`kandydaci=45 → 0`) — połowa sierpnia to puchary europejskie, celowo poza whitelistą (Poisson nie liczy par międzyligowych).
+- **API-Football zawieszone** (nie limit — konto suspended) → brak składów i sędziego → sufit DECISION SCORE 70/100.
+- **Dług testowy:** `$env:DATABASE_URL=""` w PowerShellu KASUJE zmienną (guard widzi wtedy `.env` → prod i przerywa suitę). Działa: `python -c "import os,sys; os.environ['DATABASE_URL']=''; import pytest; sys.exit(pytest.main(['tests/','-q']))"`.
 
 ---
 
