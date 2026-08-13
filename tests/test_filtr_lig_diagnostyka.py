@@ -69,6 +69,43 @@ def test_czesciowe_odrzucenie_zostaje_na_info(whitelist_tylko_ekstraklasa, caplo
     assert all(r.levelno < logging.WARNING for r in caplog.records)
 
 
+@pytest.fixture
+def blacklista_towarzyskich(monkeypatch):
+    monkeypatch.setattr("footstats.config.LIGI_WHITELIST", frozenset({"Ekstraklasa"}))
+    monkeypatch.setattr("footstats.config.LIGA_WHITELIST_ENFORCE", True)
+    monkeypatch.setattr("footstats.config.LIGI_BLACKLIST_KEYWORDS", ("friendl", "towarzysk"))
+    monkeypatch.setattr("footstats.config.LIGI_SLABE", frozenset())
+
+
+def test_blacklista_slow_kluczowych_tez_sie_tlumaczy(blacklista_towarzyskich, caplog):
+    """LUKA znaleziona na produkcji 13.08: gałąź blacklisty milczała całkowicie.
+
+    Realny przebieg `footstats-final-5dpcn`: `kandydaci=5, po filtrach=0`, a w logu
+    ANI JEDNEJ nazwy ligi — bo diagnostyka pokrywała tylko whitelistę, natomiast
+    blacklista słów kluczowych robi `continue` bez licznika i bez zapisu nazwy.
+    Dokładnie ta sama cicha awaria, przed którą miał chronić ten plik.
+    """
+    with caplog.at_level(logging.INFO):
+        daily_filters._pre_filtruj_ligi(
+            _kandydaci("Club Friendlies", "Mecze towarzyskie", "Ekstraklasa")
+        )
+
+    tekst = " ".join(r.getMessage() for r in caplog.records)
+    assert "Friendlies" in tekst or "towarzysk" in tekst.lower(), (
+        f"blacklista wycieła ligi po cichu — log nic nie mowi: {tekst!r}"
+    )
+
+
+def test_blacklista_wycinajaca_wszystko_krzyczy(blacklista_towarzyskich, caplog):
+    with caplog.at_level(logging.INFO):
+        daily_filters._pre_filtruj_ligi(_kandydaci("Club Friendlies", "Mecze towarzyskie"))
+
+    poziomy = [r.levelno for r in caplog.records] or [logging.NOTSET]
+    assert max(poziomy) >= logging.WARNING, (
+        "blacklista wycieła wszystko, a log milczy albo zostal na INFO"
+    )
+
+
 def test_lista_lig_nie_puchnie_bez_konca(whitelist_tylko_ekstraklasa, caplog):
     """Przy 40 roznych ligach log ma zostac czytelny, nie stac sie sciana tekstu."""
     with caplog.at_level(logging.INFO):

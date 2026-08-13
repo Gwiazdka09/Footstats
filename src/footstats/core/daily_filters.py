@@ -90,6 +90,15 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
         liga = (k.get("liga") or "").strip()
         liga_lower = liga.lower()
         if any(kw.lower() in liga_lower for kw in LIGI_BLACKLIST_KEYWORDS):
+            # Ta gałąź milczała całkowicie — bez licznika i bez nazwy. Przebieg
+            # `footstats-final-5dpcn` (13.08): `kandydaci=5, po filtrach=0`, a w
+            # logu ANI JEDNEJ ligi, bo komplet wyciął tu blacklist keywordów,
+            # nie whitelist niżej. Dokładnie ta cicha awaria, przed którą miała
+            # chronić diagnostyka whitelisty.
+            odrzucone_liga += 1
+            nazwy_odrzuconych[liga or "(bez nazwy)"] = (
+                nazwy_odrzuconych.get(liga or "(bez nazwy)", 0) + 1
+            )
             continue
         # Kandydaci bez nazwy ligi (np. API-Football) — zawsze zachowywani.
         if liga and LIGA_WHITELIST_ENFORCE and _norm_liga(liga) not in whitelist_norm:
@@ -116,11 +125,11 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
             # Filtr wyciol WSZYSTKO — to zdarzenie warte krzyku, nie notatki.
             # Cisza na INFO wyglada dokladnie tak samo jak "nie bylo meczow".
             logger.warning(
-                "Whitelist lig wycieła WSZYSTKICH %d kandydatów — zero predykcji. Ligi: %s",
+                "Filtr lig wyciął WSZYSTKICH %d kandydatów — zero predykcji. Ligi: %s",
                 odrzucone_liga, opis,
             )
         else:
-            logger.info("Whitelist lig: odrzucono %d kandydatów spoza whitelist (%s)",
+            logger.info("Filtr lig (blacklist + whitelist): odrzucono %d kandydatów (%s)",
                         odrzucone_liga, opis)
     if odrzucone_slabe:
         logger.info("Gating słabych lig: odrzucono %d kandydatów (POL/ESP/FRA <50%%)", odrzucone_slabe)
