@@ -34,9 +34,37 @@ W 2–3 zdaniach odpowiedz PO POLSKU:
 Odpowiedz TYLKO tekstem bez nagłówków ani wypunktowania.
 """.strip()
 
+# Trafienie z błędnego powodu to nadal błędna decyzja. Ten prompt celowo NIE
+# gratuluje — pyta, czy zadziałał proces, czy dopisało szczęście. Bez tego
+# rozróżnienia lekcje z wygranych utrwalałyby przypadkowe trafy jako wzorzec.
+_PROMPT_ANALIZA_TRAFIENIE = """
+Jesteś analitykiem piłkarskim oceniającym, dlaczego typ AI okazał się trafny.
 
-def _pobierz_porazki(days_back: int) -> list[dict]:
-    """Zwraca mecze tip_correct=0 bez wpisu w ai_feedback (nie przeanalizowane)."""
+Mecz: {home} vs {away} ({league}, {date})
+Typ AI: {tip} (pewność: {confidence}%)
+Uzasadnienie AI: {reasoning}
+Wynik meczu: {actual_result}
+Czynniki analizowane: {factors}
+
+W 2–3 zdaniach odpowiedz PO POLSKU:
+1. Czy typ obronił się PROCESEM (przewaga widoczna w danych), czy dopisało SZCZĘŚCIE
+   (np. wynik wbrew przebiegu gry, gol w doliczonym czasie, czerwona kartka)?
+2. Który czynnik faktycznie zadziałał, a który okazał się bez znaczenia?
+3. Krótka rekomendacja: co warto powtórzyć (1 zdanie).
+
+Bądź surowy — jeśli to był szczęśliwy traf, napisz to wprost.
+Odpowiedz TYLKO tekstem bez nagłówków ani wypunktowania.
+""".strip()
+
+
+def _pobierz_do_analizy(days_back: int, trafione: bool) -> list[dict]:
+    """Rozliczone mecze bez wpisu w ai_feedback. `trafione` wybiera stronę.
+
+    Zapytanie było zaszyte na `tip_correct = 0`, więc baza lekcji rosła wyłącznie
+    z porażek — produkcja 13.08: 133 lekcje z 82 porażek, 49 trafień nietkniętych.
+    RAG uczył się czego unikać, ale nigdy co powtarzać, i nie miał jak odróżnić
+    dobrego procesu od szczęścia.
+    """
     from footstats.core.backtest import _connect
     cutoff = (datetime.now() - timedelta(days=days_back)).isoformat()
     with _connect() as conn:
@@ -44,17 +72,22 @@ def _pobierz_porazki(days_back: int) -> list[dict]:
             """
             SELECT p.id, p.match_date, p.team_home, p.team_away, p.league,
                    p.ai_tip, p.ai_confidence, p.ai_reasoning,
-                   p.actual_result, p.factors
+                   p.actual_result, p.factors, p.tip_correct
             FROM predictions p
             LEFT JOIN ai_feedback f ON f.match_id = p.id
-            WHERE p.tip_correct = 0
+            WHERE p.tip_correct = ?
               AND p.created_at >= ?
               AND f.id IS NULL
             ORDER BY p.match_date DESC
             """,
-            (cutoff,),
+            (1 if trafione else 0, cutoff),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def _pobierz_porazki(days_back: int) -> list[dict]:
+    """Zwraca mecze tip_correct=0 bez wpisu w ai_feedback (nie przeanalizowane)."""
+    return _pobierz_do_analizy(days_back, trafione=False)
 
 
 def _zapisz_feedback(match_id: int, prediction_details: dict, reason: str) -> None:
@@ -110,30 +143,45 @@ def pobierz_ostatnie_wnioski(n: int = 3) -> list[str]:
     ]
 
 
-def analizuj_porazki(days_back: int = 14, dry_run: bool = False) -> dict:
+def analizuj_porazki(
+    days_back: int = 14,
+    dry_run: bool = False,
+    analizuj_trafienia: bool = False,
+) -> dict:
     """
-    Główna funkcja. Analizuje nieprzetworzone porażki i zapisuje wnioski.
+    Główna funkcja. Analizuje nieprzetworzone rozliczenia i zapisuje wnioski.
     Zwraca {"analyzed": N, "skipped": M, "errors": K}.
+
+    `analizuj_trafienia` domyślnie WYŁĄCZONE: włączenie pisze do produkcyjnego
+    `ai_feedback` i pali tokeny Groqa, więc ma być świadomą decyzją, a nie
+    efektem ubocznym aktualizacji.
     """
     from footstats.ai.client import zapytaj_ai
 
     porazki = _pobierz_porazki(days_back)
+    trafienia = _pobierz_do_analizy(days_back, trafione=True) if analizuj_trafienia else []
+    do_analizy = porazki + trafienia
     stats = {"analyzed": 0, "skipped": 0, "errors": 0}
 
-    if not porazki:
-        print("[PostMatchAnalyzer] Brak nowych porażek do przeanalizowania.")
+    if not do_analizy:
+        print("[PostMatchAnalyzer] Brak nowych rozliczeń do przeanalizowania.")
         return stats
 
-    print(f"[PostMatchAnalyzer] Porażki do analizy: {len(porazki)}")
+    print(f"[PostMatchAnalyzer] Do analizy: {len(porazki)} porażek"
+          f" + {len(trafienia)} trafień")
 
-    for p in porazki:
-        label = f"{p['team_home']} vs {p['team_away']} ({p['match_date'][:10]})"
+    for p in do_analizy:
+        trafiony = bool(p.get("tip_correct"))
+        etykieta_wyniku = "TRAFIONY" if trafiony else "chybiony"
+        label = (f"{p['team_home']} vs {p['team_away']} "
+                 f"({p['match_date'][:10]}, {etykieta_wyniku})")
         if dry_run:
             print(f"  [DRY] {label} — tip={p['ai_tip']} wynik={p['actual_result']}")
             stats["analyzed"] += 1
             continue
 
-        prompt = _PROMPT_ANALIZA.format(
+        szablon = _PROMPT_ANALIZA_TRAFIENIE if trafiony else _PROMPT_ANALIZA
+        prompt = szablon.format(
             home=p["team_home"],
             away=p["team_away"],
             league=p.get("league", "?"),
@@ -154,6 +202,10 @@ def analizuj_porazki(days_back: int = 14, dry_run: bool = False) -> dict:
                 "confidence": p["ai_confidence"],
                 "odds":       None,
                 "result":     p["actual_result"],
+                # Bez tego RAG dostaje wymieszane lekcje z wygranych i przegranych
+                # i nie ma jak ich odróżnić — wniosek „to zadziałało" czytałby
+                # tak samo jak „tego unikaj".
+                "tip_correct": 1 if trafiony else 0,
             }
             _zapisz_feedback(p["id"], prediction_details, reason)
             print(f"  [OK] {label} → {reason[:80]}…")
@@ -195,6 +247,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="FootStats Post-Match Analyzer")
     parser.add_argument("--dry",  action="store_true", help="Tylko pokaż bez zapisu")
     parser.add_argument("--dni",  type=int, default=14, help="Dni wstecz (domyślnie 14)")
+    parser.add_argument("--trafienia", action="store_true",
+                        help="Analizuj TAKŻE trafione typy (proces vs szczęście). "
+                             "Pisze do ai_feedback i zużywa tokeny Groqa.")
     args = parser.parse_args()
 
-    analizuj_porazki(days_back=args.dni, dry_run=args.dry)
+    analizuj_porazki(days_back=args.dni, dry_run=args.dry,
+                     analizuj_trafienia=args.trafienia)

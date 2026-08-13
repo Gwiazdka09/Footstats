@@ -166,6 +166,115 @@ def test_respektuje_okno_czasowe(db):
     assert {r["team_home"] for r in pma._pobierz_porazki(60)} == {"Stara", "Swieza"}
 
 
+# ── Nauka TAKZE z trafien ───────────────────────────────────────────────────
+#
+# PO CO: `_pobierz_porazki` bierze wylacznie `tip_correct = 0`, wiec baza lekcji
+# jest z definicji jednostronna — produkcja 13.08: 133 lekcje z 82 porazek,
+# 49 trafien nigdy nie przeanalizowanych. RAG uczy sie wylacznie tego, co poszlo
+# zle, i nie potrafi odroznic dobrego procesu od szczescia. Analiza trafien
+# domyka druga polowe petli.
+#
+# Domyslnie WYLACZONE: zapisuje do produkcyjnego `ai_feedback` i pali tokeny
+# Groqa, wiec wlaczenie ma byc swiadoma decyzja, nie efekt uboczny aktualizacji.
+
+
+def test_pobiera_trafienia_gdy_poproszone(db):
+    _dodaj_predykcje(db, tip_correct=0, team_home="Przegrany")
+    _dodaj_predykcje(db, tip_correct=1, team_home="Wygrany")
+    _dodaj_predykcje(db, tip_correct=None, team_home="Nierozliczony")
+
+    wynik = pma._pobierz_do_analizy(14, trafione=True)
+
+    assert [r["team_home"] for r in wynik] == ["Wygrany"]
+
+
+def test_pobiera_porazki_gdy_poproszone(db):
+    _dodaj_predykcje(db, tip_correct=0, team_home="Przegrany")
+    _dodaj_predykcje(db, tip_correct=1, team_home="Wygrany")
+
+    wynik = pma._pobierz_do_analizy(14, trafione=False)
+
+    assert [r["team_home"] for r in wynik] == ["Przegrany"]
+
+
+def test_trafienia_tez_pomijaja_juz_przeanalizowane(db):
+    mid = _dodaj_predykcje(db, tip_correct=1)
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO ai_feedback (match_id, reason_for_failure) VALUES (?, ?)",
+                 (mid, "juz wiadomo"))
+    conn.commit()
+    conn.close()
+
+    assert pma._pobierz_do_analizy(14, trafione=True) == []
+
+
+def test_domyslnie_trafienia_nie_sa_analizowane(db, groq):
+    """Zmiana zachowania produkcji musi byc swiadoma — nie wlacza sie sama."""
+    _dodaj_predykcje(db, tip_correct=1, team_home="Wygrany")
+
+    stats = pma.analizuj_porazki(days_back=14)
+
+    assert stats["analyzed"] == 0
+    assert groq == [], "wolal AI o trafienie bez wyraznej zgody"
+
+
+def test_flaga_wlacza_analize_trafien(db, groq):
+    _dodaj_predykcje(db, tip_correct=1, team_home="Wygrany")
+
+    stats = pma.analizuj_porazki(days_back=14, analizuj_trafienia=True)
+
+    assert stats["analyzed"] == 1
+    assert len(groq) == 1
+
+
+def test_prompt_dla_trafienia_pyta_o_proces_nie_o_blad(db, groq):
+    """Trafienie z zlego powodu to nadal zla decyzja — prompt musi to rozroznic."""
+    _dodaj_predykcje(db, tip_correct=1, team_home="Wygrany")
+
+    pma.analizuj_porazki(days_back=14, analizuj_trafienia=True)
+
+    prompt = groq[0].lower()
+    assert "zły typ" not in prompt, "trafienie dostalo prompt o bledzie"
+    assert "szczęśc" in prompt or "proces" in prompt
+
+
+def test_lekcja_z_trafienia_niesie_znacznik_wyniku(db, groq):
+    """RAG musi umiec odroznic lekcje z wygranej od lekcji z porazki."""
+    mid = _dodaj_predykcje(db, tip_correct=1, team_home="Wygrany")
+
+    pma.analizuj_porazki(days_back=14, analizuj_trafienia=True)
+
+    conn = sqlite3.connect(db)
+    szczegoly = conn.execute(
+        "SELECT prediction_details FROM ai_feedback WHERE match_id = ?", (mid,)
+    ).fetchone()[0]
+    conn.close()
+
+    assert '"tip_correct": 1' in szczegoly.replace("'", '"')
+
+
+def test_lekcja_z_porazki_tez_niesie_znacznik(db, groq):
+    mid = _dodaj_predykcje(db, tip_correct=0)
+
+    pma.analizuj_porazki(days_back=14)
+
+    conn = sqlite3.connect(db)
+    szczegoly = conn.execute(
+        "SELECT prediction_details FROM ai_feedback WHERE match_id = ?", (mid,)
+    ).fetchone()[0]
+    conn.close()
+
+    assert '"tip_correct": 0' in szczegoly.replace("'", '"')
+
+
+def test_stara_nazwa_dalej_dziala(db):
+    """`_pobierz_porazki` wolaja inne moduly — nie wolno jej urwac."""
+    _dodaj_predykcje(db, tip_correct=0, team_home="Przegrany")
+    _dodaj_predykcje(db, tip_correct=1, team_home="Wygrany")
+
+    assert [r["team_home"] for r in pma._pobierz_porazki(14)] == ["Przegrany"]
+
+
 # ── pobierz_ostatnie_wnioski ────────────────────────────────────────────────
 
 def test_wnioski_formatowane_z_data_i_druzynami(db):
