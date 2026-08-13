@@ -239,8 +239,15 @@ def retrieve_relevant_lessons(query_context: str, k: int = 5, min_score: float =
         score_map = dict(results)
         placeholders = ",".join("?" * len(feedback_ids))
         with _connect() as conn:
+            # `tip_correct` dojeżdża razem z treścią: od 13.08.2026 baza lekcji
+            # zawiera też trafienia, a bez znacznika wołający nie ma jak odróżnić
+            # „to zadziałało" od „tego unikaj" i wkłada jedno pod drugie do promptu.
+            # LEFT JOIN — brakująca predykcja nie może wyciąć lekcji z wyników.
             rows = conn.execute(
-                f"SELECT id, match_id, reason_for_failure, created_at FROM ai_feedback WHERE id IN ({placeholders})",  # nosec B608 — placeholders='?,?' (param), wartości w feedback_ids
+                f"SELECT f.id, f.match_id, f.reason_for_failure, f.created_at,"  # nosec B608 — placeholders='?,?' (param), wartości w feedback_ids
+                f" p.tip_correct"
+                f" FROM ai_feedback f LEFT JOIN predictions p ON p.id = f.match_id"
+                f" WHERE f.id IN ({placeholders})",
                 feedback_ids,
             ).fetchall()
         for row in rows:
@@ -248,6 +255,7 @@ def retrieve_relevant_lessons(query_context: str, k: int = 5, min_score: float =
                 "id": row["id"],
                 "match_id": row["match_id"],
                 "reason_for_failure": row["reason_for_failure"],
+                "tip_correct": row["tip_correct"],
                 "score": score_map.get(row["id"], 0.0),
                 "created_at": row["created_at"],
             })

@@ -14,10 +14,13 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
 import footstats.ai.post_match_analyzer as pma
+
+ROOT = Path(__file__).resolve().parents[1]
 
 _SCHEMA = """
 CREATE TABLE predictions (
@@ -290,6 +293,51 @@ def test_wnioski_formatowane_z_data_i_druzynami(db):
     assert "2026-07-20" in wnioski[0]
     assert "Legia vs Lech" in wnioski[0]
     assert "przecenienie gospodarza" in wnioski[0]
+
+
+def test_wniosek_z_trafienia_jest_oznaczony(db):
+    """REGRESJA 13.08: lekcje z wygranych szly do promptu Groqa nieodroznialne
+    od porazek, a `analyzer.py` podpisywal caly blok naglowkiem
+    "WNIOSKI Z OSTATNICH PORAZEK — ucz sie bledow". Model dostawal wiec
+    "typ obronil sie procesem" jako blad do unikania i uczyl sie omijac to,
+    co zadzialalo. Znacznik wyniku musi jechac razem z trescia.
+    """
+    mid = _dodaj_predykcje(db, tip_correct=1, team_home="Wygrany")
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO ai_feedback (match_id, reason_for_failure) VALUES (?, ?)",
+                 (mid, "typ obronil sie procesem"))
+    conn.commit()
+    conn.close()
+
+    wniosek = pma.pobierz_ostatnie_wnioski(5)[0]
+
+    assert "TRAFIONY" in wniosek, f"lekcja z wygranej bez znacznika: {wniosek}"
+
+
+def test_wniosek_z_porazki_jest_oznaczony(db):
+    mid = _dodaj_predykcje(db, tip_correct=0, team_home="Przegrany")
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO ai_feedback (match_id, reason_for_failure) VALUES (?, ?)",
+                 (mid, "przecenienie gospodarza"))
+    conn.commit()
+    conn.close()
+
+    wniosek = pma.pobierz_ostatnie_wnioski(5)[0]
+
+    assert "CHYBIONY" in wniosek, f"lekcja z porazki bez znacznika: {wniosek}"
+
+
+def test_naglowek_bloku_feedbacku_nie_klamie_ze_to_same_porazki():
+    """Blok karmiacy Groqa niesie teraz OBIE strony — naglowek musi to oddawac.
+
+    Czytamy zrodlo, bo `_buduj_prompt` wymaga pelnego kontekstu kuponu;
+    tu chodzi o jedno slowo, ktore przekreca znaczenie calego bloku.
+    """
+    zrodlo = (ROOT / "src" / "footstats" / "ai" / "analyzer.py").read_text(encoding="utf-8")
+
+    assert "WNIOSKI Z OSTATNICH PORAŻEK" not in zrodlo, (
+        "lekcje z trafien ida do promptu podpisane jako porazki"
+    )
 
 
 def test_wnioski_respektuja_limit(db):

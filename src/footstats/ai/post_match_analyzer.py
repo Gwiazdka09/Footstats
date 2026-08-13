@@ -122,14 +122,19 @@ def _zapisz_feedback(match_id: int, prediction_details: dict, reason: str) -> No
 
 def pobierz_ostatnie_wnioski(n: int = 3) -> list[str]:
     """
-    Zwraca n ostatnich wniosków z ai_feedback.
-    Używane przez daily_agent do wzbogacenia kontekstu Groq.
+    Zwraca n ostatnich wniosków z ai_feedback — każdy ZE ZNACZNIKIEM wyniku.
+
+    Znacznik jest obowiązkowy, odkąd baza lekcji zawiera też trafienia
+    (13.08.2026). Bez niego wniosek „typ obronił się procesem" trafiał do
+    promptu nieodróżnialny od porażki, a `analyzer.py` podpisywał cały blok
+    nagłówkiem o błędach — więc model uczył się omijać to, co zadziałało.
     """
     from footstats.core.backtest import _connect
     with _connect() as conn:
         rows = conn.execute(
             """
-            SELECT f.reason_for_failure, p.team_home, p.team_away, p.match_date
+            SELECT f.reason_for_failure, p.team_home, p.team_away,
+                   p.match_date, p.tip_correct
             FROM ai_feedback f
             JOIN predictions p ON p.id = f.match_id
             ORDER BY f.created_at DESC
@@ -138,7 +143,9 @@ def pobierz_ostatnie_wnioski(n: int = 3) -> list[str]:
             (n,),
         ).fetchall()
     return [
-        f"[{r['match_date'][:10]}] {r['team_home']} vs {r['team_away']}: {r['reason_for_failure']}"
+        f"[{r['match_date'][:10]}] {r['team_home']} vs {r['team_away']}"
+        f" ({'TRAFIONY' if r['tip_correct'] else 'CHYBIONY'}):"
+        f" {r['reason_for_failure']}"
         for r in rows
     ]
 

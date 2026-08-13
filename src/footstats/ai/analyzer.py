@@ -659,11 +659,24 @@ def ai_analiza_pewniaczki(
 
         # Try semantic retrieval first; fall back to chronological
         lessons_data = retrieve_relevant_lessons(query_context, k=3, min_score=0.3) if query_context.strip() else []
-        wnioski = [lesson["reason_for_failure"] for lesson in lessons_data] if lessons_data else pobierz_ostatnie_wnioski(3)
+        if lessons_data:
+            wnioski = [
+                f"({'TRAFIONY' if lesson.get('tip_correct') else 'CHYBIONY'})"
+                f" {lesson['reason_for_failure']}"
+                for lesson in lessons_data
+            ]
+        else:
+            wnioski = pobierz_ostatnie_wnioski(3)
 
         if wnioski:
+            # Nagłówek mówił „Z OSTATNICH PORAŻEK — ucz się błędów", a od
+            # 13.08.2026 baza lekcji zawiera też trafienia. Wniosek „typ obronił
+            # się procesem" szedł więc do modelu jako błąd do unikania, czyli
+            # uczył go omijać to, co zadziałało. Każdy wniosek niesie własny
+            # znacznik TRAFIONY/CHYBIONY (`pobierz_ostatnie_wnioski`).
             feedback_str = (
-                "WNIOSKI Z OSTATNICH PORAŻEK (Pętla Feedbacku — ucz się błędów):\n"
+                "WNIOSKI Z OSTATNICH ROZLICZEŃ (Pętla Feedbacku — powtarzaj to,"
+                " co zadziałało procesem; unikaj przyczyn chybionych typów):\n"
                 + "\n".join(f"  • {w}" for w in wnioski)
                 + "\n"
             )
