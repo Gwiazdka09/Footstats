@@ -40,8 +40,41 @@ OKNO_LIGOWE = 30
 MIN_MECZOW_LIGOWYCH = 6
 
 
+def _tabela_ratingow(df_liga: pd.DataFrame, kol_dom: str, kol_wyj: str,
+                     okno: int) -> tuple[dict, float, float] | None:
+    """Ratingi dom/wyjazd wobec średniej ligowej dla DOWOLNEJ pary kolumn.
+
+    Ta sama arytmetyka służy golom i strzałom celnym — ilorazy są bezwymiarowe,
+    więc λ zostaje w golach niezależnie od tego, czym mierzymy siłę.
+    """
+    dane = df_liga.dropna(subset=[kol_dom, kol_wyj])
+    if dane.empty:
+        return None
+    sr_dom = float(dane[kol_dom].mean())
+    sr_wyj = float(dane[kol_wyj].mean())
+    if not (sr_dom > 0 and sr_wyj > 0):
+        return None
+
+    tabela: dict[str, dict] = {}
+    for druzyna in set(dane["gospodarz"]) | set(dane["goscie"]):
+        dom = dane[dane["gospodarz"] == druzyna].tail(okno)
+        wyj = dane[dane["goscie"] == druzyna].tail(okno)
+        if len(dom) + len(wyj) < MIN_MECZOW_LIGOWYCH:
+            continue
+        tabela[druzyna] = {
+            "atak_dom":   float(dom[kol_dom].mean()) / sr_dom if len(dom) else 1.0,
+            "atak_wyj":   float(wyj[kol_wyj].mean()) / sr_wyj if len(wyj) else 1.0,
+            "obrona_dom": float(dom[kol_wyj].mean()) / sr_wyj if len(dom) else 1.0,
+            "obrona_wyj": float(wyj[kol_dom].mean()) / sr_dom if len(wyj) else 1.0,
+            "mecze":      len(dom) + len(wyj),
+        }
+    return (tabela, sr_dom, sr_wyj) if tabela else None
+
+
 def sily_ligowe(
-    df_liga: pd.DataFrame, okno: int = OKNO_LIGOWE
+    df_liga: pd.DataFrame,
+    okno: int = OKNO_LIGOWE,
+    waga_strzalow: float | None = None,
 ) -> tuple[dict, float, float] | None:
     """Siła każdej drużyny WOBEC LIGI: {atak_dom, atak_wyj, obrona_dom, obrona_wyj}.
 
@@ -61,31 +94,40 @@ def sily_ligowe(
 
     Zmierzone walk-forwardem na dwóch niezależnych próbach — Brier 0.6557→0.6089
     (4 ligi top) i 0.6639→0.6142 (6 innych lig), przy 0.6001/0.5924 dla rynku.
+
+    STRZAŁY CELNE (`waga_strzalow`): gol pada ~1,4 razy na drużynę, strzał celny
+    4-5 razy częściej — ta sama próbka daje więc stabilniejszą ocenę siły. Ratingi
+    ze strzałów mieszają się z golowymi; ilorazy są bezwymiarowe, więc λ zostaje
+    w golach. Zmierzone na dwóch próbach: Brier 0.6062→0.6032 (top-4) i
+    0.6290→0.6180 (6 innych lig). Brak kolumn albo pustych strzałów cicho wraca
+    do samych goli — połowa datasetu ich nie ma i to jest normalny stan.
     """
     wymagane = {"gospodarz", "goscie", "gole_g", "gole_a"}
     if df_liga is None or df_liga.empty or not wymagane.issubset(df_liga.columns):
         return None
 
-    sr_dom = float(df_liga["gole_g"].mean())
-    sr_wyj = float(df_liga["gole_a"].mean())
-    if not (sr_dom > 0 and sr_wyj > 0):
+    z_goli = _tabela_ratingow(df_liga, "gole_g", "gole_a", okno)
+    if not z_goli:
         return None  # liga bez goli — każdy iloraz byłby dzieleniem przez zero
+    tabela, sr_dom, sr_wyj = z_goli
 
-    tabela: dict[str, dict] = {}
-    for druzyna in set(df_liga["gospodarz"]) | set(df_liga["goscie"]):
-        dom = df_liga[df_liga["gospodarz"] == druzyna].tail(okno)
-        wyj = df_liga[df_liga["goscie"] == druzyna].tail(okno)
-        if len(dom) + len(wyj) < MIN_MECZOW_LIGOWYCH:
-            continue
-        tabela[druzyna] = {
-            "atak_dom":   float(dom["gole_g"].mean()) / sr_dom if len(dom) else 1.0,
-            "atak_wyj":   float(wyj["gole_a"].mean()) / sr_wyj if len(wyj) else 1.0,
-            "obrona_dom": float(dom["gole_a"].mean()) / sr_wyj if len(dom) else 1.0,
-            "obrona_wyj": float(wyj["gole_g"].mean()) / sr_dom if len(wyj) else 1.0,
-            "mecze":      len(dom) + len(wyj),
-        }
+    if waga_strzalow is None:
+        from footstats.config import WAGA_STRZALOW
+        waga_strzalow = WAGA_STRZALOW
 
-    return (tabela, sr_dom, sr_wyj) if tabela else None
+    if waga_strzalow > 0 and {"hst", "ast"} <= set(df_liga.columns):
+        ze_strzalow = _tabela_ratingow(df_liga, "hst", "ast", okno)
+        if ze_strzalow:
+            tab_s = ze_strzalow[0]
+            w = waga_strzalow
+            for druzyna, wpis in tabela.items():
+                s = tab_s.get(druzyna)
+                if not s:
+                    continue  # ta drużyna nie ma strzałów — zostaje na golach
+                for klucz in ("atak_dom", "atak_wyj", "obrona_dom", "obrona_wyj"):
+                    wpis[klucz] = w * s[klucz] + (1 - w) * wpis[klucz]
+
+    return (tabela, sr_dom, sr_wyj)
 
 
 def _oblicz_sile_wazona(df_mecze: pd.DataFrame) -> tuple:

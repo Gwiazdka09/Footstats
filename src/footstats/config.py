@@ -85,6 +85,25 @@ W_BAYESIAN      = float(os.getenv("W_BAYESIAN", "0.5"))   # waga ramienia DC (0=
 USE_DC_TAU = os.getenv("USE_DC_TAU", "0").strip() not in ("0", "false", "False", "")
 DC_RHO     = float(os.getenv("DC_RHO", "-0.13"))
 
+# ── Sila druzyny liczona TEZ ze strzalow celnych (13.08.2026) ──
+# Gol to zdarzenie rzadkie (~1.4 na druzyne), wiec srednia z 30 meczow jest
+# szumna — to jest zrodlo braku ROZDZIELCZOSCI modelu. Strzal celny pada 4-5x
+# czesciej, wiec ta sama probka daje stabilniejsza ocene sily.
+#
+# ZMIERZONE walk-forwardem na DWOCH niezaleznych probach (waga 0 = stan poprzedni):
+#     waga   Brier top-4   Brier 6 innych lig   trafnosc
+#     0.0    0.6062        0.6290               47.4-48.6%
+#     0.5    0.6020        0.6197               48.0-50.3%
+#     0.7    0.6032        0.6180               48.1-50.8%
+#     1.0    0.6081        0.6176               48.3-48.4%
+#     rynek  0.5919        0.5978               52.2-52.7%
+#
+# Obie proby zgadzaja sie co do kierunku, roznia sie optimum (czolowe 0.5,
+# nizsze 1.0). 0.7 jest bliskie najlepszego na obu i unika ryzyka czystych
+# strzalow, ktore na ligach czolowych wypadaly gorzej. WAGA_STRZALOW=0 wraca
+# do samych goli bez redeploya.
+WAGA_STRZALOW = float(os.getenv("WAGA_STRZALOW", "0.7"))
+
 # ── C2 / Cel B bug 2: override REALNEGO tipu Groq argmaxem modelu ──
 # Gdy Groq wybierze 1X2 o prob modelu <15% → podmiana na argmax (konserwatywny).
 # FLIP ON 2026-07-06: walidacja zebrana (104 settled) — model argmax 60% vs Groq 48%
