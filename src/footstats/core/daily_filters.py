@@ -85,6 +85,7 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
     wynik = []
     odrzucone_liga = 0
     odrzucone_slabe = 0
+    nazwy_odrzuconych: dict[str, int] = {}
     for k in kandydaci:
         liga = (k.get("liga") or "").strip()
         liga_lower = liga.lower()
@@ -93,6 +94,7 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
         # Kandydaci bez nazwy ligi (np. API-Football) — zawsze zachowywani.
         if liga and LIGA_WHITELIST_ENFORCE and _norm_liga(liga) not in whitelist_norm:
             odrzucone_liga += 1
+            nazwy_odrzuconych[liga] = nazwy_odrzuconych.get(liga, 0) + 1
             continue
         # M1 lever #2: gating słabych lig (<50% offline) — tylko gdy LEAGUE_GATING=1.
         if liga and gating and _norm_liga(liga) in slabe_norm:
@@ -100,7 +102,26 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
             continue
         wynik.append(k)
     if odrzucone_liga:
-        logger.info("Whitelist lig: odrzucono %d kandydatów spoza whitelist", odrzucone_liga)
+        # NAZWY, nie sama liczba. 10-12.08.2026 job konczyl sie sukcesem przez trzy
+        # dni z rzedu, produkujac ZERO predykcji: whitelist wycinala komplet 44
+        # kandydatow, bo w polowie sierpnia kalendarz wypelniaja puchary europejskie
+        # (Conference/Europa/Champions League, Copa Libertadores), ktorych na liscie
+        # nie ma. Log podawal tylko liczbe, wiec diagnoza wymagala grzebania w bazie.
+        szczyt = sorted(nazwy_odrzuconych.items(), key=lambda kv: -kv[1])[:5]
+        opis = ", ".join(f"{liga} ({ile})" for liga, ile in szczyt)
+        reszta = len(nazwy_odrzuconych) - len(szczyt)
+        if reszta > 0:
+            opis += f" i {reszta} innych"
+        if kandydaci and not wynik:
+            # Filtr wyciol WSZYSTKO — to zdarzenie warte krzyku, nie notatki.
+            # Cisza na INFO wyglada dokladnie tak samo jak "nie bylo meczow".
+            logger.warning(
+                "Whitelist lig wycieła WSZYSTKICH %d kandydatów — zero predykcji. Ligi: %s",
+                odrzucone_liga, opis,
+            )
+        else:
+            logger.info("Whitelist lig: odrzucono %d kandydatów spoza whitelist (%s)",
+                        odrzucone_liga, opis)
     if odrzucone_slabe:
         logger.info("Gating słabych lig: odrzucono %d kandydatów (POL/ESP/FRA <50%%)", odrzucone_slabe)
     return wynik

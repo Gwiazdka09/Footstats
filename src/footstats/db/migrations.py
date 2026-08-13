@@ -152,6 +152,13 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     " ON predictions(model_source)",
                 ],
             ),
+            (
+                11,
+                "add_clv_closing_odds_to_predictions",
+                [
+                    "ALTER TABLE predictions ADD COLUMN clv_closing_odds REAL",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -266,6 +273,22 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "UPDATE predictions SET model_source = 'bzzoiro-ml' WHERE model_source = ''",
                     "CREATE INDEX IF NOT EXISTS idx_predictions_model_source"
                     " ON predictions(model_source)",
+                ],
+            ),
+            # `clv_tracker._ensure_clv_column` probowalo dodac te kolumne samo,
+            # ale robilo to w `try/except Exception: pass` — a taki except polyka
+            # nie tylko "kolumna juz istnieje", tylko KAZDY blad. Sprawdzone na
+            # produkcji 09.08.2026: kolumny nie bylo wcale
+            #   psycopg2.errors.UndefinedColumn: column "clv_closing_odds" does not exist
+            # wiec `record_closing_odds` nie mial gdzie pisac, a CLV nie dzialalo
+            # od poczatku i nikt sie nie dowiedzial. Migracja wykona sie raz
+            # i GLOSNO padnie, gdy sie nie uda.
+            (
+                11,
+                "add_clv_closing_odds_to_predictions",
+                [
+                    "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS"
+                    " clv_closing_odds DOUBLE PRECISION",
                 ],
             ),
         ]
