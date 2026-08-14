@@ -50,17 +50,21 @@ jobs:
           env_vars: |
             ENV=production
           env_vars_update_strategy: merge
-          # UWAGA: tylko sekrety ktore JUZ sa typu secretKeyRef na serwisie.
-          # CRON_SECRET jest plain env var -> proba ustawienia go jako sekret
-          # daje "Cannot update environment variable to the given type" (deploy fail).
-          # Merge i tak zachowuje CRON_SECRET/ENSEMBLE_MARKET_WEIGHT ustawione recznie.
+          # UWAGA: tylko sekrety ktore JUZ sa typu secretKeyRef na serwisie —
+          # proba zmiany typu w locie daje "Cannot update environment variable to
+          # the given type" i wywala deploy.
+          # CRON_SECRET dopisany 2026-08-14: do tego dnia byl PLAIN env var, wiec
+          # nie mogl tu stac. Byl przez to jedynym sekretem, ktorego CD nie
+          # re-asertowalo — a jego wartosc dalo sie odczytac zwyklym
+          # `gcloud run services describe` (tak wlasnie wyciekla 14.08 i wymusila
+          # rotacje). Teraz jest secretKeyRef, wiec deploy go pilnuje jak reszty.
           # BZZOIRO_KEY + APISPORTS_KEY doszly 2026-07-29: serwis ich NIE MIAL, przez co
           # /cron/draft od migracji na Supabase (20.07) zwracal {'ok': False, 'error':
           # 'brak BZZOIRO_KEY'} przy HTTP 200 -> System paper-trading utworzyl 0 kuponow
           # przez 9 dni. Joby footstats-final/evening te klucze mialy, dlatego predykcje
           # szly dalej i awaria nie rzucala sie w oczy.
-          # Oba sekrety JUZ istnieja w Secret Managerze — dopisanie nieistniejacego
-          # wywaliloby deploy, wiec przed dodaniem kolejnego sprawdz `gcloud secrets list`.
+          # Kazdy sekret z tej listy MUSI istniec w Secret Managerze — dopisanie
+          # nieistniejacego wywala deploy, wiec najpierw `gcloud secrets list`.
           secrets: |
             JWT_SECRET=JWT_SECRET:latest
             FOOTSTATS_USER=FOOTSTATS_USER:latest
@@ -69,6 +73,7 @@ jobs:
             BZZOIRO_KEY=BZZOIRO_KEY:latest
             APISPORTS_KEY=APISPORTS_KEY:latest
             ODDS_API_KEY=ODDS_API_KEY:latest
+            CRON_SECRET=CRON_SECRET:latest
           secrets_update_strategy: merge
 
       - name: Verify deployment health
