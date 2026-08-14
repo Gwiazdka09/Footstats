@@ -60,14 +60,30 @@ def _raport_kursow(conn) -> None:
     trzymaja kurs od modelu jezykowego. Na prodzie oznaczalo to ten sam kurs 52.58
     na trzech roznych meczach jednego dnia. ROI i CLV z takich wierszy nie znacza nic.
     """
-    wiersze = _licz(conn, """
-        SELECT COUNT(*) AS wszystkie,
-               COALESCE(SUM(CASE WHEN COALESCE(odds_verified, 0) = 1 THEN 1 ELSE 0 END), 0)
-                   AS zweryfikowane,
-               COALESCE(SUM(CASE WHEN odds IS NOT NULL AND (odds < 1.2 OR odds > 4.0)
-                                 THEN 1 ELSE 0 END), 0) AS poza_filtrem
-        FROM predictions
-    """)
+    try:
+        wiersze = _licz(conn, """
+            SELECT COUNT(*) AS wszystkie,
+                   COALESCE(SUM(CASE WHEN COALESCE(odds_verified, 0) = 1 THEN 1 ELSE 0 END), 0)
+                       AS zweryfikowane,
+                   COALESCE(SUM(CASE WHEN odds IS NOT NULL AND (odds < 1.2 OR odds > 4.0)
+                                     THEN 1 ELSE 0 END), 0) AS poza_filtrem
+            FROM predictions
+        """)
+    except Exception as e:                                   # noqa: BLE001
+        # Skrypt chodzi lokalnie przeciw produkcji, a migracja 13 wchodzi dopiero
+        # z nowym obrazem — brak kolumny to stan przejsciowy, nie awaria. Ale musi
+        # byc WIDOCZNY, inaczej raport milczy o tym, ze kursy sa niezweryfikowane.
+        if "odds_verified" in str(e):
+            # Postgres zostawia transakcje w stanie aborted — bez rollbacku KAZDY
+            # kolejny raport w tym polaczeniu pada, i to na cudzym zapytaniu.
+            try:
+                conn.rollback()
+            except Exception:                                # noqa: BLE001
+                pass
+            print("\n  kurs zweryfikowany: BRAK KOLUMNY — migracja 13 niewdrozona."
+                  "\n  → wszystkie kursy w `predictions` pochodza sprzed weryfikacji (KROK 4).")
+            return
+        raise
     if not wiersze:
         return
     w = wiersze[0]

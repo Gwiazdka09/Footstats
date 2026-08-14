@@ -230,3 +230,42 @@ def test_raport_kursow_znosi_brak_wiersza():
                     "rozliczone": 0, "trafione": 0}]])
 
     stan_uczenia.raport_predykcji(conn)   # brak drugiej odpowiedzi → [] 
+
+
+def test_raport_kursow_znosi_brak_kolumny_przed_migracja(capsys):
+    """Skrypt chodzi lokalnie przeciw prod — migracja 13 wchodzi dopiero z obrazem.
+
+    Brak kolumny nie moze wywalic raportu, ale nie moze tez przejsc bez slowa:
+    wtedy WSZYSTKIE kursy pochodza sprzed weryfikacji.
+    """
+    class _Wybuchowy(_Conn):
+        def execute(self, zapytanie, params=None):
+            if "odds_verified" in zapytanie:
+                raise RuntimeError('column "odds_verified" does not exist')
+            return super().execute(zapytanie, params)
+
+    conn = _Wybuchowy([[{"model_source": "x", "wszystkie": 3, "z_faktorami": 0,
+                         "rozliczone": 1, "trafione": 0}]])
+
+    stan_uczenia.raport_predykcji(conn)
+
+    out = capsys.readouterr().out
+    assert "BRAK KOLUMNY" in out
+    assert "migracja 13" in out
+
+
+def test_raport_kursow_nie_polyka_innych_bledow():
+    """Awaria bazy ma byc slyszalna, nie zamieciona pod dywan razem z migracja."""
+    import pytest as _pytest
+
+    class _Wybuchowy(_Conn):
+        def execute(self, zapytanie, params=None):
+            if "odds_verified" in zapytanie:
+                raise RuntimeError("connection reset by peer")
+            return super().execute(zapytanie, params)
+
+    conn = _Wybuchowy([[{"model_source": "x", "wszystkie": 3, "z_faktorami": 0,
+                         "rozliczone": 1, "trafione": 0}]])
+
+    with _pytest.raises(RuntimeError, match="connection reset"):
+        stan_uczenia.raport_predykcji(conn)
