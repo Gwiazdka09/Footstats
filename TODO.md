@@ -166,7 +166,7 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 1. **Obserwować budżet API-Football.** 14.08 zjechał do **17/100** — nadrabianie zaległości kosztuje ~8 requestów na przebieg. Przy dwóch przebiegach dziennie może nie starczyć. Regulacja bez redeploya: `LIMIT_NADRABIANIA` (domyślnie 15).
 2. **Dobić 7 rozliczonych poisson-dc** → próg 30 → `scripts/porownaj_modele.py` wydaje werdykt. Licznik: `python scripts/stan_uczenia.py`.
 3. ✅ **Podzbiory BTTS i O/U rozbite 14.08** — żaden nie przeżył sprawdzenia poza próbą. Szczegóły niżej.
-4. **Wdrożyć migrację 13 (`odds_verified`) na prod** — joby migrują same od 14.08, więc wystarczy rebuild obrazu; do czasu wdrożenia `predictions` dalej zapisuje kurs od Groqa.
+4. ✅ **Migracja 13 (`odds_verified`) WDROŻONA 15.08** — kolumna weszła przez CD (API rew. 00402), joby przebudowane osobno (digest z tagiem `89ae6a28`; dwa nowsze były bez tagu = atestacja BuildKita). **Do sprawdzenia po przebiegu 11:00:** czy pojawiają się wiersze `odds_verified = 1` i czy w logach nie ma WARNINGA „Uzgodniono kursy dla X z Y" (= rozjazd nazw między zapisem a weryfikacją).
 5. **Kosmetyka:** usunąć `DATABASE_URL_NEON` z lokalnego `.env` (Neon zbędny; rotacja wymagałaby ich konsoli, brak `NEON_API_KEY`).
 
 > Zamknięte 14.08 (szczegóły → `CHANGELOG.md`): rozjazd wag ensemble · `CRON_SECRET` → `secretKeyRef`
@@ -211,6 +211,30 @@ z tego rozkładu, nie przewaga. Lig dodatnich w OBU połowach: **0**.
 to zaciera" została sprawdzona na 4× większej próbie i się nie broni — wzdłuż żadnego
 z sześciu wymiarów. To nie zamyka tematu na zawsze (można próbować innych cech, np. formy
 czy H2H), ale zamyka drogę „potnijmy istniejące predykcje na kawałki i znajdźmy dobry".
+
+### 🎯 BTTS dwustronne (pomysł usera 15.08) — sygnał REALNY, ale nie bije rynku
+**Diagnoza usera trafna:** ścieżka selekcji (`system_paper._ODDS_KEY`) zna wyłącznie
+„BTTS" = TAK. Skoro BTTS pada w ~54%, model był strukturalnie wepchnięty w klasę
+większościową i nie mógł zagrać tam, gdzie jest pewny, że gole po obu stronach NIE padną.
+Wczorajszy werdykt „gorszy od stałej" był więc częściowo artefaktem pomiaru.
+(`markets.py:92` ma „BTTS NIE" w katalogu BetBuildera — selekcja go nie widzi.)
+
+**Sygnał istnieje i REPLIKUJE SIĘ** — krzywa monotoniczna w obu połowach:
+`p_btts` 0-40% → BTTS pada 48.7% / 51.2%; 65%+ → **60.7% / 64.1%**.
+Gra dwustronna przy marginesie 15pp bije stałą odpowiedź w obu połowach:
+TAK +7.0/+8.4pp, NIE +6.3/+6.6pp.
+
+**Ale przeciw rynkowi przegrywa** (rynkowe BTTS wyliczone z dopasowania λ do cen O/U,
+bo kursów BTTS w datasecie nie ma): Brier model 0.2524/0.2508 vs rynek **0.2503/0.2460**;
+przy niezgodzie rynek 52.2%/53.0% vs model 47.8%/47.0%.
+**Arytmetyka progu:** NIE trafia 50.8% → wymaga kursu **2.10**, a rynek na „BTTS nie"
+w takim meczu daje ~1.6. Nie domyka się.
+
+**Rekomendacja:** wdrożyć dwustronne BTTS jako SYGNAŁ w dzienniku (kierunek tak/nie jest
+uczciwszą informacją niż dzisiejsze „tylko tak"), ale **NIE włączać do kuponów System**,
+dopóki nie mamy prawdziwych kursów „BTTS nie" do zmierzenia opłacalności.
+⏳ Czeka na decyzję usera.
+Zastrzeżenie metody: zbieracz nie zapisał kursów 1X2, więc λ dopasowane tylko do O/U.
 
 ### 🔍 Ustalone 13-14.08 — nie zgubić
 - **`model_log` to główne źródło danych o modelu**, nie `predictions`. Ta druga dostaje wiersz dopiero PO filtrach wartości. `scripts/stan_uczenia.py` czyta już obie.
