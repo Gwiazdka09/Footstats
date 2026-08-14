@@ -35,7 +35,32 @@
 ### Bezpieczeństwo
 - **Rotacja `CRON_SECRET`** (Secret Manager v2 + serwis + 5 zadań Schedulera) po tym, jak wartość
   trafiła do wyjścia terminala przy filtrowaniu env. Zweryfikowane: nowy sekret 200, stary **401**.
-  Zostaje: sekret to wciąż zwykła zmienna środowiskowa, nie `secretKeyRef`.
+- **`CRON_SECRET` → `secretKeyRef`** (rew. `00395-nss`) + dopisany do re-asercji w `cd.yml`.
+  Wartość nie jest już widoczna w `gcloud run services describe`. Wcześniejszy konflikt typów,
+  który wypchnął go do plain env (`aa307944f`), zniknął po pełnym przejściu na sekrety.
+- **Ekspozycja Neona zamknięta:** wersja **1** sekretu `DATABASE_URL` zawierała połączenie do Neona
+  i była `enabled` → wyłączona (dziś `FAILED_PRECONDITION`). Przeskanowane 60 rewizji Cloud Run —
+  **żadna** jej nie wystawiała. Backfill okazał się już wykonany (`predykcje do wstawienia: 0`,
+  sędziowie 186 w obu bazach). Kupony/bankroll/users z Neona **odpuszczone** (decyzja usera).
+
+### Rozjazd wag ensemble zlikwidowany
+- Ten sam mecz dawał **inną predykcję zależnie od ścieżki**: API miało `ENSEMBLE_MARKET_WEIGHT=0.70`,
+  joby nie miały nic (default 1.0 = czysty model). Joby dostały 0.70. Decyzja poparta przeliczonym
+  A/B na nowym modelu (n=3578, 3 niezależne grupy lig) — pełna tabela w `.env.example`.
+- **NIE zeszliśmy do 0/100** mimo że mierzy się najlepiej: grupa kontrolna ma szczyt trafności przy
+  30/70, a wypisanie modelu z 1X2 to decyzja produktowa, nie parametr.
+
+### Werdykt per rynek — trzy różne odpowiedzi (walk-forward, n≈3586)
+- **1X2 przegrany.** Przy niezgodzie z rynkiem (510 meczów) rynek trafia **42.9%**, model **29.8%** —
+  spójnie we wszystkich trzech grupach. ROI ujemne przy KAŻDEJ wadze. To niezależnie potwierdza
+  pivot z 07-06: static value-betting na publicznych danych nie bije rynku.
+- **BTTS gorszy od stałej.** Model 53.2% / Brier 0.2496 vs częstość bazowa 54.4% / 0.2480.
+  Typowanie „zawsze BTTS tak" bije model. Prod potwierdza: 18.2% (2/11). Kursów BTTS w datasecie
+  NIE MA — to porównanie z częstością bazową, nie z rynkiem.
+- **O/U 2.5 jedyna nadzieja.** ROI przy 30/70: ligi czołowe **+9.2%** (106 zakładów), razem −0.2%
+  (na zero po 12% podatku). Przy niezgodzie na czołowych model **wygrywa 52.1% do 47.9%**.
+- Ograniczenie: `model_log` śledzi wyłącznie argmax 1X2 → rynków golowych nie zweryfikujemy live
+  bez rozszerzenia dziennika.
 
 ### Model
 - **`QUICK_PICKS_USE_POISSON_CACHE` 0 → 1 na API.** Przy `=0` draft (kupony System) z definicji chodził

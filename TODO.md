@@ -11,7 +11,7 @@
 **Aktualizacja:** 2026-08-14 · v3.4-stable
 **Accuracy (live, `model_log` 13.08):** **poisson-dc 65.2%** (15/23) · bzzoiro-ml 50.0% (41/82) — próba mała, ale poisson-dc realnie gra i prowadzi
 **Accuracy (offline):** Brier 0.6064 po fiksie rozdzielczości (było 0.6454); rynek 0.5912 — **wciąż nad nami**
-**Cel M1:** 55% win rate · **Suite:** 4336 testów
+**Cel M1:** 55% win rate (mierzony na 1X2 — **do rewizji**, patrz werdykt per rynek) · **Suite:** 4375 testów
 **LIVE:** pipeline **PC-off w chmurze** — Cloud Run Jobs (final 11:00 + evening 23:00) + Scheduler (draft 07:30, settle 06:00/21:30). Szczegóły → `docs/cloud_migration.md`.
 **⚠️ INCYDENT 27.07 (naprawiony):** redeploy zgubił env Cloud Run (`JWT_SECRET` itd.) → login zwracał 500 udający „złe hasło". Fix: rev 00313-mf5 + malformed-hash guard (401 nie 500) + `/mcp` off w prod + CD re-asertuje krytyczne sekrety + LoginView rozróżnia błąd serwera/limit/sieć od złych danych. Audyt auth: 6 znalezisk, rdzeń szczelny.
 **⚠️ INCYDENT 14-20.07 (naprawiony 07-20):** potrójna awaria — Neon quota-block → **DB = Supabase free** (session pooler); image jobów bez `footstats.data` (`.gcloudignore` fix); kupon=None crash. **Luka w danych 14-20.07** (zero predykcji/settled). Dane 1-17.07 uwięzione w Neonie do **1.08**. Szczegóły → `CHANGELOG.md` 07-20.
@@ -26,31 +26,14 @@
 
 | # | Zadanie | Kod | Blokada | Status |
 |---|---------|-----|---------|--------|
-| **P0** | **Model musi realnie grać live** — parquet w obrazach jobów i API → Poisson-DC zamiast `bzzoiro-ml` | **A** | — | ✅ **ZROBIONE 13.08** — 29 ocen `poisson-dc` w `model_log`, 23 rozliczone, 65.2% |
-| **P1** | **Pętla settle→kalibracja** — `calibration_monitor.py` + `flip_advisor` co 2-3 dni → progi flipów | — | brakuje **7** rozliczonych poisson-dc do progu 30 | ⏳ blisko |
-| **P2** | **Więcej danych → lepsze λ** — backfill Neon→Supabase `predictions`+`coupons` + rotacja hasła Neon | **B** | decyzja usera (quota Neon zresetowana 1.08) | ⏳ |
-| **P3** | **RAG feedback domyka sygnał** — puste `factors` | **C** | — | ✅ **KOD OK** (`fac15410d`), patrz werdykt niżej |
+| **P0** | **Model musi realnie grać live** — parquet w obrazach jobów i API → Poisson-DC zamiast `bzzoiro-ml` | **A** | — | ✅ **13.08** — `poisson-dc` 65.2% (15/23) w `model_log` |
+| **P1** | **Pętla settle→kalibracja** — `calibration_monitor.py` + `flip_advisor` co 2-3 dni → progi flipów | — | brakuje **7** rozliczonych poisson-dc do progu 30 | ⏳ **JEDYNA ŻYWA BLOKADA** |
+| **P2** | **Więcej danych → lepsze λ** — backfill Neon→Supabase | **B** | — | ✅ **14.08** — backfill był już zrobiony, reszta danych odpuszczona |
+| **P3** | **RAG feedback domyka sygnał** — puste `factors` | **C** | — | ✅ **13.08 NIE bug** — wąskie gardło = liczba predykcji |
 
-### ✅ P3 — werdykt 13.08: to NIE był bug
-Sprawdzone odtworzeniem łańcucha offline na tych samych 18 meczach co na produkcji → **0/18 tagów, identycznie jak live**. Czyli zapis działa, sygnały po prostu milczą:
-- Historia JEST (Nagoya Grampus: 227 meczów u siebie, H2H 20).
-- TWIERDZA wymaga serii ≥5 bez porażki u siebie (`FORTRESS_MECZE=5`); grane drużyny miały serie **0, 1, 2, 3**.
-- Na losowej próbce 300 meczów tagi zapalają się w **31.7%** (TWIERDZA 65, PATENT 19, ZEMSTA 16, ZMĘCZENIE 5) — mechanizm żyje.
-- **Wniosek:** wąskim gardłem jest LICZBA predykcji, nie kod. Przy 18 predykcjach zero tagów mieści się w normie.
-
-### P0 / A — szczegóły
-> **KOREKTA 2026-07-29:** sam rebuild jobów **NIE wystarczy**. `/cron/draft` — czyli to, co tworzy kupony System (dane walidacyjne) — chodzi na **serwisie** `footstats-api`, a `Dockerfile.api` **nie kopiuje parquetu** (robi to tylko `Dockerfile.jobs`). Potwierdzone dry-runem na prodzie 29.07: `model_source: bzzoiro-ml`. Żeby Poisson-DC grał w OBU ścieżkach, parquet (562 KB) musi trafić też do `Dockerfile.api` — albo draft trzeba przenieść do joba.
-- Dowód problemu: obraz `footstats-jobs:latest` zbudowany **2026-07-20 17:56**, commit parquetu-do-obrazu `0cb82150f` = **2026-07-22 10:33** → parquet nigdy nie wdrożony → `load_cached()`=None → `cloud_draft._wykryj_model_source` = `bzzoiro-ml`.
-- **KOREKTA:** flaga `QUICK_PICKS_USE_POISSON_CACHE` ma default **"1" (ON)** (`quick_picks.py:73`). Blokada to brak parquetu w obrazie, nie flaga.
-- Kroki: `gcloud builds submit` → `gcloud run jobs update footstats-final/evening --image <digest>`. Po flipie mierzyć Poisson-DC vs bzzoiro-ml.
-
-### P3 / C — szczegóły
-- `pred` sub-dict nigdy nie budowany w ścieżce quick_picks (tylko weekly_picks) → `wyciagnij_faktory` zwraca `[]` → `factors='[]'` na 15/15 predykcji → RAG nie ma tagów do nauki.
-- Ten sam pusty `pred` był źródłem bug 1 (confidence) — confidence naprawione, faktory nie.
-
-### P2 / B — szczegóły
-- `scripts/backfill_users_from_neon.py` istnieje (users 1:1 login+hasło). Rozszerzyć o `predictions` + `coupons`.
-- Bez backfillu licznik settled = od zera → P1 nie ruszy.
+> Szczegóły zamkniętych P0/P2/P3 → `CHANGELOG.md` (13-14.08).
+> Zostaje z P3 do zapamiętania: TWIERDZA wymaga serii ≥5 (`FORTRESS_MECZE`), a na losowej próbce
+> 300 meczów tagi zapalają się w 31.7% — mechanizm żyje, po prostu potrzebuje wolumenu.
 
 ---
 
@@ -110,7 +93,7 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 > STOP na nowe λ aż zbierzemy świeże settled — zmiana teraz zaciemnia czy fixy działają.
 > **Zbieranie leci PC-niezależnie** (cloud draft 07:30 + settle) — brak wąskiego gardła danych.
 
-- [ ] **⏰ ZALEGŁE — termin 1.08 minął (quota Neon zresetowana):** backfill Neon → Supabase (`pg_dump`: predictions/coupons/bankroll/**users z hasłami**) + **rotacja hasła Neon** (wisiało plaintext w env Cloud Run) + decyzja czy Neon kasować. Czeka na decyzję usera. Stan Neona: 317 kuponów / 354 bankroll / 11 userów.
+- [x] ~~**Backfill Neon → Supabase + rotacja hasła**~~ ✅ **14.08 zamknięte** — backfill był już wykonany, kupony/bankroll/users odpuszczone (decyzja usera), wersja 1 sekretu `DATABASE_URL` z Neonem wyłączona. Zostaje kosmetyka: usunąć `DATABASE_URL_NEON` z lokalnego `.env`.
 - [ ] **Co kilka dni:** `python scripts/stan_uczenia.py` (read-only) — licznik do werdyktu, teraz z `model_log`. Uzupełniająco `scripts/calibration_monitor.py` + flip-advisor (`core/flip_advisor.py`): rekomenduje flip `SELECTION_MIN_CONF` i ligi do `LEAGUE_GATING` (<50%, n≥8).
 - [ ] **D3 — pełna decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled z zapisanym prob. Zwaliduj że guard pomaga, dostrój próg. (D3 cz.1+2 prob+guard ZROBIONE 06-22.)
 - [ ] **Po ~88 settled → D2 auto-refit sam** (delta +30 od n_train); gdy krzywa zdrowa → włącz `CALIBRATION_ENABLED=1`.
@@ -138,8 +121,8 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 > Teraz off-season = mecze kadr (WC) → Poisson nie ma historii reprezentacji (dataset = ligi klubowe). Realny zysk dopiero na restart lig.
 
-- [ ] **Verify quick_picks-fix → Poisson live** (51.8%) zamiast Bzzoiro-ML gdy wrócą ligi klubowe. Monitor `calibration_monitor.py`. Gdyby Poisson gorszy → escape-hatch `QUICK_PICKS_USE_POISSON_CACHE=0`.
-- [ ] **Parquet na cloud** → cloud-draft użyje Poisson-DC zamiast `bzzoiro-ml` (cloud nie ma `full_dataset.parquet` 562KB). Opcje: (a) GCS-pull przy starcie [najlepsze] lub (b) COPY do obrazu. **Odłożone do sierpnia** (off-season → Poisson i tak nie ruszy).
+- [x] ~~**Verify quick_picks-fix → Poisson live**~~ ✅ **13-14.08** — `poisson-dc` gra w OBU ścieżkach (job + draft na API). Escape-hatch bez zmian: `QUICK_PICKS_USE_POISSON_CACHE=0`, ale **uwaga** — ta flaga wyłącza adapter schematu i Poisson odpada po cichu, to nie jest czysty przełącznik modelu.
+- [x] ~~**Parquet na cloud**~~ ✅ w obrazie (`Dockerfile.jobs` + `Dockerfile.api`).
 - [x] **Kontuzje v2 — baza graczy + goal_share** (07-05): `core/player_db.py` (SQLite) + `scrapers/player_stats.py`. Wpięte w `_apply_injury_corrections` → kara napastnika ∝ udziałowi w golach. Populacja przez **`scripts/refresh_players.py`** (`--season`, `--only`, `--understat`).
   - **2 źródła:** (1) API-Football `/players/topscorers` (topscorer denominator, mniejsze ligi) — 11 lig; (2) **Understat pełne składy TOP5** (per-gracz gole/asysty/xG) → **prawdziwy denominator** (Salah 34% nie 60%). Stan 07-05: **sezon 2025 (2025-26) PRIMARY = 2775 graczy** (Understat TOP5, najświeższy pełny sezon — pipeline `_current_season`=2026 → walk-back → 2025) + sezon 2024 fallback 2885. **MŚ 2026: 119 graczy** (sezon 2026, liga WC) — Sofascore top-players API (gole/asysty/**rating 1-10**/xG, angielskie kadry) via headless browser; Flashscore strzelcy jako cross-check. goal_share kadr działa (France Mbappé 54%, Brazil Vini 57%, England Kane 71%). `rating`/`xg` = nowe kolumny player_db (`get_team_players`).
   - **Siła kadr (team_stats):** 48 kadr MŚ (Sofascore standings + top-teams) → `team_attack_defense(team,2026)` = (gole/mecz, tracone/mecz) = **Poisson λ dla reprezentacji** (model nie miał historii kadr!). France λ_atk 3.33/def 0.67, Spain 1.67/0.00, Norway 2.67/2.33. + avg_rating 1-10, possession, clean_sheets, big_chances. Tabela `team_stats`.
@@ -182,21 +165,14 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 1. **Obserwować budżet API-Football.** 14.08 zjechał do **17/100** — nadrabianie zaległości kosztuje ~8 requestów na przebieg. Przy dwóch przebiegach dziennie może nie starczyć. Regulacja bez redeploya: `LIMIT_NADRABIANIA` (domyślnie 15).
 2. **Dobić 7 rozliczonych poisson-dc** → próg 30 → `scripts/porownaj_modele.py` wydaje werdykt. Licznik: `python scripts/stan_uczenia.py`.
-3. ✅ **Rozjazd wag ensemble — ZLIKWIDOWANY 14.08.** Joby dostały `ENSEMBLE_MARKET_WEIGHT=0.70`, tak jak API. Decyzja oparta na przeliczonym A/B (n=3578, 3 grupy) — szczegóły i liczby w `.env.example`.
-4. ✅ **`CRON_SECRET` → `secretKeyRef`** (rew. 00395-nss) + dopisany do re-asercji w `cd.yml`. Wartość nie jest już widoczna w `gcloud run services describe`.
-5. ✅ **Backfill Neon→Supabase** — był już zrobiony (`predykcje do wstawienia: 0`, sędziowie 186 w obu). **Ekspozycja hasła zamknięta:** wersja 1 sekretu `DATABASE_URL` zawierała połączenie do Neona i była `enabled` → wyłączona. Żadna z 60 rewizji Cloud Run go nie wystawiała.
-6. ✅ **Kupony/bankroll/users z Neona — ODPUSZCZONE (decyzja usera 14.08).** Nie są potrzebne. Neon nie ma już dla nas żadnej wartości; `scripts/import_neon_do_supabase.py` i `backfill_users_from_neon.py` są odtąd bezprzedmiotowe.
-7. **Rotacja hasła Neona** — wymaga konsoli Neona, **nie da się z CLI** (brak `NEON_API_KEY`). Pilność niska: wersja 1 sekretu `DATABASE_URL` wyłączona, żadna rewizja Cloud Run go nie wystawia, poświadczenie zostało tylko w lokalnym `.env`. Skoro Neon jest zbędny — najprościej usunąć `DATABASE_URL_NEON` z `.env` zamiast rotować.
+3. **Rozbić BTTS i O/U na podzbiory** (liga · pasmo pewności · profil drużyn) — patrz werdykt niżej, punkty 1-2.
+4. **Kosmetyka:** usunąć `DATABASE_URL_NEON` z lokalnego `.env` (Neon zbędny; rotacja wymagałaby ich konsoli, brak `NEON_API_KEY`).
 
-### ⚠️ Model NIE bije rynku w 1X2 — zmierzone ponownie 14.08
-Walk-forward, n=3578, trzy niezależne grupy lig, model PO poprawkach z 13.08:
-- **Niezgoda model vs rynek (510 meczów): rynek trafia 42,9%, model 29,8%.** Spójnie we wszystkich
-  trzech grupach (28,6/44,7 · 29,1/37,3 · 31,4/46,1). Gdy model się wychyla, myli się systematycznie.
-- **ROI ujemne przy KAŻDEJ wadze** (−5,8% do −84%, flat-bet, EV>5%, podatek 12%). Więcej głosu
-  modelu = więcej zakładów = większa strata.
-- Brier i log-loss monotonicznie na korzyść rynku; czysty rynek najlepszy we wszystkich grupach.
-- **To niezależnie potwierdza pivot z 07-06:** static value-betting na publicznych danych nie bije rynku.
-### 🎯 Werdykt per rynek (14.08, n=3586, te same 3 grupy) — TRZY RÓŻNE ODPOWIEDZI
+> Zamknięte 14.08 (szczegóły → `CHANGELOG.md`): rozjazd wag ensemble · `CRON_SECRET` → `secretKeyRef`
+> · backfill Neon + wyłączenie wersji 1 sekretu `DATABASE_URL` · okno rozliczeń · lekcje RAG z trafień
+> · diagnostyka blacklisty lig.
+
+### 🎯 Werdykt per rynek (14.08, n=3586, 3 niezależne grupy lig) — TRZY RÓŻNE ODPOWIEDZI
 | rynek | werdykt | dowód |
 |---|---|---|
 | **1X2** | 🔴 przegrany | ROI ~−20% przy każdej wadze; przy niezgodzie rynek 42.9% vs model 29.8% |
