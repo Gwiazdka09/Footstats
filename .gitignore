@@ -119,3 +119,6 @@ brain_graph.html
 # Inwentarz funkcji — migawka lokalna, generowana przez scripts/inwentarz_funkcji.py
 FUNCTIONS.md
 coverage.json
+
+# Artefakty uruchomieniowe (pliki blokad dashboardu itp.) - nie kod
+downloaded_files/
