@@ -3,6 +3,49 @@
 > Archiwum ukończonych prac (przeniesione z TODO.md przez `footstats-scribe`).
 > Aktywne zadania: `TODO.md`. Pełna historia commitów: `git log`.
 
+## 2026-08-14
+
+### Rozliczenia gubiły predykcje bezpowrotnie — 95 sierot na produkcji
+- **`3d678f557`** okno rozliczeń było domknięte z OBU stron (`cutoff <= data < dziś`) i przesuwało się
+  z datą, więc predykcja bez wyniku w swoje 3 dni wypadała z zasięgu **na zawsze**. Każda chwilowa
+  usterka (padnięty job, brak meczu w źródle, zawieszone API-Football) zamieniała się w trwałą stratę.
+  Zmierzone: 95 predykcji bez wyniku, mecze od 7 maja; 13 dało się jeszcze odzyskać, **82 przepadły**.
+  Fix: `_wybierz_do_rozliczenia` (świeże okno w całości + zaległości paczkami po 15, limit 5 prób),
+  migracja 12 z `settle_attempts`. Zweryfikowane na prodzie: licznik prób 0 → 19.
+- **Druga ścieżka też ich nie łapała:** `cron_settle` rozlicza KUPONY, a wszystkie predykcje System
+  mają `coupon_id IS NULL`. Dwa mechanizmy rozliczeń i żaden nie pokrywał tego przypadku.
+- **`run_migrations()` odpalało wyłącznie `api/main.py`** → poprawność zależała od niepisanej kolejności
+  wdrożenia, a brak kolumny wywalał CAŁY dzienny przebieg (KROK 0). Joby migrują teraz same.
+- Test `test_mecz_starszy_niz_days_back_pomijany` **kodował ten błąd** — wymagał pomijania zaległości.
+  Przepisany na nową intencję wraz z historią, dlaczego stare uzasadnienie było błędne.
+
+### Pętla uczenia — obie strony medalu
+- **`2b50d73ec`** `stan_uczenia.py` pytał tylko `predictions` (tabelę PO filtrach), więc w dni z zerem
+  kuponów pokazywał martwą pętlę. `model_log` zbierał w tym czasie 202 oceny, 105 rozliczonych.
+  Licznik do werdyktu: „brakuje 20" → „brakuje 7".
+- **`a661afefa`** lekcje także z trafień — `_pobierz_porazki` miał `tip_correct = 0` zaszyte w zapytaniu.
+  Osobny prompt pyta „proces czy szczęście" i każe być surowym; trafienie z błędnego powodu to nadal
+  błędna decyzja. Domyślnie WYŁĄCZONE (pisze do prod `ai_feedback` + tokeny Groqa).
+- **`f2e570faa`** regresja z powyższego: lekcje z wygranych szły do Groqa pod nagłówkiem
+  „WNIOSKI Z OSTATNICH PORAŻEK — ucz się błędów", czyli model uczył się omijać to, co zadziałało.
+  Każdy wniosek niesie teraz `(TRAFIONY)`/`(CHYBIONY)`.
+- **`791f51063`** blacklista lig wycinała kandydatów całkiem po cichu — gałąź bez licznika i bez nazwy.
+  Wykryte wymuszonym przebiegiem produkcyjnym; ta gałąź nie miała ANI JEDNEGO testu.
+
+### Bezpieczeństwo
+- **Rotacja `CRON_SECRET`** (Secret Manager v2 + serwis + 5 zadań Schedulera) po tym, jak wartość
+  trafiła do wyjścia terminala przy filtrowaniu env. Zweryfikowane: nowy sekret 200, stary **401**.
+  Zostaje: sekret to wciąż zwykła zmienna środowiskowa, nie `secretKeyRef`.
+
+### Model
+- **`QUICK_PICKS_USE_POISSON_CACHE` 0 → 1 na API.** Przy `=0` draft (kupony System) z definicji chodził
+  na `bzzoiro-ml` — stąd 218 predykcji `bzzoiro-ml` vs 10 `poisson-dc`. Flaga wyłączała adapter schematu,
+  a walidator odrzucał ramkę, więc Poisson odpadał po cichu. Zmierzone przed flipem (`model_log`):
+  poisson-dc 65.2% (15/23), bzzoiro-ml 50.0% (41/82).
+- **Kalibracja λ replikuje się** — niezależne przeliczenie na n=2983 dało 1.0193/0.9967 wobec
+  1.0158/0.9795 z 09.08. NIE wdrożone (różnica w granicach szumu). Uwaga: n=388 daje mylące 0.921 —
+  szum małej próby, nie zmiana reżimu.
+
 ## 2026-07-27
 
 ### Incydent logowania — redeploy zgubił env Cloud Run

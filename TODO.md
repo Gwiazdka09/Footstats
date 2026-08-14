@@ -8,7 +8,7 @@
 
 > **🎯 KIERUNEK 2026-07-27:** produkt zostaje na **użytek prywatny + beta-testerzy (znajomi)**. Priorytet = **żeby bot się uczył** (pętla predykcja→settle→kalibracja→RAG). Zero monetyzacji, zero publicznego launchu. Plan wykonawczy → sekcja `🎯 PLAN P0-P3` niżej.
 
-**Aktualizacja:** 2026-08-13 · v3.4-stable
+**Aktualizacja:** 2026-08-14 · v3.4-stable
 **Accuracy (live, `model_log` 13.08):** **poisson-dc 65.2%** (15/23) · bzzoiro-ml 50.0% (41/82) — próba mała, ale poisson-dc realnie gra i prowadzi
 **Accuracy (offline):** Brier 0.6064 po fiksie rozdzielczości (było 0.6454); rynek 0.5912 — **wciąż nad nami**
 **Cel M1:** 55% win rate · **Suite:** 4336 testów
@@ -178,19 +178,25 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
-## 📋 Następne kroki (zweryfikowane na produkcji 2026-08-13)
+## 📋 Następne kroki (zweryfikowane na produkcji 2026-08-14)
 
-1. **Dobić 7 rozliczonych poisson-dc** → próg 30 → `scripts/porownaj_modele.py` wydaje werdykt Poisson-DC vs bzzoiro-ml. Licznik: `python scripts/stan_uczenia.py`.
-2. **Zweryfikować CLV po najbliższym wieczornym przebiegu.** Kolumna `clv_closing_odds` powstała 13.08 08:46 UTC, job `footstats-evening` (23:00) od tego czasu jeszcze nie chodził → **0/228 wypełnionych to stan oczekiwany, nie awaria**. Jeśli po przebiegu dalej 0 — wtedy to bug.
-3. **P2 / B — decyzja usera:** backfill Neon→Supabase (`predictions`/`coupons`/`users`) + rotacja hasła Neon (wisiało plaintext w env Cloud Run).
-4. **Lekcje jednostronne** — `_pobierz_porazki` bierze wyłącznie `tip_correct = 0`, więc RAG uczy się tylko z porażek (82 porażki / 49 trafień). Rozszerzyć o trafienia.
-5. **Pasywne:** pipeline leci PC-niezależnie. `model_log` zbiera oceny NAWET w dni z zerem kuponów (13.08: `kandydaci=45, po filtrach=0`, a mimo to 10 wpisów w dzienniku).
+1. **Obserwować budżet API-Football.** 14.08 zjechał do **17/100** — nadrabianie zaległości kosztuje ~8 requestów na przebieg. Przy dwóch przebiegach dziennie może nie starczyć. Regulacja bez redeploya: `LIMIT_NADRABIANIA` (domyślnie 15).
+2. **Dobić 7 rozliczonych poisson-dc** → próg 30 → `scripts/porownaj_modele.py` wydaje werdykt. Licznik: `python scripts/stan_uczenia.py`.
+3. **Rozjazd wag ensemble — DO DECYZJI.** `ENSEMBLE_MARKET_WEIGHT=0.70` stoi na serwisie API (30% Poisson / 70% rynek), a joby go NIE mają (default 70/30 na korzyść Poissona). Ten sam mecz daje inną predykcję zależnie od ścieżki.
+4. **`CRON_SECRET` jako zwykła zmienna, nie `secretKeyRef`** — odczytuje ją każdy z `run.services.get`. Zmiana typu w locie wywala deploy (patrz komentarz w `cd.yml`), więc wymaga ostrożnej kolejności.
+5. **P2 / B — decyzja usera:** backfill Neon→Supabase + rotacja hasła Neon (wisiało plaintext w env Cloud Run).
 
-### 🔍 Ustalone 13.08 — nie zgubić
-- **`model_log` to główne źródło danych o modelu**, nie `predictions`. Ta druga dostaje wiersz dopiero PO filtrach wartości, więc w dni z zerem kuponów jest pusta i udaje martwą pętlę. `scripts/stan_uczenia.py` czyta już obie.
-- **Filtry zjadają wszystko od 11.08** (`kandydaci=45 → 0`) — połowa sierpnia to puchary europejskie, celowo poza whitelistą (Poisson nie liczy par międzyligowych).
-- **API-Football zawieszone** (nie limit — konto suspended) → brak składów i sędziego → sufit DECISION SCORE 70/100.
-- **Dług testowy:** `$env:DATABASE_URL=""` w PowerShellu KASUJE zmienną (guard widzi wtedy `.env` → prod i przerywa suitę). Działa: `python -c "import os,sys; os.environ['DATABASE_URL']=''; import pytest; sys.exit(pytest.main(['tests/','-q']))"`.
+### 🔍 Ustalone 13-14.08 — nie zgubić
+- **`model_log` to główne źródło danych o modelu**, nie `predictions`. Ta druga dostaje wiersz dopiero PO filtrach wartości. `scripts/stan_uczenia.py` czyta już obie.
+- **Rozliczenia mają DWIE ścieżki i żadna nie pokrywała wszystkiego:** `cron_settle` rozlicza KUPONY, a wszystkie predykcje System mają `coupon_id IS NULL`. Predykcje luzem rozlicza wyłącznie `update_pending` z jobów.
+- **Okno rozliczeń gubiło dane bezpowrotnie** (naprawione 14.08, commit `3d678f557`): filtr domknięty z obu stron zostawił 95 sierot, mecze od 7 maja. Odzyskiwalne było 13, reszta przepadła. Teraz zaległości wracają paczkami po 15 z limitem 5 prób.
+- **Odzyskiwalne były NAJSTARSZE, nie najnowsze** — pierwsza paczka (15 najnowszych) odzyskała 0. Założenie „źródła pamiętają świeższe mecze" nie potwierdziło się na tych ligach.
+- **`run_migrations()` odpalało wyłącznie API.** Joby dostały to samo 14.08 — wcześniej poprawność zależała od niepisanej kolejności wdrożenia, a brak kolumny wywalał CAŁY dzienny przebieg (KROK 0), nie same rozliczenia.
+- **CLV zależy od rozliczeń.** Blok CLV siedzi wewnątrz pętli rozliczania — bez rozliczonej nogi w ogóle nie startuje. Zero wypełnionych przy zerze rozliczeń to stan oczekiwany, nie bug.
+- **API-Football zawieszone** (konto suspended) → brak składów i sędziego → sufit DECISION SCORE 70/100. Dla starych meczów zwraca „Brak w API", ale część zapytań przechodzi.
+- **Logi jobów idą w `jsonPayload`, nie `textPayload`** (JSON formatter). `severity` też się nie mapuje — pytaj `jsonPayload.level`.
+- **Dług testowy:** `$env:DATABASE_URL=""` w PowerShellu KASUJE zmienną (guard widzi `.env` → prod i przerywa suitę). Działa: `python -c "import os,sys; os.environ['DATABASE_URL']=''; import pytest; sys.exit(pytest.main(['tests/','-q']))"`.
+- **Schematy testowe dublują produkcyjny** (`test_backtest_db.py`, `test_evening_agent.py` mają własne `CREATE TABLE`) — każda migracja wymaga ręcznego dociągnięcia, inaczej test sprawdza tabelę, której nigdzie nie ma.
 
 ---
 
