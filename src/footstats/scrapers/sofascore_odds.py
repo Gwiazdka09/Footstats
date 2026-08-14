@@ -118,10 +118,13 @@ def _parse_markets(odds_json: dict) -> dict:
 
         elif name in _MARKET_BTTS:
             for ch in choices:
-                if (ch.get("name", "") or "").lower() == "yes":
-                    dec = fractional_to_decimal(ch.get("fractionalValue", ""))
-                    if dec is not None:
-                        result["btts"] = dec
+                strona = (ch.get("name", "") or "").lower()
+                if strona not in ("yes", "no"):
+                    continue
+                dec = fractional_to_decimal(ch.get("fractionalValue", ""))
+                if dec is None:
+                    continue
+                result["btts" if strona == "yes" else "btts_no"] = dec
 
     return result
 

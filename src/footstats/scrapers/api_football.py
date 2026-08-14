@@ -475,11 +475,17 @@ class APIFootball:
                         wynik["under_2_5"] = odd
 
             elif nazwa == "Both Teams Score":
+                # Obie strony, nie tylko "yes". Bez "no" model moze typowac BTTS NIE,
+                # ale nikt nie potrafi tego wycenic — noga byla kasowana po cichu.
                 for v in values:
-                    if (v.get("value", "") or "").lower() == "yes":
-                        odd = _parse_odd(v.get("odd"))
-                        if odd is not None:
-                            wynik["btts"] = odd
+                    strona = (v.get("value", "") or "").lower()
+                    odd = _parse_odd(v.get("odd"))
+                    if odd is None:
+                        continue
+                    if strona == "yes":
+                        wynik["btts"] = odd
+                    elif strona == "no":
+                        wynik["btts_no"] = odd
 
         return wynik
 

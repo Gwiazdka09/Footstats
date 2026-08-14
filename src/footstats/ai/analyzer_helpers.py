@@ -41,6 +41,12 @@ def prob_modelu(typ: str, pred: dict) -> float | None:
     if not pred:
         return None
     t = typ.strip().lower()
+    # BTTS NIE przed mapa ogolna: model daje P(BTTS), wiec strona "nie" to dopelnienie.
+    # Bez tego `pewnosc_z_modelu` spadalo do fallbacku 50 wlasnie dla typow, ktorych
+    # model byl NAJPEWNIEJSZY (bt=20 → pewnosc strony NIE to 80, nie 50).
+    if t in _BTTS_NO:
+        bt = pred.get("btts")
+        return None if bt is None else 100.0 - bt
     key = _TYP_DO_PROB_KEY.get(t)
     if key:
         return pred.get(key)

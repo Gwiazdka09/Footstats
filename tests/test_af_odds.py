@@ -52,10 +52,13 @@ class TestKursyFixture:
         with patch.object(klient, "_get", return_value=odds_response):
             wynik = klient.kursy_fixture(123)
 
+        # `btts_no` doszlo 15.08: fikstura ZAWSZE miala strone "No" (2.05), a parser
+        # ja wyrzucal. Bez tego kursu model mogl wytypowac BTTS NIE (`koryguj_tip_ou_btts`),
+        # ale nikt nie potrafil tego wycenic — noga byla kasowana jako halucynacja Groqa.
         assert wynik == {
             "home": 1.50, "draw": 3.50, "away": 4.50,
             "over_2_5": 1.80, "under_2_5": 2.10,
-            "btts": 1.75,
+            "btts": 1.75, "btts_no": 2.05,
         }
 
     def test_brak_rynku_pomija_klucz_nie_wstawia_fałszywego(self):

@@ -117,6 +117,13 @@ GROQ_TIP_OVERRIDE_THRESHOLD = float(os.getenv("GROQ_TIP_OVERRIDE_THRESHOLD", "33
 # Rynki 2-way (Over/Under, BTTS): flip na stronę modelu gdy prob picku Groq < prog.
 # LLM odsunięty od wszystkich picków — tylko analiza/podsumowania. Audyt: BTTS 14%.
 GROQ_TIP_OVERRIDE_2WAY = float(os.getenv("GROQ_TIP_OVERRIDE_2WAY", "45"))
+# Czy typ "BTTS NIE" moze faktycznie wejsc do kuponu. Default OFF — zmierzone 15.08
+# (walk-forward n=15460, proba dzielona po dacie): sygnal `p_btts` jest REALNY
+# (krzywa monotoniczna w obu polowach, 65%+ → BTTS pada w 60.7%/64.1%), ale strona
+# NIE trafia 50.8%, wiec do zera potrzebuje kursu 2.10, a rynek daje ~1.6.
+# Wlaczamy dopiero, gdy zbierzemy realne kursy `btts_no` i zmierzymy ROI na nich.
+# Do tego czasu typ jest LICZONY i LOGOWANY, tylko nie gra — jak SELECTION_MIN_CONF.
+BTTS_TWO_WAY = os.getenv("BTTS_TWO_WAY", "0").strip() in ("1", "true", "True")
 
 # Konto docelowe: daily_agent, operator_agent, zapis kuponów systemowych
 OPERATOR_ADMIN_USERNAME = os.getenv("OPERATOR_ADMIN_USERNAME", "Admin_JG").strip() or "Admin_JG"

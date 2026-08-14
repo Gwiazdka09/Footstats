@@ -22,6 +22,7 @@ from footstats.utils.normalize import (
     normalize_team_name,
     team_similarity,
 )
+from footstats.config import BTTS_TWO_WAY
 from footstats.core.checkpoint import save_predictions_batch, cleanup_old_checkpoints
 from footstats.daily_agent_output import (  # noqa: F401  re-export (ścieżki + patch-targety)
     LOGS_DIR,
@@ -192,7 +193,17 @@ _TYP_DO_ODDS_KEY = {
     "under":       "under_2_5",
     "btts":        "btts",
     "obie strzelą": "btts",
+    # Strona NIE — model potrafil ja wytypowac (`koryguj_tip_ou_btts`), ale bez
+    # wpisu w tej mapie noga byla kasowana i podpisywana jako halucynacja Groqa.
+    "btts no":     "btts_no",
+    "no btts":     "btts_no",
+    "btts nie":    "btts_no",
+    "nie btts":    "btts_no",
+    "ng":          "btts_no",
 }
+
+# Typy, ktore graja tylko przy wlaczonym BTTS_TWO_WAY (patrz config).
+_TYPY_BTTS_NIE = {"btts no", "no btts", "btts nie", "nie btts", "ng"}
 
 
 # FAZA 17.2: twardy filtr longshotów
@@ -278,10 +289,25 @@ def _weryfikuj_noge(z: dict, indeks: dict, usuniete: list[str]) -> dict | None:
         usuniete.append(f"{mecz_str} [{typ_raw}] — brak w Bzzoiro")
         return None
 
-    odds_key    = _TYP_DO_ODDS_KEY.get(typ_raw.lower())
+    typ_norm    = typ_raw.lower()
+    odds_key    = _TYP_DO_ODDS_KEY.get(typ_norm)
+
+    # Strona NIE zostaje policzona i zalogowana, ale nie gra — dowody z 15.08 mowia,
+    # ze do zera potrzebuje kursu 2.10, a rynek daje ~1.6. Flip flagi po walidacji.
+    if typ_norm in _TYPY_BTTS_NIE and not BTTS_TWO_WAY:
+        usuniete.append(f"{mecz_str} [{typ_raw}] — BTTS dwustronne wylaczone (BTTS_TWO_WAY=0)")
+        return None
+
     rzeczywisty = (wpis["odds"] or {}).get(odds_key) if odds_key else None
     if not rzeczywisty:
-        usuniete.append(f"{mecz_str} [{typ_raw}] — brak realnego kursu w Bzzoiro (kurs Groq niezweryfikowany)")
+        if odds_key:
+            # Rynek znamy, tylko zrodlo go nie wycenia. To brak danych, nie zmyslony
+            # typ — mieszanie tych przypadkow ukrywalo, ze czegos po prostu nie mamy.
+            usuniete.append(f"{mecz_str} [{typ_raw}] — zrodlo nie podaje kursu"
+                            f" dla rynku '{odds_key}'")
+        else:
+            usuniete.append(f"{mecz_str} [{typ_raw}] — brak realnego kursu w Bzzoiro"
+                            f" (kurs Groq niezweryfikowany)")
         return None
 
     z["kurs"]      = float(rzeczywisty)
