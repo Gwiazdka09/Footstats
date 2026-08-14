@@ -151,11 +151,23 @@ def test_mecz_wczorajszy_sprawdzany(env):
     assert env["zapytania_date"] == [_dzien(-1)]
 
 
-def test_mecz_starszy_niz_days_back_pomijany(env):
-    """Stare zaleglosci nie maja juz fixtures w API — nie palimy na nie budzetu."""
+def test_mecz_starszy_niz_days_back_JEST_nadrabiany(env):
+    """ZMIANA ZACHOWANIA 2026-08-14 — wczesniej ten test wymagal pominiecia.
+
+    Stare uzasadnienie brzmialo "stare zaleglosci nie maja juz fixtures w API,
+    nie palmy na nie budzetu". Produkcja je obalila: okno domkniete z obu stron
+    zostawilo 95 predykcji bez wyniku (mecze od 7 maja), a przebieg na sucho
+    odzyskal z nich 13. Oszczednosc na requestach kosztowala 82 rekordy —
+    czyli wiecej, niz wynosila wtedy cala baza rozliczen.
+
+    Zaleglosci sa teraz sprawdzane, ale paczkami i z limitem prob, wiec budzet
+    dalej jest chroniony — patrz `tests/test_rozliczenia_nadrabianie.py`.
+    """
     env["pending"] = [_pending(offset=-10)]
     ru.update_pending(days_back=2)
-    assert env["zapytania_date"] == []
+    assert env["zapytania_date"] == [_dzien(-10)], (
+        "stary mecz znow wypada z kolejki — regresja wraca"
+    )
 
 
 def test_days_back_rozszerza_okno(env):

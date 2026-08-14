@@ -41,7 +41,10 @@ CREATE TABLE IF NOT EXISTS predictions (
     prompt_version       TEXT NOT NULL DEFAULT '',
     factors              TEXT NOT NULL DEFAULT '[]',
     match_stats          TEXT,
-    coupon_id            INTEGER REFERENCES coupons(id)
+    coupon_id            INTEGER REFERENCES coupons(id),
+    -- Licznik prob rozliczenia (migracja 12) — `update_pending` czyta go
+    -- przy nadrabianiu zaleglosci, wiec schemat testowy musi go miec.
+    settle_attempts      INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS ai_feedback (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

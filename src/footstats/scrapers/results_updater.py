@@ -14,7 +14,7 @@ import json
 import os
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from dotenv import load_dotenv
 
 from footstats.utils.normalize import _norm_ascii, team_similarity
@@ -270,6 +270,67 @@ def _znajdz_wynik(
     return None
 
 
+# Ile razy wracamy do jednego meczu, zanim uznamy go za nieodzyskiwalny.
+# Bez tego 82 rekordy, ktorych zadne zrodlo juz nie ma, skanowalyby sie
+# przy KAZDYM przebiegu i zjadaly limit requestow przeznaczony na swieze mecze.
+MAX_PROB_ROZLICZENIA = int(os.getenv("MAX_PROB_ROZLICZENIA", "5"))
+
+# Ile zaleglych meczow bierzemy na jeden przebieg. Kolejka drenuje sie powoli,
+# ale przewidywalnie, zamiast probowac wszystkiego naraz.
+LIMIT_NADRABIANIA = int(os.getenv("LIMIT_NADRABIANIA", "15"))
+
+
+def _data_meczu(pred: dict) -> "date | None":
+    """Data meczu albo None, gdy wiersz ma smieciowa wartosc.
+
+    Jeden zepsuty rekord nie moze zatrzymac rozliczania calej reszty — dlatego
+    parsowanie jest tu, a nie w wyrazeniu listowym, gdzie wyjatek ubijal petle.
+    """
+    surowa = pred.get("match_date")
+    if not surowa:
+        return None
+    try:
+        return datetime.fromisoformat(str(surowa)[:10]).date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _wybierz_do_rozliczenia(
+    pending_all: list[dict],
+    dzis: "date",
+    days_back: int,
+    limit_nadrabiania: int = LIMIT_NADRABIANIA,
+    max_prob: int = MAX_PROB_ROZLICZENIA,
+) -> "tuple[list[dict], list[dict]]":
+    """Dzieli oczekujace na (swieze okno, zaleglosci do nadrobienia).
+
+    PO CO ISTNIEJE: wczesniej filtr brzmial `cutoff <= data < dzis`, czyli okno
+    domkniete z OBU stron. Poniewaz przesuwa sie ono z data, mecz ktorego wynik
+    nie pojawil sie w swoje `days_back` dni wypadal z zasiegu NA ZAWSZE.
+    Produkcja 2026-08-14: 95 predykcji bez wyniku, mecze od 7 maja.
+
+    Swieze okno idzie w calosci — biezacych rozliczen nie wolno dlawic limitem.
+    Zaleglosci ida paczkami, od najnowszych (zrodla pamietaja swiezsze mecze,
+    wiec ta kolejnosc daje najwiecej trafien na jeden request) i tylko dopoki
+    nie wyczerpia `max_prob`.
+    """
+    cutoff = dzis - timedelta(days=days_back)
+    swieze: list[dict] = []
+    zalegle: list[tuple[date, dict]] = []
+
+    for p in pending_all:
+        data = _data_meczu(p)
+        if data is None or data >= dzis:
+            continue  # smieciowa data albo mecz jeszcze nierozegrany
+        if data >= cutoff:
+            swieze.append(p)
+        elif int(p.get("settle_attempts") or 0) < max_prob:
+            zalegle.append((data, p))
+
+    zalegle.sort(key=lambda para: para[0], reverse=True)
+    return swieze, [p for _, p in zalegle[:limit_nadrabiania]]
+
+
 def update_pending(
     days_back: int = 2,
     dry_run: bool = False,
@@ -295,14 +356,9 @@ def update_pending(
     init_db()
     pending_all = get_pending_results()
 
-    # Filtruj tylko mecze które już się odbyły (data < dziś)
     today = datetime.now().date()
-    cutoff = today - timedelta(days=days_back)
-    pending = [
-        p for p in pending_all
-        if p.get("match_date") and datetime.fromisoformat(p["match_date"]).date() < today
-        and datetime.fromisoformat(p["match_date"]).date() >= cutoff
-    ]
+    swieze, nadrabiane = _wybierz_do_rozliczenia(pending_all, today, days_back)
+    pending = swieze + nadrabiane
 
     if not pending:
         if verbose:
@@ -310,7 +366,14 @@ def update_pending(
         return {"updated": 0, "not_found": 0, "errors": 0}
 
     if verbose:
-        print(f"[ResultsUpdater] Pending meczów do sprawdzenia: {len(pending)}")
+        print(f"[ResultsUpdater] Pending meczów do sprawdzenia: {len(pending)}"
+              f" (świeże: {len(swieze)}, zaległe: {len(nadrabiane)})")
+    if nadrabiane:
+        # Zaległości to sygnał, że coś wcześniej nie zadziałało — cisza tutaj
+        # wygląda identycznie jak "nie było czego rozliczać".
+        log.warning("Nadrabianie zaległości: %d meczów spoza okna %d dni"
+                    " (najstarszy: %s)", len(nadrabiane), days_back,
+                    nadrabiane[-1].get("match_date", "?")[:10])
 
     # Grupuj po dacie żeby minimalizować requesty API
     dates_needed: set[str] = set()
@@ -322,6 +385,7 @@ def update_pending(
     req_count = 0
 
     stats = {"updated": 0, "not_found": 0, "errors": 0}
+    nieznalezione: list[int] = []
 
     for p in pending:
         match_date = p["match_date"][:10]
@@ -408,6 +472,18 @@ def update_pending(
             if verbose:
                 print(f"  [NOT FOUND] {p['team_home']} vs {p['team_away']} ({match_date})")
             stats["not_found"] += 1
+            nieznalezione.append(p["id"])
+
+    # Licznik prób podbijamy JEDNORAZOWO, po pętli: inaczej każdy mecz kosztuje
+    # osobny UPDATE, a przy dziesiątkach zaległości to dziesiątki round-tripów.
+    # Bez tego licznika nadrabianie krążyłoby w kółko po tych samych rekordach,
+    # których żadne źródło już nie ma (produkcja 14.08: 82 z 95 nie do odzyskania).
+    if nieznalezione and not dry_run:
+        try:
+            from footstats.core.backtest import zwieksz_probe_rozliczenia
+            zwieksz_probe_rozliczenia(nieznalezione)
+        except (OSError, ValueError, RuntimeError, ImportError) as e:
+            log.warning("Nie udało się podbić licznika prób rozliczenia: %s", e)
 
     if verbose:
         print(f"\n[ResultsUpdater] Zaktualizowano: {stats['updated']} | "

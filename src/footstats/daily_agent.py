@@ -504,6 +504,16 @@ def main():
         border_style="cyan",
     ))
 
+    # Migracje przy starcie joba — dotad robilo je WYLACZNIE `api/main.py`, wiec
+    # kolejnosc wdrozenia (najpierw API, potem joby) byla niepisanym warunkiem
+    # poprawnosci. Job wdrozony pierwszy padal na brakujacej kolumnie i zabieral
+    # ze soba caly dzienny przebieg, nie tylko rozliczenia. Idempotentne.
+    try:
+        from footstats.db.migrations import run_migrations
+        run_migrations()
+    except (OSError, ValueError, RuntimeError, ImportError) as e:
+        log.warning("Migracje pominięte przy starcie joba: %s", e)
+
     # Krok 0: Auto-update wynikow pending meczow (pomijamy w dry-run)
     _sep("KROK 0 — Auto-update wynikow")
     if args.dry_run:

@@ -257,6 +257,16 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     init_coupon_tables()
     init_db()
 
+    # `init_db` robi tylko CREATE TABLE IF NOT EXISTS — na ISTNIEJĄCEJ bazie nie
+    # doda kolumny z nowej migracji. Dotąd migracje odpalało wyłącznie `api/main.py`,
+    # przez co poprawność zależała od kolejności wdrożenia (API przed jobami).
+    # Idempotentne, więc powtórzenie nic nie kosztuje.
+    try:
+        from footstats.db.migrations import run_migrations
+        run_migrations()
+    except (OSError, ValueError, RuntimeError, ImportError) as e:
+        log.warning("Migracje pominięte przy starcie evening: %s", e)
+
     # Rozlicz WSZYSTKIE pending predykcje (nie tylko nogi kuponów) — standalone typy
     # Groq + System paper-trading. Bez tego predictions.tip_correct nie rośnie i
     # calibration_monitor / walidacja są zagłodzone (fix 06-18).

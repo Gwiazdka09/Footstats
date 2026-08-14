@@ -73,7 +73,11 @@ def init_db() -> None:
                 prob_away            REAL,
                 -- Ktory model policzyl te predykcje: 'poisson-dc' albo 'bzzoiro-ml'.
                 -- Puste = nie wiadomo (predykcja sprzed wprowadzenia stempla).
-                model_source         TEXT NOT NULL DEFAULT ''
+                model_source         TEXT NOT NULL DEFAULT '',
+                -- Ile razy probowalismy juz sciagnac wynik. Po MAX_PROB_ROZLICZENIA
+                -- nieudanych probach rekord wypada z nadrabiania zaleglosci.
+                -- Istniejace bazy dostaja te kolumne migracja 12.
+                settle_attempts      INTEGER DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS idx_match_date  ON predictions(match_date);
             CREATE INDEX IF NOT EXISTS idx_tip_correct ON predictions(tip_correct);
@@ -343,13 +347,36 @@ def get_pending_results() -> list[dict]:
         rows = conn.execute(
             """
             SELECT id, match_date, team_home, team_away, league,
-                   ai_tip, ai_confidence, odds, kupon_type
+                   ai_tip, ai_confidence, odds, kupon_type,
+                   COALESCE(settle_attempts, 0) AS settle_attempts
             FROM predictions
             WHERE actual_result IS NULL
             ORDER BY match_date DESC
             """
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def zwieksz_probe_rozliczenia(ids: list[int]) -> int:
+    """Podbija licznik nieudanych prob rozliczenia. Zwraca liczbe wierszy.
+
+    Bez tego licznika nadrabianie zaleglosci nie odroznia meczu, ktorego jeszcze
+    nie szukalismy, od takiego, ktorego zadne zrodlo juz nie ma — i skanuje
+    w kolko te same nieodzyskiwalne rekordy.
+    """
+    if not ids:
+        return 0
+    init_db()
+    with _connect() as conn:
+        # `executemany` ze STATYCZNYM zapytaniem zamiast budowanego `IN (?,?,?)`:
+        # zero interpolacji do tekstu SQL, wiec nie ma czego tlumaczyc `nosec`-iem,
+        # a i tak jest to jeden round-trip do bazy.
+        conn.executemany(
+            "UPDATE predictions SET settle_attempts = COALESCE(settle_attempts, 0) + 1"
+            " WHERE id = ?",
+            [(int(i),) for i in ids],
+        )
+    return len(ids)
 
 
 # ── 5. get_weakness_report ────────────────────────────────────────────────

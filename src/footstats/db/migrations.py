@@ -159,6 +159,13 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "ALTER TABLE predictions ADD COLUMN clv_closing_odds REAL",
                 ],
             ),
+            (
+                12,
+                "add_settle_attempts_to_predictions",
+                [
+                    "ALTER TABLE predictions ADD COLUMN settle_attempts INTEGER DEFAULT 0",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -289,6 +296,18 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                 [
                     "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS"
                     " clv_closing_odds DOUBLE PRECISION",
+                ],
+            ),
+            # Licznik prob rozliczenia. Bez niego nadrabianie zaleglosci nie ma
+            # jak odroznic "jeszcze nie probowalismy" od "zadne zrodlo tego nie
+            # ma" i skanowaloby 82 martwe rekordy przy kazdym przebiegu,
+            # zjadajac limit requestow przeznaczony na swieze mecze.
+            (
+                12,
+                "add_settle_attempts_to_predictions",
+                [
+                    "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS"
+                    " settle_attempts INTEGER DEFAULT 0",
                 ],
             ),
         ]

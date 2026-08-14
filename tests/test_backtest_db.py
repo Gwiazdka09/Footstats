@@ -27,7 +27,10 @@ CREATE TABLE IF NOT EXISTS predictions (
     prob_home            REAL,
     prob_draw            REAL,
     prob_away            REAL,
-    model_source         TEXT NOT NULL DEFAULT ''
+    model_source         TEXT NOT NULL DEFAULT '',
+    -- Licznik prob rozliczenia (migracja 12). Schemat testowy musi nadazac za
+    -- produkcyjnym, inaczej test przechodzi na tabeli, ktorej nigdzie nie ma.
+    settle_attempts      INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS ai_feedback (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
