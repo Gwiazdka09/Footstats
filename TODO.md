@@ -196,8 +196,17 @@ Walk-forward, n=3578, trzy niezależne grupy lig, model PO poprawkach z 13.08:
   modelu = więcej zakładów = większa strata.
 - Brier i log-loss monotonicznie na korzyść rynku; czysty rynek najlepszy we wszystkich grupach.
 - **To niezależnie potwierdza pivot z 07-06:** static value-betting na publicznych danych nie bije rynku.
-- **Nie badane:** Over/Under i BTTS. Tam model może nadal wnosić wartość — to następne pytanie,
-  nie wniosek. `model_log` mierzy dziś wyłącznie argmax 1X2.
+### 🎯 Werdykt per rynek (14.08, n=3586, te same 3 grupy) — TRZY RÓŻNE ODPOWIEDZI
+| rynek | werdykt | dowód |
+|---|---|---|
+| **1X2** | 🔴 przegrany | ROI ~−20% przy każdej wadze; przy niezgodzie rynek 42.9% vs model 29.8% |
+| **BTTS** | 🔴 **szkodliwy** | model 53.2% / Brier 0.2496 vs częstość bazowa 54.4% / 0.2480. „Zawsze BTTS tak" **bije model**. Grupa C: 50.5% vs 54.2%. Prod potwierdza: BTTS 18.2% (2/11) |
+| **Over/Under 2.5** | 🟡 **jedyna nadzieja** | ROI przy 30/70: A **+9.2%** (106 zakł.), B −3.8%, C −15.5%, **razem −0.2%** (na zero PO podatku). Przy niezgodzie na ligach czołowych model **wygrywa 52.1% do 47.9%** |
+
+**Wnioski do decyzji:**
+1. **BTTS — rozważyć wyłączenie z selekcji.** Nie „brak przewagi", tylko ujemna wartość: stała predykcja jest lepsza. Kursów BTTS nie ma w datasecie, więc to porównanie z częstością bazową, nie z rynkiem.
+2. **O/U zasługuje na dalszą pracę** — to jedyny rynek, gdzie model dotyka rentowności. Warto sprawdzić, czy przewaga na ligach czołowych utrzyma się na większej próbie (dziś 106 zakładów).
+3. **`model_log` śledzi wyłącznie argmax 1X2** — rynków golowych nie da się dziś zweryfikować live bez rozszerzenia dziennika.
 
 ### 🔍 Ustalone 13-14.08 — nie zgubić
 - **`model_log` to główne źródło danych o modelu**, nie `predictions`. Ta druga dostaje wiersz dopiero PO filtrach wartości. `scripts/stan_uczenia.py` czyta już obie.
