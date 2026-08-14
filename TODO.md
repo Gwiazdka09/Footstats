@@ -230,11 +230,20 @@ przy niezgodzie rynek 52.2%/53.0% vs model 47.8%/47.0%.
 **Arytmetyka progu:** NIE trafia 50.8% → wymaga kursu **2.10**, a rynek na „BTTS nie"
 w takim meczu daje ~1.6. Nie domyka się.
 
-**Rekomendacja:** wdrożyć dwustronne BTTS jako SYGNAŁ w dzienniku (kierunek tak/nie jest
-uczciwszą informacją niż dzisiejsze „tylko tak"), ale **NIE włączać do kuponów System**,
-dopóki nie mamy prawdziwych kursów „BTTS nie" do zmierzenia opłacalności.
-⏳ Czeka na decyzję usera.
-Zastrzeżenie metody: zbieracz nie zapisał kursów 1X2, więc λ dopasowane tylko do O/U.
+✅ **ZROBIONE 15.08 (`b51ea5519`)** — przy okazji wyszło, że dwustronność **już istniała**,
+tylko potok ją kasował. `koryguj_tip_ou_btts` od dawna przerzuca typ na `"BTTS NO"`, ale:
+1. `prob_modelu` nie znało tego typu → pewność zapisywana jako **50 zamiast 100−bt**,
+   i to akurat dla typów, których model był NAJPEWNIEJSZY;
+2. `_TYP_DO_ODDS_KEY` nie znało → noga kasowana...
+3. ...i podpisywana jako **halucynacja Groqa**, choć Groq nie miał z nią nic wspólnego;
+4. API-Football i SofaScore zwracają OBIE strony, a parsery brały tylko „yes" — więc nie
+   było czym wycenić (`match_tips.py` czytał `btts_no` i dostawał wyłącznie kurs teoretyczny).
+
+Granie strony NIE zostaje za flagą **`BTTS_TWO_WAY` (default OFF)** — typ jest liczony,
+wyceniany i logowany, ale nie wchodzi do kuponu. Flip po zebraniu realnych kursów `btts_no`
+i zmierzeniu ROI na nich. Pełna tabela dowodów w `.env.example`.
+
+Zastrzeżenie metody: zbieracz nie zapisał kursów 1X2, więc λ rynku dopasowane tylko do O/U.
 
 ### 🔍 Ustalone 13-14.08 — nie zgubić
 - **`model_log` to główne źródło danych o modelu**, nie `predictions`. Ta druga dostaje wiersz dopiero PO filtrach wartości. `scripts/stan_uczenia.py` czyta już obie.

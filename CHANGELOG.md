@@ -3,6 +3,31 @@
 > Archiwum ukończonych prac (przeniesione z TODO.md przez `footstats-scribe`).
 > Aktywne zadania: `TODO.md`. Pełna historia commitów: `git log`.
 
+## 2026-08-15
+
+### BTTS dwustronne — model typował NIE, a potok kasował to po cichu
+- **`b51ea5519`** `koryguj_tip_ou_btts` od dawna przerzuca typ na `"BTTS NO"`, gdy model
+  daje stronie TAK mniej niż próg. Reszta potoku o tym nie wiedziała, w czterech miejscach:
+  `prob_modelu` nie znało typu (pewność **50 zamiast 100−bt** — dla typów, których model
+  był najpewniejszy), `_TYP_DO_ODDS_KEY` nie znało (noga kasowana), powód odrzucenia
+  mówił „halucynacja Groqa" (Groq nie miał z tym nic wspólnego), a parsery API-Football
+  i SofaScore brały ze zwracanego rynku **tylko stronę „yes"** — więc nie było czym wycenić.
+  `match_tips.py` już czytał `odds.get("btts_no")` i dostawał wyłącznie kurs teoretyczny.
+- **Zmierzone (walk-forward n=15 460, 39 lig, próba dzielona po dacie):** sygnał `p_btts`
+  jest REALNY i replikuje się — krzywa monotoniczna w obu połowach (0-40% → BTTS pada
+  w 48.7%/51.2%; 65%+ → **60.7%/64.1%**). Gra dwustronna bije stałą odpowiedź: TAK
+  +7.0/+8.4pp, NIE +6.3/+6.6pp.
+- **Ale rynek dalej lepszy:** Brier 0.2524/0.2508 vs **0.2503/0.2460**; przy niezgodzie
+  rynek 52.2%/53.0% vs model 47.8%/47.0%. Strona NIE trafia 50.8%, więc do zera wymaga
+  kursu **2.10**, a rynek daje ~1.6. Stąd `BTTS_TWO_WAY` **default OFF** — typ jest
+  liczony, wyceniany i logowany, ale nie gra.
+- Powód odrzucenia nogi rozróżnia teraz „źródło nie wycenia tego rynku" od „typ zmyślony".
+
+### Migracja 13 wdrożona
+- Kolumna `odds_verified` weszła przez CD (API rew. 00402 woła `run_migrations`).
+  Joby przebudowane osobno, digest **z tagiem** `89ae6a28` — dwa nowsze digesty
+  w rejestrze były BEZ TAGU (manifesty atestacji BuildKita), ta sama pułapka co 30.07.
+
 ## 2026-08-14
 
 ### `predictions` opisywało propozycje Groqa, nie zagrane typy
