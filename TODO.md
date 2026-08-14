@@ -182,9 +182,22 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 1. **Obserwować budżet API-Football.** 14.08 zjechał do **17/100** — nadrabianie zaległości kosztuje ~8 requestów na przebieg. Przy dwóch przebiegach dziennie może nie starczyć. Regulacja bez redeploya: `LIMIT_NADRABIANIA` (domyślnie 15).
 2. **Dobić 7 rozliczonych poisson-dc** → próg 30 → `scripts/porownaj_modele.py` wydaje werdykt. Licznik: `python scripts/stan_uczenia.py`.
-3. **Rozjazd wag ensemble — DO DECYZJI.** `ENSEMBLE_MARKET_WEIGHT=0.70` stoi na serwisie API (30% Poisson / 70% rynek), a joby go NIE mają (default 70/30 na korzyść Poissona). Ten sam mecz daje inną predykcję zależnie od ścieżki.
-4. **`CRON_SECRET` jako zwykła zmienna, nie `secretKeyRef`** — odczytuje ją każdy z `run.services.get`. Zmiana typu w locie wywala deploy (patrz komentarz w `cd.yml`), więc wymaga ostrożnej kolejności.
-5. **P2 / B — decyzja usera:** backfill Neon→Supabase + rotacja hasła Neon (wisiało plaintext w env Cloud Run).
+3. ✅ **Rozjazd wag ensemble — ZLIKWIDOWANY 14.08.** Joby dostały `ENSEMBLE_MARKET_WEIGHT=0.70`, tak jak API. Decyzja oparta na przeliczonym A/B (n=3578, 3 grupy) — szczegóły i liczby w `.env.example`.
+4. ✅ **`CRON_SECRET` → `secretKeyRef`** (rew. 00395-nss) + dopisany do re-asercji w `cd.yml`. Wartość nie jest już widoczna w `gcloud run services describe`.
+5. ✅ **Backfill Neon→Supabase** — był już zrobiony (`predykcje do wstawienia: 0`, sędziowie 186 w obu). **Ekspozycja hasła zamknięta:** wersja 1 sekretu `DATABASE_URL` zawierała połączenie do Neona i była `enabled` → wyłączona. Żadna z 60 rewizji Cloud Run go nie wystawiała.
+6. **DO DECYZJI — kupony/bankroll/users z Neona** (317/354/11). Skrypt pomija je celowo: wiszą na 7 kontach nieistniejących w Supabase, 11 ma status ACTIVE sprzed miesięcy, wskrzeszenie zafałszowałoby bieżący bankroll.
+7. **Rotacja hasła Neona** — do zrobienia w konsoli Neona (brak dostępu z CLI). Pilność spadła po wyłączeniu wersji 1: poświadczenie zostało już tylko w lokalnym `.env`.
+
+### ⚠️ Model NIE bije rynku w 1X2 — zmierzone ponownie 14.08
+Walk-forward, n=3578, trzy niezależne grupy lig, model PO poprawkach z 13.08:
+- **Niezgoda model vs rynek (510 meczów): rynek trafia 42,9%, model 29,8%.** Spójnie we wszystkich
+  trzech grupach (28,6/44,7 · 29,1/37,3 · 31,4/46,1). Gdy model się wychyla, myli się systematycznie.
+- **ROI ujemne przy KAŻDEJ wadze** (−5,8% do −84%, flat-bet, EV>5%, podatek 12%). Więcej głosu
+  modelu = więcej zakładów = większa strata.
+- Brier i log-loss monotonicznie na korzyść rynku; czysty rynek najlepszy we wszystkich grupach.
+- **To niezależnie potwierdza pivot z 07-06:** static value-betting na publicznych danych nie bije rynku.
+- **Nie badane:** Over/Under i BTTS. Tam model może nadal wnosić wartość — to następne pytanie,
+  nie wniosek. `model_log` mierzy dziś wyłącznie argmax 1X2.
 
 ### 🔍 Ustalone 13-14.08 — nie zgubić
 - **`model_log` to główne źródło danych o modelu**, nie `predictions`. Ta druga dostaje wiersz dopiero PO filtrach wartości. `scripts/stan_uczenia.py` czyta już obie.
