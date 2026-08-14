@@ -146,3 +146,59 @@ def test_clv_report_overall():
     assert result["overall"] is not None
     assert result["overall"]["n"] == 5
     assert result["overall"]["positive_pct"] == pytest.approx(60.0)
+
+
+# ── CLV liczone na kursie od Groqa mierzyłoby halucynację ──────────────────
+
+class _FakeKursor:
+    def __init__(self, wiersze):
+        self._w = wiersze
+    def fetchall(self):
+        return self._w
+    def fetchone(self):
+        return self._w[0] if self._w else None
+
+
+class _FakeConn:
+    """Połączenie zwracające zaplanowane odpowiedzi po kolei, zapamiętuje SQL."""
+    def __init__(self, odpowiedzi):
+        self.odpowiedzi = list(odpowiedzi)
+        self.zapytania = []
+    def execute(self, sql, params=()):
+        self.zapytania.append(sql)
+        return _FakeKursor(self.odpowiedzi.pop(0) if self.odpowiedzi else [])
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+
+
+def test_clv_report_pomija_niezweryfikowane_kursy():
+    """Kurs zapisany w KROKU 3 pochodzi od Groqa — CLV z niego nic nie mierzy."""
+    conn = _FakeConn([[], [{"n": 0}]])
+    with patch("footstats.core.clv_tracker._connect", return_value=conn), \
+         patch("footstats.core.clv_tracker._ensure_clv_column"):
+        get_clv_report()
+    assert "odds_verified" in conn.zapytania[0]
+
+
+def test_clv_report_ostrzega_o_odrzuconej_probie(caplog):
+    """Pusty raport z powodu braku weryfikacji to NIE to samo, co brak danych."""
+    import logging
+    conn = _FakeConn([[], [{"n": 42}]])
+    with patch("footstats.core.clv_tracker._connect", return_value=conn), \
+         patch("footstats.core.clv_tracker._ensure_clv_column"):
+        with caplog.at_level(logging.WARNING, logger="footstats.core.clv_tracker"):
+            wynik = get_clv_report()
+    assert wynik["overall"] is None
+    assert "pominieto 42" in caplog.text
+
+
+def test_clv_report_milczy_gdy_nie_ma_czego_pomijac(caplog):
+    import logging
+    conn = _FakeConn([[], [{"n": 0}]])
+    with patch("footstats.core.clv_tracker._connect", return_value=conn), \
+         patch("footstats.core.clv_tracker._ensure_clv_column"):
+        with caplog.at_level(logging.WARNING, logger="footstats.core.clv_tracker"):
+            get_clv_report()
+    assert "pominieto" not in caplog.text

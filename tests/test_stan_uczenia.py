@@ -191,3 +191,42 @@ def test_gotowosc_liczy_z_dziennika_gdy_ten_ma_wiecej(capsys):
 
     wyjscie = capsys.readouterr().out
     assert "23" in wyjscie, "gotowosc zignorowala wieksza probe z model_log"
+
+
+def test_raport_kursow_pokazuje_udzial_zweryfikowanych(capsys):
+    """Kurs zapisuje sie PRZED weryfikacja — raport ma to widzieć, nie przemilczeć."""
+    conn = _Conn([
+        [{"model_source": "poisson-dc", "wszystkie": 10, "z_faktorami": 0,
+          "rozliczone": 10, "trafione": 4}],
+        [{"wszystkie": 10, "zweryfikowane": 6, "poza_filtrem": 3}],
+    ])
+
+    stan_uczenia.raport_predykcji(conn)
+
+    out = capsys.readouterr().out
+    assert "kurs zweryfikowany: 6/10 (60%)" in out
+    assert "poza filtrem longshotow" in out
+    assert "ROI i CLV licz wylacznie na zweryfikowanych" in out
+
+
+def test_raport_kursow_milczy_gdy_wszystko_zweryfikowane(capsys):
+    """Bez szumu, gdy dane są zdrowe — ostrzeżenie ma coś znaczyć."""
+    conn = _Conn([
+        [{"model_source": "poisson-dc", "wszystkie": 5, "z_faktorami": 0,
+          "rozliczone": 5, "trafione": 3}],
+        [{"wszystkie": 5, "zweryfikowane": 5, "poza_filtrem": 0}],
+    ])
+
+    stan_uczenia.raport_predykcji(conn)
+
+    out = capsys.readouterr().out
+    assert "kurs zweryfikowany: 5/5 (100%)" in out
+    assert "ROI i CLV licz wylacznie" not in out
+
+
+def test_raport_kursow_znosi_brak_wiersza():
+    """Puste zapytanie nie moze wywalic calego raportu diagnostycznego."""
+    conn = _Conn([[{"model_source": "x", "wszystkie": 1, "z_faktorami": 0,
+                    "rozliczone": 0, "trafione": 0}]])
+
+    stan_uczenia.raport_predykcji(conn)   # brak drugiej odpowiedzi → [] 

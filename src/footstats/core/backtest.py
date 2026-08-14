@@ -77,7 +77,12 @@ def init_db() -> None:
                 -- Ile razy probowalismy juz sciagnac wynik. Po MAX_PROB_ROZLICZENIA
                 -- nieudanych probach rekord wypada z nadrabiania zaleglosci.
                 -- Istniejace bazy dostaja te kolumne migracja 12.
-                settle_attempts      INTEGER DEFAULT 0
+                settle_attempts      INTEGER DEFAULT 0,
+                -- Czy kurs przeszedl anty-halucynacyjna weryfikacje (KROK 4).
+                -- Zapis dzieje sie w KROKU 3, wiec swiezy wiersz ma tu 0 i trzyma
+                -- kurs zaproponowany przez Groqa — nie nadaje sie do ROI ani CLV.
+                -- Istniejace bazy dostaja te kolumne migracja 13.
+                odds_verified        INTEGER DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS idx_match_date  ON predictions(match_date);
             CREATE INDEX IF NOT EXISTS idx_tip_correct ON predictions(tip_correct);
@@ -377,6 +382,55 @@ def zwieksz_probe_rozliczenia(ids: list[int]) -> int:
             [(int(i),) for i in ids],
         )
     return len(ids)
+
+
+def oznacz_zweryfikowane(nogi: list[dict]) -> int:
+    """Uzgadnia `predictions` ze stanem PO weryfikacji kursow. Zwraca liczbe wierszy.
+
+    Po co: zapis predykcji dzieje sie w KROKU 3 `daily_agent` (wewnatrz analizy
+    Groqa), a anty-halucynacyjna podmiana kursu dopiero w KROKU 4. Weryfikacja
+    dziala na slowniku w pamieci, wiec do bazy nigdy nie wracala — `predictions`
+    trzymalo kurs zaproponowany przez model jezykowy. Na prodzie dawalo to ten sam
+    kurs 52.58 na trzech roznych meczach jednego dnia i Under 2.5 po 1.05.
+
+    Noga, ktora przezyla weryfikacje, dostaje tu RZECZYWISTY kurs i znacznik.
+    Nogi odrzucone (brak pokrycia w Bzzoiro, longshot) zostaja z zerem i wypadaja
+    z raportow ROI/CLV — inaczej raport mierzy typy, ktorych system nie zagral.
+
+    Zwrocona liczba mniejsza od dlugosci `nogi` oznacza rozjazd nazw miedzy
+    zapisem a weryfikacja. Wolajacy ma to zglosic, nie polknac.
+    """
+    if not nogi:
+        return 0
+
+    params = []
+    for noga in nogi:
+        try:
+            kurs = float(noga.get("odds"))
+        except (TypeError, ValueError):
+            continue                      # brak kursu / smiec — nie nadpisuj tego, co jest
+        if kurs <= 1.0:
+            continue
+        params.append((kurs,
+                       noga.get("team_home") or "",
+                       noga.get("team_away") or "",
+                       noga.get("match_date") or "",
+                       noga.get("ai_tip") or ""))
+    if not params:
+        return 0
+
+    init_db()
+    zmienione = 0
+    with _connect() as conn:
+        for p in params:
+            cur = conn.execute(
+                "UPDATE predictions SET odds = ?, odds_verified = 1"
+                " WHERE team_home = ? AND team_away = ? AND match_date = ?"
+                " AND ai_tip = ?",
+                p,
+            )
+            zmienione += max(getattr(cur, "rowcount", 0) or 0, 0)
+    return zmienione
 
 
 # ── 5. get_weakness_report ────────────────────────────────────────────────

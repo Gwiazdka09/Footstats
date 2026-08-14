@@ -82,6 +82,9 @@ def _pobierz_kandydatow(dni: int = 2) -> tuple[list, dict]:
             "goscie":    a,
             "liga":      w.get("liga", ""),
             "pred":      w.get("pred") or {},
+            # Data jest potrzebna dopiero w KROKU 4b (uzgodnienie `predictions`),
+            # ale musi pochodzic z tego samego meczu, co podmieniony kurs.
+            "data":      w.get("data", ""),
         }
 
     return wyniki, indeks
@@ -284,6 +287,7 @@ def _weryfikuj_noge(z: dict, indeks: dict, usuniete: list[str]) -> dict | None:
     z["kurs"]      = float(rzeczywisty)
     z["mecz"]      = f"{wpis['gospodarz']} vs {wpis['goscie']}"
     z["_verified"] = True
+    z["_data"]     = wpis.get("data", "")
 
     # 11.6: Arbitraż — porównaj z BetExplorer cache (bez Playwright)
     try:
@@ -358,6 +362,70 @@ def _weryfikuj_kupony(dane: dict, indeks: dict) -> dict:
             console.print(f"  [dim]- {u}[/dim]")
 
     return dane
+
+
+# tip → postac zapisana w `predictions` (musi zgadzac sie z `_TYP_NORM`
+# w `analyzer_helpers._auto_zapisz_backtest`, inaczej uzgodnienie nic nie trafi).
+_TYP_NORM_ZAPIS = {"Over": "Over 2.5", "Under": "Under 2.5",
+                   "OVER": "Over 2.5", "UNDER": "Under 2.5"}
+
+
+def _zbierz_ocalale_nogi(dane: dict) -> list[dict]:
+    """Nogi, ktore przezyly weryfikacje — w postaci gotowej do uzgodnienia z baza.
+
+    Ta sama noga bywa i w `top3`, i w kuponie, wiec deduplikujemy po kluczu
+    zapisu; bez tego licznik uzgodnionych wierszy bylby zawyzony i przestalby
+    wykrywac rozjazd nazw.
+    """
+    zrodla = list(dane.get("top3") or [])
+    for kupon_key in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
+        zrodla.extend((dane.get(kupon_key) or {}).get("zdarzenia") or [])
+
+    zebrane: dict[tuple, dict] = {}
+    for z in zrodla:
+        mecz = z.get("mecz") or ""
+        if " vs " not in mecz:
+            continue
+        home, away = (czesc.strip() for czesc in mecz.split(" vs ", 1))
+        typ_raw = (z.get("typ") or "").strip()
+        typ = _TYP_NORM_ZAPIS.get(typ_raw, typ_raw)
+        klucz = (home, away, z.get("_data") or "", typ)
+        zebrane[klucz] = {
+            "team_home": home, "team_away": away,
+            "match_date": z.get("_data") or "", "ai_tip": typ,
+            "odds": z.get("kurs"),
+        }
+    return list(zebrane.values())
+
+
+def _uzgodnij_predykcje(dane: dict) -> int:
+    """KROK 4b — dosyla do `predictions` wynik weryfikacji kursow. Zwraca liczbe wierszy.
+
+    Zapis predykcji dzieje sie w KROKU 3 (wewnatrz analizy Groqa), czyli ZANIM
+    kurs zostanie podmieniony na rzeczywisty i zanim odpadna nogi bez pokrycia.
+    Bez tego kroku baza opisuje propozycje modelu jezykowego, a nie to, co system
+    faktycznie wystawil — i wlasnie tak trafialy tam kursy w rodzaju 52.58
+    powtorzonego na trzech roznych meczach.
+    """
+    nogi = _zbierz_ocalale_nogi(dane)
+    if not nogi:
+        return 0
+    try:
+        from footstats.core.backtest import oznacz_zweryfikowane
+        uzgodnione = oznacz_zweryfikowane(nogi)
+    except (ImportError, OSError, RuntimeError, ValueError) as e:
+        log.warning("Uzgodnienie predykcji po weryfikacji nie powiodlo sie: %s", e)
+        return 0
+
+    if uzgodnione < len(nogi):
+        # Nie polykamy tego: mniej trafien niz nog = rozjazd nazw miedzy zapisem
+        # a weryfikacja, czyli czesc wierszy zostaje z kursem od Groqa.
+        log.warning("Uzgodniono kursy dla %d z %d zweryfikowanych nog —"
+                    " reszta zostaje niezweryfikowana w `predictions`",
+                    uzgodnione, len(nogi))
+    else:
+        log.info("Uzgodniono kursy dla %d zweryfikowanych nog", uzgodnione)
+    return uzgodnione
 
 
 # ── Krok 1b: API-Football Ekstraklasa ───────────────────────────────────────
@@ -593,7 +661,8 @@ def main():
             g = w.get("gospodarz", "")
             a = w.get("goscie", "")
             indeks[(_norm(g), _norm(a))] = {
-                "odds": w.get("odds", {}), "gospodarz": g, "goscie": a, "liga": w.get("liga", "")
+                "odds": w.get("odds", {}), "gospodarz": g, "goscie": a,
+                "liga": w.get("liga", ""), "data": w.get("data", ""),
             }
 
     if not wyniki:
@@ -746,6 +815,11 @@ def main():
 
     _sep("KROK 4 — Weryfikacja kursow (anty-halucynacja)")
     dane = _weryfikuj_kupony(dane, indeks)
+
+    # Krok 4a: dosli wynik weryfikacji do `predictions` (zapis byl w KROKU 3,
+    # czyli przed podmiana kursu — bez tego baza trzyma kurs od Groqa).
+    if not args.dry_run:
+        _uzgodnij_predykcje(dane)
 
     # Krok 4b: Dodaj Kelly do kazdej nogi
     _dodaj_kelly(dane, current_bankroll)

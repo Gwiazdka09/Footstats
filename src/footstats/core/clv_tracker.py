@@ -106,6 +106,10 @@ def get_clv_report(
     # (match_date to ISO 'YYYY-MM-DD...' → leksykograficzne >= działa na obu DB).
     cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     with _connect() as conn:
+        # `odds_verified = 1` — kurs w `predictions` zapisuje sie PRZED weryfikacja
+        # (KROK 3 vs KROK 4 `daily_agent`), wiec niezweryfikowany bywa kursem
+        # zaproponowanym przez model jezykowy. CLV liczone na takim kursie mierzy
+        # halucynacje, nie przewage nad rynkiem.
         rows = conn.execute(
             """
             SELECT league, odds, clv_closing_odds, tip_correct
@@ -114,10 +118,31 @@ def get_clv_report(
               AND odds IS NOT NULL
               AND odds > 1.0
               AND clv_closing_odds > 1.0
+              AND COALESCE(odds_verified, 0) = 1
               AND match_date >= ?
             """,
             (cutoff,),
         ).fetchall()
+        pominiete = conn.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM predictions
+            WHERE clv_closing_odds IS NOT NULL
+              AND odds IS NOT NULL
+              AND odds > 1.0
+              AND clv_closing_odds > 1.0
+              AND COALESCE(odds_verified, 0) = 0
+              AND match_date >= ?
+            """,
+            (cutoff,),
+        ).fetchone()
+
+    # Pusty raport z powodu braku weryfikacji to CO INNEGO niz brak danych —
+    # bez tego ostrzezenia wyglada jak cisza, a jest odrzuceniem calej proby.
+    n_pominietych = (dict(pominiete).get("n") if pominiete else 0) or 0
+    if n_pominietych:
+        _log.warning("[CLV] pominieto %d predykcji z niezweryfikowanym kursem"
+                     " (zapis przed KROK 4) — nie nadaja sie do CLV", n_pominietych)
 
     if not rows:
         return {"overall": None, "per_liga": []}

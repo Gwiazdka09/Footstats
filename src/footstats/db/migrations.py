@@ -166,6 +166,13 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "ALTER TABLE predictions ADD COLUMN settle_attempts INTEGER DEFAULT 0",
                 ],
             ),
+            (
+                13,
+                "add_odds_verified_to_predictions",
+                [
+                    "ALTER TABLE predictions ADD COLUMN odds_verified INTEGER DEFAULT 0",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -308,6 +315,14 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                 [
                     "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS"
                     " settle_attempts INTEGER DEFAULT 0",
+                ],
+            ),
+            (
+                13,
+                "add_odds_verified_to_predictions",
+                [
+                    "ALTER TABLE predictions ADD COLUMN IF NOT EXISTS"
+                    " odds_verified INTEGER DEFAULT 0",
                 ],
             ),
         ]

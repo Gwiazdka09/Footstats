@@ -48,7 +48,39 @@ def raport_predykcji(conn) -> dict:
     for w in wiersze:
         print(f"{str(w['model_source'] or '(brak)'):14} {w['wszystkie']:7}"
               f" {w['z_faktorami']:10} {w['rozliczone']:11} {w['trafione']:9}")
+    _raport_kursow(conn)
     return {w["model_source"]: w for w in wiersze}
+
+
+def _raport_kursow(conn) -> None:
+    """Ile predykcji ma kurs POTWIERDZONY, a ile tylko zaproponowany przez Groqa.
+
+    Zapis do `predictions` dzieje sie w KROKU 3 `daily_agent`, a anty-halucynacyjna
+    podmiana kursu dopiero w KROKU 4 — wiersze sprzed uzgodnienia (migracja 13)
+    trzymaja kurs od modelu jezykowego. Na prodzie oznaczalo to ten sam kurs 52.58
+    na trzech roznych meczach jednego dnia. ROI i CLV z takich wierszy nie znacza nic.
+    """
+    wiersze = _licz(conn, """
+        SELECT COUNT(*) AS wszystkie,
+               COALESCE(SUM(CASE WHEN COALESCE(odds_verified, 0) = 1 THEN 1 ELSE 0 END), 0)
+                   AS zweryfikowane,
+               COALESCE(SUM(CASE WHEN odds IS NOT NULL AND (odds < 1.2 OR odds > 4.0)
+                                 THEN 1 ELSE 0 END), 0) AS poza_filtrem
+        FROM predictions
+    """)
+    if not wiersze:
+        return
+    w = wiersze[0]
+    if not w.get("wszystkie"):
+        return
+    udzial = 100.0 * w["zweryfikowane"] / w["wszystkie"]
+    print(f"\n  kurs zweryfikowany: {w['zweryfikowane']}/{w['wszystkie']} ({udzial:.0f}%)")
+    if w["poza_filtrem"]:
+        print(f"  kurs poza filtrem longshotow 1.2-4.0: {w['poza_filtrem']}"
+              f" — te wiersze opisuja PROPOZYCJE, nie zagrane typy")
+    if udzial < 100.0:
+        print("  → ROI i CLV licz wylacznie na zweryfikowanych"
+              " (reszta to kurs zaproponowany przez Groqa).")
 
 
 def raport_lekcji(conn) -> None:
