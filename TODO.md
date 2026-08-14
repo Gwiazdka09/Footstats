@@ -165,8 +165,9 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 1. **Obserwować budżet API-Football.** 14.08 zjechał do **17/100** — nadrabianie zaległości kosztuje ~8 requestów na przebieg. Przy dwóch przebiegach dziennie może nie starczyć. Regulacja bez redeploya: `LIMIT_NADRABIANIA` (domyślnie 15).
 2. **Dobić 7 rozliczonych poisson-dc** → próg 30 → `scripts/porownaj_modele.py` wydaje werdykt. Licznik: `python scripts/stan_uczenia.py`.
-3. **Rozbić BTTS i O/U na podzbiory** (liga · pasmo pewności · profil drużyn) — patrz werdykt niżej, punkty 1-2.
-4. **Kosmetyka:** usunąć `DATABASE_URL_NEON` z lokalnego `.env` (Neon zbędny; rotacja wymagałaby ich konsoli, brak `NEON_API_KEY`).
+3. ✅ **Podzbiory BTTS i O/U rozbite 14.08** — żaden nie przeżył sprawdzenia poza próbą. Szczegóły niżej.
+4. **Wdrożyć migrację 13 (`odds_verified`) na prod** — joby migrują same od 14.08, więc wystarczy rebuild obrazu; do czasu wdrożenia `predictions` dalej zapisuje kurs od Groqa.
+5. **Kosmetyka:** usunąć `DATABASE_URL_NEON` z lokalnego `.env` (Neon zbędny; rotacja wymagałaby ich konsoli, brak `NEON_API_KEY`).
 
 > Zamknięte 14.08 (szczegóły → `CHANGELOG.md`): rozjazd wag ensemble · `CRON_SECRET` → `secretKeyRef`
 > · backfill Neon + wyłączenie wersji 1 sekretu `DATABASE_URL` · okno rozliczeń · lekcje RAG z trafień
@@ -180,9 +181,36 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 | **Over/Under 2.5** | 🟡 **jedyna nadzieja** | ROI przy 30/70: A **+9.2%** (106 zakł.), B −3.8%, C −15.5%, **razem −0.2%** (na zero PO podatku). Przy niezgodzie na ligach czołowych model **wygrywa 52.1% do 47.9%** |
 
 **Wnioski do decyzji:**
-1. **BTTS — ZOSTAJE (decyzja usera 14.08), ale pod obserwacją.** Uśredniony wynik jest gorszy od stałej predykcji, natomiast hipoteza usera brzmi: *model działa na SPECYFICZNYCH meczach/drużynach, a średnia to zaciera*. To jest testowalne — sprawdzić BTTS w podziale na ligę, pasmo pewności i profil drużyn (np. obie strzelające dużo vs mecze niskopunktowe). Jeśli podzbiór z realną przewagą się znajdzie, selekcja powinna dotyczyć wyłącznie jego; jeśli nie — wtedy wyłączyć.
-2. **O/U zasługuje na dalszą pracę** — to jedyny rynek, gdzie model dotyka rentowności. Warto sprawdzić, czy przewaga na ligach czołowych utrzyma się na większej próbie (dziś 106 zakładów).
+1. ✅ **Hipoteza „model działa na specyficznych meczach" SPRAWDZONA 14.08 — nie potwierdza się.** Patrz sekcja niżej.
+2. ⚠️ **+9,2% na ligach czołowych NIE replikuje się** — patrz sekcja niżej. Tę liczbę trzeba uznać za szum.
 3. **`model_log` śledzi wyłącznie argmax 1X2** — rynków golowych nie da się dziś zweryfikować live bez rozszerzenia dziennika.
+
+### 🔬 Test podzbiorów BTTS i O/U (14.08, n=15 460, 39 lig) — NIC NIE PRZEŻYŁO
+Metoda: próba podzielona **po dacie**. Podzbiory szukane wyłącznie na starszej części
+(DISCOVERY, 9226 meczów do 03.01.2026), liczone na nowszej (HOLDOUT, 6234), której szukanie
+nie widziało. Bez tego każde dostatecznie drobne cięcie znajduje „przewagę" — tak powstają
+strategie działające wyłącznie wstecz.
+
+Wymiary cięcia: liga · pasmo pewności BTTS · suma λ (profil golowy) · λ słabszej strony ·
+rozjazd z rynkiem · zgoda/niezgoda z rynkiem. Razem **52 podzbiory**.
+
+| rynek | kandydaci na DISCOVERY | przeżyli HOLDOUT |
+|---|---|---|
+| **BTTS** | 5 (RUS +5.2pp, BEL +3.2pp, ENG-PL +1.9pp, rozjazd 3-6pp, BRA) | **0** |
+| **O/U** | 2 z dodatnim ROI (+8.5%, +7.4%) | **0** |
+
+Oba dodatnie ROI mieściły się w granicy błędu (±11,7pp i ±11,2pp przy 73 i 80 zakładach).
+Na HOLDOUT: −6,1% i −4,2%.
+
+**Ligi czołowe (te same 4 co wczoraj), test wczorajszego +9,2%:**
+DISCOVERY **−11,4%** (55 zakładów) · HOLDOUT **+12,1%** (61 zakładów) — obie w granicy błędu
+(±13,5 i ±12,8), **znak się odwraca**. Wczorajsze +9,2% na 106 zakładach to jedno losowanie
+z tego rozkładu, nie przewaga. Lig dodatnich w OBU połowach: **0**.
+
+**Co z tego wynika:** hipoteza „model działa na specyficznych meczach/drużynach, a średnia
+to zaciera" została sprawdzona na 4× większej próbie i się nie broni — wzdłuż żadnego
+z sześciu wymiarów. To nie zamyka tematu na zawsze (można próbować innych cech, np. formy
+czy H2H), ale zamyka drogę „potnijmy istniejące predykcje na kawałki i znajdźmy dobry".
 
 ### 🔍 Ustalone 13-14.08 — nie zgubić
 - **`model_log` to główne źródło danych o modelu**, nie `predictions`. Ta druga dostaje wiersz dopiero PO filtrach wartości. `scripts/stan_uczenia.py` czyta już obie.

@@ -5,6 +5,30 @@
 
 ## 2026-08-14
 
+### `predictions` opisywało propozycje Groqa, nie zagrane typy
+- **`6b25c95c9`** zapis predykcji dzieje się w KROKU 3 `daily_agent` (wewnątrz analizy Groqa),
+  a anty-halucynacyjna podmiana kursu dopiero w KROKU 4. Weryfikacja działa na słowniku
+  w pamięci i **nigdy nie wracała do bazy**. Komentarz „FAZA 17.3: top3 też weryfikowane
+  (wcześniej halucynacje wchodziły do predictions)" opisywał naprawę, która nie mogła zadziałać —
+  zapis jest wcześniej w potoku.
+- Zmierzone na prodzie: ten sam kurs **52.58 na trzech różnych meczach** jednego dnia,
+  Over 2.5 po 52.58, Under 2.5 po 1.05. **48 ze 133 rozliczonych (36%)** miało kurs poza
+  filtrem longshotów 1.2–4.0 i trafiało **20.8%**. Bez nich trafność całości to 45.9%
+  zamiast 36.8%, a 1X2 **45.5% zamiast 33.7%**.
+- Konsumenci tych kursów to `backtest` (ROI, pasma kursów), `clv_tracker` i dashboard —
+  czyli raporty, na których opieramy decyzje o modelu.
+- Fix: migracja 13 + `odds_verified`, `oznacz_zweryfikowane`, KROK 4a w `daily_agent`
+  (mniej trafień niż nóg → WARNING, nie cisza), CLV liczy tylko zweryfikowane i głośno mówi
+  ile odrzucił, `stan_uczenia.py` pokazuje udział zweryfikowanych.
+
+### Podzbiory BTTS i O/U — hipoteza „model działa na specyficznych meczach" obalona
+- Test na **n=15 460 z 39 lig**, próba dzielona po dacie: podzbiory szukane na starszej
+  połowie, liczone na nowszej. **52 podzbiory** wzdłuż 6 wymiarów (liga, pasmo pewności,
+  suma λ, λ słabszej strony, rozjazd z rynkiem, zgoda z rynkiem).
+- **BTTS: 5 kandydatów na DISCOVERY, 0 przeżyło.** **O/U: 2 z dodatnim ROI, 0 przeżyło.**
+- **Wczorajsze +9,2% na ligach czołowych nie replikuje się:** −11,4% (55 zakładów) vs
+  +12,1% (61) — obie w granicy błędu, znak się odwraca. Lig dodatnich w obu połowach: 0.
+
 ### Rozliczenia gubiły predykcje bezpowrotnie — 95 sierot na produkcji
 - **`3d678f557`** okno rozliczeń było domknięte z OBU stron (`cutoff <= data < dziś`) i przesuwało się
   z datą, więc predykcja bez wyniku w swoje 3 dni wypadała z zasięgu **na zawsze**. Każda chwilowa
