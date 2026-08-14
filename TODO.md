@@ -185,8 +185,8 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 3. ✅ **Rozjazd wag ensemble — ZLIKWIDOWANY 14.08.** Joby dostały `ENSEMBLE_MARKET_WEIGHT=0.70`, tak jak API. Decyzja oparta na przeliczonym A/B (n=3578, 3 grupy) — szczegóły i liczby w `.env.example`.
 4. ✅ **`CRON_SECRET` → `secretKeyRef`** (rew. 00395-nss) + dopisany do re-asercji w `cd.yml`. Wartość nie jest już widoczna w `gcloud run services describe`.
 5. ✅ **Backfill Neon→Supabase** — był już zrobiony (`predykcje do wstawienia: 0`, sędziowie 186 w obu). **Ekspozycja hasła zamknięta:** wersja 1 sekretu `DATABASE_URL` zawierała połączenie do Neona i była `enabled` → wyłączona. Żadna z 60 rewizji Cloud Run go nie wystawiała.
-6. **DO DECYZJI — kupony/bankroll/users z Neona** (317/354/11). Skrypt pomija je celowo: wiszą na 7 kontach nieistniejących w Supabase, 11 ma status ACTIVE sprzed miesięcy, wskrzeszenie zafałszowałoby bieżący bankroll.
-7. **Rotacja hasła Neona** — do zrobienia w konsoli Neona (brak dostępu z CLI). Pilność spadła po wyłączeniu wersji 1: poświadczenie zostało już tylko w lokalnym `.env`.
+6. ✅ **Kupony/bankroll/users z Neona — ODPUSZCZONE (decyzja usera 14.08).** Nie są potrzebne. Neon nie ma już dla nas żadnej wartości; `scripts/import_neon_do_supabase.py` i `backfill_users_from_neon.py` są odtąd bezprzedmiotowe.
+7. **Rotacja hasła Neona** — wymaga konsoli Neona, **nie da się z CLI** (brak `NEON_API_KEY`). Pilność niska: wersja 1 sekretu `DATABASE_URL` wyłączona, żadna rewizja Cloud Run go nie wystawia, poświadczenie zostało tylko w lokalnym `.env`. Skoro Neon jest zbędny — najprościej usunąć `DATABASE_URL_NEON` z `.env` zamiast rotować.
 
 ### ⚠️ Model NIE bije rynku w 1X2 — zmierzone ponownie 14.08
 Walk-forward, n=3578, trzy niezależne grupy lig, model PO poprawkach z 13.08:
@@ -204,7 +204,7 @@ Walk-forward, n=3578, trzy niezależne grupy lig, model PO poprawkach z 13.08:
 | **Over/Under 2.5** | 🟡 **jedyna nadzieja** | ROI przy 30/70: A **+9.2%** (106 zakł.), B −3.8%, C −15.5%, **razem −0.2%** (na zero PO podatku). Przy niezgodzie na ligach czołowych model **wygrywa 52.1% do 47.9%** |
 
 **Wnioski do decyzji:**
-1. **BTTS — rozważyć wyłączenie z selekcji.** Nie „brak przewagi", tylko ujemna wartość: stała predykcja jest lepsza. Kursów BTTS nie ma w datasecie, więc to porównanie z częstością bazową, nie z rynkiem.
+1. **BTTS — ZOSTAJE (decyzja usera 14.08), ale pod obserwacją.** Uśredniony wynik jest gorszy od stałej predykcji, natomiast hipoteza usera brzmi: *model działa na SPECYFICZNYCH meczach/drużynach, a średnia to zaciera*. To jest testowalne — sprawdzić BTTS w podziale na ligę, pasmo pewności i profil drużyn (np. obie strzelające dużo vs mecze niskopunktowe). Jeśli podzbiór z realną przewagą się znajdzie, selekcja powinna dotyczyć wyłącznie jego; jeśli nie — wtedy wyłączyć.
 2. **O/U zasługuje na dalszą pracę** — to jedyny rynek, gdzie model dotyka rentowności. Warto sprawdzić, czy przewaga na ligach czołowych utrzyma się na większej próbie (dziś 106 zakładów).
 3. **`model_log` śledzi wyłącznie argmax 1X2** — rynków golowych nie da się dziś zweryfikować live bez rozszerzenia dziennika.
 
