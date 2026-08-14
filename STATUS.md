@@ -1,9 +1,11 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-07-27
+**Last Updated:** 2026-08-14
 **Current Version:** v3.4-stable
 **System State:** FUNCTIONAL — PRODUCTION (pipeline PC-off na Cloud Run Jobs, DB = Supabase, dziennik kuponów J1-J6 live)
-**Suite:** 1656 testów zebranych (unit-mode; 23 integracyjne wymagają żywej DB — patrz dług testowy w TODO)
+**Suite:** **4375 testów** (11 skipped), ruff + bandit czyste
+**Nowe (08-14):** rozliczenia przestały gubić predykcje (okno bez nadrabiania → 95 sierot; migracja 12 + limit prób) · rozjazd wag ensemble zlikwidowany (joby = API = 0.70) · `CRON_SECRET` → `secretKeyRef` + rotacja · wyłączona wersja 1 sekretu `DATABASE_URL` (zawierała hasło Neona)
+**Nowe (08-13):** siła drużyny liczona też ze strzałów celnych (Brier 0.6454→0.6064) · raport uczenia czyta `model_log` · lekcje także z trafień
 **Nowe (07-27):** auth hardening po incydencie logowania (malformed hash → 401 nie 500, MCP tylko poza prod, CD re-asercje sekretów, LoginView rozróżnia błąd serwera od złych danych) + skrypt backfillu users Neon→Supabase
 **Nowe (07-21/22):** dziennik kuponów J1-J6 (statystyki usera, krzywa postępu, ręczny wpis, leaderboard v2, predykcja jako sygnał) + match-linking + auto-settle manual
 
@@ -14,14 +16,16 @@
 | Metric | Status | Value |
 |--------|--------|-------|
 | **Accuracy (model offline)** | ✅ | Walk-forward 10 lig: DC **51.3%** > baseline 49.6% (NED 54.9%), kalibracja monotoniczna |
-| **Accuracy (live)** | 🔴 | **Data-starved:** Supabase = 15 pred / 6 settled od migracji 20.07. Historia (171/104, live 37.5%) uwięziona w zablokowanym Neonie do **1.08**. Na n=6 nic nie da się walidować |
-| **Model faktycznie grający live** | 🔴 | **`bzzoiro-ml`, NIE nasz Poisson-DC** — obraz `footstats-jobs` z 20.07 17:56 < commit parquetu `0cb82150f` z 22.07 → `load_cached()`=None → fallback. Fix = rebuild+redeploy jobs (**P0/A**) |
-| **RAG factors** | 🔴 | `factors='[]'` na 15/15 predykcji — `pred` sub-dict pusty w quick_picks → `wyciagnij_faktory` puste → RAG się nie uczy (**P3/C**, data-independent) |
+| **Accuracy (live)** | 🟡 | 231 predykcji / 133 rozliczonych. Backfill z Neona **zrobiony**. Główne źródło to `model_log` (oceny PRZED filtrami): poisson-dc **65.2%** (15/23), bzzoiro-ml 50.0% (41/82) — próba wciąż mała |
+| **Model faktycznie grający live** | ✅ | **`poisson-dc`** — parquet w obrazach jobów i API (08-13), a `QUICK_PICKS_USE_POISSON_CACHE` przestawione 0→1 na API (14.08). Przy `=0` draft z definicji chodził na `bzzoiro-ml`, stąd 218 vs 10 w historii |
+| **Czy model bije rynek (1X2)** | 🔴 | **NIE.** WF 14.08, n=3578, 3 grupy: przy niezgodzie model↔rynek (510 meczów) rynek trafia **42.9%**, model **29.8%**. ROI ujemne przy KAŻDEJ wadze. Poprawki z 13.08 tego nie zmieniły |
+| **RAG factors** | 🟡 | `factors='[]'` to **NIE bug** (werdykt 13.08) — odtworzenie łańcucha offline na tych samych 18 meczach daje 0/18 tak samo jak live. TWIERDZA wymaga serii ≥5, grane drużyny miały 0-3. Na próbce 300 meczów tagi zapalają się w 31.7%. Wąskie gardło = liczba predykcji |
+| **Rozliczenia** | ✅ | Okno gubiło predykcje **bezpowrotnie** (95 sierot, mecze od 7 maja; 13 do odzyskania, 82 stracone). Naprawione 14.08: zaległości wracają paczkami po 15, limit 5 prób, migracja 12 `settle_attempts`. Joby migrują teraz same |
 | **Model fixes** | ✅ | Cel B root-cause USUNIĘTY (bug 1 conf + bug kalibracji per-wynik 1X2, `11cc57232`) + D3 część 1+2 (prob modelu w `predictions` + guard `koryguj_tip_wg_modelu`, `4823ac9c0`) + Dixon-Coles w prod (flaga ON) + Faza 17 + A1-A3 + λ |
 | **Kalibracja** | 🟡 | Gate `CALIBRATION_ENABLED` OFF (identity) — zdegenerowana krzywa psuła Kelly/value-bet. Auto-refit co +30 settled wpięty (D2), czeka na próg ~88 settled |
 | **Kursy (odds)** | ✅ | Fallback chain Bzzoiro → API-Football `/odds` (live OK, zero anti-bot) → Sofascore (403, niski priorytet) |
 | **Data collection** | ✅ | System paper-trading (single-leg, bez Groq) od 06-16 + **cloud-draft PC-niezależny** (`/cron/draft` + Cloud Scheduler `footstats-draft-morning` 07:30 CEST, requests-only, dry_run=false live) — draft już nie zależy od PC |
-| **Ensemble waga** | ✅ | **reweight ku rynkowi LIVE 06-26** — `ENSEMBLE_MARKET_WEIGHT=0.70` (=30/70 model/rynek, rev 00274). WF A/B +1.0-1.4pp. Model przy suficie, rynek ~53% nieprzekraczalny |
+| **Ensemble waga** | ✅ | `ENSEMBLE_MARKET_WEIGHT=0.70` (30/70 model/rynek) na API **oraz jobach** — rozjazd zlikwidowany 14.08. Do tego dnia joby chodziły na 70/30, więc ten sam mecz dawał inną predykcję zależnie od ścieżki. Przeliczony WF n=3578 potwierdził przewagę rynku |
 | **quick_picks Poisson** | ✅ | **fix schema mismatch 06-26** — `load_cached()` (eng) walidowany jako pl → Poisson cicho pomijany → Bzzoiro-ML. Adapter `adapt_to_prod_schema`, default ON (`QUICK_PICKS_USE_POISSON_CACHE`). Realna poprawa na restart lig klubowych (sierpień) |
 | **Email transakcyjny** | ✅ | Resend (`utils/mailer.py`) wpięty — welcome po `/auth/register` (live OK, dostarczony). Limit Free 100/dzień, 3000/mc. FROM=test-sender, podmień przed prod |
 | **Rynki bukmacherskie** | ✅ | + "Mecz & gol w każdej połowie" (GG2H, Poisson half-model) + HT capture z API-Football (`67f5f418b`) |
