@@ -206,6 +206,29 @@ _TYP_DO_ODDS_KEY = {
 _TYPY_BTTS_NIE = {"btts no", "no btts", "btts nie", "nie btts", "ng"}
 
 
+def wykryj_anomalie_runu(n_kandydatow: int, n_po_filtrach: int, n_kuponow_system: int,
+                         ma_typy: bool, system_paper: bool = False) -> str | None:
+    """Opis cichej awarii albo None, gdy przebieg wyglada zdrowo.
+
+    Detektor pilnowal dotad WEJSCIA (czy zrodlo cos dalo) i bocznej sciezki kuponow
+    System — nie pilnowal GLOWNEGO produktu, czyli typow. 15.08 przebieg mial
+    42 kandydatow i 7 po filtrach, ale JSON od Groqa nie sparsowal sie i nie powstal
+    ANI JEDEN typ. Alert milczal, bo zaden z warunkow tego nie obejmowal, a job
+    skonczyl sie exit=0 i wyslal Telegram — wygladalo jak dzien bez okazji.
+
+    `n_po_filtrach == 0` to NIE awaria: filtry maja prawo wyciac komplet.
+    Awaria to material po filtrach, z ktorego mimo wszystko nie powstal zaden typ.
+    """
+    if n_kandydatow == 0:
+        return "0 kandydatów z Bzzoiro (źródło puste/niedostępne?)"
+    if n_po_filtrach > 0 and not ma_typy:
+        return (f"0 typów mimo {n_po_filtrach} meczów po filtrach"
+                f" (odpowiedź modelu nie sparsowana? pusty top3?) — ZERO predykcji zapisanych")
+    if system_paper and n_kuponow_system == 0:
+        return "0 kuponów System mimo --system-paper (kursy? filtry? pauza?)"
+    return None
+
+
 # FAZA 17.2: twardy filtr longshotów
 _MAX_KURS_LONGSHOT = 4.0      # kurs > 4.0 ⇒ implied prob < 25% = longshot
 _MIN_PROB_MODELU = 40.0       # p_modelu < 40% ⇒ odrzuć (model nie wspiera typu)
@@ -974,11 +997,11 @@ def main():
     log.info("RUN SUMMARY — %s", podsumowanie)
     console.print(f"[dim]{podsumowanie}[/dim]")
     if not args.dry_run:
-        anomalia = None
-        if n_raw_kandydatow == 0:
-            anomalia = "0 kandydatów z Bzzoiro (źródło puste/niedostępne?)"
-        elif getattr(args, "system_paper", False) and n_system_coupons == 0:
-            anomalia = "0 kuponów System mimo --system-paper (kursy? filtry? pauza?)"
+        anomalia = wykryj_anomalie_runu(
+            n_raw_kandydatow, len(wyniki), n_system_coupons,
+            ma_typy=bool((dane or {}).get("top3")),
+            system_paper=getattr(args, "system_paper", False),
+        )
         if anomalia:
             log.warning("ALERT cicha awaria: %s | %s", anomalia, podsumowanie)
             try:
