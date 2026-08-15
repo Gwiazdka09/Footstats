@@ -7,8 +7,10 @@ wzorem `superbet`/`cli`/`analyzer`). Behavior-preserving — `daily_agent`
 re-importuje te symbole, więc istniejące ścieżki i patch-targety działają.
 """
 
+import logging
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -17,6 +19,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
+log = logging.getLogger(__name__)
 
 LOGS_DIR = Path(__file__).parent.parent.parent / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
@@ -24,11 +27,38 @@ LOGS_DIR.mkdir(exist_ok=True)
 
 # ── Separatory / błędy ────────────────────────────────────────────────────────
 
+# Stan biezacego kroku — pozwala zalogowac czas trwania POPRZEDNIEGO przy starcie
+# nastepnego. Bez tego z logow nie widac, ktory etap trwa dlugo albo wisi.
+_krok: dict = {"nazwa": None, "start": None}
+
+
 def _sep(tytul: str):
+    """Separator kroku na konsoli + STRUKTURALNY log startu i czasu poprzedniego.
+
+    Konsola idzie do `textPayload` i gubi sie w zawijaniu wierszy; joby logujemy
+    w JSON, wiec kroki musza trafic do `jsonPayload` — inaczej nie da sie zapytac
+    o przebieg inaczej niz czytaniem calego strumienia oczami.
+    """
     console.rule(f"[bold cyan]{tytul}[/bold cyan]")
+    zamknij_krok()
+    log.info("KROK START | %s", tytul)
+    _krok.update(nazwa=tytul, start=time.monotonic())
+
+
+def zamknij_krok() -> None:
+    """Domyka biezacy krok w logach (czas trwania). Bezpieczne przy braku kroku."""
+    if not _krok.get("nazwa"):
+        return
+    trwal = time.monotonic() - (_krok.get("start") or time.monotonic())
+    log.info("KROK KONIEC | %s | %.1fs", _krok["nazwa"], trwal)
+    _krok.update(nazwa=None, start=None)
 
 
 def _blad(msg: str):
+    # Wczesniej fatalny blad szedl WYLACZNIE na konsole i proces konczyl sie
+    # exit(1) bez ani jednego wpisu ERROR w logach — awaria bez sladu tam,
+    # gdzie sie jej szuka.
+    log.error("PRZERWANIE: %s", msg)
     console.print(f"[bold red]BŁĄD:[/bold red] {msg}")
     sys.exit(1)
 

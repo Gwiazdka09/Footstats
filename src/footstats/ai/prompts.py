@@ -5,6 +5,30 @@ All builder functions return formatted strings ready to send to LLM.
 """
 from __future__ import annotations
 
+import re
+
+# Emoji i znaki ozdobne kosztuja 2-4 TOKENY przy jednym-dwoch znakach (zmierzone
+# tokenizerem: "⚔️" = 4 tokeny, "🏅" = 3, "⚠️" = 4), a nie niosa nic ponad sasiadujace
+# slowo. W opisach czynnikow siedza, bo te same napisy ida do konsoli i Telegrama —
+# tam maja sens. Do modelu wysylamy wersje bez nich: na jednej linii czynnikow
+# to ~18% tokenow, przy 5 meczach rzedu 50-150 tokenow za sama dekoracje.
+# Swiadomie NIE ruszamy bloku strzalek U+2190-U+21FF: "→" kosztuje 1 token,
+# a rozdziela tresc ("λg=1.8 → gospodarz dominuje"). Ciecie na oslep zabiera sens.
+_EMOJI = re.compile(
+    "[\U0001F000-\U0001FAFF"      # piktogramy: 🏅 😫 🔄 👑 🆘 🏰
+    "☀-➿"               # symbole i dingbaty: ⚔ ⚠ ✈ ✅ ❌ ★
+    "⬀-⯿"               # dodatkowe strzalki/ksztalty ozdobne
+    "️‍]"               # selektor wariantu + ZWJ (same w sobie tokeny)
+)
+
+
+def bez_emoji(tekst: str) -> str:
+    """Usuwa emoji/ikony z tekstu idacego do modelu. Zostawia polskie znaki i strzalki."""
+    if not tekst:
+        return tekst
+    return re.sub(r"[ \t]{2,}", " ", _EMOJI.sub("", tekst))
+
+
 # ── System prompt for the betting analyst role ─────────────────────────────
 
 SYSTEM_TYPER = """Jesteś BEZWZGLĘDNYM ANALITYKIEM DANYCH BUKMACHERSKICH. Nie bądź miły — bądź precyzyjny.
@@ -176,67 +200,51 @@ def build_pewniaczki_prompt(
     mecze_opisy_text: str,
     cel_kuponow_text: str,
 ) -> str:
-    return f"""ROLA: Jesteś zawodowym, ultra-sceptycznym analitykiem bukmacherskim. Twój cel NIE jest znaleźć zwycięzcę — jest znaleźć powody, dla których typ PRZEGRA.
+    # UWAGA PRZY EDYCJI: kazdy token tutaj zabiera miejsce OPISOM MECZOW, ktore
+    # niosa informacje. Szkielet mial 2077 tokenow z 4300 budzetu (48%), wiec
+    # prompt byl przycinany na slepo w KAZDYM przebiegu. Struktura kuponu byla
+    # powielona 4x, a regula "wysoka pewnosc + wysoki kurs" powtorzona 3x.
+    # `tests/test_prompt_budzet.py` pilnuje i rozmiaru, i kompletu zakazow.
+    return f"""ROLE: ultra-skeptical betting analyst. You look NOT for a winner, but for reasons a pick will LOSE.
 
-MASZ DO DYSPOZYCJI: {n_mecze} meczów piłkarskich z predykcjami na najbliższe 72h.
-Mecze [metoda:POISSON] mają pełną analizę czynnikową. Mecze [metoda:ML] to samo Bzzoiro bez historii.
+DATA: {n_mecze} matches within 72h. [metoda:POISSON] = full factor analysis; [metoda:ML] = Bzzoiro only, no history.
 
-KONTEKST ZBIORU:
-{sygnaly}
-{kalibracja_str[:600]}{feedback_str[:400]}
-PODATEK: 12% zryczałtowany. Wzór netto: stawka × kurs_łączny × 0.88
-EV(brutto) w danych jest PRZED podatkiem — po podatku realny zysk jest o ~12% niższy.
+CONTEXT:
+{bez_emoji(sygnaly)}
+{bez_emoji(kalibracja_str)[:600]}{bez_emoji(feedback_str)[:400]}
+TAX 12%: net = stake * total_odds * 0.88. EV in the data is BEFORE tax.
 
-== SKALOWANIE PEWNOŚCI (CHŁODNA KALKULACJA, NIE OPTYMIZM) ==
-75-100%: TYLKO dla absolutnych "pewniaków" — seria zwycięstw, brak kontuzji, historyczna dominacja. MUSI być miażdżący dowód.
-50-74%: Mecz o wyrównanych szansach, normalny zakład.
-<50%: Wysokie ryzyko, brak stabilności — UNIKAJ.
+CONFIDENCE (cold calculation, not optimism):
+- 75-100%: only with overwhelming evidence (win streak, no injuries, H2H dominance). 50-74%: normal bet. <50%: avoid.
+- Confidence >=75% with odds >2.00 is a contradiction -> cut it hard unless the data is overwhelming.
+- Cannot list 3 arguments AGAINST -> lower confidence by 15-25 points.
 
-REGUŁA KURSU: Jeśli sugerowana pewność jest wysoka (>=75%) A kurs >2.00, SUROWO obniż ocenę — chyba że masz miażdżące dowody statystyczne.
+RISK: every pick MUST carry a "ryzyko" field with the 3 strongest arguments AGAINST it. Missing = under-analysis.
 
-== OBOWIĄZKOWA SEKCJA RYZYKA ==
-Każda analiza MUSI zawierać pole "ryzyko" z 3 najsilniejszymi argumentami PRZECIWKO danemu typowi.
+BETTING SLIPS:
+{bez_emoji(cel_kuponow_text)}
 
-== FILOZOFIA KUPONÓW ==
-{cel_kuponow_text}
+MATCHES:
+{bez_emoji(mecze_opisy_text)}
 
-MECZE:
-{mecze_opisy_text}
-
-ZADANIE: Odpowiedz TYLKO w JSON (bez tekstu przed/po):
+TASK: reply with JSON ONLY (no text before/after). Keep the keys exactly as shown.
 {{
   "top3": [{{"mecz": "X vs Y", "typ": "1", "kurs": 1.48, "pewnosc_pct": 72, "ev_netto": 6.8, "uzasadnienie": "1 zdanie", "ryzyko": ["r1","r2","r3"]}}],
   "kupon_a": {{
     "zdarzenia": [{{"nr": 1, "mecz": "A vs B", "typ": "1", "kurs": 1.55, "pewnosc_pct": 70, "ryzyko": ["r1","r2","r3"]}}],
     "kurs_laczny": 1.55, "szansa_wygranej_pct": 70.0, "wygrana_netto": 4.84, "ryzyko_ogolne": "..."
   }},
-  "kupon_b": {{
-    "zdarzenia": [{{"nr": 1, "mecz": "C vs D", "typ": "2", "kurs": 2.10, "pewnosc_pct": 62, "ryzyko": ["r1","r2","r3"]}}],
-    "kurs_laczny": 2.10, "szansa_wygranej_pct": 62.0, "wygrana_netto": 9.68, "ryzyko_ogolne": "..."
-  }},
-  "kupon_c": {{
-    "zdarzenia": [{{"nr": 1, "mecz": "E vs F", "typ": "Over", "kurs": 1.75, "pewnosc_pct": 65, "ryzyko": ["r1","r2","r3"]}}],
-    "kurs_laczny": 1.75, "szansa_wygranej_pct": 65.0, "wygrana_netto": 6.16, "ryzyko_ogolne": "..."
-  }},
-  "kupon_d": {{
-    "zdarzenia": [{{"nr": 1, "mecz": "G vs H", "typ": "BTTS", "kurs": 1.68, "pewnosc_pct": 61, "ryzyko": ["r1","r2","r3"]}}],
-    "kurs_laczny": 1.68, "szansa_wygranej_pct": 61.0, "wygrana_netto": 5.79, "ryzyko_ogolne": "..."
-  }},
+  "kupon_b": {{...}}, "kupon_c": {{...}}, "kupon_d": {{...}},
   "ostrzezenia": "2-3 zdania"
 }}
+kupon_b/c/d: same structure as kupon_a, different match and market - b: 1X2, c: Over/Under, d: BTTS. Fill all four.
+LANGUAGE: JSON keys and "typ" values stay exactly as above (ASCII). All free text - "uzasadnienie", "ryzyko", "ryzyko_ogolne", "ostrzezenia" - write in POLISH.
 
-ZAKAZY BEZWZGLEDNE:
-- Każdy kupon = DOKŁADNIE 1 zdarzenie (single). Zakaz AKO.
-- 4 różne mecze — każdy kupon inny mecz.
-- Kurs zdarzenia < 1.20: NIGDY.
-- Grupy spadkowe/relegacyjne + Over 2.5: ZABRONIONE.
-- BetBuilder (Over+BTTS z jednego meczu): ZABRONIONE.
-- Każda noga musi mieć pewnosc_pct >= 60%.
-
-REGUŁY SCEPTYCYZMU:
-- WYSOKA PEWNOŚĆ (75-100%) + WYSOKI KURS (>2.00) = DRASTYCZNE OBNIŻENIE. To jest kombinacja ryzyka.
-- Jeśli nie możesz wymienić 3 mocnych argumentów PRZECIWKO, obniż pewność o 15-25 punktów.
-- Każdy typ musi mieć pole "ryzyko" z 3 argumentami. Brak ryzyko = niedoanaliza."""
+ABSOLUTE BANS:
+- One slip = EXACTLY 1 leg (single). No accumulators (AKO). 4 slips = 4 different matches.
+- Leg odds < 1.20: NEVER. Every leg: pewnosc_pct >= 60%.
+- Relegation groups + Over 2.5: FORBIDDEN.
+- BetBuilder (Over+BTTS from one match): FORBIDDEN."""
 
 
 def build_kupon_prompt(stawka: float, picks_text: str, ml_kontekst: str) -> str:

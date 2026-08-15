@@ -32,6 +32,7 @@ from footstats.daily_agent_output import (  # noqa: F401  re-export (ścieżki +
     _wyswietl,
     _zapisz_txt,
     console,
+    zamknij_krok,
 )
 
 log = logging.getLogger(__name__)
@@ -991,6 +992,7 @@ def main():
     # Obserwowalność (06-21): podsumowanie runu do logu + ALERT gdy "cicha awaria"
     # (run się wykonał ale nic nie zrobił — np. pauza, 0 kandydatów, 0 kuponów).
     # Bez tego pauza stop-loss blokowała pipeline 5 dni niezauważona (exit 0, brak logów).
+    zamknij_krok()          # ostatni KROK bez tego nie zameldowalby czasu trwania
     faza_label = args.faza or "(no-faza)"
     podsumowanie = (f"daily_agent {faza_label}: kandydaci={n_raw_kandydatow}, "
                     f"po filtrach={len(wyniki)}, System kupony={n_system_coupons}")
