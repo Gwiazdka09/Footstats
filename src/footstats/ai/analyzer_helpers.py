@@ -380,19 +380,81 @@ def _analizuj_forme(mecze: list) -> dict:
     }
 
 
+def _pierwszy_domkniety_obiekt(tekst: str) -> str | None:
+    """Zwraca fragment od pierwszego `{` do miejsca, gdzie nawiasy się domykają.
+
+    Po co: Groq (llama-3.1-8b) potrafi dokleic NADMIAROWY nawias zamykajacy —
+    obiekt glowny domyka sie wtedy za wczesnie, a wszystko po nim to smiec.
+    Zachlanne `\\{[\\s\\S]*\\}` bierze az do OSTATNIEGO nawiasu, wiec parsowanie
+    pada i tracimy caly przebieg. Liczac glebokosc mozemy uciac dokladnie
+    w punkcie domkniecia i odzyskac to, co model zdazyl poprawnie napisac.
+
+    Swiadomie omija nawiasy wewnatrz stringow (i sekwencje ucieczki) — inaczej
+    klamra w uzasadnieniu przesuwalaby licznik i ucinala w zlym miejscu.
+    """
+    start = tekst.find("{")
+    if start < 0:
+        return None
+    glebokosc = 0
+    w_stringu = False
+    ucieczka = False
+    for i in range(start, len(tekst)):
+        znak = tekst[i]
+        if ucieczka:
+            ucieczka = False
+            continue
+        if znak == "\\":
+            ucieczka = True
+            continue
+        if znak == '"':
+            w_stringu = not w_stringu
+            continue
+        if w_stringu:
+            continue
+        if znak == "{":
+            glebokosc += 1
+        elif znak == "}":
+            glebokosc -= 1
+            if glebokosc == 0:
+                return tekst[start:i + 1]
+    return None
+
+
 def _wyciagnij_json(tekst: str) -> dict:
-    """Wyciąga JSON z odpowiedzi AI (nawet jeśli AI doda tekst dookoła)."""
-    # Szukaj bloku JSON
+    """Wyciąga JSON z odpowiedzi AI (nawet jeśli AI doda tekst dookoła).
+
+    Porazka tej funkcji kosztuje CALY dzienny przebieg: zaslepka nie ma klucza
+    `top3`, wiec `ai_analiza_pewniaczki` pomija override tipu, pewnosc z modelu,
+    bramki i zapis do `predictions` — a job i tak konczy sie exit=0. Dlatego
+    najpierw probujemy naprawy, a nieodwracalna porazke logujemy jako ERROR.
+    """
     match = re.search(r"\{[\s\S]*\}", tekst)
     if match:
         try:
             return json.loads(match.group())
         except json.JSONDecodeError:
             pass
-    # Fallback – spróbuj cały tekst
+
+    # Naprawa: utnij w miejscu, gdzie nawiasy sie domykaja (nadmiarowy nawias,
+    # doklejony komentarz, urwana koncowka). Czesc odzyskana > nic.
+    kandydat = _pierwszy_domkniety_obiekt(tekst)
+    if kandydat:
+        try:
+            dane = json.loads(kandydat)
+        except json.JSONDecodeError:
+            dane = None
+        if isinstance(dane, dict):
+            logger.warning("[AI] JSON od modelu byl uszkodzony — naprawiony przez"
+                        " domkniecie nawiasow (odzyskano %d kluczy: %s)",
+                        len(dane), ", ".join(sorted(dane)[:6]))
+            return dane
+
     try:
         return json.loads(tekst)
     except json.JSONDecodeError:
+        logger.error("[AI] Nie udalo sie sparsowac JSON z odpowiedzi modelu —"
+                  " przebieg NIE zapisze zadnych predykcji. Poczatek odpowiedzi: %s",
+                  tekst[:200].replace("\n", " "))
         return {"typ": "brak", "pewnosc": 0, "uzasadnienie": tekst[:300], "value_bet": False}
 
 
