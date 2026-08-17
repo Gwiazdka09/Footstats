@@ -106,8 +106,14 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
             <h2 className="text-2xl font-bold mb-1">Dodaj kupon ręcznie</h2>
             <p className="text-sm text-slate-400">Zapisz w dzienniku kupon obstawiony u innego bukmachera.</p>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-500 hover:text-white transition-colors">
-            <X size={20} />
+          {/* Przycisk z sama ikona nie ma czego odczytac — bez `aria-label`
+              czytnik ekranu anonsuje go jako "przycisk", i tyle. */}
+          <button
+            onClick={onClose}
+            aria-label="Zamknij formularz"
+            className="p-2 text-slate-500 hover:text-white transition-colors"
+          >
+            <X size={20} aria-hidden="true" />
           </button>
         </div>
 

@@ -113,10 +113,11 @@ const LoginView = ({ setToken, setUser }) => {
         <form onSubmit={handleSubmit} className="space-y-6">
           {(mode === 'login' || mode === 'register') && (
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+              <label htmlFor="pole-login" className="block text-xs font-bold text-slate-500 uppercase mb-2">
                 {mode === 'login' ? 'Login lub e-mail' : 'Login'}
               </label>
               <input
+                id="pole-login"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -128,8 +129,9 @@ const LoginView = ({ setToken, setUser }) => {
           )}
           {(mode === 'register' || mode === 'forgot') && (
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">E-mail</label>
+              <label htmlFor="pole-email" className="block text-xs font-bold text-slate-500 uppercase mb-2">E-mail</label>
               <input
+                id="pole-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -141,10 +143,11 @@ const LoginView = ({ setToken, setUser }) => {
           )}
           {(mode === 'login' || mode === 'register' || mode === 'reset') && (
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+              <label htmlFor="pole-haslo" className="block text-xs font-bold text-slate-500 uppercase mb-2">
                 {mode === 'reset' ? 'Nowe hasło' : 'Hasło'}
               </label>
               <input
+                id="pole-haslo"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

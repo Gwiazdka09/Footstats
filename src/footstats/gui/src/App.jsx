@@ -186,8 +186,8 @@ const App = () => {
             <div className="brand text-2xl font-bold bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">
               FootStats
             </div>
-            <button onClick={() => setMobileNavOpen(false)} className="p-2 hover:bg-white/5 rounded-lg text-slate-400">
-              <X size={24} />
+            <button onClick={() => setMobileNavOpen(false)} aria-label="Zamknij menu" className="p-2 hover:bg-white/5 rounded-lg text-slate-400">
+              <X size={24} aria-hidden="true" />
             </button>
           </div>
           <nav>
@@ -221,8 +221,8 @@ const App = () => {
           <div className="brand text-xl font-bold bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">
             FootStats
           </div>
-          <button onClick={() => setMobileNavOpen(true)}>
-            <Menu size={22} />
+          <button onClick={() => setMobileNavOpen(true)} aria-label="Otwórz menu">
+            <Menu size={22} aria-hidden="true" />
           </button>
         </div>
         <main className={`flex-1 main-content p-4 lg:p-12 ${sidebarCollapsed ? 'lg:ml-24' : 'lg:ml-72'}`}>
