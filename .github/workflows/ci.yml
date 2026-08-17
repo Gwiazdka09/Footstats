@@ -111,6 +111,37 @@ jobs:
       - name: Check imports
         run: python -c "import footstats; print('Import OK')"
 
+  # Front miał 0 testów przy 4500+ backendowych (znalezisko F3 z audytu 17.08),
+  # więc każda zmiana w 14 komponentach była weryfikowana wyłącznie okiem.
+  # Osobny job: nie blokuje testów Pythona i odwrotnie.
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/footstats/gui
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/footstats/gui/package-lock.json
+
+      # `--legacy-peer-deps`, bo tego samego przełącznika używa build na Vercelu
+      # (vercel.json) — CI ma instalować to samo drzewo zależności co produkcja.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Vitest
+        run: npm test
+
+      # Build łapie błędy, których testy jednostkowe nie widzą (import z literówką,
+      # niepoprawny JSX w komponencie bez testu).
+      - name: Build
+        run: npm run build
+
   docker-build:
     runs-on: ubuntu-latest
     needs: test

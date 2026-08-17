@@ -17,4 +17,15 @@ export default defineConfig({
       '/sw.js': 'http://localhost:8000',
     },
   },
+  test: {
+    // jsdom, bo testujemy komponenty — bez DOM `render()` nie ma gdzie rysować.
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.js'],
+    // Testy NIE mogą bić po sieci ani po produkcji — odpowiednik reguły
+    // `tests-no-prod.md` po stronie backendu. `fetch` jest zaślepiony w setupie.
+    restoreMocks: true,
+    clearMocks: true,
+    include: ['src/**/*.test.{js,jsx}'],
+  },
 })

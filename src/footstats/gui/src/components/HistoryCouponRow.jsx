@@ -105,10 +105,13 @@ const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
       {isManualActive && (
         <div className="px-6 pb-4 flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-500 uppercase tracking-widest">Oznacz wynik:</span>
-          {/* Kolory inline (nie Tailwind-klasy): index.css ma niewarstwowe
-              `button { color: inherit; background: transparent }`, ktore bije
-              warstwowe (@layer utilities) klasy Tailwind na <button> — patrz
-              StatsView.jsx/ProgressChart.jsx (ten sam wzorzec). */}
+          {/* Kolory inline to POZOSTALOSC po bugu naprawionym 17.08.2026: reset
+              `button { color: inherit }` stal poza `@layer`, wiec bil warstwowe
+              klasy Tailwinda i zadne `text-*`/`bg-*` nie dzialalo na przycisku.
+              Reset siedzi juz w `@layer base`, wiec te style mozna uproscic do
+              zwyklych klas — patrz F9 w TODO. Zostawione swiadomie: dzialaja,
+              a zmiana wymaga przejscia po wszystkich trzech miejscach naraz
+              (tu, StatsView.jsx, ProgressChart.jsx) z regresja wizualna. */}
           <button
             onClick={() => markResult('WON')}
             disabled={settling}
