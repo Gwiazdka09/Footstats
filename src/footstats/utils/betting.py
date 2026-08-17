@@ -1,4 +1,41 @@
+import logging
 import re
+
+log = logging.getLogger(__name__)
+
+# Znaczniki dogrywki i karnych. Dopasowanie po CALYCH slowach — inaczej nazwa
+# zawierajaca "pen" (np. "Openda") falszywie unieważnialaby wynik.
+_DOGRYWKA = re.compile(r"(?<![a-z])(aet|a\.e\.t\.?|et|dogrywk\w*)(?![a-z])", re.IGNORECASE)
+_KARNE = re.compile(r"(?<![a-z])(pens?|ap|karn\w*|k\.k\.)(?![a-z])", re.IGNORECASE)
+
+
+def powod_nierozliczalny(actual_result) -> str | None:
+    """Zwraca powod, dla ktorego wyniku NIE da sie uczciwie rozliczyc, albo None.
+
+    Standardowe rynki (1X2, Over/Under, BTTS) rozliczaja sie PO 90 MINUTACH, a zapis
+    w rodzaju "2-1aet" niesie wynik po dogrywce — regulaminowego w nim nie ma.
+
+    Kuszace "skoro byla dogrywka, to po 90 minutach byl remis" jest ZAWODNE:
+    w dwumeczu dogrywke wymusza remis w DWUMECZU, wiec sam mecz mogl skonczyc sie
+    1-0. Zgadywanie dawaloby ciche przeklamania w statystykach modelu — a to
+    wlasnie one sa jedynym produktem tego systemu.
+
+    UWAGA: brak wyniku ("" / None) to NIE to samo. Tam po prostu jeszcze nie wiemy;
+    tutaj wiemy i wiemy, ze sie nie da.
+    """
+    if actual_result is None:
+        return None
+    if isinstance(actual_result, (tuple, list)):
+        return None                      # krotka to czyste bramki, bez adnotacji
+    tekst = str(actual_result).strip()
+    if not tekst:
+        return None
+    if _KARNE.search(tekst):
+        return "karne"
+    if _DOGRYWKA.search(tekst):
+        return "dogrywka"
+    return None
+
 
 def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
     """
@@ -20,6 +57,18 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
 
     actual_result = str(actual_result)
     tip  = (ai_tip or "").strip().upper()
+
+    # Dogrywka/karne: wynik ISTNIEJE, ale nie da sie z niego uczciwie rozliczyc rynkow
+    # 90-minutowych. Wczesniej zachowanie zalezalo od ZAPISU zrodla: "2-1aet" dawalo
+    # None (limbo do czasu VOID po 10 dniach), a "2-1 (AET)" bylo rozliczane jako
+    # wygrana gospodarza — mimo ze po 90 minutach mogl byc remis. Ten sam mecz,
+    # dwa rozne werdykty. Teraz oba traktowane tak samo i GLOSNO.
+    powod = powod_nierozliczalny(actual_result)
+    if powod:
+        log.warning("Wynik '%s' (%s) nie pozwala rozliczyc typu '%s' — "
+                    "rynki 90-minutowe wymagaja wyniku regulaminowego",
+                    actual_result, powod, ai_tip)
+        return None
 
     # BetBuilder combo: "BB: 1 + Over 1.5" = KONIUNKCJA członów (wszystkie muszą trafić).
     # Bez tego oceniany byl tylko pierwszy pasujacy czlon -> przegrane combo jako WON.

@@ -108,8 +108,11 @@ def test_list_result():
 
 
 def test_result_with_aet():
-    # "2-1 (AET)" — extra time annotation should be stripped
-    assert oblicz_tip_correct("1", "2-1 (AET)") == 1
+    # ZMIANA INTENCJI 17.08: adnotacja o dogrywce NIE jest już obcinana.
+    # Rynki 90-minutowe rozliczają się po regulaminowym czasie, a ten zapis
+    # niesie wynik PO dogrywce — rozliczanie z niego było zgadywaniem.
+    # Kupon z takim wynikiem dostaje teraz VOID z podanym powodem.
+    assert oblicz_tip_correct("1", "2-1 (AET)") is None
 
 
 def test_lowercase_result():

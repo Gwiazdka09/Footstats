@@ -88,8 +88,17 @@ class TestObliczTipCorrect:
     def test_list_result(self):
         assert oblicz_tip_correct("2", [0, 1]) == 1
 
-    def test_aet_suffix_stripped(self):
-        assert oblicz_tip_correct("1", "2-1 (AET)") == 1
+    def test_aet_nie_jest_rozliczany(self):
+        """ZMIANA INTENCJI 17.08. Wczesniej sufiks (AET) byl OBCINANY i typ
+        rozliczany po dogrywce — ale rynki 90-minutowe tak sie nie rozliczaja,
+        a wyniku regulaminowego w tym zapisie NIE MA.
+
+        Stare zachowanie bylo tez niespojne: "2-1 (AET)" rozliczalo sie jako
+        wygrana gospodarza, a "2-1aet" (bez nawiasu) zwracalo None. Ten sam mecz,
+        dwa werdykty, zaleznie od zapisu zrodla. Szczegoly i uzasadnienie:
+        `tests/test_wynik_dogrywka.py`.
+        """
+        assert oblicz_tip_correct("1", "2-1 (AET)") is None
 
     def test_unknown_tip_returns_none(self):
         assert oblicz_tip_correct("UNKNOWN", "2-1") is None

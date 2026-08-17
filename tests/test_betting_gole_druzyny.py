@@ -108,8 +108,14 @@ def test_wynik_1x2_bez_bramek_nie_rozlicza():
     assert oblicz_tip_correct("Gospodarz strzeli 0.5+", "1") is None
 
 
-def test_wynik_z_dogrywka_parsowany():
-    assert oblicz_tip_correct("Gospodarz strzeli 0.5+", "2-1 (AET)") == 1
+def test_wynik_z_dogrywka_NIE_jest_rozliczany():
+    """ZMIANA INTENCJI 17.08 — rynek goli drużyny też rozlicza się po 90 minutach.
+
+    Gol strzelony w dogrywce nie liczy się do zakładu, a zapis `2-1 (AET)` nie
+    mówi, ile padło w regulaminowym czasie. Wcześniej sufiks był obcinany i typ
+    rozliczany z sumy po dogrywce.
+    """
+    assert oblicz_tip_correct("Gospodarz strzeli 0.5+", "2-1 (AET)") is None
 
 
 def test_sufiks_polowy_nie_przeszkadza():

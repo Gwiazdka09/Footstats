@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 log = logging.getLogger(__name__)
 
 from footstats.core import match_linker
-from footstats.utils.betting import oblicz_tip_correct
+from footstats.utils.betting import oblicz_tip_correct, powod_nierozliczalny
 from footstats.utils.normalize import normalize_team_name, team_similarity
 
 # Kupony ACTIVE bez wyniku po tylu dniach (legi z nieobsługiwanych lig/friendly)
@@ -343,6 +343,31 @@ def settle_active_coupons(
 
         # Nierozliczalne: brak nóg lub brakujące wyniki (i nic dotąd nie przegrane)
         if (not leg_results or None in leg_results) and not any_leg_lost:
+            # Dogrywka/karne: wynik JEST, ale rynków 90-minutowych nie da się z niego
+            # rozliczyć (patrz `powod_nierozliczalny`). Czekanie `VOID_AFTER_DAYS`
+            # niczego nie zmieni — źródło nie dośle wyniku regulaminowego. Anulujemy
+            # od razu i Z PODANYM POWODEM, zamiast dziesięciu dni ciszy zakończonych
+            # anulowaniem, którego potem nikt nie umie wytłumaczyć.
+            blokady = [
+                (lg.get("mecz") or f"{lg.get('home','?')} vs {lg.get('away','?')}", powod)
+                for lg in updated_legs
+                if (powod := powod_nierozliczalny(lg.get("result")))
+            ]
+            if blokady:
+                opis = "; ".join(f"{mecz} ({powod})" for mecz, powod in blokady)
+                if not dry_run:
+                    with _connect() as conn:
+                        conn.execute(
+                            "UPDATE coupons SET status='VOID', legs_json=? WHERE id=?",
+                            (json.dumps(updated_legs, ensure_ascii=False), coupon_id),
+                        )
+                stats["voided"] += 1
+                log.warning("Kupon #%s → VOID: wyniku nie da sie rozliczyc — %s",
+                            coupon_id, opis)
+                if verbose:
+                    print(f"  [VOID] Kupon #{coupon_id} — {opis}\n")
+                continue
+
             if too_old:
                 # >= VOID_AFTER_DAYS i wciąż nierozliczalne (mecz dawno rozegrany,
                 # brak wyniku w żadnym źródle) → VOID. Nie wisi ACTIVE w nieskończoność.

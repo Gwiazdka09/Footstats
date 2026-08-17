@@ -168,3 +168,60 @@ def test_mieszany_zestaw_manual_zostaje_reszta_rozliczona(tmp_db):
     settlement.settle_active_coupons(dry_run=False, verbose=False)
     assert _status_of(tmp_db, manual_id) == "ACTIVE"
     assert _status_of(tmp_db, normal_id) == "WON"
+
+
+# ── dogrywka/karne: VOID od razu, nie po 10 dniach ─────────────────────────
+
+def test_dogrywka_anuluje_kupon_OD_RAZU(tmp_db, monkeypatch):
+    """Wynik po dogrywce nie doczeka się wersji regulaminowej — czekanie nic nie da.
+
+    Wcześniej taki kupon wisiał ACTIVE przez `VOID_AFTER_DAYS` i dopiero wtedy
+    wpadał w siatkę, bez podanej przyczyny.
+    """
+    monkeypatch.setattr(settlement, "_find_leg_result", lambda *a, **k: "2-1aet")
+    cid = _insert_coupon(tmp_db, kupon_type="accumulator", match_date=_YESTERDAY)
+
+    settlement.settle_active_coupons(dry_run=False, verbose=False)
+
+    assert _status_of(tmp_db, cid) == "VOID"
+
+
+def test_karne_tez_anuluja(tmp_db, monkeypatch):
+    monkeypatch.setattr(settlement, "_find_leg_result", lambda *a, **k: "1-1 (4-3 pen)")
+    cid = _insert_coupon(tmp_db, kupon_type="accumulator")
+
+    settlement.settle_active_coupons(dry_run=False, verbose=False)
+
+    assert _status_of(tmp_db, cid) == "VOID"
+
+
+def test_powod_anulowania_trafia_do_logow(tmp_db, monkeypatch, caplog):
+    """Anulowanie bez wyjaśnienia to dokładnie ten problem, który naprawiamy."""
+    import logging
+    monkeypatch.setattr(settlement, "_find_leg_result", lambda *a, **k: "2-1aet")
+    _insert_coupon(tmp_db, kupon_type="accumulator")
+
+    with caplog.at_level(logging.WARNING, logger="footstats.core.coupon_settlement"):
+        settlement.settle_active_coupons(dry_run=False, verbose=False)
+
+    assert "dogrywka" in caplog.text
+    assert "Legia" in caplog.text
+
+
+def test_dry_run_nie_zmienia_statusu(tmp_db, monkeypatch):
+    """Tryb na sucho musi zostać suchy także na nowej ścieżce."""
+    monkeypatch.setattr(settlement, "_find_leg_result", lambda *a, **k: "2-1aet")
+    cid = _insert_coupon(tmp_db, kupon_type="accumulator")
+
+    settlement.settle_active_coupons(dry_run=True, verbose=False)
+
+    assert _status_of(tmp_db, cid) == "ACTIVE"
+
+
+def test_zwykly_wynik_dalej_rozlicza_sie_normalnie(tmp_db):
+    """Kontrola — bez tego testy wyżej mogłyby przechodzić na zepsutym rozliczaniu."""
+    cid = _insert_coupon(tmp_db, kupon_type="accumulator", tip="1")
+
+    settlement.settle_active_coupons(dry_run=False, verbose=False)
+
+    assert _status_of(tmp_db, cid) == "WON"
