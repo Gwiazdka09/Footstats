@@ -161,6 +161,52 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
+## 🔍 AUDYT 2026-08-17 — 23 znaleziska (0 krytycznych)
+
+> Pełny raport z dowodami: artefakt „Audyt FootStats". Poniżej lista do odhaczania.
+> Zakres: 172 pliki .py (37 636 linii), 3381 linii JSX, 4463 testy / **80% pokrycia**, prod DB + GCP.
+
+### 🔴 Wysokie
+- [ ] **D1 — dogrywka/karne zawieszają kupon NA ZAWSZE.** `oblicz_tip_correct("1X","2-1aet")` → `None`, więc noga nigdy się nie rozlicza, a kupon all-or-nothing stoi ACTIVE. Dowód: kupon **#81 z 10.08 wciąż ACTIVE** (1 noga `2-1aet`, 2 bez wyniku); 3 kupony z meczami starszymi niż 14.08 otwarte. Fix: obciąć sufiksy `aet`/`pen`/`ap` + **logować nierozpoznany format zamiast cicho zwracać None**.
+- [ ] **F1 — reset CSS zabija kolory WSZYSTKICH przycisków.** `gui/src/index.css:28` `button{...}` poza `@layer base` → w Tailwind v4 bije utility. Obejście inline `style var()` w dzienniku leczy objaw. Fix = wciągnąć do `@layer base` + regresja wizualna.
+- [ ] **F2 — zero dostępności.** 0× `aria-label`, 0× `alt`, 0× `role` w 3381 liniach JSX. (Plus: 0× `onClick` na `div`/`span` — klikalne są `<button>`, więc baza jest dobra.)
+- [ ] **F3 — zero testów frontendu.** Backend 4463, front 0 (brak vitest/jest, brak `*.test.jsx`) przy 14 komponentach.
+- [ ] **M1 — selekcja gra najwięcej tam, gdzie traci najwięcej.** 62% kuponów 15.08 to BTTS; papier: **47,6% traf, ROI −28,2%** na 42 kuponach. Hipoteza: filtr kursu 1,20–4,00 strukturalnie faworyzuje BTTS (kursy 1,5–1,8 zawsze przechodzą, faworyci 1X2 wypadają dołem). Sprawdzić rozkład typów PO filtrze per rynek → ewentualnie próg kursu per rynek.
+
+### 🟡 Średnie
+- [ ] **B1 — tokenów nie da się unieważnić.** Brak `jti`/blacklisty/`token_version`; **zmiana hasła NIE wylogowuje sesji**, token żyje 24h. Fix: `token_version` w users + w tokenie.
+- [ ] **B2 — limity zapytań mogą liczyć zły adres.** `get_remote_address` = `request.client.host`, za Cloud Run to load balancer, nie klient. **Podejrzenie, nie fakt** — potwierdzić testem z dwóch sieci. Fix: `key_func` czytający `X-Forwarded-For`.
+- [ ] **B3 — python-jose → PyJWT**, żeby zdjąć `--ignore-vuln PYSEC-2026-1325` (ecdsa) z pip-audit.
+- [ ] **B4 — zależności bez wersji.** 50 pozycji, **0 przypiętych**, brak lockfile → build niereprodukowalny. Fix: `pip-compile` + lock z hashami.
+- [ ] **D2 — `/cron/settle-manual` NIE jest w Schedulerze** (7 zadań, żadne go nie woła) → kupony `manual` z dziennika nie rozliczają się. Dotyczy m.in. #149.
+- [ ] **D3 — 231 predykcji z `odds_verified=0`** (kurs od Groqa) → ROI/CLV z historii nic nie znaczą. Decyzja: backfill kursów czy trwałe wykluczenie z raportów.
+- [ ] **I1 — wdrożenie jobów to ręczna pułapka.** Przy każdym buildzie 2 najnowsze digesty są BEZ TAGU (atestacja BuildKita); przypięcie takiego zatrzymało pipeline 30.07–02.08. API ma CD, joby nie. Fix: joby w `cd.yml`.
+- [ ] **I2 — licznik tokenów myli się 2×.** Heurystyka 1,4 znaku/token vs realne 2,86 (1338 vs **655** tokenów na szkielecie) → prompt bywa przycinany bez potrzeby. Fix: `tiktoken` — **wymaga `pip install`, czyli zgody**.
+- [ ] **J1 — połowa `except` milczy.** 271 z 546 bez logu i bez `raise`. Strażnik w testach pilnuje SZEROKOŚCI (`except Exception`), nie milczenia. Fix: drugie kryterium w tym samym strażniku.
+- [ ] **J2 — mypy sprawdza 1 katalog** (`scrapers/sources/`) ze 172 plików.
+- [ ] **J3 — schematy testowe dublują produkcyjny** (`test_backtest_db`, `test_evening_agent`) — bolało przy migracji 12 i 13. Fix: jedna fikstura z `init_db()`.
+- [ ] **M2 — trzy flagi czekają na walidację:** `SELECTION_MIN_CONF=65`, `LEAGUE_GATING=1`, `BTTS_TWO_WAY`. Wszystkie blokuje ten sam brak danych.
+- [ ] **M3 — cel M1 mierzy rynek, który przegrywa.** „55% win rate" liczone na 1X2, gdzie przy niezgodzie rynek 42,9% vs model 29,8%. Rozważyć ROI zamiast trafności.
+
+### ⚪ Niskie
+- [ ] **B5 — brak Content-Security-Policy** (reszta nagłówków jest: nosniff, DENY, HSTS, Referrer-Policy). Start w `report-only`.
+- [ ] **B6 — jedyne dynamiczne SQL:** `player_db.py:73` `ALTER TABLE ... ADD COLUMN {col} {typ}` — wartości z kodu, nie z wejścia. Whitelist par (kolumna, typ).
+- [ ] **D4 — `model_log` śledzi tylko argmax 1X2** → rynków golowych nie zweryfikujemy live. Dopisać `p_over25`/`p_btts` + wynik.
+- [ ] **F4 — brak PWA** mimo planu „PWA first" (jest favicon/robots/sitemap, brak manifestu i SW). Albo `vite-plugin-pwa`, albo skreślić z planu.
+- [ ] **F5 — `CouponWizard.jsx` 437 linii**, `SettingsView.jsx` 377 (limit 400).
+- [ ] **I3 — brak Sentry na froncie** (backend ma).
+- [ ] **I4 — `DATABASE_URL_NEON` wciąż w lokalnym `.env`** mimo porzucenia Neona.
+- [ ] **J4 — bramka pokrycia 8 pkt pod stanem faktycznym.** Zmierzone **80%**, `--cov-fail-under=72` → można skasować 8 pkt i build przejdzie. Najsłabsze: `football_data.py` 21%, `flashscore_results.py` 42%, `utils/cache.py` 56%, **`utils/db.py` 69%** (warstwa dostępu do bazy).
+- [ ] **J5 — 4 pliki > 800 linii:** `daily_agent.py` 1022, `superbet.py` 867, `coupons.py` 832, `analyzer.py` 814.
+
+### ✅ Sprawdzone i w porządku
+SQL parametryzowany (1 wyjątek wyżej) · JWT fail-closed · bcrypt+gensalt, min. 8 znaków w walidatorach ·
+limity 10/5/60 na minutę · nagłówki bezpieczeństwa · CORS z jawnej listy (nie `*`) · `/mcp` off na prodzie ·
+CI blokujące (ruff+bandit+pip-audit+coverage) · backup DB codziennie 07:00 · zero sekretów w kodzie ·
+klikalne elementy to `<button>`, nie `<div>`.
+
+---
+
 ## 📋 Następne kroki (zweryfikowane na produkcji 2026-08-14)
 
 1. **Obserwować budżet API-Football.** 14.08 zjechał do **17/100** — nadrabianie zaległości kosztuje ~8 requestów na przebieg. Przy dwóch przebiegach dziennie może nie starczyć. Regulacja bez redeploya: `LIMIT_NADRABIANIA` (domyślnie 15).
