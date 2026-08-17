@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
-import { API_BASE, decodeJwtPayload } from './lib/api';
+import { API_BASE, decodeJwtPayload, legalUrl } from './lib/api';
 import { NavItem } from './components/ui';
 import LoginView from './components/LoginView';
 import DashboardHome from './components/DashboardHome';
@@ -296,9 +296,9 @@ const App = () => {
         </main>
         <footer className="py-3 px-6 border-t border-white/5 text-center text-xs text-[var(--text-muted)]">
           FootStats nie jest bukmacherem, nie przyjmuje zakładów. Prognozy nie gwarantują wyników. Hazard 18+.{' '}
-          <a href="https://footstats-api-949240532526.europe-west1.run.app/regulamin" target="_blank" rel="noreferrer" className="underline hover:text-[var(--text-main)]">Regulamin</a>
+          <a href={legalUrl('regulamin')} target="_blank" rel="noreferrer" className="underline hover:text-[var(--text-main)]">Regulamin</a>
           {' · '}
-          <a href="https://footstats-api-949240532526.europe-west1.run.app/polityka-prywatnosci" target="_blank" rel="noreferrer" className="underline hover:text-[var(--text-main)]">Polityka prywatności</a>
+          <a href={legalUrl('polityka-prywatnosci')} target="_blank" rel="noreferrer" className="underline hover:text-[var(--text-main)]">Polityka prywatności</a>
         </footer>
       </div>
     </div>

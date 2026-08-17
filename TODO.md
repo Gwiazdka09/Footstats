@@ -177,7 +177,9 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
   - **Zmieniło wygląd 6 przycisków** — wszystkie na lepsze. Najboleśniejsze były niewidoczne: przycisk **rejestracji** (`bg-indigo-500`) był PRZEZROCZYSTY, a **usunięcia konta** (`bg-rose-500`) nie miał czerwieni ostrzegawczej.
   - Zrzuty desktop 1440 + mobile 390 po fiksie: bez regresji. `tests/test_css_warstwy.py` pilnuje warstwy (i tego, że `.btn-primary` ma zostać POZA warstwami — to celowe).
 - [ ] **F6 — baner cookie zasłania link „Masz już konto? Zaloguj się"** na mobile (390px) w widoku rejestracji. Znalezione przy weryfikacji F1, nie związane z tą zmianą.
-- [ ] **F7 — baner zgody mówi nieprawdę, a zgoda niczego nie bramkuje.** ⚠️ **Zmierzone w przeglądarce 17.08.** Trzy rzeczy się nie zgadzają:
+- [x] ✅ **F7 — ZROBIONE 17.08 (wariant A: analityka usunięta).** `<Analytics />` i `<SpeedInsights />` wyjęte z `main.jsx`, zależności `@vercel/*` usunięte z `package.json` + lockfile. Zweryfikowane w przeglądarce po zmianie: **zero** skryptów analityki w DOM. Treść banera („wyłącznie niezbędne") jest teraz prawdziwa. Rewert = jeden commit.
+- [x] ✅ **F8 — ZROBIONE 17.08.** Trzy zaszyte na sztywno adresy Cloud Run (baner + dwa linki w stopce) zastąpione helperem `legalUrl()` w `lib/api.js`. **Zweryfikowane, że nie psuje produkcji:** żywy bundle na Vercelu ma `VITE_API_BASE = https://footstats-api-…run.app/api`, a helper wylicza z niego dokładnie ten sam URL, który był zaszyty. Teraz linki dzielą los aplikacji — jeśli `API_BASE` jest zły, i tak nic nie działa.
+- ~~**F7 — opis pierwotny**~~ (zostawiony dla kontekstu):
   1. **Baner twierdzi**: „używamy NIEZBĘDNYCH plików cookie / local storage (np. token sesji)".
   2. **Realnie**: `main.jsx:13-14` montuje `<Analytics />` i `<SpeedInsights />` (Vercel) **bezwarunkowo**. Dowód: przy `fs_cookie_consent = null` i widocznym banerze oba skrypty są już w DOM (`/_vercel/insights/script.js`, `/_vercel/speed-insights/script.js`).
   3. **Polityka prywatności** nie wspomina o analityce ani słowem (jest tylko „cookies").
