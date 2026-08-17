@@ -22,7 +22,12 @@ BASELINE: dict[str, int] = {
     "ai/rag.py": 2,
     "ai/rag_embeddings.py": 3,
     "ai/trainer.py": 3,
-    "api/auth.py": 2,  # forgot-password: DB lookup + mailer graceful → ZAWSZE 200 (anty-enumeracja kont)
+    # 2 → 3 (17.08.2026): doszedł guard w `wersja_tokenu_uzytkownika`. Sprawdzenie
+    # wersji sesji leci przy KAŻDYM uwierzytelnionym żądaniu, więc dowolny błąd po
+    # stronie bazy (brak migracji, zerwane połączenie, dryf schematu) wylogowywałby
+    # wszystkich naraz. Świadomy fail-open z WARNINGIEM: podpis tokenu jest już
+    # zweryfikowany, a przy niedostępnej bazie żaden endpoint i tak nie odda danych.
+    "api/auth.py": 3,  # forgot-password: DB lookup + mailer graceful → ZAWSZE 200 (anty-enumeracja kont)
     "api/main.py": 3,  # startup DB init + health endpoint (5xx-proof) + Sentry init guard
     "api/routes/bankroll.py": 1,
     "api/routes/model_stats.py": 1,  # /admin/model-vs-live: błąd DB → 503 nie 500

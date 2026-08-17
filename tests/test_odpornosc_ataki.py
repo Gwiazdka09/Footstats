@@ -8,10 +8,12 @@ ZERO kontaktu z produkcją: warstwa DB jest podmieniona na atrapę, która
 zapamiętuje SQL i parametry ODDZIELNIE — to właśnie ten rozdział dowodzi
 parametryzacji. Limiter jest resetowany między testami (współdzieli pamięć).
 
-Trzy testy są celowo napisane „na zielono" wobec ISTNIEJĄCYCH LUK
-(`test_BRAK_*`, `test_token_dziala_z_DOWOLNEGO_*`, `test_zmiana_hasla_NIE_*`).
+Dwa testy są celowo napisane „na zielono" wobec ISTNIEJĄCYCH LUK
+(`test_BRAK_blokady_konta_*`, `test_token_dziala_z_DOWOLNEGO_*`).
 Gdy luka zostanie załatana, taki test PADNIE — i to jest jego zadanie:
 wymusić świadomą aktualizację audytu zamiast cichego rozjazdu dokumentacji.
+Tak wlasnie stalo sie 17.08 z luka B1: naprawa uniewazniania sesji zmusila
+do przepisania dwoch testow, zamiast pozwolic dokumentacji sie rozjechac.
 """
 from __future__ import annotations
 
@@ -77,9 +79,13 @@ class _Polaczenie:
 
     def execute(self, sql, params=()):
         _Polaczenie.zapisane.append((sql, params))
+        # Sprawdzenie stanu sesji (`require_auth` od naprawy B1). Bez tego atrapa
+        # mowilaby "konta nie ma" i KAZDE uwierzytelnione zadanie konczyloby sie 401.
+        if "AS wersja" in sql:            # zapytanie o stan sesji, nie o uzytkownika
+            return _Kursor({"wersja": 0, "is_active": True})
         if "FROM users" in sql and params and params[0] == "admin":
-            return _Kursor({"id": 1, "username": "admin",
-                            "password_hash": _HASH, "is_admin": False})
+            return _Kursor({"id": 1, "username": "admin", "password_hash": _HASH,
+                            "is_admin": False, "token_version": 0})
         return _Kursor(None)
 
     def __enter__(self):
@@ -241,16 +247,21 @@ def test_token_dziala_z_DOWOLNEGO_adresu_i_przegladarki(klient):
     assert r.status_code == 200, "test opisuje stan faktyczny — zmien go razem z fixem"
 
 
-def test_token_nie_niesie_odcisku_urzadzenia(klient):
-    """Brak `jti`, powiązania z IP czy user-agentem = kopii tokenu nie da się wykryć."""
+def test_token_niesie_wersje_ale_NIE_odcisk_urzadzenia(klient):
+    """Po naprawie B1 (17.08) token ma `tv` — wersję sesji.
+
+    Pozwala to unieważnić WSZYSTKIE tokeny naraz (zmiana/reset hasła), ale nadal
+    NIE wiąże tokenu z urządzeniem: skradziona kopia działa z dowolnego adresu
+    aż do unieważnienia albo wygaśnięcia. Rozróżnienie jest istotne — wersja
+    rozwiązuje „odbierz dostęp", nie rozwiązuje „wykryj kopię".
+    """
     from jose import jwt
 
     from footstats.api.auth import _secret
 
     dane = jwt.decode(_zaloguj(klient), _secret(), algorithms=["HS256"])
-    assert set(dane) == {"sub", "uid", "adm", "exp"}, (
-        "zmienil sie zestaw claimow — jesli doszedl jti/token_version,"
-        " zaktualizuj znalezisko B1 w audycie")
+    assert set(dane) == {"sub", "uid", "adm", "tv", "exp"}
+    assert "jti" not in dane, "kopii tokenu nadal nie odroznimy od oryginalu"
 
 
 def test_token_zyje_najwyzej_dobe(klient):
@@ -281,18 +292,26 @@ def test_token_podpisany_obcym_sekretem_odrzucony(klient):
     assert r.status_code == 401
 
 
-def test_zmiana_hasla_NIE_uniewaznia_starego_tokenu(klient):
-    """UDOKUMENTOWANA LUKA (B1) — sedno pytania o „przenoszenie tokenów".
+def test_uniewaznienie_sesji_odbiera_dostep_staremu_tokenowi(klient, monkeypatch):
+    """LUKA B1 ZAŁATANA 17.08 — token niesie wersję sesji (`tv`).
 
-    Po zmianie hasła stary token dalej otwiera konto. Przy przejęciu konta
-    zmiana hasła NIE odbiera napastnikowi dostępu — do 24 godzin.
+    Wcześniej zmiana hasła nie odbierała napastnikowi dostępu przez 24 godziny,
+    bo token był bezstanowy. Teraz podbicie `users.token_version` unieważnia
+    wszystkie wydane dotąd tokeny.
+
+    Atrapa DB z tego pliku nie modeluje kolumny `token_version` (zwraca brak
+    wiersza → fail-open), więc wersję podajemy wprost. Pełne pokrycie tej
+    ścieżki, razem ze zgodnością wstecz i zachowaniem przy awarii bazy,
+    siedzi w `tests/test_uniewaznianie_sesji.py`.
     """
     token = _zaloguj(klient)
-    klient.post("/api/auth/change-password",
-                headers={"Authorization": f"Bearer {token}"},
-                json={"current_password": _HASLO, "new_password": "NoweHaslo12345"})
 
+    # przed unieważnieniem token działa
+    monkeypatch.setattr(_auth, "stan_sesji", lambda uid: {"wersja": 0, "aktywne": True})
+    assert klient.get("/chronione",
+                      headers={"Authorization": f"Bearer {token}"}).status_code == 200
+
+    # po podbiciu wersji ten sam token jest już bezużyteczny
+    monkeypatch.setattr(_auth, "stan_sesji", lambda uid: {"wersja": 1, "aktywne": True})
     r = klient.get("/chronione", headers={"Authorization": f"Bearer {token}"})
-    assert r.status_code == 200, (
-        "stary token przestal dzialac — czyli doszlo uniewaznianie sesji;"
-        " zaktualizuj ten test i znalezisko B1")
+    assert r.status_code == 401

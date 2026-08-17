@@ -208,7 +208,12 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 - [ ] **M5 — jedyna zmiana wsparta danymi: wyłączyć BTTS z puli selekcji.** Symulacja BEZ BTTS dała −10,7%, a produkcja z BTTS −13,5% ogółem przy **−28,2% na samym BTTS**. Zastrzeżenie: to inne okresy i próby, więc nie jest to porównanie 1:1 — przed flipem policzyć na wspólnym oknie.
 
 ### 🟡 Średnie
-- [ ] **B1 — tokenów nie da się unieważnić.** Brak `jti`/blacklisty/`token_version`; **zmiana hasła NIE wylogowuje sesji**, token żyje 24h. Fix: `token_version` w users + w tokenie.
+- [x] ✅ **B1 — ZROBIONE 17.08.** Migracja 14 (`users.token_version`) + claim `tv` w tokenie. Zmiana i reset hasła podbijają wersję → **wszystkie wydane tokeny przestają działać**. Zmieniający hasło dostaje świeży token w odpowiedzi, żeby nie wylogować samego siebie.
+  - **Przy okazji domknięta druga luka, której audyt nie zauważył:** `require_auth` **w ogóle nie sprawdzało `is_active`**. Token konta zdezaktywowanego lub zanonimizowanego przechodził strażnika, a odsiew zależał od tego, czy konkretny endpoint sam o to zapyta. Teraz sprawdzane raz, w jednym miejscu.
+  - **Własna dziura wprowadzona i zamknięta w trakcie:** pierwsza wersja zwracała `None` zarówno przy awarii bazy, jak i przy braku wiersza — czyli traktowała **usunięte konto jak awarię i wpuszczała jego token**. Rozdzielone: wyjątek → przepuść (fail-open), brak wiersza → odrzuć.
+  - **Świadome kompromisy** (oba przypięte testami): brak `tv` = wersja 0, żeby wdrożenie nie wylogowało wszystkich; błąd bazy przepuszcza token, bo podpis jest już zweryfikowany, a przy niedostępnej bazie żaden endpoint i tak nie odda danych.
+  - Koszt: jedno zapytanie do bazy na uwierzytelnione żądanie. Próg `except Exception` dla `api/auth.py` podniesiony 2 → 3 z uzasadnieniem.
+  - **Zostaje z B1:** token nadal nie jest związany z urządzeniem (brak `jti`), więc skradziona kopia działa do unieważnienia albo wygaśnięcia. Wersja rozwiązuje „odbierz dostęp", nie „wykryj kopię".
 - [ ] **B2 — limity zapytań mogą liczyć zły adres.** `get_remote_address` = `request.client.host`, za Cloud Run to load balancer, nie klient. **Podejrzenie, nie fakt** — potwierdzić testem z dwóch sieci. Fix: `key_func` czytający `X-Forwarded-For`.
 - [ ] **B3 — python-jose → PyJWT**, żeby zdjąć `--ignore-vuln PYSEC-2026-1325` (ecdsa) z pip-audit.
 - [ ] **B4 — zależności bez wersji.** 50 pozycji, **0 przypiętych**, brak lockfile → build niereprodukowalny. Fix: `pip-compile` + lock z hashami.

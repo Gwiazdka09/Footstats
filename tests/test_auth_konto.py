@@ -114,13 +114,21 @@ def test_admin_nie_usuwa_sie_ta_droga(baza, naglowki):
     assert baza["conn"].zawierajace("UPDATE users") == []
 
 
-def test_nieistniejace_konto_to_404(baza, naglowki):
+def test_nieistniejace_konto_to_401(baza, naglowki):
+    """ZMIANA INTENCJI 17.08: 404 → 401.
+
+    Od naprawy B1 `require_auth` sprawdza stan konta przy kazdym zadaniu, wiec
+    token konta usunietego albo zanonimizowanego odpada JUZ NA STRAZNIKU.
+    To poprawniejsza odpowiedz: nie chodzi o "zasob nieznaleziony", tylko o to,
+    ze sesja wolajacego przestala byc wazna. Wczesniej taki token przechodzil
+    uwierzytelnienie i dopiero endpoint orientowal sie, ze konta nie ma.
+    """
     baza["conn"].row = None
 
     r = client.request("DELETE", "/api/auth/me", headers=naglowki,
                        json={"password": HASLO})
 
-    assert r.status_code == 404
+    assert r.status_code == 401
 
 
 def test_konto_anonimizowane_a_nie_kasowane(baza, naglowki):
@@ -209,12 +217,13 @@ def test_login_przyciety_z_bialych_znakow(baza, naglowki):
 
 
 def test_zmiana_loginu_nieistniejacego_konta(baza, naglowki):
+    """ZMIANA INTENCJI 17.08: 404 → 401 (patrz `test_nieistniejace_konto_to_401`)."""
     baza["conn"].row = None
 
     r = client.post("/api/auth/change-username", headers=naglowki,
                     json={"current_password": HASLO, "new_username": "nowy_login"})
 
-    assert r.status_code == 404
+    assert r.status_code == 401
 
 
 # ── get_me ──────────────────────────────────────────────────────────────────
@@ -239,14 +248,20 @@ def test_me_nie_wystawia_hasla(baza, naglowki):
     assert "password" not in r.text.lower()
 
 
-def test_me_konta_nieaktywnego_to_404(baza, naglowki):
-    """Zapytanie filtruje po is_active — konto zanonimizowane nie istnieje."""
+def test_me_konta_nieaktywnego_to_401(baza, naglowki):
+    """ZMIANA INTENCJI 17.08: 404 → 401.
+
+    Konto zanonimizowane nie przechodzi juz przez `require_auth`, wiec `/me`
+    w ogole sie nie wykonuje. Sprawdzamy przy okazji, ze straznik pyta o
+    `is_active` — to on jest teraz jedynym miejscem, ktore o to dba.
+    """
     baza["conn"].row = None
 
     r = client.get("/api/auth/me", headers=naglowki)
 
-    assert r.status_code == 404
-    assert "is_active = TRUE" in baza["conn"].zawierajace("SELECT")[0][0]
+    assert r.status_code == 401
+    selekty = [z[0] for z in baza["conn"].zawierajace("SELECT")]
+    assert any("is_active" in s for s in selekty), selekty
 
 
 def test_me_bez_tokenu_odrzucone(baza):

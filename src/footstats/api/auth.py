@@ -75,7 +75,8 @@ def get_user_by_username(username: str) -> Optional[dict]:
 
     with connect() as conn:
         row = conn.execute(
-            "SELECT id, username, password_hash, is_admin FROM users"
+            "SELECT id, username, password_hash, is_admin,"
+            " COALESCE(token_version, 0) AS token_version FROM users"
             " WHERE username = ? AND is_active = TRUE",
             (username,),
         ).fetchone()
@@ -88,7 +89,8 @@ def get_user_by_email(email: str) -> Optional[dict]:
 
     with connect() as conn:
         row = conn.execute(
-            "SELECT id, username, password_hash, is_admin FROM users"
+            "SELECT id, username, password_hash, is_admin,"
+            " COALESCE(token_version, 0) AS token_version FROM users"
             " WHERE email = ? AND is_active = TRUE",
             (email,),
         ).fetchone()
@@ -111,10 +113,14 @@ def _verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def _make_token(username: str, user_id: int, is_admin: bool = False) -> str:
+def _make_token(username: str, user_id: int, is_admin: bool = False,
+                token_version: int = 0) -> str:
+    # `tv` pozwala uniewaznic wszystkie wydane tokeny jednym UPDATE-em.
+    # Bez tego zmiana hasla nie odbierala dostepu napastnikowi przez 24h.
     exp = datetime.now(timezone.utc) + timedelta(hours=_EXPIRE_HOURS)
     return jwt.encode(
-        {"sub": username, "uid": user_id, "adm": is_admin, "exp": exp},
+        {"sub": username, "uid": user_id, "adm": is_admin,
+         "tv": int(token_version), "exp": exp},
         _secret(),
         algorithm=_ALGORITHM,
     )
@@ -132,7 +138,9 @@ def login(request: Request, req: LoginRequest) -> TokenResponse:
     if not _verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     return TokenResponse(
-        access_token=_make_token(user["username"], user["id"], bool(user.get("is_admin", False)))
+        access_token=_make_token(user["username"], user["id"],
+                                 bool(user.get("is_admin", False)),
+                                 int(user.get("token_version") or 0))
     )
 
 
@@ -177,6 +185,90 @@ def register(request: Request, req: RegisterRequest) -> TokenResponse:
     return TokenResponse(access_token=_make_token(row["username"], row["id"], False))
 
 
+def stan_sesji(user_id: int) -> dict | None:
+    """Stan konta pod katem waznosci sesji, albo `None` gdy nie da sie sprawdzic.
+
+    Zwraca `{"wersja": int | None, "aktywne": bool}`.
+
+    Rozroznienie trzech przypadkow jest tu istotne i kazdy znaczy co innego:
+
+    * **wyjatek** (baza padla, brak migracji) → `None` → wolajacy PRZEPUSZCZA token.
+    * **brak wiersza** (konto usuniete albo zanonimizowane) → `aktywne=False`
+      → wolajacy ODRZUCA. Pierwsza wersja zwracala tu `None`, czyli traktowala
+      usuniete konto jak awarie bazy i wpuszczala jego token. Wlasna dziura,
+      wprowadzona przy naprawie B1.
+    * **wiersz** → porownanie wersji i flagi `is_active`.
+    """
+    from footstats.utils.db import connect
+
+    # CALY odczyt w try — razem z wyciagnieciem pol. Wersja z `return` poza blokiem
+    # dawala 500 na KAZDYM uwierzytelnionym zadaniu, gdy wiersz nie mial oczekiwanej
+    # kolumny (dryf schematu, baza bez migracji 14). Zlapane przez `test_auth_konto`.
+    try:
+        with connect() as conn:
+            row = conn.execute(
+                "SELECT COALESCE(token_version, 0) AS wersja, is_active"
+                " FROM users WHERE id = ?",
+                (int(user_id),),
+            ).fetchone()
+        if not row:
+            return {"wersja": None, "aktywne": False}
+        dane = dict(row)
+        wersja = dane.get("wersja")
+        return {
+            "wersja": None if wersja is None else int(wersja),
+            "aktywne": bool(dane.get("is_active", True)),
+        }
+    except Exception as e:                                   # noqa: BLE001
+        log.warning("Nie udalo sie sprawdzic stanu sesji dla uid=%s: %s", user_id, e)
+        return None
+
+
+def _uniewaznij_sesje(conn, user_id: int) -> None:
+    """Podbija `token_version` — wszystkie wydane dotad tokeny przestaja dzialac."""
+    conn.execute(
+        "UPDATE users SET token_version = COALESCE(token_version, 0) + 1 WHERE id = ?",
+        (int(user_id),),
+    )
+
+
+def _sprawdz_wersje(payload: dict, user_id: int) -> None:
+    """Odrzuca token wydany przed uniewaznieniem sesji.
+
+    Bez tego zmiana hasla NIE odbierala dostepu: token zyje 24h i jest bezstanowy,
+    wiec po przejeciu konta zmiana hasla nic nie dawala napastnikowi do konca doby.
+
+    Dwie swiadome decyzje:
+
+    * **Brak `tv` w tokenie = wersja 0.** Tokeny wydane przed ta zmiana nie maja
+      tego claimu; traktowanie ich jako niewazne wylogowaloby wszystkich przy
+      wdrozeniu. Kolumna startuje od 0, wiec stare tokeny dzialaja dalej,
+      a uniewaznianie dziala od pierwszego podbicia.
+    * **Blad bazy przepuszcza token** (fail-open) z ostrzezeniem w logach.
+      Podpis jest juz zweryfikowany, a przy niedostepnej bazie i tak zaden
+      endpoint nie zwroci danych — wiec nie otwiera to nowej drogi wejscia,
+      a fail-closed wylogowywalby wszystkich przy kazdym zakrztuszeniu bazy.
+
+    Przy okazji domyka luke, ktorej `require_auth` nie mialo wczesniej wcale:
+    token konta **dezaktywowanego lub usunietego** przestaje dzialac od razu.
+    Dotad sam strażnik go przepuszczal, a odsiew zalezal od tego, czy konkretny
+    endpoint sam sprawdzi `is_active`.
+    """
+    stan = stan_sesji(user_id)
+    if stan is None:
+        return                                   # nie da sie sprawdzic → przepuszczamy
+    if not stan["aktywne"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Konto nieaktywne",
+        )
+    if stan["wersja"] is not None and int(payload.get("tv", 0)) != stan["wersja"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesja wygasla — zaloguj sie ponownie",
+        )
+
+
 def require_auth(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> int:
@@ -188,9 +280,10 @@ def require_auth(
         user_id: int | None = payload.get("uid")
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token — re-login required")
-        return int(user_id)
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    _sprawdz_wersje(payload, int(user_id))
+    return int(user_id)
 
 
 def require_admin(
@@ -206,9 +299,10 @@ def require_admin(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token — re-login required")
         if not payload.get("adm", False):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-        return int(user_id)
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    _sprawdz_wersje(payload, int(user_id))
+    return int(user_id)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -232,7 +326,21 @@ def change_password(req: ChangePasswordRequest, user_id: int = Depends(require_a
     new_hash = bcrypt.hashpw(req.new_password.encode(), bcrypt.gensalt()).decode()
     with connect() as conn:
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
-    return {"ok": True, "message": "Hasło zmienione"}
+        _uniewaznij_sesje(conn, user_id)
+        dane = conn.execute(
+            "SELECT username, is_admin, COALESCE(token_version, 0) AS token_version"
+            " FROM users WHERE id = ?", (user_id,)).fetchone()
+    # Uniewaznienie dotyczy WSZYSTKICH sesji, wiec osoba zmieniajaca haslo tez
+    # stracilaby dostep. Oddajemy jej swiezy token — pozostale urzadzenia
+    # (i ewentualny napastnik) musza zalogowac sie ponownie.
+    d = dict(dane) if dane else {}
+    return {
+        "ok": True,
+        "message": "Hasło zmienione. Pozostałe sesje zostały wylogowane.",
+        "access_token": _make_token(d.get("username", ""), user_id,
+                                    bool(d.get("is_admin", False)),
+                                    int(d.get("token_version") or 0)),
+    }
 
 
 # ── Reset hasła (forgot / reset) — token JWT purpose=reset, 1h ──────────────
@@ -312,6 +420,9 @@ def reset_password(request: Request, req: ResetPasswordRequest):
             "UPDATE users SET password_hash = ? WHERE id = ? AND is_active = TRUE",
             (new_hash, payload["uid"]),
         )
+        # Reset hasla to najczestsza reakcja na przejecie konta — musi wyrzucic
+        # napastnika ze wszystkich urzadzen, nie tylko zmienic haslo.
+        _uniewaznij_sesje(conn, int(payload["uid"]))
     return {"ok": True, "message": "Hasło zmienione. Możesz się zalogować."}
 
 

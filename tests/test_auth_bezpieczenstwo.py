@@ -364,11 +364,24 @@ def test_reset_odrzuca_token_podpisany_obcym_sekretem(db_zapis):
 
 
 def test_reset_wazny_token_zmienia_haslo(db_zapis):
+    """ZMIANA INTENCJI 17.08: reset robi teraz DWA zapisy, nie jeden.
+
+    Drugi to podbicie `token_version`. Reset hasla to najczestsza reakcja na
+    przejecie konta, wiec musi wyrzucic napastnika ze WSZYSTKICH urzadzen —
+    wczesniej stary token dzialal dalej do konca doby (znalezisko B1).
+    """
     _reset(auth._make_reset_token(7))
     update = [z for z in db_zapis if z[0].upper().startswith("UPDATE USERS")]
-    assert len(update) == 1
-    assert update[0][1][1] == 7                       # uid z tokenu
-    assert bcrypt.checkpw(b"nowe-haslo-1234", update[0][1][0].encode())
+    assert len(update) == 2
+
+    haslo = [u for u in update if "password_hash" in u[0]]
+    assert len(haslo) == 1
+    assert haslo[0][1][1] == 7                        # uid z tokenu
+    assert bcrypt.checkpw(b"nowe-haslo-1234", haslo[0][1][0].encode())
+
+    sesje = [u for u in update if "token_version" in u[0]]
+    assert len(sesje) == 1, "reset hasla musi uniewazniac sesje"
+    assert sesje[0][1][0] == 7
 
 
 def test_reset_dotyczy_tylko_konta_aktywnego(db_zapis):
