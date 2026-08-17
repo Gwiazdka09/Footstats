@@ -25,12 +25,23 @@ html {
   font-size: 17px;
 }
 
-button {
-  background: transparent;
-  border: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
+/* Reset przycisku MUSI siedzieć w `@layer base`.
+   W Tailwindzie v4 utility siedzą w `@layer utilities`, a reguła spoza warstw
+   bije KAŻDĄ regułę z warstwy — niezależnie od specyficzności. Ten reset stał
+   poza warstwami, więc `text-*` i `bg-*` nie stosowały się do żadnego przycisku
+   w aplikacji. Zmierzone w przeglądarce przed poprawką:
+     <button class="text-rose-400">   → rgb(248,250,252)  (zignorowane)
+     <button class="bg-emerald-500">  → rgba(0,0,0,0)     (zignorowane)
+     <span   class="text-rose-400">   → oklch(0.712 …)    (działa)
+   Stąd obejścia `style={{ ... var() }}` w dzienniku kuponów — leczyły objaw. */
+@layer base {
+  button {
+    background: transparent;
+    border: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
 }
 
 body {
