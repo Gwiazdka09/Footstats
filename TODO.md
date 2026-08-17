@@ -177,6 +177,15 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
   - **Zmieniło wygląd 6 przycisków** — wszystkie na lepsze. Najboleśniejsze były niewidoczne: przycisk **rejestracji** (`bg-indigo-500`) był PRZEZROCZYSTY, a **usunięcia konta** (`bg-rose-500`) nie miał czerwieni ostrzegawczej.
   - Zrzuty desktop 1440 + mobile 390 po fiksie: bez regresji. `tests/test_css_warstwy.py` pilnuje warstwy (i tego, że `.btn-primary` ma zostać POZA warstwami — to celowe).
 - [ ] **F6 — baner cookie zasłania link „Masz już konto? Zaloguj się"** na mobile (390px) w widoku rejestracji. Znalezione przy weryfikacji F1, nie związane z tą zmianą.
+- [ ] **F7 — baner zgody mówi nieprawdę, a zgoda niczego nie bramkuje.** ⚠️ **Zmierzone w przeglądarce 17.08.** Trzy rzeczy się nie zgadzają:
+  1. **Baner twierdzi**: „używamy NIEZBĘDNYCH plików cookie / local storage (np. token sesji)".
+  2. **Realnie**: `main.jsx:13-14` montuje `<Analytics />` i `<SpeedInsights />` (Vercel) **bezwarunkowo**. Dowód: przy `fs_cookie_consent = null` i widocznym banerze oba skrypty są już w DOM (`/_vercel/insights/script.js`, `/_vercel/speed-insights/script.js`).
+  3. **Polityka prywatności** nie wspomina o analityce ani słowem (jest tylko „cookies").
+  - Flaga `fs_cookie_consent` jest **czytana wyłącznie przez sam baner** — przycisk „Rozumiem" nie włącza ani nie wyłącza niczego.
+  - Pod RODO/ePrivacy: cookies *ściśle niezbędne* zgody NIE wymagają, ale analityka **wymaga** i nie może odpalać przed zgodą. Obecny stan jest gorszy niż brak banera — to komunikat, który nie opisuje tego, co aplikacja robi.
+  - **Do decyzji:** (A) usunąć Vercel Analytics — najprościej i zgodne z kierunkiem „prywatny użytek + znajomi", wtedy treść banera staje się prawdziwa i wystarczy jednolinijkowa notka zamiast paska; (B) bramkować analitykę zgodą i dopisać ją do polityki; (C) zostawić i tylko poprawić treść — najsłabsze, bo dalej brak bramki.
+- [ ] **F8 — link do polityki prywatności zaszyty na sztywno** jako surowy adres Cloud Run (`CookieConsent.jsx:21`), zamiast ścieżki względnej lub zmiennej środowiskowej. Po zmianie hostingu link umrze po cichu.
+- ⚠️ **KOREKTA F4 (PWA):** manifest i service worker **istnieją** — serwuje je API (`main.py:411` `/manifest.json`, `/sw.js`). Front ich jednak **nie podpina**: `index.html` nie linkuje manifestu, `main.jsx` nie rejestruje SW. Czyli nie „brak PWA", tylko **PWA niepodłączone** — kawałki leżą po stronie API i nikt ich nie używa.
 - [ ] **F2 — zero dostępności.** 0× `aria-label`, 0× `alt`, 0× `role` w 3381 liniach JSX. (Plus: 0× `onClick` na `div`/`span` — klikalne są `<button>`, więc baza jest dobra.)
 - [ ] **F3 — zero testów frontendu.** Backend 4463, front 0 (brak vitest/jest, brak `*.test.jsx`) przy 14 komponentach.
 - [ ] **M1 — selekcja gra najwięcej tam, gdzie traci najwięcej.** 62% kuponów 15.08 to BTTS; papier: **47,6% traf, ROI −28,2%** na 42 kuponach. Hipoteza: filtr kursu 1,20–4,00 strukturalnie faworyzuje BTTS (kursy 1,5–1,8 zawsze przechodzą, faworyci 1X2 wypadają dołem). Sprawdzić rozkład typów PO filtrze per rynek → ewentualnie próg kursu per rynek.
