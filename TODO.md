@@ -199,6 +199,20 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 - [ ] **J4 — bramka pokrycia 8 pkt pod stanem faktycznym.** Zmierzone **80%**, `--cov-fail-under=72` → można skasować 8 pkt i build przejdzie. Najsłabsze: `football_data.py` 21%, `flashscore_results.py` 42%, `utils/cache.py` 56%, **`utils/db.py` 69%** (warstwa dostępu do bazy).
 - [ ] **J5 — 4 pliki > 800 linii:** `daily_agent.py` 1022, `superbet.py` 867, `coupons.py` 832, `analyzer.py` 814.
 
+### 🛡️ Odporność na ataki — ZMIERZONA 17.08 (`tests/test_odpornosc_ataki.py`, 25 testów)
+
+| atak | werdykt | dowód |
+|---|---|---|
+| **Wstrzyknięcie SQL** (`' OR 1=1 --`, `UNION SELECT`, `DROP TABLE`) | ✅ **odporni** | 14 ładunków × 2 pola → wszystkie 401. Ładunek trafia do bazy jako **parametr**, nigdy do tekstu zapytania |
+| **Brute-force z jednego IP** | ✅ **blokowany** | 15 prób zgadywania → limiter ucina po 10. Ta sama odpowiedź dla złego hasła i nieistniejącego konta (brak enumeracji) |
+| **Brute-force z wielu IP** | ⚠️ **luka B7** | brak licznika prób i blokady konta — botnet dostaje 10 prób/min **z każdego adresu**, konto nigdy się nie zamyka |
+| **Podrobiony token** | ✅ **odrzucany** | obcy sekret → 401; wygasły → 401; bez `uid` → 401 |
+| **Skradziony token** | ⚠️ **luka B1** | działa z **dowolnego IP i przeglądarki** do 24h; brak `jti`/powiązania z urządzeniem, więc kopii nie da się wykryć |
+| **Zmiana hasła po przejęciu konta** | ⚠️ **luka B1** | **nie unieważnia** starego tokenu — napastnik zachowuje dostęp do doby |
+
+- [ ] **B7 — brak blokady konta po serii błędnych haseł.** Jedyna obrona to limit per IP (B2 podaje w wątpliwość nawet to, bo za Cloud Run kluczem bywa adres load balancera). Fix: licznik `failed_attempts` + `locked_until` na `users`, wykładnicze opóźnienie albo CAPTCHA po N próbach.
+- Trzy testy są celowo zielone WOBEC LUK (`test_BRAK_blokady_konta…`, `test_token_dziala_z_DOWOLNEGO…`, `test_zmiana_hasla_NIE_uniewaznia…`). Po naprawie **padną** — to ich zadanie: wymuszają aktualizację audytu zamiast cichego rozjazdu dokumentacji.
+
 ### ✅ Sprawdzone i w porządku
 SQL parametryzowany (1 wyjątek wyżej) · JWT fail-closed · bcrypt+gensalt, min. 8 znaków w walidatorach ·
 limity 10/5/60 na minutę · nagłówki bezpieczeństwa · CORS z jawnej listy (nie `*`) · `/mcp` off na prodzie ·
