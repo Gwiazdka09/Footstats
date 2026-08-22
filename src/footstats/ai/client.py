@@ -18,20 +18,30 @@ logger = logging.getLogger(__name__)
 # 22.08.2026: Groq WYCOFAL `llama-3.1-8b-instant` — API zwracalo 404 (NotFoundError),
 # wiec KROK 3 nie dostawal odpowiedzi i caly dzienny przebieg konczyl sie zerem
 # predykcji. Nie bylo o tym zadnego ostrzezenia poza naszym wlasnym alertem.
-# `openai/gpt-oss-20b` zweryfikowany na realnym promptcie: pelny JSON (top3 +
-# kupon_a..d + ostrzezenia), `finish_reason: stop`, odpowiedz po polsku.
-GROQ_MODEL   = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+# KOREKTA 22.08 wieczorem: pierwotnie ustawiono `gpt-oss-20b`, ale zmierzone na
+# REALNYM prompcie okazal sie NIESTABILNY — w trzech probach zwrocil top3 o dlugosci
+# 1, 1 i 0, a przy `reasoning_effort=medium` spalil caly budzet na rozumowanie
+# i skonczyl na `finish_reason: length` bez tresci. Pusty `top3` to dokladnie ta
+# awaria, ktora naprawiamy (przebieg konczy sie zerem predykcji).
+#
+# `openai/gpt-oss-120b` w tych samych warunkach: top3=3, po polsku, `stop`,
+# ~1550 tokenow wyjscia. Limity konta (konsola Groq): 30 req/min, 1000 req/dzien,
+# 8K tok/min, 200K tok/dzien — przy naszych 10-20 wywolaniach dziennie z zapasem.
+GROQ_MODEL   = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_TAGS_URL = OLLAMA_URL.rsplit("/api/", 1)[0] + "/api/tags"
 AI_PREFER_LOCAL = os.getenv("AI_PREFER_LOCAL", "0").strip() in ("1", "true", "True", "yes")
 
 # ── Limity Groq free tier (2026-07, z nagłówków x-ratelimit-*) ──────────────────
-#   Model                       req/dzień   tok/min   typ
-#   llama-3.1-8b-instant          14400      6000     szybki
-#   llama-3.3-70b-versatile        1000     12000     mocny, non-reasoning
-#   openai/gpt-oss-120b            1000      8000     REASONING (myśli→tokeny)
-#   qwen/qwen3-32b                 1000      ~         REASONING (wycieka <think>)
+#   Model                       req/dzień   tok/min   tok/dzień   typ
+#   openai/gpt-oss-120b            1000       8000      200K       REASONING — WYBRANY
+#   openai/gpt-oss-20b             1000       8000      200K       REASONING, gubi top3
+#   groq/compound-mini              250      70000    bez limitu   dziala, ale zerze 2x tokenow
+#   groq/compound                   250      70000    bez limitu   agentowy
+#   qwen/qwen3.6-27b               1000       8000      200K       wycieka <think> do tresci
+#   allam-2-7b                     7000       6000      500K       arabski
+# (odczytane z console.groq.com/settings/limits, 22.08.2026 — plan darmowy)
 # Pipeline: ~10-20 callów/dzień → req/dzień z ogromnym zapasem. tok/min ciasny ale
 # calle rozłożone + retry/circuit-breaker obsługują 429.
 #
@@ -115,6 +125,7 @@ def _groq_call_impl(klucz: str, prompt: str, max_tokens: int) -> str:
 # PRZED wysłaniem — odmowa kosztuje cały dzienny przebieg.
 _TPM_MODELI = {
     "openai/gpt-oss-20b":      8000,
+    "groq/compound-mini":     70000,
     "llama-3.1-8b-instant":    6000,   # wycofany przez Groqa 08.2026, zostawiony dla historii
     "llama-3.3-70b-versatile": 12000,
     "openai/gpt-oss-120b":     8000,
