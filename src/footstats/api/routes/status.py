@@ -153,10 +153,21 @@ def pipeline_health(
                         f"brak nowych predykcji od {wiek_h:.0f}h (próg {max_wiek_h:.0f}h)"
                     )
 
+            # `settle_attempts >= MAX_PROB_ROZLICZENIA` = predykcje SWIADOMIE
+            # porzucone: zadne zrodlo nie ma juz ich wyniku, wiec nadrabianie
+            # przestalo je probowac (patrz `_wybierz_do_rozliczenia`). Liczenie
+            # ich tutaj czynilo alarm WIECZNYM — 22.08 bylo takich 49 z 95, wiec
+            # alert palil sie niezaleznie od stanu potoku i zagluszyl prawdziwa
+            # awarie (wycofany model Groqa). Alarm, ktory nigdy nie gasnie, uczy
+            # go ignorowac.
+            from footstats.scrapers.results_updater import MAX_PROB_ROZLICZENIA
+
             row2 = conn.execute(
                 "SELECT COUNT(*) AS n FROM predictions"
-                " WHERE tip_correct IS NULL AND match_date < ?",
-                ((datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d"),),
+                " WHERE tip_correct IS NULL AND match_date < ?"
+                "   AND COALESCE(settle_attempts, 0) < ?",
+                ((datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d"),
+                 MAX_PROB_ROZLICZENIA),
             ).fetchone()
             nierozliczone = (row2["n"] if row2 else 0) or 0
             if nierozliczone > max_zaleglosci:
