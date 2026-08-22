@@ -161,6 +161,55 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
+## 🚨 AWARIA 16-22.08 — Groq wycofał model (naprawione 22.08)
+
+**Potok stał 6 dni przy `exit=0`.** `llama-3.1-8b-instant` zniknął z API Groqa →
+404 NotFoundError → brak odpowiedzi → zero predykcji. Dostawca nie ostrzegł.
+
+- [x] ✅ Model → `openai/gpt-oss-120b`. ⚠️ **Korekta w trakcie:** najpierw ustawiłem
+  `gpt-oss-20b` po teście na uproszczonym prompcie; na realnym okazał się niestabilny
+  (top3 = 1, 1, **0**; przy `reasoning_effort=medium` spalił 3750 tokenów na rozumowanie
+  i nie zwrócił nic). 120b: top3=3, po polsku, ~1550 tokenów.
+- [x] ✅ `reasoning_effort: low` dla rodziny gpt-oss — model płaci za myślenie z tego
+  samego budżetu wyjścia (330/400 tokenów przy domyślnym wysiłku).
+- [x] ✅ **`GROQ_MODEL` ustawiony JAWNIE** na obu jobach i na API. To była przyczyna
+  źródłowa: nazwa modelu żyła wyłącznie jako wartość domyślna w kodzie, a lokalny `.env`
+  wskazywał już co innego niż produkcja.
+- [x] ✅ Alarm o zaległościach wykluczał porzucone (97 → 48) — palił się wiecznie
+  i **zagłuszył prawdziwą awarię**.
+
+### ⚠️ ZNALEZIONE PRZY OKAZJI — Groq zmyśla pewność
+Zmierzone (3 próby na zestaw, `gpt-oss-120b`):
+
+| dane wejściowe | wynik |
+|---|---|
+| żaden rynek nie sięga 60% | `top3=0` · `top3=3 [68,62,65]` · `top3=3 [71,68,66]` |
+| rynki powyżej 60% | `top3=3` za każdym razem |
+
+Gdy dane nie dają żadnego typu powyżej progu, model **albo poprawnie zwraca pustkę,
+albo wymyśla pewności** (68%, 71%) nieistniejące w danych. Losowo, ~1 na 3.
+
+**To NIE jest groźne dla typów** — potok i tak nadpisuje `pewnosc_pct`
+prawdopodobieństwem modelu (`_nadpisz_pewnosc_modelem`), podmienia kurs na realny
+(KROK 4) i nadpisuje tip argmaxem (`GROQ_TIP_OVERRIDE`). Groq jest tylko warstwą
+opisu, nie decyduje.
+
+**Groźne jest co innego:** gdy Groq zwróci pustkę, przebieg zapisuje ZERO predykcji —
+mimo że Poisson policzył je niezależnie. Potok jest uzależniony od LLM-a w tym,
+żeby *wypisał listę*, choć typy powstają bez niego.
+- [ ] **A1 — odciąć zapis predykcji od odpowiedzi LLM-a.** Predykcje mają powstawać
+  z modelu (Poisson/ensemble) niezależnie od tego, czy Groq cokolwiek zwrócił.
+  Dziś pusta odpowiedź = stracony dzień. To najgroźniejsza pojedyncza zależność
+  w potoku i przyczyna obu awarii (15.08 zepsuty JSON, 16-22.08 wycofany model).
+
+### Sprawdzone i odrzucone
+- **Podział promptu na warstwy** (reguły w wiadomości systemowej, potem kontekst →
+  mecze → polecenie): A/B po 3 próby. Tokeny wejścia 1285 vs 1289, ta sama
+  częstość pustego `top3`. **Bez mierzalnej korzyści** — nie wdrażać.
+- `qwen/qwen3.6-27b` — wypluwa `<think>` do treści, parser nie ma szans.
+- `groq/compound-mini` — działa (top3=3), ale zjada 3423 tokeny zamiast 1550.
+  Rezerwa: 70K tok/min i brak dziennego limitu tokenów (za to 250 req/dzień).
+
 ## 🔍 AUDYT 2026-08-17 — 23 znaleziska (0 krytycznych)
 
 > Pełny raport z dowodami: artefakt „Audyt FootStats". Poniżej lista do odhaczania.
@@ -217,7 +266,12 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 - [ ] **B2 — limity zapytań mogą liczyć zły adres.** `get_remote_address` = `request.client.host`, za Cloud Run to load balancer, nie klient. **Podejrzenie, nie fakt** — potwierdzić testem z dwóch sieci. Fix: `key_func` czytający `X-Forwarded-For`.
 - [ ] **B3 — python-jose → PyJWT**, żeby zdjąć `--ignore-vuln PYSEC-2026-1325` (ecdsa) z pip-audit.
 - [ ] **B4 — zależności bez wersji.** 50 pozycji, **0 przypiętych**, brak lockfile → build niereprodukowalny. Fix: `pip-compile` + lock z hashami.
-- [ ] **D2 — `/cron/settle-manual` NIE jest w Schedulerze** (7 zadań, żadne go nie woła) → kupony `manual` z dziennika nie rozliczają się. Dotyczy m.in. #149.
+- [ ] **D2 — `/cron/settle-manual` NIE jest w Schedulerze.** ⚠️ **Sprawdzone na sucho na produkcji 17.08: wpięcie go dziś NIC BY NIE DAŁO.**
+  - Dry-run zwrócił `{"settled": 0, "skipped": 1, "errors": 0}` — endpoint działa, znalazł jedyny kupon manualny (#149) i **pominął** go.
+  - **Powód:** `settle_manual_coupons` rozlicza wyłącznie z NASZYCH `predictions`, a dla meczu Yunnan Yukun – Dalian Yingbo (15.08) predykcji **w ogóle nie ma** — przebieg o 11:00 tego dnia padł na parsowaniu JSON-a od Groqa. W bazie jest tylko Yunnan Yukun – Chengdu Rongcheng z 08.08, czyli inny mecz.
+  - **Wniosek:** samo zadanie w Schedulerze jest bezpieczne (0 błędów) i tanie, ale rozlicza tylko mecze, które sami typowaliśmy. Reszta zostaje na ręczne oznaczenie w GUI — i tak działa zaprojektowana hybryda („co mamy = my, reszta = user ręcznie").
+  - ⏳ **Decyzja usera:** wpiąć do Schedulera (dry-run pokazuje, że bezpieczne) czy zostawić trigger ręczny, skoro dziś i tak nie ma czego rozliczać.
+- [ ] **D5 — kupony na mecze BEZ naszej predykcji nie rozliczą się nigdy.** Wyszło przy D2. `settle_manual_coupons` czyta tylko `predictions`, a `coupon_settlement` dla kuponów AI ma osobną ścieżkę z czterema źródłami wyników (`_find_leg_result`). Dziennik użytkownika nie korzysta z żadnego z nich. Do rozważenia: dopuścić `_find_leg_result` również dla kuponów `manual` (kosztuje zapytania do API-Football, więc pod flagą).
 - [ ] **D3 — 231 predykcji z `odds_verified=0`** (kurs od Groqa) → ROI/CLV z historii nic nie znaczą. Decyzja: backfill kursów czy trwałe wykluczenie z raportów.
 - [ ] **I1 — wdrożenie jobów to ręczna pułapka.** Przy każdym buildzie 2 najnowsze digesty są BEZ TAGU (atestacja BuildKita); przypięcie takiego zatrzymało pipeline 30.07–02.08. API ma CD, joby nie. Fix: joby w `cd.yml`.
 - [ ] **I2 — licznik tokenów myli się 2×.** Heurystyka 1,4 znaku/token vs realne 2,86 (1338 vs **655** tokenów na szkielecie) → prompt bywa przycinany bez potrzeby. Fix: `tiktoken` — **wymaga `pip install`, czyli zgody**.
