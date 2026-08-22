@@ -15,7 +15,12 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-GROQ_MODEL   = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+# 22.08.2026: Groq WYCOFAL `llama-3.1-8b-instant` — API zwracalo 404 (NotFoundError),
+# wiec KROK 3 nie dostawal odpowiedzi i caly dzienny przebieg konczyl sie zerem
+# predykcji. Nie bylo o tym zadnego ostrzezenia poza naszym wlasnym alertem.
+# `openai/gpt-oss-20b` zweryfikowany na realnym promptcie: pelny JSON (top3 +
+# kupon_a..d + ostrzezenia), `finish_reason: stop`, odpowiedz po polsku.
+GROQ_MODEL   = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_TAGS_URL = OLLAMA_URL.rsplit("/api/", 1)[0] + "/api/tags"
@@ -90,6 +95,12 @@ def _groq_call_impl(klucz: str, prompt: str, max_tokens: int) -> str:
         ],
         max_tokens=max_tokens,
         temperature=0.3,
+        # `gpt-oss` rozumuje przed odpowiedzia i placi za to z TEGO SAMEGO budzetu
+        # wyjscia. Zmierzone: przy domyslnym wysilku 330 z 400 tokenow poszlo na
+        # rozumowanie i odpowiedz urwala sie w polowie (`finish_reason: length`).
+        # Przy `low` — 85 tokenow i pelny JSON. Parametr podajemy tylko modelom,
+        # ktore go znaja: reszta odrzucilaby zadanie jako nieznane pole.
+        **({"reasoning_effort": "low"} if "gpt-oss" in GROQ_MODEL else {}),
     )
     return resp.choices[0].message.content
 
@@ -103,7 +114,8 @@ def _groq_call_impl(klucz: str, prompt: str, max_tokens: int) -> str:
 # meczów zrobiło się realnie więcej. Limit trzeba znać PER MODEL i sprawdzać
 # PRZED wysłaniem — odmowa kosztuje cały dzienny przebieg.
 _TPM_MODELI = {
-    "llama-3.1-8b-instant":    6000,
+    "openai/gpt-oss-20b":      8000,
+    "llama-3.1-8b-instant":    6000,   # wycofany przez Groqa 08.2026, zostawiony dla historii
     "llama-3.3-70b-versatile": 12000,
     "openai/gpt-oss-120b":     8000,
 }
