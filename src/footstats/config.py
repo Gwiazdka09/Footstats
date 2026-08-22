@@ -125,6 +125,16 @@ GROQ_TIP_OVERRIDE_2WAY = float(os.getenv("GROQ_TIP_OVERRIDE_2WAY", "45"))
 # Do tego czasu typ jest LICZONY i LOGOWANY, tylko nie gra — jak SELECTION_MIN_CONF.
 BTTS_TWO_WAY = os.getenv("BTTS_TWO_WAY", "0").strip() in ("1", "true", "True")
 
+# ── A1: typy powstaja z modelu takze wtedy, gdy warstwa LLM nic nie zwrocila ──
+# Poisson/ensemble liczy prawdopodobienstwa i wybiera typ bez udzialu Groqa, ale
+# do 08.2026 caly przebieg zapisywal ZERO predykcji, gdy model jezykowy nie wypisal
+# listy `top3`. Zdarzylo sie dwa razy w tygodniu: 15.08 (JSON nie sparsowany) i
+# 16-22.08 (Groq wycofal `llama-3.1-8b-instant`, 404 przez 6 dni przy exit=0).
+# Default ON — awaria, ktora to naprawia, jest calkowita. TYPY_BEZ_LLM=0 cofa
+# zapis bez redeploya; wiersze sa oznaczone `kupon_type='model'`, wiec daja sie
+# odsiac i zmierzyc osobno od typow, ktore przeszly przez opis LLM-a.
+TYPY_BEZ_LLM = os.getenv("TYPY_BEZ_LLM", "1").strip() in ("1", "true", "True")
+
 # Konto docelowe: daily_agent, operator_agent, zapis kuponów systemowych
 OPERATOR_ADMIN_USERNAME = os.getenv("OPERATOR_ADMIN_USERNAME", "Admin_JG").strip() or "Admin_JG"
 OPERATOR_STAWKA_A = float(os.getenv("OPERATOR_STAWKA_A", "10"))

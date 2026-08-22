@@ -76,6 +76,9 @@ superoferta_error.png
 
 # ── Node modules i cache builds
 src/footstats/gui/node_modules/
+# Vitest zaklada cache w katalogu, z ktorego zostal uruchomiony —
+# przy odpaleniu z korzenia repo powstaje tu `node_modules/.vite/`.
+node_modules/
 
 # ── Edytory
 .vscode/

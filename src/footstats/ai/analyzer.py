@@ -599,10 +599,62 @@ def _buduj_opis_meczu(w: dict) -> str:
 from footstats.ai.analyzer_helpers import (
     _wzbogac_forme, _sygnaly_summary, _auto_zapisz_backtest, _buduj_cel_kuponow,
     _wyciagnij_json, _deduplikuj_kupony, _wymusz_40pct, _nadpisz_pewnosc_modelem,
-    _nadpisz_tip_modelem,
+    _nadpisz_tip_modelem, zbuduj_typy_z_modelu,
 )
 # Re-eksport wsteczny (importowany z tego modułu przez testy/inne moduły):
 from footstats.ai.analyzer_helpers import _analizuj_forme  # noqa: F401
+
+def _dopisz_typy_z_modelu(dane: dict, wyniki: list) -> int:
+    """A1 — wypelnia `top3` typami modelu, gdy warstwa LLM nic nie wypisala.
+
+    Zwraca liczbe dopisanych typow. Zero oznacza, ze zaden mecz nie przeszedl
+    filtrow selekcji (brak kursu, longshot, prob ponizej progu) — wtedy cisza
+    jest poprawna i niczego nie wymyslamy na sile.
+    """
+    from footstats import config as _cfg
+    if not _cfg.TYPY_BEZ_LLM:
+        logger.warning("[AI] Brak typow od modelu jezykowego, a sciezka awaryjna"
+                       " jest wylaczona (TYPY_BEZ_LLM=0) — przebieg bez predykcji.")
+        return 0
+
+    legi = zbuduj_typy_z_modelu(wyniki)
+    if not legi:
+        logger.error("[AI] Brak typow od modelu jezykowego I zaden z %d meczow nie"
+                     " przeszedl filtrow selekcji — przebieg bez predykcji.",
+                     len(wyniki))
+        return 0
+
+    dane["top3"] = legi
+    dane["_top3_z_modelu"] = True
+    ostrz = dane.get("ostrzezenia")
+    nota = ("Typy wybrane przez model bez udzialu LLM-a"
+            " (warstwa opisowa nie zwrocila listy).")
+    dane["ostrzezenia"] = f"{ostrz} | {nota}" if isinstance(ostrz, str) and ostrz else nota
+    logger.warning("[AI] Model jezykowy nie zwrocil typow — %d typow zbudowanych"
+                   " z modelu (Poisson/ensemble), zapis oznaczony kupon_type='model'.",
+                   len(legi))
+    return len(legi)
+
+
+def typy_awaryjne_z_modelu(wyniki: list) -> dict:
+    """A1 — komplet typow z modelu, gdy warstwa LLM w ogole nie odpowiedziala.
+
+    Uzywane przez potok dzienny tam, gdzie do `ai_analiza_pewniaczki` nawet nie
+    dochodzi: brak klucza API albo wyjatek transportowy (413, 404 po wycofaniu
+    modelu, timeout). Wczesniej oba przypadki konczyly sie zerem predykcji —
+    a to jest dokladnie ten sam material, ktory model policzyl juz wczesniej.
+
+    Zwraca slownik w formacie `ai_analiza_pewniaczki` (klucz `top3`), zapisany
+    do `predictions` z etykieta `kupon_type='model'`. Pusty, gdy zaden mecz nie
+    przeszedl filtrow selekcji.
+    """
+    dane: dict = {}
+    if not wyniki:
+        return dane
+    if _dopisz_typy_z_modelu(dane, wyniki):
+        _auto_zapisz_backtest(dane, wyniki)
+    return dane
+
 
 def ai_analiza_pewniaczki(
     wyniki: list,
@@ -704,9 +756,15 @@ def ai_analiza_pewniaczki(
     # Langfuse observability is handled globally
     tekst = _zapytaj_typera(prompt, max_tokens=1500)
     dane = _wyciagnij_json(tekst)
-    if "top3" not in dane:
+    sparsowane = "top3" in dane
+    if not sparsowane:
         dane["_raw"] = tekst
-    else:
+    # A1: typy powstaja z modelu niezaleznie od tego, co (i czy) zwrocil LLM.
+    # Bez tego pusta lub niesparsowana odpowiedz kasowala CALY dzien predykcji,
+    # mimo ze Poisson policzyl je wczesniej i bez udzialu Groqa.
+    if not dane.get("top3"):
+        _dopisz_typy_z_modelu(dane, wyniki)
+    if sparsowane or dane.get("top3"):
         # C2: override realnego tipu argmaxem modelu (gated GROQ_TIP_OVERRIDE,
         # default OFF). PRZED pewnością/bramkami → liczą się na finalnym tipie.
         from footstats import config as _cfg

@@ -151,9 +151,17 @@ def _analizuj_groq(
     cel_wygrana_b: float | None = None,
     stawka: float = 10.0,
 ) -> dict:
-    from footstats.ai.analyzer import ai_analiza_pewniaczki, ai_groq_dostepny
+    from footstats.ai.analyzer import (
+        ai_analiza_pewniaczki, ai_groq_dostepny, typy_awaryjne_z_modelu,
+    )
     if not ai_groq_dostepny():
-        _blad("Brak GROQ_API_KEY w .env")
+        # A1: brak klucza konczyl przebieg przez sys.exit(1) — razem z typami,
+        # ktore model policzyl juz przed tym krokiem i ktore nie potrzebuja
+        # Groqa do niczego. Degradujemy glosno zamiast przerywac.
+        log.error("[Agent] Brak GROQ_API_KEY — warstwa opisowa pominieta,"
+                  " typy powstaja z samego modelu.")
+        console.print("[red]Brak GROQ_API_KEY — typy z samego modelu.[/red]")
+        return typy_awaryjne_z_modelu(wyniki)
     console.print("[dim]Groq: analizuję i buduję kupony...[/dim]")
     try:
         return ai_analiza_pewniaczki(
@@ -178,7 +186,10 @@ def _analizuj_groq(
         console.print(f"[red]Groq niedostępny: {e}[/red]")
         console.print("[yellow]Przebieg degraduje do części modelowej "
                       "— kupony AI pominięte.[/yellow]")
-        return {}
+        # A1: "degraduje do czesci modelowej" bylo dotad tylko opisem — zwracany
+        # pusty slownik oznaczal ZERO zapisanych typow. Teraz czesc modelowa
+        # faktycznie zostaje.
+        return typy_awaryjne_z_modelu(wyniki)
 
 
 # ── Krok 4: Weryfikacja halucynacji ──────────────────────────────────────────
@@ -223,8 +234,13 @@ def wykryj_anomalie_runu(n_kandydatow: int, n_po_filtrach: int, n_kuponow_system
     if n_kandydatow == 0:
         return "0 kandydatów z Bzzoiro (źródło puste/niedostępne?)"
     if n_po_filtrach > 0 and not ma_typy:
+        # Od A1 (23.08) awaria warstwy LLM juz TEGO nie wywola — typy powstaja
+        # wtedy z modelu. Ten warunek zostaje jako ostatnia siatka i oznacza,
+        # ze rowniez selekcja modelu nie znalazla ani jednego typu: brak kursow,
+        # same longshoty albo prob ponizej progu.
         return (f"0 typów mimo {n_po_filtrach} meczów po filtrach"
-                f" (odpowiedź modelu nie sparsowana? pusty top3?) — ZERO predykcji zapisanych")
+                f" (selekcja modelu nic nie wybrala: kursy? progi?)"
+                f" — ZERO predykcji zapisanych")
     if system_paper and n_kuponow_system == 0:
         return "0 kuponów System mimo --system-paper (kursy? filtry? pauza?)"
     return None

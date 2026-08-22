@@ -212,6 +212,62 @@ def koryguj_tip_ou_btts(tip: str, o25, bt, prog_2way: float = 45.0) -> "tuple[st
     return tip, False
 
 
+# A1: ile typow moze powstac bez udzialu LLM-a. Ta sama pojemnosc co `top3`,
+# zeby dzien awaryjny nie mial innej charakterystyki niz dzien normalny.
+LIMIT_TYPOW_Z_MODELU = 3
+
+
+def zbuduj_typy_z_modelu(wyniki: list, limit: int = LIMIT_TYPOW_Z_MODELU) -> list[dict]:
+    """A1 — typy wylacznie z modelu, bez ani jednego slowa od LLM-a.
+
+    Poisson/ensemble liczy prawdopodobienstwa i wybiera typ calkowicie bez Groqa,
+    ale do 08.2026 przebieg zapisywal ZERO predykcji, gdy model jezykowy nie
+    wypisal listy `top3`. Ta funkcja odcina te zaleznosc: liczby juz sa, trzeba
+    je tylko przepisac do tej samej struktury, ktorej uzywa reszta potoku.
+
+    Selekcja to `najlepszy_typ()` z paper-tradingu System — CELOWO nie nowy
+    algorytm. Dzieki temu typ zapisany bez LLM-a jest tym samym typem, ktory
+    system i tak by postawil, a nie trzecim wariantem selekcji do osobnego
+    pomiaru. Dziedziczy tez jego filtry (prog `SELECTION_MIN_CONF`, kurs 1.2-4.0)
+    i jego znana stronniczosc ku rynkom 2-way (patrz `tests/test_selekcja_
+    stronniczosc_rynkow.py`) — awaryjna sciezka nie jest miejscem na jej naprawe.
+
+    Zwraca nogi w formacie `top3` (mecz/typ/kurs/pewnosc_pct/ev_netto), oznaczone
+    `_z_modelu`, posortowane od najpewniejszej. Pusta lista, gdy zaden mecz nie
+    przechodzi filtrow — cisza jest wtedy poprawna odpowiedzia.
+    """
+    from footstats.core.kelly import ev_netto
+    from footstats.core.system_paper import najlepszy_typ
+
+    kandydaci = []
+    for w in wyniki:
+        best = najlepszy_typ(w)
+        if best is None:
+            continue
+        prob, tip, kurs = best
+        kandydaci.append((prob, tip, kurs, w))
+
+    kandydaci.sort(key=lambda x: -x[0])
+
+    legi: list[dict] = []
+    for prob, tip, kurs, w in kandydaci[:limit]:
+        # ev_netto w PROCENTACH — tak samo jak w schemacie odpowiedzi Groqa
+        # (`"ev_netto": 6.8`). Ulamek rozjechalby wydruk i Telegram o dwa rzedy.
+        ev_pct = round(ev_netto(prob / 100.0, kurs) * 100, 1)
+        legi.append({
+            "mecz":         f"{w.get('gospodarz', '')} vs {w.get('goscie', '')}",
+            "typ":          tip,
+            "kurs":         round(float(kurs), 2),
+            "pewnosc_pct":  pewnosc_z_modelu(tip, w.get("pred") or {}, prob),
+            "ev_netto":     ev_pct,
+            "uzasadnienie": ("Typ wybrany przez model (Poisson/ensemble) —"
+                             " warstwa opisowa LLM niedostepna."),
+            "ryzyko":       [],
+            "_z_modelu":    True,
+        })
+    return legi
+
+
 def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
     """
     Zapisuje typy AI (top3 + kupony) do bazy backtest po każdej analizie.
@@ -240,6 +296,13 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
 
     def _zapisz(typy: list, kupon_type: str) -> None:
         for t in typy:
+            # A1: typ zbudowany bez LLM-a dostaje wlasna etykiete, zeby dalo sie
+            # go odsiac w analizach (`by_kupon`) i zmierzyc osobno.
+            # `prompt_version` mowi, ktory prompt wyprodukowal wiersz — przy
+            # typie z modelu zaden prompt nie powstal i wpisanie "v5_json"
+            # bylo by falszywym tropem przy analizie wersji promptow.
+            etykieta = "model" if t.get("_z_modelu") else kupon_type
+            wersja = "model_bez_llm" if t.get("_z_modelu") else "v5_json"
             mecz_str = t.get("mecz", "")
             w = _znajdz_mecz(mecz_str)
             czesci = mecz_str.split(" vs ", 1)
@@ -266,16 +329,21 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
                     ai_confidence=conf,
                     league=w.get("liga", ""),
                     odds=t.get("kurs"),
-                    kupon_type=kupon_type,
-                    prompt_version="v5_json",
+                    kupon_type=etykieta,
+                    prompt_version=wersja,
                     factors=faktory,
                     prob_home=pw, prob_draw=pr, prob_away=pp,
                     # Stempel modelu z quick_picks. Pusty tylko dla ścieżek,
                     # które go nie ustawiają — lepsze niż zgadywanie źródła.
                     model_source=w.get("model_source", ""),
                 )
-            except Exception:  # noqa: BLE001 — optional telemetry, never block pipeline
-                pass
+            except Exception as e:  # noqa: BLE001 — zapis nie moze zabic przebiegu
+                # Cisza tutaj byla ostatnim miejscem, w ktorym dzien predykcji
+                # mogl zniknac bez sladu. `predictions` to nie telemetria —
+                # to jedyny zapis tego, co system wytypowal. Nie przerywamy
+                # przebiegu (reszta nog ma sie zapisac), ale mowimy o tym glosno.
+                logger.error("[AI] Nie udalo sie zapisac predykcji %s vs %s [%s]: %s",
+                             home, away, tip, e)
 
     if dane.get("top3"):
         _zapisz(dane["top3"], "top3")

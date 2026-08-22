@@ -197,10 +197,37 @@ opisu, nie decyduje.
 **Groźne jest co innego:** gdy Groq zwróci pustkę, przebieg zapisuje ZERO predykcji —
 mimo że Poisson policzył je niezależnie. Potok jest uzależniony od LLM-a w tym,
 żeby *wypisał listę*, choć typy powstają bez niego.
-- [ ] **A1 — odciąć zapis predykcji od odpowiedzi LLM-a.** Predykcje mają powstawać
-  z modelu (Poisson/ensemble) niezależnie od tego, czy Groq cokolwiek zwrócił.
-  Dziś pusta odpowiedź = stracony dzień. To najgroźniejsza pojedyncza zależność
-  w potoku i przyczyna obu awarii (15.08 zepsuty JSON, 16-22.08 wycofany model).
+- [x] ✅ **A1 — ZROBIONE 23.08.** Zapis predykcji odcięty od odpowiedzi LLM-a.
+  Typy powstają z modelu (Poisson/ensemble) niezależnie od tego, czy Groq
+  cokolwiek zwrócił — to była najgroźniejsza pojedyncza zależność w potoku
+  i przyczyna obu awarii (15.08 zepsuty JSON, 16-22.08 wycofany model).
+  - **Zatkane były TRZY dziury, nie jedna** — wszystkie kończyły się zerem predykcji:
+    1. odpowiedź nie do sparsowania → `top3` nie istniało (15.08),
+    2. `top3` puste mimo poprawnego JSON-a (Groq nie znajdował nic powyżej progu),
+    3. do analizy w ogóle nie dochodziło — brak `GROQ_API_KEY` kończył przebieg
+       przez `sys.exit(1)`, a wyjątek transportowy (404/413/timeout) zwracał `{}`
+       mimo komunikatu „przebieg degraduje do części modelowej".
+  - **Selekcja awaryjna to `najlepszy_typ()`** z paper-tradingu System — CELOWO nie
+    nowy algorytm. Typ zapisany bez LLM-a jest tym samym typem, który system i tak
+    by postawił, a nie trzecim wariantem selekcji do osobnego pomiaru. Dziedziczy
+    jego filtry (próg `SELECTION_MIN_CONF`, kurs 1.2–4.0) i jego znaną stronniczość
+    ku rynkom 2-way — awaryjna ścieżka nie jest miejscem na jej naprawę.
+  - **Rozpoznawalne w bazie:** `kupon_type='model'` + `prompt_version='model_bez_llm'`.
+    Bez tego nie dałoby się zmierzyć, czy typy bez warstwy opisowej zachowują się
+    inaczej. Reszta potoku (weryfikacja kursów w KROKU 4, uzgodnienie, Kelly,
+    decision score) działa na nich bez zmian — wchodzą tym samym `top3`.
+  - **Cisza dalej bywa poprawna:** gdy żaden mecz nie ma kursu albo wszystkie
+    odpadają na filtrach, nie zapisujemy nic i logujemy ERROR. Nie wymyślamy typu
+    na siłę tylko po to, żeby dzień nie był pusty.
+  - **Przy okazji zamknięte ostatnie ciche miejsce w ścieżce zapisu:** `save_prediction`
+    było owinięte w `except Exception: pass` z komentarzem „optional telemetry".
+    `predictions` to nie telemetria — to jedyny zapis tego, co system wytypował.
+    Awaria zapisu nadal nie przerywa przebiegu (kolejne nogi mają się zapisać),
+    ale trafia do logu jako ERROR zamiast znikać.
+  - Odwracalne bez redeploya: `TYPY_BEZ_LLM=0`. +27 testów (`tests/test_typy_bez_llm.py`),
+    w tym przejście typu przez KROK 4 (weryfikacja kursów) i uzgodnienie z bazą.
+  - `.env.example` miał dalej `GROQ_MODEL=llama-3.1-8b-instant` — model wycofany
+    przez Groqa 16.08. Poprawione na `openai/gpt-oss-120b`.
 
 ### Sprawdzone i odrzucone
 - **Podział promptu na warstwy** (reguły w wiadomości systemowej, potem kontekst →

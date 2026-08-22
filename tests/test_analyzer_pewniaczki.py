@@ -86,7 +86,15 @@ def test_odpowiedz_bez_top3_zachowuje_surowy_tekst(rura):
 
 
 def test_nieudany_parse_nie_uruchamia_bramek(rura):
-    """Bramki na pustym słowniku to praca na niczym."""
+    """Bramki na pustym słowniku to praca na niczym.
+
+    UWAGA — od A1 (08.2026) nieudany parse NIE oznacza już dnia bez typów:
+    `ai_analiza_pewniaczki` buduje wtedy `top3` z samego modelu i przepuszcza je
+    przez ten sam łańcuch bramek. Ten test opisuje przypadek, w którym awaryjna
+    ścieżka nie ma z czego zbudować typu — `_mecz()` nie ma kursów, więc filtry
+    selekcji wycinają go w całości. Zachowanie z kursami pilnuje
+    `tests/test_typy_bez_llm.py`.
+    """
     rura["odpowiedz"] = "nie-json"
 
     an.ai_analiza_pewniaczki([_mecz()], pobierz_forme=False)
