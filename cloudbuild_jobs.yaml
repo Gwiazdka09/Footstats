@@ -4,6 +4,13 @@
 # a my potrzebujemy `Dockerfile.jobs` (Playwright + chromium + parquet). Wcześniej
 # ta konfiguracja żyła w scratchpadzie sesji, przez co P0/A nie dało się powtórzyć.
 #
+# ŚCIEŻKA NORMALNA OD 23.08 (I1): joby wdraża `.github/workflows/cd-jobs.yml` przy
+# każdym pushu na `main` — buduje, robi smoke-import i dopiero wtedy przypina
+# joby do digestu. Ten plik został jako droga awaryjna: ręczny build spod lokalnego
+# katalogu, gdy CD nie działa albo trzeba zbudować coś, czego nie ma na `main`.
+# Jeśli sięgasz tu w normalnym trybie pracy, prawdopodobnie CD jest zepsute —
+# napraw je, zamiast obchodzić.
+#
 # Użycie:
 #   gcloud builds submit --config cloudbuild_jobs.yaml .
 #

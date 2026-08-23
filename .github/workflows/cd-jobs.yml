@@ -1,0 +1,134 @@
+name: CD — Deploy Cloud Run Jobs
+
+# Wdrożenie obrazu jobów (`footstats-final` 11:00, `footstats-evening` 23:00).
+#
+# PO CO OSOBNY PLIK: API wdraża się z `cd.yml` w ~2 minuty, a ten obraz ciągnie
+# Playwright + chromium i buduje się kilkanaście. Trzymanie ich razem znaczyłoby,
+# że każda poprawka w API czeka na chromium. Osobny workflow: awaria jednego nie
+# blokuje drugiego.
+#
+# CO TO NAPRAWIA (I1) — dwie awarie z tego samego źródła, obie z ręcznego procesu:
+#
+#   * 29.07 — joby wskazywały ruchomy tag `footstats-jobs:latest`, więc build
+#     pomyślany jako neutralny podmienił im obraz przy najbliższym uruchomieniu.
+#
+#   * 30.07-02.08 — pipeline stał TRZY DNI na uszkodzonym obrazie. Po każdym
+#     buildzie BuildKit dopisuje wpisy atestacji, które w `artifacts docker images
+#     list` wyglądają jak najnowsze obrazy, ale NIE MAJĄ TAGU. Człowiek przypiął
+#     najnowszy digest z listy — czyli atestację, nie obraz.
+#
+# DECYZJA, KTÓRA ZMIENIA WCZEŚNIEJSZĄ: `cloudbuild_jobs.yaml` mówił „build ma
+# budować, podmiana obrazu ma być OSOBNĄ decyzją". To była właściwa reakcja na
+# 29.07, gdzie obraz podmieniał się PRZYPADKIEM. Deterministyczne wdrożenie
+# z merge'a na `main` to co innego niż przypadkowa podmiana — a rozjazd kontraktów
+# (API wdraża się samo, joby nie) jest dokładnie powodem, dla którego joby gniły.
+# KOSZT ZOSTAJE i nie jest ukryty: od teraz każdy merge na `main` zmienia
+# produkcyjny pipeline. Dlatego smoke-import stoi PRZED podmianą, nie po.
+#
+# Zabezpieczenia pilnuje `tests/test_cd_joby.py`.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Dwa pushe pod rząd nie mogą się wyprzedzić — inaczej joby dostałyby starszy
+# obraz niż `main`. Bez `cancel-in-progress`: przerwany bieg mógłby zostawić
+# jeden job podmieniony, a drugi nie.
+concurrency:
+  group: cd-jobs
+  cancel-in-progress: false
+
+env:
+  IMAGE: europe-west1-docker.pkg.dev/footstats-495009/footstats/footstats-jobs
+  REGION: europe-west1
+
+jobs:
+  deploy-jobs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Obraz z chromium + zależnościami systemowymi potrafi zjeść kilka GB.
+      # Runner ma ~14 GB wolnego, więc bez tego build bywa flaky na "no space
+      # left on device" — a taka awaria wygląda jak problem z kodem.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
+          df -h /
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
+
+      - name: Build and push jobs image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.jobs
+          push: true
+          # TYLKO tag immutable. NIE `:latest` — patrz awaria 29.07 w nagłówku.
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          # SEDNO NAPRAWY AWARII 30.07-02.08: bez atestacji BuildKit nie tworzy
+          # wpisów bez tagu, więc nie ma czego pomylić z obrazem. Naprawa u ŹRÓDŁA,
+          # nie objawu — inaczej wracamy do wybierania digestu z listy.
+          provenance: false
+          sbom: false
+
+      # Obraz instaluje zależności z locka, a sam pakiet przez `--no-deps`, więc
+      # brakująca paczka wychodzi dopiero PRZY IMPORCIE — czyli normalnie na
+      # produkcji o 11:00. Ten krok przesuwa wykrycie tutaj, PRZED podmianą.
+      # Importujemy warstwy ciągnące ciężkie zależności, bez wywoływania czegokolwiek:
+      # żadnego dotknięcia bazy ani sieci.
+      - name: Smoke import (przed podmiana produkcji)
+        run: |
+          set -euo pipefail
+          docker pull "${IMAGE}@${{ steps.build.outputs.digest }}"
+          docker run --rm "${IMAGE}@${{ steps.build.outputs.digest }}" python -c "
+          import bs4, groq, langfuse, playwright, psycopg2, pyarrow, sklearn
+          import footstats.ai.analyzer
+          import footstats.core.quick_picks
+          import footstats.scrapers.results_updater
+          print('smoke import OK')
+          "
+
+      # Digest, nie tag: job trzyma w specie dokładnie to, co dostanie, więc
+      # ruchomy tag oznaczałby, że dowolny późniejszy build zmienia produkcję.
+      - name: Pin jobs to the built digest
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.build.outputs.digest }}"
+          for JOB in footstats-final footstats-evening; do
+            gcloud run jobs update "$JOB" \
+              --region "$REGION" \
+              --image "${IMAGE}@${DIGEST}"
+          done
+
+      # Bez tego „zielony" bieg znaczyłby tylko tyle, że polecenia nie zwróciły
+      # błędu. Sprawdzamy stan faktyczny — tego brakowało przy awarii 30.07.
+      - name: Verify both jobs point at the new digest
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.build.outputs.digest }}"
+          for JOB in footstats-final footstats-evening; do
+            AKTUALNY=$(gcloud run jobs describe "$JOB" --region "$REGION" \
+              --format 'value(spec.template.spec.template.spec.containers[0].image)')
+            echo "$JOB -> $AKTUALNY"
+            if [ "$AKTUALNY" != "${IMAGE}@${DIGEST}" ]; then
+              echo "::error::$JOB wskazuje $AKTUALNY zamiast ${IMAGE}@${DIGEST}"
+              exit 1
+            fi
+          done

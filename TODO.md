@@ -498,7 +498,19 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
 
 - [ ] **D5 — kupony na mecze BEZ naszej predykcji nie rozliczą się nigdy.** Wyszło przy D2. `settle_manual_coupons` czyta tylko `predictions`, a `coupon_settlement` dla kuponów AI ma osobną ścieżkę z czterema źródłami wyników (`_find_leg_result`). Dziennik użytkownika nie korzysta z żadnego z nich. Do rozważenia: dopuścić `_find_leg_result` również dla kuponów `manual` (kosztuje zapytania do API-Football, więc pod flagą).
 - [ ] **D3 — 231 predykcji z `odds_verified=0`** (kurs od Groqa) → ROI/CLV z historii nic nie znaczą. Decyzja: backfill kursów czy trwałe wykluczenie z raportów.
-- [ ] **I1 — wdrożenie jobów to ręczna pułapka.** Przy każdym buildzie 2 najnowsze digesty są BEZ TAGU (atestacja BuildKita); przypięcie takiego zatrzymało pipeline 30.07–02.08. API ma CD, joby nie. Fix: joby w `cd.yml`.
+- [x] ✅ **I1 — ZROBIONE 23.08. Joby mają CD.** Nowy `.github/workflows/cd-jobs.yml`:
+  build `Dockerfile.jobs` → smoke-import → przypięcie obu jobów do digestu → weryfikacja
+  stanu faktycznego. **`provenance: false` gasi pułapkę u źródła** — BuildKit przestaje
+  tworzyć wpisy atestacji BEZ TAGU, czyli nie ma już czego pomylić z obrazem
+  (to one zatrzymały pipeline 30.07–02.08). Tag wyłącznie immutable SHA, nigdy `:latest`
+  (awaria 29.07). Osobny plik od `cd.yml`, bo chromium buduje się kilkanaście minut
+  i nie ma blokować wdrożeń API.
+  **Świadoma zmiana wcześniejszej decyzji:** `cloudbuild_jobs.yaml` mówił „podmiana
+  obrazu ma być OSOBNĄ decyzją" — słuszne wobec awarii 29.07, gdzie obraz podmieniał
+  się PRZYPADKIEM, ale deterministyczne wdrożenie z merge'a to co innego. **Koszt
+  zostaje:** każdy merge na `main` zmienia teraz produkcyjny pipeline — dlatego
+  smoke-import stoi PRZED podmianą. Ręczny `cloudbuild_jobs.yaml` został jako droga
+  awaryjna. +9 testów (`tests/test_cd_joby.py`), w tym strażnik kolejności smoke↔podmiana.
 - [ ] **I2 — licznik tokenów myli się 2×.** Heurystyka 1,4 znaku/token vs realne 2,86 (1338 vs **655** tokenów na szkielecie) → prompt bywa przycinany bez potrzeby. Fix: `tiktoken` — **wymaga `pip install`, czyli zgody**.
 - [ ] **J1 — połowa `except` milczy.** 271 z 546 bez logu i bez `raise`. Strażnik w testach pilnuje SZEROKOŚCI (`except Exception`), nie milczenia. Fix: drugie kryterium w tym samym strażniku.
 - [ ] **J2 — mypy sprawdza 1 katalog** (`scrapers/sources/`) ze 172 plików.

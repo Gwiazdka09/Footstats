@@ -14,11 +14,10 @@ name: Weekly dataset refresh
 #
 # PR zamiast pushu na main: zmiana danych treningowych ma być świadomie
 # przejrzana (ile meczów doszło, czy nie ubyło), a nie wjeżdżać na produkcję
-# w nocy. Merge PR-a uruchamia `cd.yml` (obraz API).
-#
-# UWAGA: `cd.yml` przebudowuje TYLKO serwis API. Obrazu jobów
-# (`footstats-final` / `footstats-evening`) nie rusza — po merge trzeba
-# osobno: `gcloud builds submit --config cloudbuild_jobs.yaml ...`.
+# w nocy. Merge PR-a uruchamia `cd.yml` (obraz API) ORAZ `cd-jobs.yml` (obraz
+# jobów) — od 23.08 (I1) oba obrazy odświeżają się same. Wcześniej joby trzeba
+# było przebudować ręcznie i właśnie dlatego potrafiły zostać z datasetem
+# sprzed miesięcy.
 
 on:
   schedule:
@@ -101,13 +100,10 @@ jobs:
 
           Liczby (przed → po, ostatni mecz) są w logu kroku *Refresh dataset*.
 
-          Po merge `cd.yml` przebuduje obraz **API**. Obraz **jobów** trzeba
-          przebudować osobno:
-
-          ```
-          gcloud builds submit --config cloudbuild_jobs.yaml \
-            --substitutions=_TAG=$(git rev-parse HEAD) .
-          ```
+          Po merge oba obrazy przebudują się same: `cd.yml` (**API**) oraz
+          `cd-jobs.yml` (**joby**, ze smoke-importem przed podmianą). Ręczne
+          `gcloud builds submit --config cloudbuild_jobs.yaml` zostaje wyłącznie
+          jako droga awaryjna, gdy CD nie działa.
           BODY
           )"
           fi
