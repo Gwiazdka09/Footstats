@@ -74,10 +74,15 @@ def test_silnik_parquet_w_zaleznosciach_bazowych_nie_opcjonalnych() -> None:
     assert bazowe & set(SILNIKI_PARQUET), "silnik parquet musi byc w [project.dependencies]"
 
 
-def test_requirements_nadaza_za_pyproject() -> None:
-    """`requirements.txt` służy pip-auditowi w CI — bez wpisu skan omija silnik."""
-    req = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()
-    assert any(s in req for s in SILNIKI_PARQUET), "brak silnika parquet w requirements.txt"
+def test_locki_nadazaja_za_pyproject() -> None:
+    """Locki karmią pip-audit w CI — bez wpisu skan omija silnik parquet.
+
+    Do 23.08 rolę tę pełnił `requirements.txt`; wypadł razem z całym ręcznym
+    lustrem (B9), a skan czyta teraz to, co obrazy realnie instalują.
+    """
+    for lock in ("requirements-api.lock", "requirements-jobs.lock"):
+        tresc = (ROOT / lock).read_text(encoding="utf-8").lower()
+        assert any(s in tresc for s in SILNIKI_PARQUET), f"brak silnika parquet w {lock}"
 
 
 def test_silnik_parquet_realnie_importowalny() -> None:

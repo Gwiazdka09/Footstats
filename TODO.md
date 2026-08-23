@@ -412,10 +412,21 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
     smoke-import. API ma to od dawna w CI (`docker run` + `/health`).
   - `tests/test_lockfile_zgodny.py` pilnuje, żeby lock nie zdryfował od `pyproject`,
     żeby nie było w nim luźnych zakresów i żeby był zbudowany dla linuxa. +7 testów.
-- [ ] **B9 — trzy listy zależności zamiast jednej.** `pyproject.toml` (źródło prawdy),
-  `requirements.txt` (lustro dla `pip-audit`) i dwa locki. Skoro locki mają dokładne
-  wersje, `pip-audit` na locku dawałby lepszy wynik niż na zakresach `>=`. Do rozważenia:
-  wyciąć `requirements.txt` i przestawić CI na lock (razem z `test_dependencies_declared`).
+- [x] ✅ **B9 — ZROBIONE 23.08. Trzy listy zależności → dwie.** `requirements.txt`
+  usunięty, `pip-audit` w CI czyta teraz oba locki (`-r requirements-api.lock
+  -r requirements-jobs.lock`), czyli dokładnie to, co instalują obrazy.
+  **HIPOTEZA SIĘ NIE POTWIERDZIŁA — zmierzone przed zmianą:** podejrzenie było takie,
+  że `pip-audit` rozwiązuje zakresy `>=` do nowszych wersji niż te w obrazie. Porównanie
+  zbiorów dało **83 pakiety w obu wypadkach, zero różnic w nazwach, zero w wersjach**
+  (to samo dla `requirements-api.lock`, 63 pakiety). **Żadnej dziury nie było.**
+  Zmiana broni się czym innym: ta zgodność to własność ŚWIEŻOŚCI locka, nie projektu —
+  locki są przypięte celowo, a zakresy `>=` dryfują ku nowszym wydaniom, więc z czasem
+  skan zacząłby dotyczyć wersji, których nikt nie uruchamia. Lustro było w dodatku
+  przepisywane ręcznie i raz już zdryfowało (wypadły `beautifulsoup4`, `psycopg2-binary`,
+  `sentry-sdk`, `langfuse`, `tenacity`). +6 testów — strażnik pilnuje NIEZMIENNIKA
+  („CI skanuje dokładnie te listy, z których instalują obrazy"), nie nazw plików,
+  więc przetrwa dołożenie trzeciego obrazu. Skasowany `test_requirements_odwzorowuje_
+  obraz_produkcyjny` zastąpiony przez `test_lockfile_zgodny` + nowy strażnik.
 - [ ] **D2 — `/cron/settle-manual` NIE jest w Schedulerze.** ⚠️ **Sprawdzone na sucho na produkcji 17.08: wpięcie go dziś NIC BY NIE DAŁO.**
   - Dry-run zwrócił `{"settled": 0, "skipped": 1, "errors": 0}` — endpoint działa, znalazł jedyny kupon manualny (#149) i **pominął** go.
   - **Powód:** `settle_manual_coupons` rozlicza wyłącznie z NASZYCH `predictions`, a dla meczu Yunnan Yukun – Dalian Yingbo (15.08) predykcji **w ogóle nie ma** — przebieg o 11:00 tego dnia padł na parsowaniu JSON-a od Groqa. W bazie jest tylko Yunnan Yukun – Chengdu Rongcheng z 08.08, czyli inny mecz.

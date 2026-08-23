@@ -190,29 +190,10 @@ def test_wpisy_opcjonalne_nie_sa_martwe():
     )
 
 
-def test_requirements_odwzorowuje_obraz_produkcyjny():
-    """requirements.txt == baza + [api] + [ai] + [scraper] (zestaw Dockerfile.jobs).
-
-    CI robi `pip-audit -r requirements.txt`, wiec kazda rozbieznosc to paczka
-    lecaca na produkcje BEZ skanu CVE. Tak wypadly z zakresu m.in. beautifulsoup4,
-    psycopg2-binary, sentry-sdk i langfuse.
-    """
-    pj = _pyproject()
-    extras = pj["project"].get("optional-dependencies", {})
-    oczekiwane = {_nazwa_paczki(w) for w in pj["project"]["dependencies"]}
-    for nazwa in ("api", "ai", "scraper"):
-        oczekiwane |= {_nazwa_paczki(w) for w in extras.get(nazwa, [])}
-
-    linie = (_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
-    faktyczne = {
-        _nazwa_paczki(ln) for ln in linie
-        if ln.strip() and not ln.lstrip().startswith("#")
-    }
-
-    brakuje = sorted(oczekiwane - faktyczne)
-    nadmiar = sorted(faktyczne - oczekiwane)
-    assert not brakuje and not nadmiar, (
-        f"requirements.txt rozjechal sie z pyproject.toml.\n"
-        f"  brakuje (leci na prod, nie jest skanowane przez pip-audit): {brakuje}\n"
-        f"  nadmiar (nie ma tego w obrazie produkcyjnym):               {nadmiar}"
-    )
+# Test `test_requirements_odwzorowuje_obraz_produkcyjny` usuniety 23.08 razem
+# z `requirements.txt` (B9). Pilnowal, zeby reczne lustro nie rozjechalo sie
+# z `pyproject.toml` — problem, ktory znikl wraz z samym lustrem. Te sama role
+# pelnia teraz dwa testy, kazdy mocniejszy od tamtego:
+#   * tests/test_lockfile_zgodny.py            — locki niosa wszystko z pyproject,
+#   * tests/test_audyt_skanuje_to_co_jedzie.py — CI skanuje dokladnie te listy,
+#                                                z ktorych instaluja obrazy.

@@ -12,7 +12,8 @@ bot/
 ├── LICENSE                     # MIT
 │
 ├── pyproject.toml              # Konfiguracja + zależności (extras: api, ai, scraper)
-├── requirements.txt            # Pin runtime (deploy)
+├── requirements-api.lock       # Przypięte wersje — instaluje Dockerfile.api (+ skan CVE w CI)
+├── requirements-jobs.lock      # Przypięte wersje — instaluje Dockerfile.jobs (+ skan CVE w CI)
 ├── manage.py                   # Entry point pomocniczy
 ├── .env.example                # Wzór zmiennych środowiskowych (bez sekretów)
 │

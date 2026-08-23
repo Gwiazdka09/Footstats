@@ -51,14 +51,24 @@ jobs:
       - name: Bandit SAST (src)
         run: python -m bandit -r src/footstats -ll
 
-      # pip-audit: CVE w zależnościach FootStats (requirements.txt). Świeży install = realny zakres.
+      # pip-audit: CVE w zależnościach FootStats. Skanujemy DOKŁADNIE te dwa locki,
+      # które instalują obrazy (Dockerfile.api / Dockerfile.jobs) — nie ręczne lustro.
+      # Do 23.08 szło to przez `requirements.txt`: listę przepisywaną ręcznie, istniejącą
+      # wyłącznie dla tego skanu. Zmierzone przed zmianą: zbiory były wtedy IDENTYCZNE
+      # (83 pakiety, zero różnic w wersjach), więc dziury nie było — ale ta zgodność
+      # brała się ze świeżości locka, nie z konstrukcji. Locki są przypięte celowo,
+      # a zakresy `>=` rozjeżdżają się ku nowszym wydaniom, więc skan zacząłby dotyczyć
+      # wersji, których nikt nie uruchamia. Lustro w dodatku raz już zdryfowało —
+      # wypadły z niego m.in. beautifulsoup4, psycopg2-binary, sentry-sdk i langfuse.
+      # Niezmiennika „skanujemy to, co instalujemy" pilnuje
+      # tests/test_audyt_skanuje_to_co_jedzie.py.
       # BEZ `--ignore-vuln` od 23.08: jedyne wyciszenie (PYSEC-2026-1325 w `ecdsa`) zniknęło
       # razem z `python-jose` — `api/auth.py` woła teraz PyJWT, a `ecdsa` wypadła z locka.
       # Nie dopisuj tu nowych wyciszeń bez daty i powodu: wyciszona luka w bibliotece
       # kryptograficznej to dług rosnący w ciszy — przy następnym CVE nikt nie odróżni
       # „znane i zaakceptowane" od „nowe".
       - name: pip-audit (dependency CVE)
-        run: python -m pip_audit -r requirements.txt
+        run: python -m pip_audit -r requirements-api.lock -r requirements-jobs.lock
 
   secrets:
     runs-on: ubuntu-latest
