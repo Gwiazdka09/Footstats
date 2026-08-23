@@ -94,17 +94,77 @@ def test_fonty_google_dozwolone(klient: TestClient):
     assert "fonts.gstatic.com" in polityka
 
 
+def _czlon(polityka: str, nazwa: str) -> str:
+    return next(c.strip() for c in polityka.split(";")
+                if c.strip().split(" ")[0] == nazwa)
+
+
 def test_style_inline_dozwolone_swiadomie(klient: TestClient):
-    """Kompromis opisany w nagłówku pliku — front używa atrybutów `style={{...}}`.
-    Test istnieje po to, żeby usunięcie tego członu było DECYZJĄ, a nie wypadkiem:
-    gdy F9 posprząta style inline, ten test ma spaść i przypomnieć o zaostrzeniu."""
-    polityka = _csp(klient.get("/health"))
-    czlon = next(c.strip() for c in polityka.split(";") if c.strip().startswith("style-src"))
+    """Kompromis opisany w nagłówku pliku — front używa atrybutów `style={{...}}`
+    (zmierzone: **79 wystąpień w 8 plikach**, nie 3 jak twierdziło F9).
+    Ten człon jest ZAPASOWY dla Firefoksa, który nie zna `style-src-elem/attr`."""
+    czlon = _czlon(_csp(klient.get("/health")), "style-src")
 
     assert "'unsafe-inline'" in czlon, (
-        "style-src bez 'unsafe-inline' — jesli F9 posprzatal style inline, USUN ten "
-        "test i zaostrz polityke; jesli nie, front wlasnie stracil kolory"
+        "style-src bez 'unsafe-inline' — Firefox spada wlasnie na ten czlon "
+        "i front straci tam kolory"
     )
+
+
+def test_wstrzykniety_element_style_zablokowany(klient: TestClient):
+    """Zysk osiągalny BEZ ruszania 79 stylów inline: `<style>` wstrzyknięty przez
+    XSS jest blokowany, bo `style-src-elem` nie ma `'unsafe-inline'`. Sprawdzone,
+    że nic w `gui/src` nie tworzy elementu `<style>` w czasie działania."""
+    czlon = _czlon(_csp(klient.get("/health")), "style-src-elem")
+
+    assert "'unsafe-inline'" not in czlon, f"style-src-elem rozluzniony: {czlon}"
+    assert "'self'" in czlon
+
+
+def test_atrybuty_style_dalej_dzialaja(klient: TestClient):
+    """Bez tego React traci kolory w Chrome i Safari — a `style-src-attr` jest
+    bardziej szczegółowy niż `style-src`, więc BIJE go tam, gdzie jest znany."""
+    czlon = _czlon(_csp(klient.get("/health")), "style-src-attr")
+
+    assert "'unsafe-inline'" in czlon
+
+
+# ── strony statyczne muszą przeżyć zacisk ───────────────────────────────────
+
+@pytest.mark.parametrize("plik", [
+    "polityka_prywatnosci.html", "regulamin.html", "preview.html",
+])
+def test_strony_statyczne_bez_blokow_style(plik: str):
+    """`style-src-elem 'self'` blokuje KAŻDY blok `<style>`, także nasz własny.
+
+    Zmierzone 23.08 przy zaciskaniu: `/polityka-prywatnosci` traciła cały wygląd,
+    font spadał z `ui-sans-serif` na `Times New Roman`. Style mieszkają teraz
+    w `static/*.css`. Ten test istnieje, bo regresja byłaby CICHA — strona dalej
+    zwraca 200, tylko wygląda jak dokument z lat 90.
+    """
+    from pathlib import Path
+
+    sciezka = Path(__file__).resolve().parents[1] / "src" / "footstats" / "api" / plik
+    if not sciezka.exists():
+        pytest.skip(f"brak {plik}")
+
+    tresc = sciezka.read_text(encoding="utf-8")
+
+    assert "<style" not in tresc.lower(), (
+        f"{plik} ma blok <style> — CSP go zablokuje i strona straci wyglad. "
+        "Przenies styl do src/footstats/api/static/"
+    )
+    assert "/static/" in tresc, f"{plik} nie linkuje zadnego arkusza z /static/"
+
+
+def test_arkusze_statyczne_istnieja():
+    """Link do nieistniejącego arkusza to ta sama cicha regresja, tylko z 404."""
+    from pathlib import Path
+
+    statyczne = Path(__file__).resolve().parents[1] / "src" / "footstats" / "api" / "static"
+
+    assert (statyczne / "legal.css").exists()
+    assert (statyczne / "preview.css").exists()
 
 
 # ── przełącznik na wymuszanie ────────────────────────────────────────────────

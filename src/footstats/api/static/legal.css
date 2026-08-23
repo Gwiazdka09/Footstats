@@ -1,0 +1,22 @@
+/* Wspolny styl stron prawnych (polityka prywatnosci, regulamin).
+ *
+ * Wyciagniety z blokow <style> 23.08 przy zaciskaniu CSP: `style-src-elem 'self'`
+ * blokuje wstrzykniety <style>, wiec wlasne bloki inline tez odpadaly — strona
+ * prawna traci wtedy caly wyglad (zmierzone: font spadal na Times New Roman).
+ * Przy okazji znikl duplikat — oba pliki mialy ten sam blok co do znaku.
+ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.6; }
+.wrap { max-width: 48rem; margin: 0 auto; padding: 4rem 1.5rem; }
+.back { font-size: 0.875rem; color: #94a3b8; text-decoration: none; }
+.back:hover { color: #f8fafc; }
+h1 { font-size: 1.875rem; font-weight: 700; margin: 1rem 0 0.5rem; }
+.subtitle { font-size: 0.875rem; color: #94a3b8; margin-bottom: 2.5rem; }
+.glass-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 1.25rem; padding: 2rem; }
+section + section { margin-top: 2rem; }
+h2 { font-size: 1.125rem; font-weight: 600; color: #818cf8; margin-bottom: 0.75rem; }
+p { color: #cbd5e1; margin-bottom: 0.5rem; }
+ul, ol { color: #cbd5e1; padding-left: 1.5rem; }
+li { margin-bottom: 0.35rem; }
+a { color: #818cf8; }
+.footer { font-size: 0.75rem; color: #475569; text-align: center; margin-top: 2.5rem; }

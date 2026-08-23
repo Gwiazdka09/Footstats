@@ -293,10 +293,23 @@
   konsoli**, font `Inter` aktywny. Zastrzeżenie: to ekran logowania (brak bazy lokalnie),
   więc widoki po zalogowaniu (wykresy `recharts`) NIE są przetestowane — dlatego
   domyślnie zostaje raportowanie.
-  **Dług świadomy:** `style-src 'unsafe-inline'` jest konieczne, bo front używa
-  atrybutów `style={{...}}` (**to samo miejsce co F9**). Dopóki tam jest, `style-src`
-  realnie nie broni przed wstrzyknięciem stylu. Sprzątnięcie F9 pozwoli go usunąć —
-  `test_style_inline_dozwolone_swiadomie` spadnie wtedy i o tym przypomni.
+  **UZUPEŁNIONE tego samego dnia — style rozdzielone.** Pierwsza wersja miała pełne
+  `style-src 'unsafe-inline'`, czyli człon, który nie bronił niczego. Teraz
+  `style-src-elem 'self'` (blokuje wstrzyknięty `<style>`) + `style-src-attr
+  'unsafe-inline'` (atrybuty Reacta działają dalej), a stary `style-src` zostaje
+  **jako zapasowy dla Firefoksa**, który `style-src-elem/attr` nie zna. Zysk jest
+  więc wzięty **bez** ruszania 79 stylów inline (F9 mówiło o trzech — policzone).
+  **Zweryfikowane kontrolą pozytywną w przeglądarce:** wstrzyknięcie `<style>`
+  z czerwonym tłem NIE zmieniło tła strony. Polityka, która nie blokuje, byłaby
+  tylko nagłówkiem.
+  **Regresja złapana i naprawiona po drodze:** zacisk zabił własne bloki `<style>`
+  na `/polityka-prywatnosci` i `/regulamin` — font spadał z `ui-sans-serif` na
+  `Times New Roman`, przy HTTP 200, czyli **cicho**. Styl wyciągnięty do
+  `api/static/legal.css`; przy okazji zniknął duplikat, bo oba pliki miały ten sam
+  blok **co do znaku**. To samo dla `preview.css`.
+  **Znalezione przy okazji:** manifest PWA wskazywał `/static/icon-192.png`, a ani
+  katalog `static/`, ani montaż nie istniały — ikony zwracały 404 od zawsze. Montaż
+  `/static` dodany; same pliki ikon zostają do F4.
 
 - [x] ✅ **B7 — ZROBIONE 23.08. Blokada konta po serii błędnych haseł.**
   Migracja 15 (`failed_attempts`, `locked_until`) w obu dialektach.

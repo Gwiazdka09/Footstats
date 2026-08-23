@@ -200,7 +200,17 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
 - [ ] **F8 — link do polityki prywatności zaszyty na sztywno** jako surowy adres Cloud Run (`CookieConsent.jsx:21`), zamiast ścieżki względnej lub zmiennej środowiskowej. Po zmianie hostingu link umrze po cichu.
 - [ ] **F10 — sześć klikalnych `<div>` do konwersji.** `HistoryCouponRow` (rozwijanie wiersza), `LeaderboardView` (wiersz rankingu), `ui.jsx`, `CouponWizard` (3×). Niedostępne z klawiatury i bez roli dla czytnika. Każdy wymaga `role="button"` + `tabIndex` + obsługi Enter/Spacji albo przepisania na `<button>`. Próg w strażniku obniżyć po każdej konwersji.
 - [ ] **F11 — reszta widoków bez audytu dostępności.** Zrobione: `LoginView`, `ManualCouponForm` (zamykanie), `App` (menu). Zostają: `SettingsView`, `AdminPanelView`, `CouponWizard`, `StatsView`, `LeaderboardView`, `TerminarzView`, `MatchAnalysisView` — głównie powiązanie etykiet z polami.
-- [ ] **F9 — inline'owe kolory na przyciskach to już tylko pozostałość.** Były obejściem buga CSS naprawionego w F1. Trzy miejsca: `HistoryCouponRow.jsx`, `StatsView.jsx`, `ProgressChart.jsx` — można uprościć do zwykłych klas Tailwinda. Wymaga przejścia po wszystkich trzech naraz z regresją wizualną. Komentarz w `HistoryCouponRow` już nie kłamie (zaktualizowany).
+- [ ] **F9 — inline'owe kolory to pozostałość po bugu CSS z F1.** ⚠️ **KOREKTA ZAKRESU 23.08:**
+  wpis mówił „trzy miejsca". Policzone: **79 wystąpień `style={{` w 8 plikach** —
+  `HistoryCouponRow`, `HistoryView`, `LeaderboardView`, `ManualCouponForm`,
+  `MatchAnalysisView`, `ProgressChart`, `StatsView`, `TerminarzView`. To duża zmiana
+  z realnym ryzykiem regresji wizualnej, nie drobiazg na kwadrans.
+  **Uzasadnienie „to odblokuje CSP" jest już SŁABSZE, niż sam napisałem przy B5:**
+  23.08 rozdzieliłem `style-src-elem` (zaciśnięty, blokuje wstrzyknięty `<style>`)
+  od `style-src-attr` (`'unsafe-inline'` dla Reacta). Zysk bezpieczeństwa jest więc
+  **już wzięty**, bez ruszania tych 79 miejsc. Zostaje wyłącznie:
+  (a) spójność z design-systemem, (b) Firefox — nie zna `style-src-elem/attr`
+  i spada na zapasowy `style-src`, więc tam `'unsafe-inline'` dalej obowiązuje.
 - [x] ✅ **M5 — ZMIERZONE 23.08. Flaga `SELECTION_SKIP_BTTS` zbudowana, DOMYŚLNIE OFF.**
   ⚠️ **KOREKTA WŁASNEGO WPISU — premisa M5 była błędnym cytatem.** Poprzednia wersja
   brzmiała: „Symulacja BEZ BTTS dała −10,7%, a produkcja z BTTS −13,5%". Źródłem jest

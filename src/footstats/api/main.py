@@ -256,11 +256,13 @@ app.add_middleware(
 # `gui-build`) i kopiuje `gui/dist`, więc Cloud Run oddaje żywy SPA na `/`, `/app`
 # i `/preview`, do tego `/polityka-prywatnosci`, `/manifest.json` i `/sw.js`.
 #
-# `style-src 'unsafe-inline'` to ŚWIADOMY kompromis, nie przeoczenie: front używa
-# atrybutów `style={{...}}` (`HistoryCouponRow`, `StatsView`, `ProgressChart` — to
-# samo miejsce, które opisuje F9). Bez tego członu te komponenty tracą kolory.
-# Dopóki tam jest, `style-src` realnie nie broni przed wstrzyknięciem stylu —
-# sprzątnięcie F9 pozwoli go usunąć i dopiero wtedy ta dyrektywa zacznie chronić.
+# STYLE — rozdzielone 23.08, bo pełne `style-src 'unsafe-inline'` nie broniło niczego.
+# Front używa atrybutów `style={{...}}` — **79 wystąpień w 8 plikach** (F9 twierdziło,
+# że w trzech; policzone). Usunięcie ich wszystkich to duża zmiana z ryzykiem regresji
+# wizualnej, a `style-src-elem` / `style-src-attr` daje realny zysk od razu:
+# wstrzyknięty `<style>` jest blokowany, atrybuty Reacta działają dalej.
+# Zweryfikowane w przeglądarce kontrolą pozytywną — wstrzyknięcie `<style>` z czerwonym
+# tłem NIE zmieniło tła strony.
 #
 # `script-src` celowo BEZ `'unsafe-inline'`: zbudowany pakiet nie ma ani jednego
 # skryptu inline (sprawdzone w `dist/index.html`), więc nie ma czego dopuszczać,
@@ -271,7 +273,15 @@ app.add_middleware(
 _CSP = "; ".join([
     "default-src 'self'",
     "script-src 'self'",
+    # `style-src` zostaje jako ZAPASOWY: Firefox nie zna `style-src-elem/attr`
+    # i spada właśnie na niego. Tam `'unsafe-inline'` dalej obowiązuje.
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    # Rozdzielenie daje realny zysk bez ruszania 79 stylów inline w 8 plikach:
+    # wstrzyknięty `<style>` jest blokowany, a atrybuty `style={{...}}` Reacta
+    # dalej działają. Sprawdzone: nic w `gui/src` nie tworzy elementu `<style>`
+    # w czasie działania, więc zacisk niczego nie psuje.
+    "style-src-elem 'self' https://fonts.googleapis.com",
+    "style-src-attr 'unsafe-inline'",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data:",
     "connect-src 'self'",
@@ -411,6 +421,19 @@ if _mcp_enabled():
         logging.getLogger(__name__).warning(
             "MCP (/mcp) niezamontowane — niezgodna wersja zaleznosci: %s", _e
         )
+
+# Pliki statyczne serwowane przez samo API (nie przez front).
+#
+# Powód 1 — CSP: `style-src-elem 'self'` blokuje wstrzyknięty `<style>`, więc bloki
+# inline na stronach prawnych też odpadały (zmierzone: font spadał na Times New Roman).
+# Styl mieszka teraz w `static/legal.css` i ładuje się jako zasób z własnego źródła.
+#
+# Powód 2 — manifest PWA od dawna wskazywał `/static/icon-192.png` i `/static/icon-512.png`,
+# a ani ten katalog, ani montaż nie istniały: ikony zwracały 404. Montaż to naprawia;
+# same pliki ikon to osobna sprawa (F4 — PWA jest napisane, ale nikt jej nie podłączył).
+_static = Path(__file__).parent / "static"
+if _static.exists():
+    app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
 _dist = Path(__file__).parent.parent / "gui" / "dist"
 
