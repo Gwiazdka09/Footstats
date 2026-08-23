@@ -86,7 +86,8 @@ def get_user_by_username(username: str) -> Optional[dict]:
     with connect() as conn:
         row = conn.execute(
             "SELECT id, username, password_hash, is_admin,"
-            " COALESCE(token_version, 0) AS token_version FROM users"
+            " COALESCE(token_version, 0) AS token_version,"
+            " COALESCE(failed_attempts, 0) AS failed_attempts, locked_until FROM users"
             " WHERE username = ? AND is_active = TRUE",
             (username,),
         ).fetchone()
@@ -100,7 +101,8 @@ def get_user_by_email(email: str) -> Optional[dict]:
     with connect() as conn:
         row = conn.execute(
             "SELECT id, username, password_hash, is_admin,"
-            " COALESCE(token_version, 0) AS token_version FROM users"
+            " COALESCE(token_version, 0) AS token_version,"
+            " COALESCE(failed_attempts, 0) AS failed_attempts, locked_until FROM users"
             " WHERE email = ? AND is_active = TRUE",
             (email,),
         ).fetchone()
@@ -121,6 +123,91 @@ def _verify_password(plain: str, hashed: str) -> bool:
         return bcrypt.checkpw(plain.encode(), hashed.encode())
     except (ValueError, TypeError, AttributeError):
         return False
+
+
+# B7: BLOKADA KONTA PO SERII BLEDNYCH HASEL
+#
+# Po naprawie B2 limit na adres realnie dziala (wczesniej mial JEDNO wiadro dla
+# calego swiata), ale nie broni przed rotacja adresow: botnet dostaje 10 prob na
+# minute Z KAZDEGO adresu, a konto nie zamykalo sie nigdy.
+BLOKADA_PROG = 5           # nieudanych prob, zanim konto sie zamknie
+BLOKADA_BAZA_MINUTY = 1    # pierwsze okno
+BLOKADA_CAP_MINUTY = 15    # sufit — patrz decyzja 2 nizej
+
+
+def czas_blokady(nieudanych: int) -> int | None:
+    """Ile minut konto ma byc zamkniete po `nieudanych` probach. None = otwarte.
+
+    DECYZJA: okno ROSNIE WYKLADNICZO i ma SUFIT, zamiast byc stale albo trwale.
+      * stale okno daje napastnikowi stala przepustowosc zgadywania;
+      * trwala blokada zamienia luke na inna — znajac czyjs login, mozna go
+        zamknac na stale kilkoma blednymi probami.
+    Rosnace okno tnie zgadywanie do kilku prob na godzine, a prawdziwemu
+    uzytkownikowi kaze czekac minute, nie wiecznie. KOSZT ZOSTAJE: napastnik
+    nadal potrafi komus utrudnic logowanie. Swiadomie — to tansze niz obie
+    alternatywy.
+    """
+    if nieudanych < BLOKADA_PROG:
+        return None
+    krok = nieudanych - BLOKADA_PROG
+    return min(BLOKADA_BAZA_MINUTY * (2 ** krok), BLOKADA_CAP_MINUTY)
+
+
+def konto_zablokowane(user: dict) -> bool:
+    """Czy konto jest teraz zamkniete. Konta sprzed migracji 15 nie maja tych pol."""
+    do_kiedy = user.get("locked_until")
+    if not do_kiedy:
+        return False
+    if isinstance(do_kiedy, str):
+        try:
+            do_kiedy = datetime.fromisoformat(do_kiedy)
+        except ValueError:
+            return False
+    if do_kiedy.tzinfo is None:
+        do_kiedy = do_kiedy.replace(tzinfo=timezone.utc)
+    return do_kiedy > datetime.now(timezone.utc)
+
+
+def _zapisz_bledne_logowanie(user_id: int, nieudanych: int) -> None:
+    """Podbija licznik i — po przekroczeniu progu — zamyka konto na czas okna."""
+    import psycopg2
+
+    from footstats.utils.db import connect
+
+    minuty = czas_blokady(nieudanych)
+    do_kiedy = (datetime.now(timezone.utc) + timedelta(minutes=minuty)) if minuty else None
+    try:
+        with connect() as conn:
+            conn.execute(
+                "UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?",
+                (int(nieudanych), do_kiedy, int(user_id)),
+            )
+    # Licznik nie moze zablokowac logowania: awaria bazy (psycopg2.Error) ani brak
+    # DATABASE_URL (RuntimeError z _get_pool) nie moga zamienic zlego hasla w 500.
+    # Wezsze niz `Exception` swiadomie — blad w NASZYM kodzie ma tu krzyczec.
+    except (psycopg2.Error, RuntimeError) as e:
+        log.warning("Nie udalo sie zapisac nieudanej proby dla uid=%s: %s", user_id, e)
+    if minuty:
+        log.warning("Konto uid=%s zamkniete na %d min po %d nieudanych probach",
+                    user_id, minuty, nieudanych)
+
+
+def _wyczysc_bledne_logowania(user_id: int) -> None:
+    """Zerowanie po udanym logowaniu — bez tego konto zamyka sie po kilku
+    pomylkach rozlozonych na tygodnie."""
+    import psycopg2
+
+    from footstats.utils.db import connect
+
+    try:
+        with connect() as conn:
+            conn.execute(
+                "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?",
+                (int(user_id),),
+            )
+    # Jak wyzej: udane logowanie nie moze przepasc przez awarie zapisu licznika.
+    except (psycopg2.Error, RuntimeError) as e:
+        log.warning("Nie udalo sie wyzerowac licznika prob dla uid=%s: %s", user_id, e)
 
 
 def _make_token(username: str, user_id: int, is_admin: bool = False,
@@ -144,9 +231,26 @@ def login(request: Request, req: LoginRequest) -> TokenResponse:
     if not user and "@" in req.username:
         user = get_user_by_email(req.username)
     if not user:
+        # Nieistniejace konto: nie ma czego blokowac, a zapis licznika dla kazdej
+        # zmyslonej nazwy bylby wektorem zasmiecania bazy.
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    # B7, DECYZJA: zablokowane konto NIE SPRAWDZA HASLA i odpowiada dokladnie tak
+    # samo jak przy zlym hasle. Kuszace jest powiedziec "konto zablokowane" — ale
+    # zeby wiedziec, komu to powiedziec, trzeba najpierw zweryfikowac haslo, a to
+    # odtwarza wyrocznie: napastnik dalej testuje hasla, tylko wolniej, i poznaje
+    # trafione po tresci odpowiedzi. Blokada, ktora sprawdza haslo, nie jest blokada.
+    if konto_zablokowane(user):
+        log.warning("Logowanie na zamkniete konto uid=%s — odrzucone bez sprawdzania hasla",
+                    user.get("id"))
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
     if not _verify_password(req.password, user["password_hash"]):
+        _zapisz_bledne_logowanie(user["id"], int(user.get("failed_attempts") or 0) + 1)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if user.get("failed_attempts"):
+        _wyczysc_bledne_logowania(user["id"])
     return TokenResponse(
         access_token=_make_token(user["username"], user["id"],
                                  bool(user.get("is_admin", False)),

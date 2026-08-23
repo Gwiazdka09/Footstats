@@ -213,21 +213,32 @@ def test_bledne_haslo_nie_zdradza_czy_konto_istnieje(klient):
     assert a.json() == b.json()
 
 
-def test_BRAK_blokady_konta_po_serii_bledow():
-    """UDOKUMENTOWANA LUKA, nie życzenie.
+def test_blokada_konta_po_serii_bledow_DZIALA():
+    """PRZEPISANY 23.08 — luka B7 zalatana.
 
-    Nie ma licznika nieudanych prób ani blokady konta — jedyną obroną jest limit
-    per adres IP. Napastnik z puli adresów (botnet, rotacja proxy) dostaje
-    10 prób na minutę Z KAŻDEGO adresu, a konto nigdy się nie zamyka.
+    Poprzednia wersja tego testu byla celowo zielona WOBEC LUKI: sprawdzala, ze
+    w `auth.py` NIE MA sladu po liczniku prob, i miala paść w dniu naprawy.
+    Padla — i to jest dokladnie jej zasluga: wymusila aktualizacje audytu zamiast
+    pozwolic dokumentacji sie rozjechac. Tak samo zadzialalo 17.08 przy B1.
+
+    Teraz pilnuje stanu po naprawie. Szczegoly zachowania (brak wyroczni, rosnace
+    okno, zerowanie po sukcesie) sa w `tests/test_blokada_konta.py`; tutaj zostaje
+    kotwica audytu: mechanizm ISTNIEJE i jest wpiety w logowanie.
     """
     import inspect
 
     from footstats.api import auth
     zrodlo = inspect.getsource(auth)
-    for slad in ("failed_attempts", "lockout", "locked_until", "blokada_konta"):
-        assert slad not in zrodlo, (
-            f"pojawil sie '{slad}' — blokada konta chyba zostala dodana;"
-            " zaktualizuj ten test i znalezisko B7 w audycie")
+    for slad in ("failed_attempts", "locked_until", "konto_zablokowane", "czas_blokady"):
+        assert slad in zrodlo, (
+            f"znikl '{slad}' — blokada konta chyba zostala usunieta;"
+            " zaktualizuj ten test i tabele audytu (B7)")
+
+    # Kolejnosc jest tu bezpieczenstwem, nie stylem: sprawdzenie blokady MUSI byc
+    # przed weryfikacja hasla, inaczej zablokowane konto dalej dziala jak wyrocznia.
+    zrodlo_login = inspect.getsource(auth.login)
+    assert zrodlo_login.index("konto_zablokowane") < zrodlo_login.index("_verify_password"), (
+        "blokada sprawdzana PO hasle — to nie jest blokada, tylko spowolnienie")
 
 
 # ── 3. Kradzież / przenoszenie tokenu ──────────────────────────────────────

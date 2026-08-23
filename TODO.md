@@ -523,12 +523,32 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
 |---|---|---|
 | **Wstrzyknięcie SQL** (`' OR 1=1 --`, `UNION SELECT`, `DROP TABLE`) | ✅ **odporni** | 14 ładunków × 2 pola → wszystkie 401. Ładunek trafia do bazy jako **parametr**, nigdy do tekstu zapytania |
 | **Brute-force z jednego IP** | ✅ **blokowany** | 15 prób zgadywania → limiter ucina po 10. Ta sama odpowiedź dla złego hasła i nieistniejącego konta (brak enumeracji) |
-| **Brute-force z wielu IP** | ⚠️ **luka B7** | brak licznika prób i blokady konta — botnet dostaje 10 prób/min **z każdego adresu**, konto nigdy się nie zamyka |
+| **Brute-force z wielu IP** | ✅ **naprawione (B7, 23.08)** | licznik `failed_attempts` + `locked_until`: po 5 błędach konto zamyka się na rosnące okno (1 → 15 min). Zablokowane konto **nie sprawdza hasła**, więc nie działa jak wyrocznia. Limit per-adres realnie działa od naprawy B2 |
 | **Podrobiony token** | ✅ **odrzucany** | obcy sekret → 401; wygasły → 401; bez `uid` → 401 |
-| **Skradziony token** | ⚠️ **luka B1** | działa z **dowolnego IP i przeglądarki** do 24h; brak `jti`/powiązania z urządzeniem, więc kopii nie da się wykryć |
-| **Zmiana hasła po przejęciu konta** | ⚠️ **luka B1** | **nie unieważnia** starego tokenu — napastnik zachowuje dostęp do doby |
+| **Skradziony token** | ⚠️ **luka B10** | działa z **dowolnego IP i przeglądarki** do wygaśnięcia; brak `jti`/powiązania z urządzeniem, więc kopii nie da się wykryć. **To NIE jest B1** — naprawa `token_version` unieważnia tokeny przy zmianie hasła, ale nie wykrywa kopii przy niezmienionym haśle |
+| **Zmiana hasła po przejęciu konta** | ✅ **naprawione (B1, 17.08)** | `_uniewaznij_sesje` podbija `token_version` przy zmianie hasła ([auth.py:339](src/footstats/api/auth.py#L339)) i przy resecie ([auth.py:435](src/footstats/api/auth.py#L435)) — wszystkie wydane tokeny padają natychmiast |
 
-- [ ] **B7 — brak blokady konta po serii błędnych haseł.** Jedyna obrona to limit per IP (B2 podaje w wątpliwość nawet to, bo za Cloud Run kluczem bywa adres load balancera). Fix: licznik `failed_attempts` + `locked_until` na `users`, wykładnicze opóźnienie albo CAPTCHA po N próbach.
+- [ ] **B10 — token nie jest z niczym związany** (wydzielone z B1, 23.08). `token_version`
+  unieważnia tokeny przy zmianie hasła, ale skradzionej KOPII przy niezmienionym haśle
+  nie da się wykryć ani odciąć: brak `jti`, brak powiązania z urządzeniem/adresem.
+  Do rozważenia: `jti` + lista unieważnionych, albo skrócenie życia tokenu + refresh.
+- [x] ✅ **B7 — ZROBIONE 23.08. Blokada konta po serii błędnych haseł.**
+  Migracja 15 (`failed_attempts`, `locked_until`) w obu dialektach.
+  - **Decyzja 1 — zablokowane konto NIE SPRAWDZA HASŁA** i odpowiada identycznie jak
+    przy złym haśle. Kuszące jest powiedzieć „konto zablokowane", ale żeby wiedzieć,
+    komu to powiedzieć, trzeba najpierw zweryfikować hasło — a to odtwarza wyrocznię:
+    napastnik dalej testuje hasła, tylko wolniej, i poznaje trafione po treści
+    odpowiedzi. **Blokada, która sprawdza hasło, nie jest blokadą.** Test pilnuje
+    też KOLEJNOŚCI w kodzie, bo tu kolejność jest bezpieczeństwem, nie stylem.
+  - **Decyzja 2 — okno rośnie wykładniczo (1 → 15 min), nie jest trwałe.** Stałe okno
+    daje napastnikowi stałą przepustowość; trwała blokada zamienia lukę na inną —
+    znając czyjś login, można go zamknąć na stałe. **Koszt zostaje i jest świadomy:**
+    napastnik nadal potrafi komuś utrudnić logowanie.
+  - Licznik zeruje się po udanym logowaniu — bez tego konto zamyka się po kilku
+    pomyłkach rozłożonych na tygodnie. Awaria zapisu licznika **nie blokuje logowania**.
+  - **Test-strażnik zadziałał:** `test_BRAK_blokady_konta_po_serii_bledow` był celowo
+    zielony wobec luki i padł w dniu naprawy, wymuszając aktualizację audytu. Przepisany
+    na opis nowego stanu. Ten sam mechanizm zadziałał 17.08 przy B1. +16 testów.
 - Trzy testy są celowo zielone WOBEC LUK (`test_BRAK_blokady_konta…`, `test_token_dziala_z_DOWOLNEGO…`, `test_zmiana_hasla_NIE_uniewaznia…`). Po naprawie **padną** — to ich zadanie: wymuszają aktualizację audytu zamiast cichego rozjazdu dokumentacji.
 
 ### ✅ Sprawdzone i w porządku

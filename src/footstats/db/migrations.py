@@ -180,6 +180,14 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 0",
                 ],
             ),
+            (
+                15,
+                "add_lockout_to_users",
+                [
+                    "ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN locked_until TIMESTAMP",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -338,6 +346,16 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                 [
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS"
                     " token_version INTEGER DEFAULT 0",
+                ],
+            ),
+            (
+                15,
+                "add_lockout_to_users",
+                [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS"
+                    " failed_attempts INTEGER DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS"
+                    " locked_until TIMESTAMP",
                 ],
             ),
         ]
