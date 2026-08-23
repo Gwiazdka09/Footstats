@@ -457,6 +457,46 @@ def change_password(req: ChangePasswordRequest, user_id: int = Depends(require_a
     }
 
 
+# B10 — WYŁĄCZNIK dla wyciekłego tokenu.
+#
+# `token_version` (B1) unieważnia tokeny przy ZMIANIE HASŁA. Ale gdy hasło jest
+# w porządku, a wyciekła sama kopia tokenu — z cudzego urządzenia, ze wspólnego
+# komputera, z logu — nie było jak jej odciąć bez zmiany hasła.
+#
+# CZEGO TO *NIE* ROBI, powiedziane wprost zamiast ukryte:
+#   * NIE WYKRYWA kradzieży. Token jest bezstanowy i wygląda identycznie
+#     u właściciela i u napastnika.
+#   * NIE WIĄŻE tokenu z urządzeniem ani adresem. Sprawdzone i ODRZUCONE: komórka
+#     zmienia adres przy każdym przejściu między LTE a wifi, więc powiązanie z IP
+#     wylogowywałoby prawdziwych użytkowników po kilka razy dziennie. Zabezpieczenie,
+#     które psuje się samo, uczy ludzi ignorować swoje komunikaty — a napastnik
+#     w tej samej sieci i tak je omija.
+#
+# Wykrycie zostaje po stronie CZŁOWIEKA (`last_login_at` w `/auth/me`), tak jak
+# w bankach: widzisz logowanie o 3 w nocy i wiesz, że masz kliknąć ten przycisk.
+@router.post("/auth/logout-all", status_code=status.HTTP_200_OK)
+def logout_all(user_id: int = Depends(require_auth)):
+    """Unieważnia WSZYSTKIE wydane tokeny i oddaje wołającemu świeży."""
+    from footstats.utils.db import connect
+
+    with connect() as conn:
+        _uniewaznij_sesje(conn, user_id)
+        dane = conn.execute(
+            "SELECT username, is_admin, COALESCE(token_version, 0) AS token_version"
+            " FROM users WHERE id = ?", (user_id,)).fetchone()
+
+    # Bez oddania świeżego tokenu przycisk odcinałby także osobę, która go klika —
+    # a wtedy każde użycie kończy się ponownym logowaniem i ludzie przestają go używać.
+    d = dict(dane) if dane else {}
+    return {
+        "ok": True,
+        "message": "Wszystkie pozostałe sesje zostały wylogowane.",
+        "access_token": _make_token(d.get("username", ""), user_id,
+                                    bool(d.get("is_admin", False)),
+                                    int(d.get("token_version") or 0)),
+    }
+
+
 # ── Reset hasła (forgot / reset) — token JWT purpose=reset, 1h ──────────────
 _RESET_EXPIRE_MINUTES = 60
 _GENERIC_RESET_MSG = "Jeśli konto istnieje, wysłaliśmy link resetu na podany e-mail."

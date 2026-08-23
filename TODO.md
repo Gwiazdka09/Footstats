@@ -351,13 +351,27 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
 | **Brute-force z jednego IP** | ✅ **blokowany** | 15 prób zgadywania → limiter ucina po 10. Ta sama odpowiedź dla złego hasła i nieistniejącego konta (brak enumeracji) |
 | **Brute-force z wielu IP** | ✅ **naprawione (B7, 23.08)** | licznik `failed_attempts` + `locked_until`: po 5 błędach konto zamyka się na rosnące okno (1 → 15 min). Zablokowane konto **nie sprawdza hasła**, więc nie działa jak wyrocznia. Limit per-adres realnie działa od naprawy B2 |
 | **Podrobiony token** | ✅ **odrzucany** | obcy sekret → 401; wygasły → 401; bez `uid` → 401 |
-| **Skradziony token** | ⚠️ **luka B10** | działa z **dowolnego IP i przeglądarki** do wygaśnięcia; brak `jti`/powiązania z urządzeniem, więc kopii nie da się wykryć. **To NIE jest B1** — naprawa `token_version` unieważnia tokeny przy zmianie hasła, ale nie wykrywa kopii przy niezmienionym haśle |
+| **Skradziony token** | 🟡 **da się uciąć, nie da się wykryć (B10, 23.08)** | `POST /auth/logout-all` unieważnia wszystkie wydane tokeny bez zmiany hasła — wołający dostaje świeży, więc nie odcina sam siebie. **Wykrycie kopii pozostaje niemożliwe i jest to świadomy non-goal:** token jest bezstanowy i wygląda identycznie u właściciela i u napastnika, a powiązanie z IP wylogowywałoby prawdziwych użytkowników przy każdym przejściu LTE↔wifi. Non-goal przypięty testem `test_brak_wiazania_tokenu_z_adresem` |
 | **Zmiana hasła po przejęciu konta** | ✅ **naprawione (B1, 17.08)** | `_uniewaznij_sesje` podbija `token_version` przy zmianie hasła ([auth.py:339](src/footstats/api/auth.py#L339)) i przy resecie ([auth.py:435](src/footstats/api/auth.py#L435)) — wszystkie wydane tokeny padają natychmiast |
 
-- [ ] **B10 — token nie jest z niczym związany** (wydzielone z B1, 23.08). `token_version`
-  unieważnia tokeny przy zmianie hasła, ale skradzionej KOPII przy niezmienionym haśle
-  nie da się wykryć ani odciąć: brak `jti`, brak powiązania z urządzeniem/adresem.
-  Do rozważenia: `jti` + lista unieważnionych, albo skrócenie życia tokenu + refresh.
+- [x] ✅ **B10 — ZROBIONE 23.08 w części, która jest wykonalna. `POST /auth/logout-all`.**
+  Wyciekłą kopię tokenu da się teraz uciąć bez zmiany hasła — jedno żądanie podbija
+  `token_version`, a wołający dostaje świeży token, żeby nie odciął sam siebie
+  (bez tego przycisk wylogowywałby też osobę, która go klika, więc nikt by go nie
+  używał). +8 testów.
+  **CZEGO NIE DA SIĘ ZROBIĆ — i dlaczego to nie jest wymówka:** wykrycie kopii tokenu
+  wymaga zapisywania adresu/przeglądarki przy KAŻDYM żądaniu. Token jest bezstanowy
+  i u napastnika wygląda identycznie jak u właściciela. Powiązanie z IP **sprawdzone
+  i odrzucone**: komórka zmienia adres przy każdym przejściu LTE↔wifi, więc prawdziwi
+  użytkownicy wylatywaliby po kilka razy dziennie — zabezpieczenie, które psuje się
+  samo, uczy ignorować własne komunikaty, a napastnik w tej samej sieci i tak je omija.
+  Non-goal przypięty testem `test_brak_wiazania_tokenu_z_adresem`.
+  **Odrzucone w trakcie — `last_login_at`.** Wydawało się tanie i sensowne („zobaczysz
+  logowanie o 3 w nocy"), ale **nie dotyczy tej luki**: skradziony TOKEN nigdy się nie
+  loguje, złodziej używa gotowej kopii, więc znacznik ani drgnie. Byłaby to kolumna
+  wyglądająca jak zabezpieczenie i nim niebędąca — migracja 16 napisana i wycofana.
+  Dwa testy-strażniki (`test_token_dziala_z_DOWOLNEGO_adresu…`, `test_token_niesie_wersje_ale_NIE_odcisk…`)
+  **zostają zielone i tak ma być** — opisują stan faktyczny, którego świadomie nie zmieniam.
 - Trzy testy są celowo zielone WOBEC LUK (`test_BRAK_blokady_konta…`, `test_token_dziala_z_DOWOLNEGO…`, `test_zmiana_hasla_NIE_uniewaznia…`). Po naprawie **padną** — to ich zadanie: wymuszają aktualizację audytu zamiast cichego rozjazdu dokumentacji.
 
 ### ✅ Sprawdzone i w porządku
