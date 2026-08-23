@@ -240,7 +240,20 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
 - [ ] **M3 — cel M1 mierzy rynek, który przegrywa.** „55% win rate" liczone na 1X2, gdzie przy niezgodzie rynek 42,9% vs model 29,8%. Rozważyć ROI zamiast trafności.
 
 ### ⚪ Niskie
-- [ ] **B6 — jedyne dynamiczne SQL:** `player_db.py:73` `ALTER TABLE ... ADD COLUMN {col} {typ}` — wartości z kodu, nie z wejścia. Whitelist par (kolumna, typ).
+- [x] ✅ **B6 — ZROBIONE 23.08. Walidacja identyfikatorów przed sklejeniem SQL.**
+  `player_db.py` `ALTER TABLE ... ADD COLUMN {col} {typ}` musi iść f-stringiem —
+  SQLite **nie pozwala parametryzować identyfikatorów** (`?` działa dla wartości,
+  nie dla nazw kolumn), więc parametryzacja jest tu fizycznie niemożliwa i jedyną
+  obroną jest walidacja. `_sprawdz_identyfikator` przepuszcza wyłącznie nazwę
+  pasującą do `^[a-z_][a-z0-9_]*$` i typ z zamkniętej listy `{REAL, INTEGER, TEXT}`.
+  Sprawdzane są **oba** pola — walidacja samej nazwy zostawiałaby drugą połowę
+  zapytania otwartą. +21 testów, bandit czysty.
+  **Uczciwie: to nie była podatność.** `_OPTIONAL_COLS` to stała w module, nie dane
+  z zewnątrz — nic nie dało się wstrzyknąć. Zmiana zamienia „bezpieczne, bo nikt
+  tego nie zmienił" na „bezpieczne, bo sprawdzane", co zaczyna mieć znaczenie
+  dopiero w dniu, w którym ktoś weźmie listę kolumn z konfiguracji albo ze źródła.
+  Jeden z testów sprawdza SKUTEK, nie sam wyjątek: po próbie wstrzyknięcia tabela
+  `player_stats` ma dalej istnieć.
 - [ ] **D4 — `model_log` śledzi tylko argmax 1X2** → rynków golowych nie zweryfikujemy live. Dopisać `p_over25`/`p_btts` + wynik.
 - [ ] **F4 — PWA nie działa, ale NIE dlatego, że jej nie ma.** Backend serwuje OBA:
   `/manifest.json` (`main.py:455`) i `/sw.js` z pełnym cyklem install/activate/fetch.

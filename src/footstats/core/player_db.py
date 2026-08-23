@@ -10,6 +10,7 @@ Zero prod Neon — świadomie lokalny SQLite (reference/cache), testowalny na tm
 """
 from __future__ import annotations
 
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -63,14 +64,45 @@ def _connect(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
     return con
 
 
+# B6 — jedyne dynamicznie sklejane SQL w projekcie.
+#
+# `ALTER TABLE ... ADD COLUMN {col} {typ}` musi iść f-stringiem, bo SQLite nie
+# pozwala parametryzować IDENTYFIKATORÓW — `?` działa dla wartości, nie dla nazw
+# kolumn. Parametryzacja jest tu fizycznie niemożliwa, więc jedyną obroną jest
+# walidacja.
+#
+# DZIŚ TO NIE JEST PODATNOŚĆ i nie udaje, że jest: `_OPTIONAL_COLS` to stała
+# w module, nie dane z zewnątrz. Ten guard zamienia „bezpieczne, bo nikt tego nie
+# zmienił" na „bezpieczne, bo sprawdzane" — różnica robi się istotna w dniu,
+# w którym ktoś zechce wziąć listę kolumn z konfiguracji albo z odpowiedzi źródła,
+# a nikt już nie będzie pamiętał, że ten f-string jest bezbronny.
+_DOZWOLONE_TYPY = frozenset({"REAL", "INTEGER", "TEXT"})
+_WZORZEC_KOLUMNY = re.compile(r"^[a-z_][a-z0-9_]*$")
+
+
+def _sprawdz_identyfikator(kolumna: str, typ: str) -> None:
+    """Przepuszcza wyłącznie prostą nazwę kolumny i typ z zamkniętej listy.
+
+    Sprawdzamy OBA pola: walidacja samej nazwy zostawiałaby drugą połowę
+    zapytania otwartą.
+    """
+    if not _WZORZEC_KOLUMNY.match(kolumna or ""):
+        raise ValueError(f"niedozwolona nazwa kolumny: {kolumna!r}")
+    if typ not in _DOZWOLONE_TYPY:
+        raise ValueError(f"niedozwolony typ kolumny: {typ!r}")
+
+
 def init_player_table(db_path: Path | str = DB_PATH) -> None:
     """Tworzy tabelę player_stats + dokłada brakujące kolumny (migracja rating/xg)."""
     with _connect(db_path) as con:
         con.execute(_DDL)
         existing = {r["name"] for r in con.execute("PRAGMA table_info(player_stats)")}
         for col, typ in _OPTIONAL_COLS.items():
+            _sprawdz_identyfikator(col, typ)
             if col not in existing:
-                con.execute(f"ALTER TABLE player_stats ADD COLUMN {col} {typ}")
+                con.execute(  # nosec B608 — identyfikatory sprawdzone wyżej, patrz B6
+                    f"ALTER TABLE player_stats ADD COLUMN {col} {typ}"
+                )
 
 
 def upsert_players(rows: list[dict], db_path: Path | str = DB_PATH) -> int:
