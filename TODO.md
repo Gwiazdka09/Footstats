@@ -258,17 +258,32 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
     po odmowie parsera. Escapujemy każde pole, ale wystarczy jedno przeoczone, żeby
     wiadomość przepadła; brzydsza wiadomość jest lepsza niż cisza. Ponowienie tylko dla
     błędu PARSERA — blokada bota czy zły chat_id nie naprawią się powtórką. +6 testów.
-- [ ] **A2 — typ `2 (wygrana gościa)` nie rozliczy się nigdy.** `oblicz_tip_correct`
-  zwraca dla niego `None`. To zwykła „2" z dopiskiem od Groqa, ale słownik rozliczeń
-  jej nie zna. W całej bazie **1 taki wiersz** (251 predykcji) — skala mała, ale
-  będzie się powtarzać, bo zapis do `predictions` idzie PRZED weryfikacją, więc
-  słownictwo LLM-a ląduje w bazie nietknięte. Do rozważenia: normalizacja tipu przy
-  zapisie albo odrzucanie tipów spoza słownika rozliczeń.
+- [x] ✅ **A2 + A3 — ZROBIONE 23.08. Zapis przeniesiony ZA weryfikację.**
+  Oba znaleziska miały jeden korzeń: zapis szedł w KROKU 3, weryfikacja w KROKU 4.
+  - **A2** — `2 (wygrana gościa)` to zwykła „2" z dopiskiem od Groqa, ale
+    `oblicz_tip_correct` zwraca dla niej `None`: wiersz martwy od chwili zapisu.
+    Słownictwo LLM-a lądowało w bazie nietknięte.
+  - **A3** — noga, która nie przeżyła weryfikacji, zostawała z kursem od Groqa
+    (`odds_verified=0`); uzgodnienie z KROKU 4b poprawia tylko ocalałe.
+  - **Fix:** potok dzienny NIE zapisuje w KROKU 3 (`zapisz_predykcje=False`), tylko
+    w nowym KROKU 4a, po weryfikacji. Weryfikacja jest przy okazji **bramką
+    słownikową** — przepuszcza wyłącznie rynki z `_TYP_DO_ODDS_KEY`, czyli te, które
+    źródło wycenia i które rozliczenie umie policzyć. Do bazy trafia więc tylko to,
+    co system naprawdę wystawił, z prawdziwym kursem.
+  - **A1 dostał drugą szansę.** Skoro typy LLM-a mogą wyparować dopiero na
+    weryfikacji, model wchodzi PO niej. Bez tego dzień, w którym Groq wytypował same
+    rynki bez kursu (dokładnie 23.08), kończyłby się zerem predykcji mimo gotowych
+    liczb modelu. Typy z modelu przechodzą tę samą bramkę — nie są z niej zwolnione.
+  - `cli_commands` nie ma kroku weryfikacji, więc dla niego zapis w analizie
+    zostaje domyślnie włączony. `_uzgodnij_predykcje` zmienia rolę z naprawy kursu
+    na domknięcie: stawia `odds_verified` i pilnuje rozjazdu nazw.
+  - Bramka ogólna w testach: **cokolwiek wejdzie do bazy, musi mieć rozstrzygnięcie**
+    przy jakimkolwiek wyniku meczu. +12 testów.
   - Sprawdzone przy okazji i **czyste**: `Handicap +1 Gość` to wspierany rynek z reguł
     BetBuilder ([betting.py:241](src/footstats/utils/betting.py#L241)) i liczy się poprawnie.
-- [ ] **A3 — 3 wiersze z tego przebiegu mają `odds_verified=0`**, czyli trzymają kurs
-  od Groqa. Konsekwencja tej samej kolejności (zapis w KROKU 3, weryfikacja w KROKU 4):
-  gdy noga NIE przetrwa weryfikacji, uzgodnienie nie ma czego poprawić. Powiązane z D3.
+- [ ] **A4 — 1 martwy wiersz z 23.08 został w bazie** (`2 (wygrana gościa)`, nie rozliczy
+  się nigdy) plus 3 wiersze z `odds_verified=0`. Nowe już nie powstaną, ale te
+  istnieją. Do decyzji: zostawić jako ślad, czy posprzątać (operacja na prod DB).
 
 ### Sprawdzone i odrzucone
 - **Podział promptu na warstwy** (reguły w wiadomości systemowej, potem kontekst →

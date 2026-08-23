@@ -161,15 +161,17 @@ def _analizuj_groq(
         log.error("[Agent] Brak GROQ_API_KEY — warstwa opisowa pominieta,"
                   " typy powstaja z samego modelu.")
         console.print("[red]Brak GROQ_API_KEY — typy z samego modelu.[/red]")
-        return typy_awaryjne_z_modelu(wyniki)
+        return typy_awaryjne_z_modelu(wyniki, zapisz=False)
     console.print("[dim]Groq: analizuję i buduję kupony...[/dim]")
     try:
+        # A2/A3: `zapisz_predykcje=False` — zapis idzie dopiero po KROKU 4.
         return ai_analiza_pewniaczki(
             wyniki,
             pobierz_forme=False,
             cel_wygrana_a=cel_wygrana_a,
             cel_wygrana_b=cel_wygrana_b,
             stawka=stawka,
+            zapisz_predykcje=False,
         )
     except (RuntimeError, OSError, ValueError) as e:
         # Brak warstwy AI degraduje przebieg, ale go NIE zabija. Kroki przed tym
@@ -189,7 +191,7 @@ def _analizuj_groq(
         # A1: "degraduje do czesci modelowej" bylo dotad tylko opisem — zwracany
         # pusty slownik oznaczal ZERO zapisanych typow. Teraz czesc modelowa
         # faktycznie zostaje.
-        return typy_awaryjne_z_modelu(wyniki)
+        return typy_awaryjne_z_modelu(wyniki, zapisz=False)
 
 
 # ── Krok 4: Weryfikacja halucynacji ──────────────────────────────────────────
@@ -479,14 +481,63 @@ def _zbierz_ocalale_nogi(dane: dict) -> list[dict]:
     return list(zebrane.values())
 
 
-def _uzgodnij_predykcje(dane: dict) -> int:
-    """KROK 4b — dosyla do `predictions` wynik weryfikacji kursow. Zwraca liczbe wierszy.
+def _zapisz_predykcje_po_weryfikacji(dane: dict, wyniki: list, indeks: dict) -> int:
+    """KROK 4a — dopiero TERAZ typy trafiaja do `predictions`. Zwraca liczbe wierszy.
 
-    Zapis predykcji dzieje sie w KROKU 3 (wewnatrz analizy Groqa), czyli ZANIM
-    kurs zostanie podmieniony na rzeczywisty i zanim odpadna nogi bez pokrycia.
-    Bez tego kroku baza opisuje propozycje modelu jezykowego, a nie to, co system
-    faktycznie wystawil — i wlasnie tak trafialy tam kursy w rodzaju 52.58
-    powtorzonego na trzech roznych meczach.
+    Zapis szedl wczesniej w KROKU 3, czyli PRZED podmiana kursu na rzeczywisty
+    i przed odsiewem nog bez pokrycia. Kosztowalo to dwie rzeczy naraz (zmierzone
+    na produkcji 23.08, `footstats-final-pptp4`):
+
+      * noga wycieta na weryfikacji zostawala w bazie z kursem od modelu
+        jezykowego (`odds_verified=0`) — uzgodnienie poprawia tylko ocalale;
+      * slownictwo LLM-a ladowalo nietkniete: `2 (wygrana gościa)` to zwykla "2"
+        z dopiskiem, ale `oblicz_tip_correct` zwraca dla niej None, wiec taki
+        wiersz jest martwy od chwili zapisu.
+
+    Weryfikacja jest przy okazji bramka slownikowa — przepuszcza wylacznie rynki
+    z `_TYP_DO_ODDS_KEY`, czyli te, ktore zrodlo wycenia i ktore rozliczenie umie
+    policzyc. Zapis po niej dostaje wiec tylko typy realne i rozliczalne.
+
+    DRUGA SZANSA DLA MODELU (A1): skoro typy LLM-a moga wyparowac dopiero tutaj,
+    model musi miec okazje wejsc PO weryfikacji. Bez tego dzien, w ktorym LLM
+    wytypowal same rynki bez kursu, konczylby sie zerem predykcji mimo gotowych
+    liczb modelu. Typy z modelu przechodza te sama bramke — nie sa z niej zwolnione.
+    """
+    from footstats.ai.analyzer import _dopisz_typy_z_modelu
+    from footstats.ai.analyzer_helpers import _auto_zapisz_backtest
+
+    if not dane.get("top3") and _dopisz_typy_z_modelu(dane, wyniki):
+        usuniete: list[str] = []
+        dane["top3"] = [
+            z for z in (_weryfikuj_noge(row, indeks, usuniete) for row in dane["top3"])
+            if z is not None
+        ]
+        if usuniete:
+            log.warning("Typy z modelu tez nie przeszly weryfikacji: %s",
+                        " | ".join(usuniete))
+
+    _auto_zapisz_backtest(dane, wyniki)
+    n = dane.get("_zapisanych", 0)
+    if n:
+        log.info("Zapisano %d predykcji PO weryfikacji kursow", n)
+    else:
+        log.error("Zaden typ nie przezyl weryfikacji — ZERO predykcji zapisanych")
+    return n
+
+
+def _uzgodnij_predykcje(dane: dict) -> int:
+    """KROK 4b — stawia znacznik `odds_verified` na zapisanych nogach. Zwraca liczbe wierszy.
+
+    HISTORIA, bo rola tego kroku sie zmienila. Zapis predykcji dzial sie w KROKU 3
+    (wewnatrz analizy Groqa), czyli ZANIM kurs zostal podmieniony na rzeczywisty —
+    i wtedy ten krok BYL naprawa: dosylal do bazy kurs ze zrodla. Bez niego
+    `predictions` opisywalo propozycje modelu jezykowego, wlacznie z kursem 52.58
+    powtorzonym na trzech roznych meczach.
+
+    Od 23.08 (A2/A3) zapis idzie dopiero PO weryfikacji, wiec kurs w bazie jest
+    juz poprawny w chwili wstawienia. Ten krok zostaje jako domkniecie: oznacza
+    wiersze jako zweryfikowane i nadal pilnuje rozjazdu nazw miedzy zapisem
+    a weryfikacja (liczba mniejsza od dlugosci `nogi` = cos sie nie zeszlo).
     """
     nogi = _zbierz_ocalale_nogi(dane)
     if not nogi:
@@ -897,9 +948,11 @@ def main():
     _sep("KROK 4 — Weryfikacja kursow (anty-halucynacja)")
     dane = _weryfikuj_kupony(dane, indeks)
 
-    # Krok 4a: dosli wynik weryfikacji do `predictions` (zapis byl w KROKU 3,
-    # czyli przed podmiana kursu — bez tego baza trzyma kurs od Groqa).
+    # Krok 4a: TERAZ zapis do `predictions` — po podmianie kursu i po odsiewie
+    # nog bez pokrycia. `_uzgodnij_predykcje` zostaje jako domkniecie: stawia
+    # znacznik `odds_verified` na wierszach, ktore przeszly bramke.
     if not args.dry_run:
+        _zapisz_predykcje_po_weryfikacji(dane, wyniki, indeks)
         _uzgodnij_predykcje(dane)
 
     # Krok 4b: Dodaj Kelly do kazdej nogi

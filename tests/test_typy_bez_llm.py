@@ -276,14 +276,20 @@ def bez_zapisu_do_bazy(monkeypatch):
 
 def test_brak_klucza_api_nie_zabija_przebiegu(bez_zapisu_do_bazy, monkeypatch):
     """Brak GROQ_API_KEY kończył proces przez `sys.exit(1)` — razem z typami,
-    które model policzył wcześniej i którym Groq nie jest do niczego potrzebny."""
+    które model policzył wcześniej i którym Groq nie jest do niczego potrzebny.
+
+    ZMIANA UMOWY (A2/A3, 23.08): typy tu POWSTAJĄ, ale do bazy jeszcze nie idą.
+    Zapis przeniesiony za weryfikację kursów (KROK 4a), żeby do `predictions` nie
+    trafiały nogi bez pokrycia. Sam zapis pilnuje `test_zapis_po_weryfikacji.py`.
+    """
     import footstats.daily_agent as da
     monkeypatch.setattr(an, "ai_groq_dostepny", lambda: False)
 
     dane = da._analizuj_groq([_mecz()])
 
     assert len(dane["top3"]) == 1
-    assert [z["kupon_type"] for z in bez_zapisu_do_bazy] == ["model"]
+    assert dane["top3"][0]["_z_modelu"] is True
+    assert bez_zapisu_do_bazy == [], "zapis idzie dopiero po weryfikacji"
 
 
 def test_wyjatek_groqa_zostawia_czesc_modelowa(bez_zapisu_do_bazy, monkeypatch):
@@ -301,11 +307,12 @@ def test_wyjatek_groqa_zostawia_czesc_modelowa(bez_zapisu_do_bazy, monkeypatch):
 
     assert len(dane["top3"]) == 1
     assert dane["_top3_z_modelu"] is True
-    assert bez_zapisu_do_bazy
+    # Jak wyżej: typy są, zapis czeka na weryfikację kursów.
+    assert bez_zapisu_do_bazy == []
 
 
 def test_awaria_groqa_bez_kursow_nie_zapisuje_nic(bez_zapisu_do_bazy, monkeypatch):
-    """Degradacja nie może oznaczać zapisywania typów bez pokrycia w kursach."""
+    """Degradacja nie może oznaczać typowania meczów bez kursu — nawet w pamięci."""
     import footstats.daily_agent as da
     monkeypatch.setattr(an, "ai_groq_dostepny", lambda: False)
 

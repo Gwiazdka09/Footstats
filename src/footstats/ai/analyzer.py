@@ -636,7 +636,7 @@ def _dopisz_typy_z_modelu(dane: dict, wyniki: list) -> int:
     return len(legi)
 
 
-def typy_awaryjne_z_modelu(wyniki: list) -> dict:
+def typy_awaryjne_z_modelu(wyniki: list, zapisz: bool = True) -> dict:
     """A1 — komplet typow z modelu, gdy warstwa LLM w ogole nie odpowiedziala.
 
     Uzywane przez potok dzienny tam, gdzie do `ai_analiza_pewniaczki` nawet nie
@@ -644,14 +644,16 @@ def typy_awaryjne_z_modelu(wyniki: list) -> dict:
     modelu, timeout). Wczesniej oba przypadki konczyly sie zerem predykcji —
     a to jest dokladnie ten sam material, ktory model policzyl juz wczesniej.
 
-    Zwraca slownik w formacie `ai_analiza_pewniaczki` (klucz `top3`), zapisany
-    do `predictions` z etykieta `kupon_type='model'`. Pusty, gdy zaden mecz nie
-    przeszedl filtrow selekcji.
+    Zwraca slownik w formacie `ai_analiza_pewniaczki` (klucz `top3`). Pusty, gdy
+    zaden mecz nie przeszedl filtrow selekcji.
+
+    `zapisz=False` odklada zapis do bazy — tak wola potok dzienny, ktory pisze
+    dopiero PO weryfikacji kursow (A2/A3). Etykieta wiersza to `kupon_type='model'`.
     """
     dane: dict = {}
     if not wyniki:
         return dane
-    if _dopisz_typy_z_modelu(dane, wyniki):
+    if _dopisz_typy_z_modelu(dane, wyniki) and zapisz:
         _auto_zapisz_backtest(dane, wyniki)
     return dane
 
@@ -662,6 +664,7 @@ def ai_analiza_pewniaczki(
     cel_wygrana_a: float | None = None,
     cel_wygrana_b: float | None = None,
     stawka: float = 10.0,
+    zapisz_predykcje: bool = True,
 ) -> dict:
     """
     Groq analizuje listę pewniaczków (quick_picks lub weekly_picks).
@@ -672,6 +675,11 @@ def ai_analiza_pewniaczki(
     stawka: stawka PLN, używana do obliczenia celu kursu
     Wyjście: słownik JSON z kluczami top3, kupon_a, kupon_b, ostrzezenia.
       Jeśli parsowanie JSON się nie powiodło, zawiera klucz _raw z surowym tekstem.
+    zapisz_predykcje: czy zapisać typy do `predictions` od razu. Potok dzienny
+      podaje False i zapisuje sam, dopiero PO weryfikacji kursów — inaczej do bazy
+      trafiały nogi bez pokrycia (kurs od LLM-a) i typy spoza słownika rozliczeń
+      (`2 (wygrana gościa)` nie rozlicza się nigdy). Wołający bez kroku weryfikacji
+      (`cli_commands`) zostaje przy True.
     """
     if not wyniki:
         return {"_raw": "Brak pewniaczków do analizy."}
@@ -781,7 +789,8 @@ def ai_analiza_pewniaczki(
 
         else:
             _wymusz_40pct(dane, min_szansa=40.0)
-        _auto_zapisz_backtest(dane, wyniki)
+        if zapisz_predykcje:
+            _auto_zapisz_backtest(dane, wyniki)
 
     return dane
 

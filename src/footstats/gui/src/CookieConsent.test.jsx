@@ -54,3 +54,45 @@ describe('baner zgody', () => {
     expect(screen.getByText(/niezbędnych plików cookie/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * F6 — baner zaslanial tresc na dole ekranu.
+ *
+ * Zmierzone 17.08 przy 390px w widoku rejestracji: link „Masz juz konto?
+ * Zaloguj sie" chowal sie pod banerem. Baner jest `fixed bottom-0`, wiec nie
+ * zajmuje miejsca w ukladzie — na mobile rozwija sie do dwoch wierszy i przykrywa
+ * to, co jest najnizej.
+ *
+ * Naprawa jest celowo GLOBALNA, a nie lokalna dla ekranu rejestracji: baner
+ * wisi nad KAZDYM widokiem, wiec dokladanie marginesu w jednym komponencie
+ * zalatwialoby jeden ekran i zostawialo reszte. Rezerwujemy miejsce na dole
+ * strony na tyle, ile baner realnie zajmuje, i oddajemy je po zamknieciu.
+ */
+describe('baner nie zaslania tresci', () => {
+  it('rezerwuje miejsce na dole strony, dopoki wisi', () => {
+    render(<CookieConsent />);
+    expect(document.body.style.paddingBottom).not.toBe('');
+  });
+
+  it('oddaje miejsce po zamknieciu', () => {
+    render(<CookieConsent />);
+
+    fireEvent.click(screen.getByText('Rozumiem'));
+
+    expect(document.body.style.paddingBottom).toBe('');
+  });
+
+  it('nie rezerwuje miejsca, gdy zgoda juz jest', () => {
+    localStorage.setItem('fs_cookie_consent', 'accepted');
+    render(<CookieConsent />);
+    expect(document.body.style.paddingBottom).toBe('');
+  });
+
+  it('sprzata po odmontowaniu', () => {
+    const { unmount } = render(<CookieConsent />);
+
+    unmount();
+
+    expect(document.body.style.paddingBottom).toBe('');
+  });
+});
