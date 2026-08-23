@@ -250,6 +250,45 @@ app.add_middleware(
 )
 
 
+# B5 — Content-Security-Policy. Reszta nagłówków była od dawna, tego brakowało.
+#
+# To NIE jest polityka dla samego JSON-a: `Dockerfile.api` buduje front (stage
+# `gui-build`) i kopiuje `gui/dist`, więc Cloud Run oddaje żywy SPA na `/`, `/app`
+# i `/preview`, do tego `/polityka-prywatnosci`, `/manifest.json` i `/sw.js`.
+#
+# `style-src 'unsafe-inline'` to ŚWIADOMY kompromis, nie przeoczenie: front używa
+# atrybutów `style={{...}}` (`HistoryCouponRow`, `StatsView`, `ProgressChart` — to
+# samo miejsce, które opisuje F9). Bez tego członu te komponenty tracą kolory.
+# Dopóki tam jest, `style-src` realnie nie broni przed wstrzyknięciem stylu —
+# sprzątnięcie F9 pozwoli go usunąć i dopiero wtedy ta dyrektywa zacznie chronić.
+#
+# `script-src` celowo BEZ `'unsafe-inline'`: zbudowany pakiet nie ma ani jednego
+# skryptu inline (sprawdzone w `dist/index.html`), więc nie ma czego dopuszczać,
+# a to jedyny człon realnie broniący przed XSS.
+#
+# Google Fonts jako jedyne zewnętrzne pochodzenie — `gui/src/index.css` zaczyna
+# się od `@import url('https://fonts.googleapis.com/...')`.
+_CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "object-src 'none'",
+])
+
+# DOMYŚLNIE RAPORTOWANIE, NIE WYMUSZANIE. CSP, która psuje GUI, jest gorsza od jej
+# braku: użytkownik widzi białą stronę, a przyczyna siedzi w nagłówku, nie w kodzie.
+# Nie mamy jeszcze ani jednego pomiaru naruszeń, więc wymuszanie byłoby zgadywaniem.
+# Flaga pozwala przełączyć BEZ wdrażania nowego obrazu — a moment, w którym trzeba
+# wycofać złą politykę, to dokładnie ten, w którym nie chcemy czekać na build.
+_CSP_ENFORCE = os.environ.get("CSP_ENFORCE", "0").strip() in ("1", "true", "True")
+
+
 @app.middleware("http")
 async def _security_headers(request: Request, call_next):
     """Nagłówki bezpieczeństwa (OWASP API8 — Security Misconfiguration).
@@ -264,6 +303,11 @@ async def _security_headers(request: Request, call_next):
     response.headers.setdefault(
         "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
     )
+    # Treść polityki jest IDENTYCZNA w obu trybach — inaczej raporty z trybu
+    # `Report-Only` nie mówiłyby nic o tym, co stanie się po wymuszeniu.
+    naglowek = ("Content-Security-Policy" if _CSP_ENFORCE
+                else "Content-Security-Policy-Report-Only")
+    response.headers.setdefault(naglowek, _CSP)
     return response
 
 

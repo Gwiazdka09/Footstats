@@ -530,10 +530,31 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
 - [ ] **M3 — cel M1 mierzy rynek, który przegrywa.** „55% win rate" liczone na 1X2, gdzie przy niezgodzie rynek 42,9% vs model 29,8%. Rozważyć ROI zamiast trafności.
 
 ### ⚪ Niskie
-- [ ] **B5 — brak Content-Security-Policy** (reszta nagłówków jest: nosniff, DENY, HSTS, Referrer-Policy). Start w `report-only`.
+- [x] ✅ **B5 — ZROBIONE 23.08. Content-Security-Policy w trybie raportowania.**
+  Polityka domyka `default-src`/`object-src`/`base-uri`/`frame-ancestors`/`form-action`,
+  `script-src 'self'` BEZ `'unsafe-inline'` (zbudowany pakiet nie ma ani jednego skryptu
+  inline — sprawdzone w `dist/index.html`). Google Fonts jako jedyne zewnętrzne
+  pochodzenie. Flip przez `CSP_ENFORCE=1` **bez wdrażania nowego obrazu** — moment,
+  w którym trzeba wycofać złą politykę, to dokładnie ten, w którym nie chcemy czekać
+  na build. +16 testów.
+  **ZMIERZONE, nie zgadnięte:** lokalnie przy `CSP_ENFORCE=1` Playwright załadował
+  `/`, `/preview`, `/app` i `/polityka-prywatnosci` — **zero naruszeń CSP, zero błędów
+  konsoli**, font `Inter` aktywny. Zastrzeżenie: to ekran logowania (brak bazy lokalnie),
+  więc widoki po zalogowaniu (wykresy `recharts`) NIE są przetestowane — dlatego
+  domyślnie zostaje raportowanie.
+  **Dług świadomy:** `style-src 'unsafe-inline'` jest konieczne, bo front używa
+  atrybutów `style={{...}}` (**to samo miejsce co F9**). Dopóki tam jest, `style-src`
+  realnie nie broni przed wstrzyknięciem stylu. Sprzątnięcie F9 pozwoli go usunąć —
+  `test_style_inline_dozwolone_swiadomie` spadnie wtedy i o tym przypomni.
 - [ ] **B6 — jedyne dynamiczne SQL:** `player_db.py:73` `ALTER TABLE ... ADD COLUMN {col} {typ}` — wartości z kodu, nie z wejścia. Whitelist par (kolumna, typ).
 - [ ] **D4 — `model_log` śledzi tylko argmax 1X2** → rynków golowych nie zweryfikujemy live. Dopisać `p_over25`/`p_btts` + wynik.
-- [ ] **F4 — brak PWA** mimo planu „PWA first" (jest favicon/robots/sitemap, brak manifestu i SW). Albo `vite-plugin-pwa`, albo skreślić z planu.
+- [ ] **F4 — PWA nie działa, ale NIE dlatego, że jej nie ma.** ⚠️ **Korekta opisu 23.08:**
+  poprzedni wpis mówił „brak manifestu i SW" — to nieprawda. Backend serwuje OBA:
+  `/manifest.json` (`main.py:455`) i `/sw.js` z pełnym cyklem install/activate/fetch.
+  Prawdziwy problem jest inny i węższy: **front ich nie podłącza**. W `gui/index.html`
+  nie ma `<link rel="manifest">`, a w całym `gui/src` nie pada ani razu `serviceWorker`
+  — czyli nikt go nie rejestruje. Kod jest napisany i osierocony. Fix jest mniejszy niż
+  zakładano: dwie linijki (link + rejestracja), nie `vite-plugin-pwa` od zera.
 - [ ] **F5 — `CouponWizard.jsx` 437 linii**, `SettingsView.jsx` 377 (limit 400).
 - [ ] **I3 — brak Sentry na froncie** (backend ma).
 - [ ] **I4 — `DATABASE_URL_NEON` wciąż w lokalnym `.env`** mimo porzucenia Neona.
