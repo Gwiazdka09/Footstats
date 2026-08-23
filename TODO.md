@@ -201,7 +201,54 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
 - [ ] **F10 — sześć klikalnych `<div>` do konwersji.** `HistoryCouponRow` (rozwijanie wiersza), `LeaderboardView` (wiersz rankingu), `ui.jsx`, `CouponWizard` (3×). Niedostępne z klawiatury i bez roli dla czytnika. Każdy wymaga `role="button"` + `tabIndex` + obsługi Enter/Spacji albo przepisania na `<button>`. Próg w strażniku obniżyć po każdej konwersji.
 - [ ] **F11 — reszta widoków bez audytu dostępności.** Zrobione: `LoginView`, `ManualCouponForm` (zamykanie), `App` (menu). Zostają: `SettingsView`, `AdminPanelView`, `CouponWizard`, `StatsView`, `LeaderboardView`, `TerminarzView`, `MatchAnalysisView` — głównie powiązanie etykiet z polami.
 - [ ] **F9 — inline'owe kolory na przyciskach to już tylko pozostałość.** Były obejściem buga CSS naprawionego w F1. Trzy miejsca: `HistoryCouponRow.jsx`, `StatsView.jsx`, `ProgressChart.jsx` — można uprościć do zwykłych klas Tailwinda. Wymaga przejścia po wszystkich trzech naraz z regresją wizualną. Komentarz w `HistoryCouponRow` już nie kłamie (zaktualizowany).
-- [ ] **M5 — jedyna zmiana wsparta danymi: wyłączyć BTTS z puli selekcji.** Symulacja BEZ BTTS dała −10,7%, a produkcja z BTTS −13,5% ogółem przy **−28,2% na samym BTTS**. Zastrzeżenie: to inne okresy i próby, więc nie jest to porównanie 1:1 — przed flipem policzyć na wspólnym oknie.
+- [x] ✅ **M5 — ZMIERZONE 23.08. Flaga `SELECTION_SKIP_BTTS` zbudowana, DOMYŚLNIE OFF.**
+  ⚠️ **KOREKTA WŁASNEGO WPISU — premisa M5 była błędnym cytatem.** Poprzednia wersja
+  brzmiała: „Symulacja BEZ BTTS dała −10,7%, a produkcja z BTTS −13,5%". Źródłem jest
+  `CHANGELOG.md` (M1, 17.08), gdzie **−10,7% / −13,5% / −14,7% to TRZY REGUŁY SELEKCJI
+  na tych samych danych** — argmax p (czyli produkcja), argmax EV, argmax przewagi nad
+  rynkiem. Żadna z nich nie jest wariantem „bez BTTS". **Pomiar uzasadniający M5 nigdy
+  nie istniał.**
+  **Zmierzone na produkcji 23.08** (wspólne okno 2026-05-06..2026-08-16). ⚠️ Surowa próba
+  n=147 jest **skażona zmyślonymi kursami**: 17 wierszy ma kurs >10, w tym wielokrotnie
+  **52,58** — liczba zapisana jako halucynacja Groqa (patrz D3, `odds_verified=0`).
+  Po odsianiu, **n=130**:
+
+  | rynek | n | mediana kursu | próg opłacalności | trafność | ROI |
+  |---|---|---|---|---|---|
+  | 1X2 | 85 | 2,10 | 50,8% | 38,8% | −14,6% |
+  | O/U 2.5 | 27 | 1,75 | 60,2% | 55,6% | **+19,7%** |
+  | BTTS | 12 | 1,68 | **62,6%** | 25,0% | −47,9% |
+  | razem | 130 | — | — | 41,5% | −11,7% |
+  | bez BTTS | 118 | — | — | 43,2% | −8,0% (+3,7 pp) |
+
+  **Kierunek zgadza się z M5, ale to NIE jest dowód:** przy n=12-13 jeden trafiony zakład
+  przesuwa ROI o **14,5 pp**, a test dwumianowy — po korekcie na to, że BTTS wybrano jako
+  najgorszy z czterech rynków — daje **p=0,111** (surowe 0,028 × 4).
+
+  **🔬 MECHANIZM (ustalony 23.08 — to jest sedno, nie ROI):**
+  1. **Selekcja może obstawić wyłącznie „BTTS TAK".** `_ODDS_KEY` w `system_paper.py` ma
+     jeden wpis `"BTTS": "btts"` — strony NIE tam nie ma. Rynek jednostronny z definicji.
+  2. **TAK to droga strona.** Przy medianie 1,68 i podatku 12% próg opłacalności to **62,6%**,
+     a częstość bazowa BTTS w futbolu **~54,4%** → **8 punktów dziury, zanim model się odezwie.**
+  3. **Model nie ma czym jej zasypać:** n=15 460 → 53,2% przy bazie 54,4% (Brier 0,2496 vs
+     0,2480). „Zawsze BTTS tak" **bije model**.
+  4. **A argmax i tak go wybiera** — rynki 2-way wygrywają argmax w 74% meczów, bo jedna
+     strona zawsze ma ≥50% z definicji.
+
+  **Dowód kontrolny obok:** O/U 2.5 ma niemal identyczny próg (60,2%), ale selekcja ma
+  **obie** strony (`Over`/`Under`) i może wziąć tańszą — i to **jedyny rynek z dodatnim ROI**.
+  Różnica nie leży w rynku, tylko w braku wyboru strony przy BTTS.
+
+  **Hipoteza obalona po drodze:** podejrzenie, że brak korekty Dixona-Colesa **zawyża** BTTS
+  (`poisson.py:43` liczy `(1−P(g=0))·(1−P(a=0))` z niezależnych rozkładów, a `quick_picks.py:255`
+  mówi wprost „DC dotyka TYLKO 1X2"). Policzone dla realnych λ przy ρ=−0,13: DC **zawyża**
+  BTTS TAK o ~1,5 pp, czyli obecny wzór **zaniża**. To osobny, mniejszy problem — spycha
+  graniczne mecze na stronę NIE, której selekcja i tak nie umie obstawić.
+  **Czego NIE dało się policzyć:** prawdziwego kontrfaktu („co selektor wybrałby zamiast
+  BTTS"). `predictions.match_stats` to statystyki PO meczu, a prawdopodobieństw pozostałych
+  rynków baza nie trzyma — to samo ograniczenie opisuje **D4**. Odblokowanie tego pomiaru
+  = dopisać `p_over25`/`p_btts` do `model_log`.
+  +13 testów. Flip dopiero po próbce, jak `SELECTION_MIN_CONF` i `LEAGUE_GATING`.
 
 ### 🟡 Średnie
 - [ ] **D2 — `/cron/settle-manual` NIE jest w Schedulerze.** ⚠️ **Sprawdzone na sucho na produkcji 17.08: wpięcie go dziś NIC BY NIE DAŁO.**

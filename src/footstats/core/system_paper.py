@@ -39,6 +39,29 @@ def _min_prob() -> float:
         return MIN_PROB
     return v if 0.0 <= v <= 100.0 else MIN_PROB
 
+def _pomijaj_btts() -> bool:
+    """Czy wyrzucić BTTS z puli selekcji (M5 lever). Domyślnie NIE.
+
+    DLACZEGO TA FLAGA ISTNIEJE: `najlepszy_typ` bierze argmax po surowym
+    prawdopodobieństwie z sześciu typów naraz. Rynek DWUSTRONNY ma zawsze jedną
+    stronę ≥50% z definicji, trójstronny dzieli prawdopodobieństwo na trzy —
+    dlatego 2-way wygrywa argmax w 74% meczów (zmierzone 17.08 na 1755 meczach).
+    BTTS trafia do kuponu z powodu STRUKTURY reguły, nie dlatego, że mamy tam
+    przewagę. A przewagi nie ma: walk-forward n=15 460 daje model 53,2% przy
+    częstości bazowej 54,4% (Brier 0,2496 vs 0,2480) — „zawsze BTTS tak" BIJE model.
+
+    DLACZEGO MIMO TO DOMYŚLNIE WYŁĄCZONA: pomiar na produkcji (23.08, wspólne okno
+    2026-05-06..2026-08-16, n=147) daje BTTS n=13, trafność 23,1%, ROI −51,9%,
+    a bez BTTS +2,9% wobec −2,0% ogółem. Kierunek się zgadza, ale n=13 to szum —
+    jeden zakład więcej przesuwa ROI o 14,5 pp, a test dwumianowy po korekcie na
+    wybór najgorszego z czterech rynków daje p=0,111. Flip dopiero po próbce,
+    tak samo jak `SELECTION_MIN_CONF` i `LEAGUE_GATING`.
+
+    Czytane przy każdym wywołaniu — flip bez redeploy kodu.
+    """
+    return os.getenv("SELECTION_SKIP_BTTS", "").strip() in ("1", "true", "True")
+
+
 # tip → klucz kursu w odds dict kandydata
 _ODDS_KEY: dict[str, str] = {
     "1": "home", "X": "draw", "2": "away",
@@ -64,11 +87,15 @@ def najlepszy_typ(w: dict) -> tuple[float, str, float] | None:
     Najlepszy legalny typ dla meczu: max p_modelu wśród typów spełniających
     filtry Fazy 17 (`_min_prob()` ≤ p, MIN_KURS ≤ kurs ≤ MAX_KURS).
     Próg p domyślnie MIN_PROB (40), podnoszony env `SELECTION_MIN_CONF` (M1 lever #1).
+    `SELECTION_SKIP_BTTS=1` wyrzuca BTTS z puli (M5 lever — patrz `_pomijaj_btts`).
     Zwraca (prob, tip, kurs) lub None.
     """
     odds = w.get("odds") or {}
     best: tuple[float, str, float] | None = None
+    pomijaj_btts = _pomijaj_btts()
     for tip, okey in _ODDS_KEY.items():
+        if pomijaj_btts and tip == "BTTS":
+            continue
         kurs_raw = odds.get(okey)
         if kurs_raw is None:
             continue
