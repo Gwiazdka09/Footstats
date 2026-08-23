@@ -29,6 +29,14 @@ from __future__ import annotations
 import pytest
 
 import footstats.evening_agent as ea
+from datetime import date
+
+# Data MUSI byc ruchoma. `_fetch_results_today` nie wychodzi do API dla dat spoza
+# okna darmowego planu, wiec zaszyta data z przeszlosci sprawia, ze test dostaje
+# pusta liste z progu, nie z badanego zachowania (retry, pusta odpowiedz).
+# Progu pilnuje osobno `tests/test_horyzont_zrodel_wynikow.py`.
+_DZIS_ISO = date.today().isoformat()
+
 
 PROG = 0.6
 
@@ -234,30 +242,30 @@ def siec(monkeypatch):
 def test_wyniki_pobrane(siec):
     siec["odpowiedzi"] = [_Resp({"response": [_fixture("Legia", "Lech")]})]
 
-    assert len(ea._fetch_results_today("klucz", "2026-08-01")) == 1
+    assert len(ea._fetch_results_today("klucz", _DZIS_ISO)) == 1
 
 
 def test_ponawia_przy_bledzie_serwera(siec):
     siec["odpowiedzi"] = [_Resp(None, status=500), _Resp({"response": [_fixture("A", "B")]})]
 
-    assert len(ea._fetch_results_today("klucz", "2026-08-01")) == 1
+    assert len(ea._fetch_results_today("klucz", _DZIS_ISO)) == 1
     assert siec["wywolania"] == 2
 
 
 def test_poddaje_sie_po_wyczerpaniu_prob(siec):
     siec["odpowiedzi"] = [_Resp(None, status=500)] * 3
 
-    assert ea._fetch_results_today("klucz", "2026-08-01", retries=3) == []
+    assert ea._fetch_results_today("klucz", _DZIS_ISO, retries=3) == []
     assert siec["wywolania"] == 3
 
 
 def test_awaria_sieci_nie_wywala_rozliczenia(siec):
     siec["odpowiedzi"] = [ea.requests.RequestException("timeout")] * 3
 
-    assert ea._fetch_results_today("klucz", "2026-08-01", retries=3) == []
+    assert ea._fetch_results_today("klucz", _DZIS_ISO, retries=3) == []
 
 
 def test_dzien_bez_meczow_to_pusta_lista(siec):
     siec["odpowiedzi"] = [_Resp({"response": []})]
 
-    assert ea._fetch_results_today("klucz", "2026-12-25") == []
+    assert ea._fetch_results_today("klucz", _DZIS_ISO) == []

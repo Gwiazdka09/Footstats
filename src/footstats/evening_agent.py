@@ -152,6 +152,17 @@ def _status_kuponu(nogi_statusy: list[str]) -> str:
 def _fetch_results_today(api_key: str, date_str: str, retries: int = 3) -> list[dict]:
     """Pobiera zakończone mecze z API-Football dla daty YYYY-MM-DD (retry x3)."""
     import time
+
+    from footstats.scrapers.results_updater import AF_HORYZONT_DNI, data_w_zasiegu_af
+
+    # Darmowy plan odpowiada tylko na okno `dzis +/-1 dzien`; poza nim odmowa wraca
+    # jako HTTP 200 z bledem w tresci, wiec retry nic nie zmieni — a request jest
+    # juz wydany. Nie pytamy.
+    if not data_w_zasiegu_af(date_str):
+        console.print(f"[dim]Data {date_str} poza zasiegiem API-Football "
+                      f"(prog {AF_HORYZONT_DNI} dni) — pomijam zapytanie.[/dim]")
+        return []
+
     for attempt in range(1, retries + 1):
         try:
             r = requests.get(

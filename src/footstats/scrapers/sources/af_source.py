@@ -6,10 +6,14 @@ Reużywa istniejącego klienta APIFootball (cache + budżet) — fetch() woła
 """
 from __future__ import annotations
 
+import logging
+
 from footstats.config import ENV_APISPORTS, _czytaj_wszystkie_klucze
 from footstats.scrapers.api_football import APIFootball
 from footstats.scrapers.sources.base import MatchData
 from footstats.utils.helpers import _s
+
+log = logging.getLogger(__name__)
 
 # Statusy API-Football oznaczające zakończony mecz (zgodnie z evening_agent._wynik_z_fixture)
 _STATUSY_ZAKONCZONE = ("FT", "AET", "PEN")
@@ -35,6 +39,20 @@ class APIFootballSource:
         Pobiera mecze danego dnia z API-Football i mapuje na MatchData.
         Graceful: brak klucza/danych/błąd parsowania -> [].
         """
+        from footstats.scrapers.results_updater import (
+            AF_HORYZONT_DNI, data_w_zasiegu_af,
+        )
+
+        # Trzecie wejscie do tego samego API — i najlatwiejsze do przeoczenia,
+        # bo agregator jest ostatnim fallbackiem w `_find_leg_result`. Bez tego
+        # progu wdrozenie z 23.08 nie uciszylo produkcji: przebieg rozliczenia
+        # dalej zbieral 19 odmow "Free plans do not have access", mimo ze dwa
+        # wczesniejsze wejscia byly juz zabezpieczone.
+        if not data_w_zasiegu_af(date[:10]):
+            log.info("Data %s poza zasiegiem API-Football (prog %d dni) —"
+                     " agregator pomija to zrodlo.", date[:10], AF_HORYZONT_DNI)
+            return []
+
         try:
             dane = self._get("/fixtures", {"date": date[:10]})
             if not dane:

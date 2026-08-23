@@ -4,11 +4,19 @@ test_scrapers_sources.py — testy fundamentu multi-source scraperów
 
 Wszystkie testy mockują źródła/API-Football — zero realnych wywołań sieciowych.
 """
+from datetime import date
 from unittest.mock import patch
 
 from footstats.scrapers.sources.base import MatchData
 from footstats.scrapers.sources.af_source import APIFootballSource
 from footstats.scrapers.sources import aggregator
+
+# Data MUSI byc ruchoma: `APIFootballSource.fetch` nie wychodzi do API dla dat
+# spoza okna darmowego planu, wiec zaszyta data z przeszlosci sprawia, ze test
+# dostaje pusta liste z progu zamiast z badanego mapowania.
+_DZIS_ISO = date.today().isoformat()
+
+
 
 
 # ── MatchData.to_result_str ───────────────────────────────────────────────────
@@ -159,7 +167,7 @@ class TestAPIFootballSourceFetch:
         }
         src = APIFootballSource()
         with patch.object(src, "_get", return_value=fixtures_response):
-            mecze = src.fetch("2026-01-01")
+            mecze = src.fetch(_DZIS_ISO)
 
         assert len(mecze) == 1
         m = mecze[0]
@@ -175,7 +183,7 @@ class TestAPIFootballSourceFetch:
     def test_brak_klucza_lub_blad_zwraca_puste(self):
         src = APIFootballSource()
         with patch.object(src, "_get", return_value=None):
-            mecze = src.fetch("2026-01-01")
+            mecze = src.fetch(_DZIS_ISO)
 
         assert mecze == []
 
@@ -195,7 +203,7 @@ class TestAPIFootballSourceFetch:
         }
         src = APIFootballSource()
         with patch.object(src, "_get", return_value=fixtures_response):
-            mecze = src.fetch("2026-01-01")
+            mecze = src.fetch(_DZIS_ISO)
 
         assert len(mecze) == 1
         assert mecze[0].status == "scheduled"

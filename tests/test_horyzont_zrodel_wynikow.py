@@ -154,3 +154,84 @@ def test_rozliczanie_dalej_pyta_o_swieze_daty(monkeypatch):
 
     assert cs._get_fixtures_api("klucz", _dzien(-1)) == [{"fixture": {"id": 1}}]
     assert len(wolania) == 1
+
+
+# ── trzecie wejście: agregator multi-source ─────────────────────────────────
+
+def test_zrodlo_konsensusu_tez_respektuje_prog(monkeypatch):
+    """Trzecia droga do tego samego API — znaleziona dopiero po wdrożeniu.
+
+    Pierwsze wdrożenie progu (23.08) NIE uciszyło produkcji: przebieg rozliczenia
+    dalej zbierał 19 odmów `Free plans do not have access`. Okazało się, że
+    `_find_leg_result` ma jeszcze Źródło 5 — agregator multi-source, który idzie
+    przez `af_source` do klienta budżetowego, z pominięciem obu wcześniej
+    zabezpieczonych wejść. Sam próg nie wystarczy, jeśli nie stoi na KAŻDYM wejściu.
+    """
+    from footstats.scrapers.sources.af_source import APIFootballSource
+
+    zrodlo = APIFootballSource(klient=object())
+    monkeypatch.setattr(
+        zrodlo, "_get",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("nie powinno wyjsc")),
+    )
+
+    assert zrodlo.fetch(_dzien(-8)) == []
+
+
+def test_zrodlo_konsensusu_dalej_pyta_o_swieze_daty(monkeypatch):
+    from footstats.scrapers.sources.af_source import APIFootballSource
+
+    zrodlo = APIFootballSource(klient=object())
+    wolania = []
+
+    def fake_get(endpoint, params=None):
+        wolania.append(params)
+        return {"response": []}
+
+    monkeypatch.setattr(zrodlo, "_get", fake_get)
+
+    assert zrodlo.fetch(_dzien(0)) == []
+    assert len(wolania) == 1
+
+
+# ── strażnik: żadne NOWE wejście nie przemyci się bez progu ─────────────────
+
+def test_kazde_zapytanie_o_fixtures_po_dacie_ma_prog():
+    """Próg musi stać na KAŻDYM wejściu do API-Football po dacie, nie na wybranych.
+
+    Historia tej naprawy: pierwsze wdrożenie zabezpieczyło dwa wejścia i NIE
+    uciszyło produkcji — trzecie (agregator multi-source) dalej zbierało odmowy.
+    Potem znalazły się jeszcze dwa. Zamiast szukać czwartego po każdym wdrożeniu,
+    ten test przechodzi po źródłach i pilnuje, żeby nowe zapytanie o `/fixtures`
+    z parametrem `date` nie powstało bez sprawdzenia zasięgu.
+
+    Pominięte świadomie: `daily_phases` (status NS) i `fixtures_fallback` pytają
+    wyłącznie o dziś/jutro, czyli zawsze wewnątrz okna.
+    """
+    import re
+    from pathlib import Path
+
+    zrodla = Path("src/footstats")
+    dozwolone_bez_progu = {
+        "daily_phases.py",      # status=NS, tylko dzisiejsze mecze
+        "fixtures_fallback.py",  # nadchodzące mecze
+        "api_football.py",       # znajdz_fixture_id — mecz z terminarza, nie wynik
+    }
+
+    winowajcy = []
+    for plik in zrodla.rglob("*.py"):
+        if plik.name in dozwolone_bez_progu:
+            continue
+        tekst = plik.read_text(encoding="utf-8")
+        if not re.search(r'"/fixtures"|/fixtures"', tekst):
+            continue
+        if '"date"' not in tekst:
+            continue
+        if "data_w_zasiegu_af" not in tekst:
+            winowajcy.append(plik.name)
+
+    assert winowajcy == [], (
+        f"zapytanie o /fixtures po dacie bez progu zasiegu: {winowajcy}. "
+        "Kazde wejscie musi wolac `data_w_zasiegu_af` — inaczej placimy "
+        "requestem za pytanie, na ktore darmowy plan nie odpowie."
+    )

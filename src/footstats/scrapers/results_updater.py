@@ -583,6 +583,11 @@ def update_active_coupons(
         nonlocal req_count
         if date_str in date_cache:
             return date_cache[date_str]
+        if not data_w_zasiegu_af(date_str):
+            log.info("Data %s poza zasiegiem API-Football (prog %d dni) —"
+                     " nie wydaje zapytania.", date_str, AF_HORYZONT_DNI)
+            date_cache[date_str] = []
+            return []
         if req_count >= 80:
             date_cache[date_str] = []
             return []
