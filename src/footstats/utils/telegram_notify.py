@@ -120,10 +120,30 @@ def _send(text: str, parse_mode: str = "HTML", chat_id: str | None = None) -> bo
             },
             timeout=15,
         )
-        if not r.ok:
-            # Najczęstsza przyczyna 400: niezaescapowane <,>,& w nazwach drużyn (HTML parse).
-            log.warning("Telegram _send: HTTP %s — %s", r.status_code, (r.text or "")[:250])
-        return r.ok
+        if r.ok:
+            return True
+
+        # Najczęstsza przyczyna 400: niezaescapowane <,>,& w treści (HTML parse).
+        log.warning("Telegram _send: HTTP %s — %s", r.status_code, (r.text or "")[:250])
+
+        # Jedno ponowienie BEZ formatowania. Escapujemy każde pole, ale wystarczy
+        # jedno przeoczone (23.08: `ostrzezenia`), żeby cała wiadomość przepadła.
+        # Brzydsza wiadomość jest lepsza niż cisza. Tylko dla odmowy PARSERA —
+        # blokada bota czy zły chat_id nie naprawią się ponowieniem.
+        if parse_mode and r.status_code == 400 and "parse entities" in (r.text or ""):
+            log.warning("Telegram _send: ponawiam bez formatowania")
+            r2 = requests.post(
+                TELEGRAM_API.format(token=token, method="sendMessage"),
+                json={"chat_id": target, "text": text,
+                      "disable_web_page_preview": True},
+                timeout=15,
+            )
+            if not r2.ok:
+                log.error("Telegram _send: ponowienie tez odrzucone (HTTP %s) —"
+                          " wiadomosc NIE dotarla: %s",
+                          r2.status_code, (r2.text or "")[:250])
+            return r2.ok
+        return False
     except requests.RequestException as e:
         log.warning("Telegram _send: błąd sieci: %s", e)
         return False
@@ -208,7 +228,11 @@ def send_kupon(dane: dict, stawka_a: float = 10.0, stawka_b: float = 5.0) -> boo
             )
 
     if dane.get("ostrzezenia"):
-        linie.append(f"\n⚠️ {dane['ostrzezenia']}")
+        # `_esc` OBOWIAZKOWO: tresc ostrzezen pochodzi od modelu jezykowego i z
+        # listy wycietych halucynacji, wiec zawiera nawiasy i znaki nierownosci.
+        # 23.08 tekst "kurs <1.20)." wywalil parser HTML Telegrama (HTTP 400)
+        # i CALA dzienna wiadomosc przepadla.
+        linie.append(f"\n⚠️ {_esc(dane['ostrzezenia'])}")
 
     msg = "\n".join(linie)
     ok  = _send(msg)

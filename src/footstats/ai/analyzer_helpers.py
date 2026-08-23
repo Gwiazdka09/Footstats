@@ -294,7 +294,10 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
     _TYP_NORM = {"Over": "Over 2.5", "Under": "Under 2.5",
                  "OVER": "Over 2.5", "UNDER": "Under 2.5"}
 
+    zapisanych = 0
+
     def _zapisz(typy: list, kupon_type: str) -> None:
+        nonlocal zapisanych
         for t in typy:
             # A1: typ zbudowany bez LLM-a dostaje wlasna etykiete, zeby dalo sie
             # go odsiac w analizach (`by_kupon`) i zmierzyc osobno.
@@ -337,6 +340,7 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
                     # które go nie ustawiają — lepsze niż zgadywanie źródła.
                     model_source=w.get("model_source", ""),
                 )
+                zapisanych += 1
             except Exception as e:  # noqa: BLE001 — zapis nie moze zabic przebiegu
                 # Cisza tutaj byla ostatnim miejscem, w ktorym dzien predykcji
                 # mogl zniknac bez sladu. `predictions` to nie telemetria —
@@ -350,6 +354,12 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
     for kkey in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
         if (dane.get(kkey) or {}).get("zdarzenia"):
             _zapisz(dane[kkey]["zdarzenia"], kkey)
+
+    # Ile wierszy NAPRAWDE wyladowalo w bazie. Detektor cichej awarii pytal
+    # wczesniej o `dane["top3"]` PO weryfikacji kursow (KROK 4), a zapis dzieje
+    # sie PRZED nia (KROK 3) — wiec dzien z zapisanymi predykcjami, ktorym
+    # weryfikacja wycieta cały top3, byl zglaszany jako "ZERO predykcji".
+    dane["_zapisanych"] = zapisanych
 
 
 def _buduj_cel_kuponow(cel_a: float | None, cel_b: float | None, stawka: float) -> str:

@@ -219,7 +219,8 @@ _TYPY_BTTS_NIE = {"btts no", "no btts", "btts nie", "nie btts", "ng"}
 
 
 def wykryj_anomalie_runu(n_kandydatow: int, n_po_filtrach: int, n_kuponow_system: int,
-                         ma_typy: bool, system_paper: bool = False) -> str | None:
+                         ma_typy: bool, system_paper: bool = False,
+                         typy_po_weryfikacji: bool | None = None) -> str | None:
     """Opis cichej awarii albo None, gdy przebieg wyglada zdrowo.
 
     Detektor pilnowal dotad WEJSCIA (czy zrodlo cos dalo) i bocznej sciezki kuponow
@@ -234,13 +235,27 @@ def wykryj_anomalie_runu(n_kandydatow: int, n_po_filtrach: int, n_kuponow_system
     if n_kandydatow == 0:
         return "0 kandydatów z Bzzoiro (źródło puste/niedostępne?)"
     if n_po_filtrach > 0 and not ma_typy:
-        # Od A1 (23.08) awaria warstwy LLM juz TEGO nie wywola — typy powstaja
-        # wtedy z modelu. Ten warunek zostaje jako ostatnia siatka i oznacza,
-        # ze rowniez selekcja modelu nie znalazla ani jednego typu: brak kursow,
-        # same longshoty albo prob ponizej progu.
+        # `ma_typy` pyta o wiersze, ktore NAPRAWDE wyladowaly w `predictions`
+        # (`dane["_zapisanych"]`), a nie o zawartosc `top3` po weryfikacji.
+        # Stara wersja czytala `top3` PO KROKU 4, wiec dzien z zapisanymi
+        # predykcjami, ktorym weryfikacja wyciela komplet typow, byl zglaszany
+        # jako "ZERO predykcji zapisanych" — falszywy alarm zmierzony 23.08
+        # (`footstats-final-pptp4`: 5 wierszy w bazie, alarm mowil zero).
+        #
+        # Od A1 awaria warstwy LLM juz tego nie wywola — typy powstaja wtedy
+        # z modelu. Ten warunek zostaje jako ostatnia siatka i oznacza, ze ani
+        # LLM, ani selekcja modelu, ani zapis do bazy nic nie zostawily.
         return (f"0 typów mimo {n_po_filtrach} meczów po filtrach"
-                f" (selekcja modelu nic nie wybrala: kursy? progi?)"
-                f" — ZERO predykcji zapisanych")
+                f" (LLM nic nie zwrocil I selekcja modelu nic nie wybrala:"
+                f" kursy? progi? zapis do bazy?) — ZERO predykcji zapisanych")
+    if ma_typy and typy_po_weryfikacji is False:
+        # Predykcje SA — to nie cisza. Ale skoro weryfikacja kursow wyciela
+        # wszystkie typy, dzien nie zostawil ani jednego typu do postawienia.
+        # Zmierzone 23.08: Groq wytypowal trzy rynki, ktorych zrodlo nie wycenia
+        # (`Over 1.5`, `Handicap +1 Gość`, `2 (wygrana gościa)`).
+        return (f"{n_po_filtrach} meczów po filtrach, predykcje zapisane, ale"
+                f" weryfikacja kursow wyciela KOMPLET typow"
+                f" — dzien bez ani jednego użytecznego typu")
     if system_paper and n_kuponow_system == 0:
         return "0 kuponów System mimo --system-paper (kursy? filtry? pauza?)"
     return None
@@ -1017,8 +1032,9 @@ def main():
     if not args.dry_run:
         anomalia = wykryj_anomalie_runu(
             n_raw_kandydatow, len(wyniki), n_system_coupons,
-            ma_typy=bool((dane or {}).get("top3")),
+            ma_typy=bool((dane or {}).get("_zapisanych")),
             system_paper=getattr(args, "system_paper", False),
+            typy_po_weryfikacji=bool((dane or {}).get("top3")),
         )
         if anomalia:
             log.warning("ALERT cicha awaria: %s | %s", anomalia, podsumowanie)

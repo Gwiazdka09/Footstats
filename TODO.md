@@ -229,6 +229,47 @@ mimo że Poisson policzył je niezależnie. Potok jest uzależniony od LLM-a w t
   - `.env.example` miał dalej `GROQ_MODEL=llama-3.1-8b-instant` — model wycofany
     przez Groqa 16.08. Poprawione na `openai/gpt-oss-120b`.
 
+### 🔎 ZNALEZIONE NA PIERWSZYM PRZEBIEGU PO A1 (23.08, `footstats-final-pptp4`)
+
+Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział poprawnie
+→ **5 predykcji w bazie**. A1 słusznie się nie uruchomił. Wyszły trzy inne rzeczy.
+
+- [x] ✅ **Fałszywy alarm „ZERO predykcji zapisanych". ZROBIONE 23.08.**
+  Alarm krzyknął o zerze, gdy w bazie leżało 5 wierszy.
+  - **Mechanizm:** `ma_typy` czytało `dane["top3"]` **PO** weryfikacji kursów (KROK 4),
+    a zapis dzieje się **PRZED** nią (KROK 3). Groq wytypował trzy rynki, których źródło
+    nie wycenia (`Over 1.5`, `Handicap +1 Gość`, `2 (wygrana gościa)`) → weryfikacja
+    słusznie wycięła komplet → `top3` puste → alarm uznał to za dzień bez predykcji.
+  - ⚠️ **Moja wpadka z tej samej sesji:** treść komunikatu zmieniona rano na
+    „selekcja modelu nic nie wybrała" jest w tym scenariuszu **myląca**. Założyłem, że
+    po A1 pusty `top3` może już oznaczać tylko porażkę selekcji modelu — nie przewidziałem
+    trzeciej drogi: LLM odpowiada → A1 nie wchodzi → weryfikacja czyści.
+  - **Fix:** `_auto_zapisz_backtest` liczy wiersze, które NAPRAWDĘ poszły do bazy
+    (`dane["_zapisanych"]`), i to jest teraz `ma_typy`. Komplet wycięty przez weryfikację
+    dostał **własny, inaczej nazwany sygnał** — bo to nie cisza (predykcje są), ale też
+    nie zdrowy dzień (zero typów do postawienia). +11 testów.
+- [x] ✅ **Dzienna wiadomość na Telegram nie doszła. ZROBIONE 23.08.**
+  `HTTP 400 — can't parse entities: Unsupported start tag "1.20."` — pole `ostrzezenia`
+  szło do wiadomości **surowe**, jako jedyne (nazwy drużyn i typy przechodzą przez `_esc`).
+  Tekst zawierał `<1.20).`, Telegram w trybie HTML uznał `<` za początek tagu i odrzucił
+  CAŁOŚĆ. To ta sama awaria, którą `_esc` opisuje w swoim docstringu dla nazw drużyn (06-22)
+  — jedno pole zostało pominięte.
+  - **Fix dwuwarstwowy:** `_esc` na ostrzeżeniach + **jedno ponowienie bez formatowania**
+    po odmowie parsera. Escapujemy każde pole, ale wystarczy jedno przeoczone, żeby
+    wiadomość przepadła; brzydsza wiadomość jest lepsza niż cisza. Ponowienie tylko dla
+    błędu PARSERA — blokada bota czy zły chat_id nie naprawią się powtórką. +6 testów.
+- [ ] **A2 — typ `2 (wygrana gościa)` nie rozliczy się nigdy.** `oblicz_tip_correct`
+  zwraca dla niego `None`. To zwykła „2" z dopiskiem od Groqa, ale słownik rozliczeń
+  jej nie zna. W całej bazie **1 taki wiersz** (251 predykcji) — skala mała, ale
+  będzie się powtarzać, bo zapis do `predictions` idzie PRZED weryfikacją, więc
+  słownictwo LLM-a ląduje w bazie nietknięte. Do rozważenia: normalizacja tipu przy
+  zapisie albo odrzucanie tipów spoza słownika rozliczeń.
+  - Sprawdzone przy okazji i **czyste**: `Handicap +1 Gość` to wspierany rynek z reguł
+    BetBuilder ([betting.py:241](src/footstats/utils/betting.py#L241)) i liczy się poprawnie.
+- [ ] **A3 — 3 wiersze z tego przebiegu mają `odds_verified=0`**, czyli trzymają kurs
+  od Groqa. Konsekwencja tej samej kolejności (zapis w KROKU 3, weryfikacja w KROKU 4):
+  gdy noga NIE przetrwa weryfikacji, uzgodnienie nie ma czego poprawić. Powiązane z D3.
+
 ### Sprawdzone i odrzucone
 - **Podział promptu na warstwy** (reguły w wiadomości systemowej, potem kontekst →
   mecze → polecenie): A/B po 3 próby. Tokeny wejścia 1285 vs 1289, ta sama
