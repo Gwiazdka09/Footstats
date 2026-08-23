@@ -379,7 +379,30 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
     `requests.get` z pominięciem licznika budżetu — zużycie limitu z tej ścieżki było
     dla nas **niewidoczne**. Kopia usunięta, deleguje do wspólnej, strzeżonej funkcji.
   - **Fix:** `data_w_zasiegu_af()` + próg `AF_HORYZONT_DNI` (default 1, env-strojony —
-    płatny plan nie ma tego ograniczenia). +14 testów.
+    płatny plan nie ma tego ograniczenia).
+  - ⚠️ **Pierwsze wdrożenie NIE naprawiło problemu, mimo zielonej suity.** Przebieg
+    rozliczenia dalej zbierał 19 odmów. `_find_leg_result` ma **PIĘĆ** źródeł wyników,
+    nie dwa — Źródło 5 (agregator multi-source) idzie do tego samego API osobną drogą,
+    przez `af_source` do klienta budżetowego. Potem znalazły się jeszcze dwa wejścia.
+    Zamiast szukać szóstego po kolejnym wdrożeniu: test przechodzi po plikach
+    źródłowych i wymaga progu przy każdym zapytaniu o `/fixtures` z parametrem `date`
+    (trzy miejsca wyłączone świadomie — pytają tylko o dziś/jutro).
+  - **Zmierzone na produkcji, ten sam przebieg przed i po:**
+
+    | | przed | po |
+    |---|---|---|
+    | odmowy z API-Football | 19 | **0** |
+    | zapytania pominięte przez próg | 0 | **45** |
+
+    45 × 2 przebiegi = **90 ze 100 dziennego limitu odzyskane**. Uwaga: „19" to tylko
+    tyle, ile było WIDAĆ — dwa z pięciu wejść nie logowały nic, więc realne zużycie
+    było wyższe i niewidoczne.
+  - **Koszt uboczny:** próg uzależnia zachowanie od „dziś", więc 8 testów w 4 plikach
+    z zaszytą datą stało się kruche. Część **przechodziła z niewłaściwego powodu** —
+    oczekiwały pustej listy po błędzie sieci, a dostawały ją z progu. To groźniejsze
+    niż jawna porażka, bo wygląda jak zieleń. Wszystkie przestawione na daty względne.
+  - **Wniosek, który zostaje:** zielona suita mówiła „naprawione", gdy problem był
+    ruszony w jednej piątej. Wykrycie wymagało pomiaru na żywym przebiegu. +17 testów.
   - ⚠️ **Korekta mojej atrybucji w trakcie:** linie `Budzet AF 42/100` NIE pochodziły
     z rozliczania — to licznik klienta `api_football.py`, którego na tej ścieżce nie ma.
     To był równoległy cron w tym samym oknie czasowym.
