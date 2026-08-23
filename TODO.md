@@ -359,7 +359,24 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - **Świadome kompromisy** (oba przypięte testami): brak `tv` = wersja 0, żeby wdrożenie nie wylogowało wszystkich; błąd bazy przepuszcza token, bo podpis jest już zweryfikowany, a przy niedostępnej bazie żaden endpoint i tak nie odda danych.
   - Koszt: jedno zapytanie do bazy na uwierzytelnione żądanie. Próg `except Exception` dla `api/auth.py` podniesiony 2 → 3 z uzasadnieniem.
   - **Zostaje z B1:** token nadal nie jest związany z urządzeniem (brak `jti`), więc skradziona kopia działa do unieważnienia albo wygaśnięcia. Wersja rozwiązuje „odbierz dostęp", nie „wykryj kopię".
-- [ ] **B2 — limity zapytań mogą liczyć zły adres.** `get_remote_address` = `request.client.host`, za Cloud Run to load balancer, nie klient. **Podejrzenie, nie fakt** — potwierdzić testem z dwóch sieci. Fix: `key_func` czytający `X-Forwarded-For`.
+- [x] ✅ **B2 — ZROBIONE 23.08. Potwierdzone jako FAKT i naprawione.**
+  - **Dowód bez sondowania produkcji:** logi dostępowe uvicorna pokazują adres,
+    który widzi aplikacja. 36 kolejnych żądań z zupełnie różnych źródeł (Cloud
+    Scheduler, curl z sieci domowej, sondy zdrowia) → **wszystkie `169.254.169.126`**,
+    czyli link-local pośrednika Cloud Run. Odpowiedź leżała w logach, które już
+    mieliśmy — nie trzeba było testu z dwóch sieci.
+  - **Skutek gorszy niż mówił opis:** to nie tylko brak ochrony. Jedno wspólne wiadro
+    znaczy, że **dowolny klient mógł wyczerpać limit logowania (10/min) i odciąć
+    wszystkich pozostałych**. Mechanizm chroniący dostępność sam ją psuł.
+  - **Fix:** `klucz_klienta()` bierze **OSTATNI** wpis `X-Forwarded-For`, nie pierwszy.
+    Klient może wysłać własny nagłówek — Cloud Run go zachowa i dopisze na końcu
+    adres, z którego faktycznie przyszło połączenie. Pierwszy wpis czyniłby limit
+    trywialnie omijalnym (wystarczy losować nagłówek). Test to pilnuje wprost.
+  - **Założenie zapisane w kodzie:** usługa stoi bezpośrednio na `run.app`, bez
+    własnego load balancera. Gdyby kiedyś stanął przed nią LB, ostatnim wpisem
+    byłby JEGO adres i decyzję trzeba przeliczyć.
+  - +10 testów. **B7 (blokada konta) zmienia wagę:** limit per-IP znowu realnie
+    działa, więc blokada konta przestaje być jedyną obroną.
 - [x] ✅ **B3 — ZROBIONE 23.08. python-jose → PyJWT, `--ignore-vuln` zdjęte.**
   - **Zmierzone:** `python-jose`, `ecdsa`, `rsa`, `pyasn1` wypadły z obu locków;
     `pip-audit` **bez żadnych wyciszeń** → `No known vulnerabilities found`.
