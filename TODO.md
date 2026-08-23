@@ -308,7 +308,20 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - po: przycisk i span dają identyczny kolor; przycisk bez klasy dalej dziedziczy i jest przezroczysty; `.btn-primary` dalej wygrywa gradientem (brak regresji)
   - **Zmieniło wygląd 6 przycisków** — wszystkie na lepsze. Najboleśniejsze były niewidoczne: przycisk **rejestracji** (`bg-indigo-500`) był PRZEZROCZYSTY, a **usunięcia konta** (`bg-rose-500`) nie miał czerwieni ostrzegawczej.
   - Zrzuty desktop 1440 + mobile 390 po fiksie: bez regresji. `tests/test_css_warstwy.py` pilnuje warstwy (i tego, że `.btn-primary` ma zostać POZA warstwami — to celowe).
-- [ ] **F6 — baner cookie zasłania link „Masz już konto? Zaloguj się"** na mobile (390px) w widoku rejestracji. Znalezione przy weryfikacji F1, nie związane z tą zmianą.
+- [x] ✅ **F6 — ZROBIONE 23.08.** Baner zasłaniał link „Masz już konto? Zaloguj się" na mobile.
+  - **Zmierzone w przeglądarce, nie na oko** (390px, widok rejestracji): dół linku na 703px,
+    góra banera na 648px → **zasłonięty o 55px**. Po fiksie dół linku na 507px, czysto.
+  - **Przyczyna:** baner jest `fixed bottom-0`, więc nie zajmuje miejsca w układzie.
+    Na 390px rozwija się do dwóch wierszy (196px wysokości) i przykrywa to, co najniżej.
+  - **Fix celowo GLOBALNY, nie lokalny:** baner wisi nad KAŻDYM ekranem, więc margines
+    dorzucony w widoku rejestracji załatwiłby jeden i zostawił resztę. Rezerwujemy na dole
+    strony tyle, ile baner realnie zajmuje, i oddajemy po zamknięciu. Wysokość mierzona,
+    bo zależy od szerokości ekranu — potwierdzone: 196px przy 390px, 124px przy 1440px,
+    przeliczane przy zmianie rozmiaru okna.
+  - **Cykl sprawdzony w przeglądarce:** baner widoczny → miejsce zarezerwowane; zgoda →
+    baner znika, miejsce oddane (`padding-bottom` czyszczony). Desktop 1440 bez regresji.
+  - `ResizeObserver` nie istnieje w jsdom ani w starszych przeglądarkach — wtedy zostaje
+    sam nasłuch `resize`. +4 testy (front: 38 → 42).
 - [x] ✅ **F7 — ZROBIONE 17.08 (wariant A: analityka usunięta).** `<Analytics />` i `<SpeedInsights />` wyjęte z `main.jsx`, zależności `@vercel/*` usunięte z `package.json` + lockfile. Zweryfikowane w przeglądarce po zmianie: **zero** skryptów analityki w DOM. Treść banera („wyłącznie niezbędne") jest teraz prawdziwa. Rewert = jeden commit.
 - [x] ✅ **F8 — ZROBIONE 17.08.** Trzy zaszyte na sztywno adresy Cloud Run (baner + dwa linki w stopce) zastąpione helperem `legalUrl()` w `lib/api.js`. **Zweryfikowane, że nie psuje produkcji:** żywy bundle na Vercelu ma `VITE_API_BASE = https://footstats-api-…run.app/api`, a helper wylicza z niego dokładnie ten sam URL, który był zaszyty. Teraz linki dzielą los aplikacji — jeśli `API_BASE` jest zły, i tak nic nie działa.
 - ~~**F7 — opis pierwotny**~~ (zostawiony dla kontekstu):
