@@ -14,6 +14,7 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 COPY pyproject.toml ./
+COPY requirements-jobs.lock ./
 COPY src ./src
 
 # Dataset Poissona (32k meczów, ~0.56MB) — bez niego cloud-draft robi fallback na
@@ -36,7 +37,15 @@ COPY data/rag_wzorce_historyczne.json ./data/rag_wzorce_historyczne.json
 
 # Zależności: api (sentry/psycopg2) + ai (groq/langfuse) + scraper (playwright/bs4).
 # NIE tylko [api] — daily_agent/evening potrzebują groq (Groq) i bs4 (scraper sędziów).
-RUN uv pip install --system ".[api,ai,scraper]" \
+# Zaleznosci z LOCKA, nie z zakresow ">=". Bez tego dwa buildy tego samego commita
+# moga zainstalowac rozne wersje, a zla wersja z gory wchodzi na produkcje po cichu —
+# ta sama rodzina awarii co wycofany model Groqa (16-22.08).
+# Lock generowany na platforme KONTENERA, nie hosta:
+#   uv pip compile pyproject.toml --extra api --extra ai --extra scraper \
+#     --python-platform linux --python-version 3.12 -o requirements-jobs.lock
+# Zgodnosci locka z pyproject pilnuje tests/test_lockfile_zgodny.py.
+RUN uv pip install --system -r requirements-jobs.lock \
+    && uv pip install --system --no-deps . \
     && playwright install --with-deps chromium \
     && mkdir -p /app/data
 

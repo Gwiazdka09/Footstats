@@ -40,6 +40,22 @@ steps:
       - --tag=${_IMAGE}:${_TAG}
       - .
 
+  # Build przechodzi nawet gdy w locku czegos brakuje: zaleznosci instalujemy
+  # z locka, a sam pakiet przez `--no-deps`, wiec brak paczki wychodzi dopiero
+  # przy imporcie — czyli na produkcji. Ten krok przesuwa wykrycie do buildu.
+  # Importujemy warstwy, ktore realnie ciagna ciezkie zaleznosci; bez wywolywania
+  # czegokolwiek, zeby nie dotknac bazy ani sieci.
+  - name: ${_IMAGE}:${_TAG}
+    entrypoint: python
+    args:
+      - -c
+      - |
+        import bs4, groq, langfuse, playwright, psycopg2, pyarrow, sklearn
+        import footstats.ai.analyzer
+        import footstats.core.quick_picks
+        import footstats.scrapers.results_updater
+        print("smoke import OK")
+
 images:
   - ${_IMAGE}:${_TAG}
 

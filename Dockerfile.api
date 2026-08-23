@@ -20,6 +20,7 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 COPY pyproject.toml ./
+COPY requirements-api.lock ./
 COPY src ./src
 COPY --from=gui-build /gui/dist ./src/footstats/gui/dist
 
@@ -45,7 +46,12 @@ COPY data/model_calibration.json ./data/model_calibration.json
 # tego samego paliwa co joby.
 COPY data/rag_wzorce_historyczne.json ./data/rag_wzorce_historyczne.json
 
-RUN uv pip install --system ".[api]" && mkdir -p /app/data
+# Zaleznosci z LOCKA — uzasadnienie w Dockerfile.jobs. Lock dla samego [api]:
+#   uv pip compile pyproject.toml --extra api \
+#     --python-platform linux --python-version 3.12 -o requirements-api.lock
+RUN uv pip install --system -r requirements-api.lock \
+    && uv pip install --system --no-deps . \
+    && mkdir -p /app/data
 
 RUN addgroup --system app && adduser --system --ingroup app app \
     && chown -R app:app /app

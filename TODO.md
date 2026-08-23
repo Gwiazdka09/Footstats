@@ -361,7 +361,27 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - **Zostaje z B1:** token nadal nie jest związany z urządzeniem (brak `jti`), więc skradziona kopia działa do unieważnienia albo wygaśnięcia. Wersja rozwiązuje „odbierz dostęp", nie „wykryj kopię".
 - [ ] **B2 — limity zapytań mogą liczyć zły adres.** `get_remote_address` = `request.client.host`, za Cloud Run to load balancer, nie klient. **Podejrzenie, nie fakt** — potwierdzić testem z dwóch sieci. Fix: `key_func` czytający `X-Forwarded-For`.
 - [ ] **B3 — python-jose → PyJWT**, żeby zdjąć `--ignore-vuln PYSEC-2026-1325` (ecdsa) z pip-audit.
-- [ ] **B4 — zależności bez wersji.** 50 pozycji, **0 przypiętych**, brak lockfile → build niereprodukowalny. Fix: `pip-compile` + lock z hashami.
+- [x] ✅ **B4 — ZROBIONE 23.08. Zależności przypięte lockiem.**
+  - **Korekta opisu:** `requirements.txt` (26 pozycji, 0 przypiętych) **nie jest używany
+    przez obrazy** — to lustro dla skanera CVE w CI. Obrazy instalowały
+    `.[api,ai,scraper]` prosto z `pyproject.toml`, czyli z zakresów `>=`.
+  - **Realne ryzyko:** dwa buildy tego samego commita mogły dostać różne wersje,
+    a nowa wersja z góry wchodziła na produkcję po cichu. Ta sama rodzina awarii
+    co wycofany model Groqa: zmiana po stronie kogoś innego, niewidoczna aż do skutku.
+  - **Fix:** `requirements-jobs.lock` (85 przypiętych) i `requirements-api.lock` (65),
+    generowane **na platformę kontenera**, nie hosta — lock z Windowsa opisywałby
+    inne zależności warunkowe. Obrazy instalują `-r <lock>` + sam pakiet `--no-deps`.
+  - **Smoke-import w buildzie:** przy `--no-deps` brakująca paczka wychodzi dopiero
+    przy imporcie, czyli na produkcji. Nowy krok w `cloudbuild_jobs.yaml` importuje
+    ciężkie warstwy zaraz po zbudowaniu — przesuwa wykrycie do buildu.
+  - **Zweryfikowane realnym buildem** (nie tylko testem): obraz buduje się i przechodzi
+    smoke-import. API ma to od dawna w CI (`docker run` + `/health`).
+  - `tests/test_lockfile_zgodny.py` pilnuje, żeby lock nie zdryfował od `pyproject`,
+    żeby nie było w nim luźnych zakresów i żeby był zbudowany dla linuxa. +7 testów.
+- [ ] **B9 — trzy listy zależności zamiast jednej.** `pyproject.toml` (źródło prawdy),
+  `requirements.txt` (lustro dla `pip-audit`) i dwa locki. Skoro locki mają dokładne
+  wersje, `pip-audit` na locku dawałby lepszy wynik niż na zakresach `>=`. Do rozważenia:
+  wyciąć `requirements.txt` i przestawić CI na lock (razem z `test_dependencies_declared`).
 - [ ] **D2 — `/cron/settle-manual` NIE jest w Schedulerze.** ⚠️ **Sprawdzone na sucho na produkcji 17.08: wpięcie go dziś NIC BY NIE DAŁO.**
   - Dry-run zwrócił `{"settled": 0, "skipped": 1, "errors": 0}` — endpoint działa, znalazł jedyny kupon manualny (#149) i **pominął** go.
   - **Powód:** `settle_manual_coupons` rozlicza wyłącznie z NASZYCH `predictions`, a dla meczu Yunnan Yukun – Dalian Yingbo (15.08) predykcji **w ogóle nie ma** — przebieg o 11:00 tego dnia padł na parsowaniu JSON-a od Groqa. W bazie jest tylko Yunnan Yukun – Chengdu Rongcheng z 08.08, czyli inny mecz.
