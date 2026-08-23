@@ -353,6 +353,28 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
      Sprawdzaj stan faktyczny (`describe`), nie kod wyjścia.
   2. **`--delete-tags` jest konieczne** dla obrazu z tagiem („Cannot delete image …
      because it is tagged"). Bez niego pierwszy przebieg dał **434 błędy na 436 prób**.
+- [x] ✅ **I7 — ZROBIONE 23.08. Kupony nie powstawały od 8 dni: `/api/cron/draft` padał na OOM.**
+  Znalezione przy pytaniu „czy wszystko działa produkcyjnie". Łańcuch urywał się na
+  **trzecim ogniwie**: pobieranie ✅, analiza ✅, typowanie ✅ (13 predykcji dziś,
+  `poisson-dc`), ale **ZERO kuponów od 15.08** — ostatni `#149`.
+  **Dowód, jedna linia w logach:** `Memory limit of 512 MiB exceeded with 512 MiB used`.
+  Draft ładuje parquet Poissona i liczy `quick_picks`, kontener ginie, Scheduler dostaje
+  **503**. Działo się **codziennie o 05:30 nieprzerwanie od co najmniej 17.08** (dalej
+  nie sięga okno logów).
+  **Dlaczego nikt tego nie zauważył — dwie warstwy maskujące:**
+  1. **Joby kończą się `exit=0`** i wyglądają zdrowo, bo kupony robi API, nie job.
+     Ta sama rodzina co awaria Groqa stojąca 6 dni przy zerowym kodzie wyjścia.
+  2. **Predykcje dalej powstawały**, więc z zewnątrz „bot działa" — brakowało wyłącznie
+     tej części, która MIERZY, czy typy były trafne.
+  **Fix:** limit pamięci usługi 512 MiB → **1 GiB** (rew. `00441-cwj`).
+  **Zweryfikowane:** `/api/cron/draft?dry_run=false` zwraca teraz **200 w 12,5 s**
+  zamiast 503, w logach zero OOM.
+  ⚠️ **NIEDOKOŃCZONE — powstawanie kuponów NIE jest jeszcze udowodnione.** Wywołanie
+  o 21:38 dało `Pobrano 50 wydarzen` → `candidates: 0` (zero **przed** filtrem lig,
+  `after_league_filter: 0`), więc 50 meczów ginie wewnątrz `szybkie_pewniaczki_2dni`.
+  Hipoteza: pora doby — o 21:40 okno 48h obejmuje mecze rozpoczęte, a ta sama funkcja
+  o 09:05 dała 13 predykcji. **Do sprawdzenia przy przebiegu 05:30** — jeśli dalej 0,
+  to osobny bug w progu `AGENT_KANDYDAT_PROG=0.55` albo w oknie czasowym.
 - [ ] **I6 — każdy push na `main` przebudowuje obraz jobów (~570 MB), też przy zmianie
   wyłącznie dokumentacji.** Skutek uboczny I1: dziś commit czysto CI-owy (B9) odpalił
   pełny build z chromium. Do rozważenia `paths-ignore` na `*.md` — ale ostrożnie:
