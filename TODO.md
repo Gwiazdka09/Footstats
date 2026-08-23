@@ -325,7 +325,7 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
 - [ ] **F5 — `CouponWizard.jsx` 437 linii**, `SettingsView.jsx` 377 (limit 400).
 - [ ] **I3 — brak Sentry na froncie** (backend ma).
 - [ ] **I4 — `DATABASE_URL_NEON` wciąż w lokalnym `.env`** mimo porzucenia Neona.
-- [ ] **I5 — rejestr obrazów puchnie: 79 GB (znalezione 23.08 przy I1).** `footstats-api`
+- [x] ✅ **I5 — ZROBIONE 23.08. Rejestr obrazów: 94,7 GB → 6,3 GB.** `footstats-api`
   424 obrazy / 68,8 GB, `footstats-jobs` 45 / 25,9 GB. Darmowy limit Artifact Registry
   to 0,5 GB → ~0,10 USD/GB/mies. **Zrobione 23.08** (zmierzone przed/po):
   `footstats-jobs` 109 → **30** wpisów, atestacje 65 → **0**, bez taga 15 → **0**,
@@ -341,10 +341,18 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
   wskazywane przez żywe rewizje (`:latest` przewędrował dalej, digest został) —
   reguła „kasuj nieotagowane" skasowałaby działający obraz. **W tym projekcie
   nieotagowany ≠ nieużywany.**
-  **Zostaje do decyzji:** 68,8 GB obrazów API jest przypiętych przez **435 rewizji
-  Cloud Run**. Zwolnienie ich wymaga skasowania najpierw starych rewizji, czyli
-  świadomej rezygnacji z rollbacku do nich. Przed włączeniem polityki na ostro:
-  przejrzeć log trybu suchego i skonfrontować listę z `gcloud run revisions list`.
+  **DOMKNIĘTE 23.08 wieczorem — retencja 10 stron + 5 pipeline (decyzja użytkownika).**
+  Skasowane 426 rewizji Cloud Run (436 → 11, rewizja z ruchem chroniona) i 434 obrazy.
+  **94,7 GB → 6,3 GB (−93%)**, koszt ~35 zł → ~2,3 zł/mies. Produkcja żyje: `/health` 200,
+  oba joby wskazują ten sam, istniejący digest.
+  **Darmowy limit 0,5 GB jest NIEOSIĄGALNY** — jeden obraz jobów waży 691 MB (chromium
+  + sklearn/pandas/pyarrow), więc sam przekracza limit. Obraz API to 161 MB.
+  Dwie pułapki narzędziowe zapisane, obie kosztowały przebieg:
+  1. `gcloud artifacts docker images delete` pisze „Delete request issued… done." na
+     **stderr** i podnosi kod wyjścia → skrypt liczył udane kasowania jako błędy.
+     Sprawdzaj stan faktyczny (`describe`), nie kod wyjścia.
+  2. **`--delete-tags` jest konieczne** dla obrazu z tagiem („Cannot delete image …
+     because it is tagged"). Bez niego pierwszy przebieg dał **434 błędy na 436 prób**.
 - [ ] **I6 — każdy push na `main` przebudowuje obraz jobów (~570 MB), też przy zmianie
   wyłącznie dokumentacji.** Skutek uboczny I1: dziś commit czysto CI-owy (B9) odpalił
   pełny build z chromium. Do rozważenia `paths-ignore` na `*.md` — ale ostrożnie:
