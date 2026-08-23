@@ -16,6 +16,8 @@ Zero ruchu sieciowego — `requests.get` podstawiony wszedzie.
 """
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 import requests
 
@@ -181,34 +183,42 @@ def test_z_kluczem_pobiera_statystyki(http):
 
 # ── _fetch_fixtures ─────────────────────────────────────────────────────────
 
+# Data zapytan MUSI byc ruchoma. Od 23.08 `_fetch_fixtures*` nie wychodzi do API
+# dla dat spoza okna darmowego planu (`AF_HORYZONT_DNI`), wiec zaszyta na sztywno
+# data z przeszlosci sprawia, ze test przestaje sprawdzac to, co opisuje: dostaje
+# pusta liste z progu, nie z badanego zachowania. Progu pilnuje osobno
+# `tests/test_horyzont_zrodel_wynikow.py`.
+_DATA_W_ZASIEGU = date.today().isoformat()
+
+
 def test_fetch_fixtures_zwraca_liste(http):
     http["odpowiedzi"]["/fixtures"] = _Odp(200, {"response": [_fixture()]})
-    assert len(ru._fetch_fixtures("klucz", 39, "2026-07-31")) == 1
+    assert len(ru._fetch_fixtures("klucz", 39, _DATA_W_ZASIEGU)) == 1
 
 
 def test_fetch_fixtures_przekazuje_lige_i_date(http):
-    ru._fetch_fixtures("klucz", 39, "2026-07-31")
+    ru._fetch_fixtures("klucz", 39, _DATA_W_ZASIEGU)
     _url, params = http["zapytania"][0]
     assert params["league"] == 39
-    assert params["date"] == "2026-07-31"
+    assert params["date"] == _DATA_W_ZASIEGU
 
 
 def test_blad_http_daje_pusta_liste(http):
     http["odpowiedzi"]["/fixtures"] = _Odp(500)
-    assert ru._fetch_fixtures("klucz", 39, "2026-07-31") == []
+    assert ru._fetch_fixtures("klucz", 39, _DATA_W_ZASIEGU) == []
 
 
 def test_blad_sieci_daje_pusta_liste(http):
     http["odpowiedzi"]["/fixtures"] = requests.RequestException("brak sieci")
-    assert ru._fetch_fixtures("klucz", 39, "2026-07-31") == []
+    assert ru._fetch_fixtures("klucz", 39, _DATA_W_ZASIEGU) == []
 
 
 def test_fetch_by_date_nie_filtruje_ligi(http):
     """Lapie mecze z lig spoza _LIGI_IDS (np. eliminacje MS)."""
-    ru._fetch_fixtures_by_date("klucz", "2026-07-31")
+    ru._fetch_fixtures_by_date("klucz", _DATA_W_ZASIEGU)
     _url, params = http["zapytania"][0]
     assert "league" not in params
-    assert params["date"] == "2026-07-31"
+    assert params["date"] == _DATA_W_ZASIEGU
 
 
 # ── _fetch_match_stats / _fetch_match_events ────────────────────────────────

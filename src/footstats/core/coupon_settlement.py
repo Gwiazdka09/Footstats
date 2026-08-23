@@ -19,7 +19,7 @@ Użycie:
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 log = logging.getLogger(__name__)
 
@@ -31,23 +31,56 @@ from footstats.utils.normalize import normalize_team_name, team_similarity
 # oznaczamy VOID, żeby nie blokowały na zawsze i nie liczyły się do accuracy/M1.
 VOID_AFTER_DAYS = 10
 
+# Najdluzej siegajace zrodlo wynikow. `flashscore.mobi` obsluguje ~7 dni wstecz
+# (`flashscore_results.py`), darmowy plan API-Football tylko `dzis +/-1 dzien`
+# (`results_updater.AF_HORYZONT_DNI`). Poza tym oknem wyniku nie zdobedzie zadna
+# sciezka — i to jest OK, nie awaria.
+HORYZONT_ZRODEL_DNI = 7
+
+
+def data_jeszcze_osiagalna(mdate: str, dzis: date | None = None) -> bool:
+    """Czy ktorekolwiek zrodlo moze jeszcze oddac wynik meczu z tej daty."""
+    try:
+        dzien = datetime.fromisoformat(str(mdate)[:10]).date()
+    except (TypeError, ValueError):
+        return False
+    return 0 <= ((dzis or date.today()) - dzien).days <= HORYZONT_ZRODEL_DNI
+
+
+def rozliczanie_stoi(settled: int, czekajace_w_zasiegu: int) -> str | None:
+    """Opis cichej awarii rozliczania albo None, gdy stan wyglada zdrowo.
+
+    ZMIERZONE: od 16.08 do 23.08 kazdy przebieg konczyl sie `settled: 0` przy 20+
+    kuponach czekajacych. Przyczyna — zawieszone konto API-Football — nie zapalila
+    zadnego alarmu; skutek zauwazyl dopiero `pipeline-health`, posrednio.
+
+    Warunek CELOWO nie brzmi "rozliczono 0 przy niepustej kolejce". Kolejka potrafi
+    byc pelna kuponow, ktorych wyniku juz nikt nie odda (poza horyzontem zrodel) —
+    taki alarm palilby sie codziennie i przestal cokolwiek znaczyc. To dokladnie
+    ten blad, ktory naprawialismy 23.08 rano przy alarmie o "ZERO predykcji".
+    Pytamy wiec waziej: czy cos, co JESZCZE da sie zdobyc, mimo to nie zostalo
+    rozliczone.
+    """
+    if settled > 0 or czekajace_w_zasiegu <= 0:
+        return None
+    return (f"rozliczono 0 kuponow, choc {czekajace_w_zasiegu} czeka na wyniki"
+            f" wciaz osiagalne (do {HORYZONT_ZRODEL_DNI} dni wstecz)"
+            f" — zrodla wynikow moglo zabraknac (konto? klucz? nazwy druzyn?)")
+
+
 
 def _get_fixtures_api(api_key: str, date_str: str) -> list[dict]:
-    """Pobiera fixtures z API-Football dla całej daty (bez filtrowania po lidze)."""
-    import requests
-    from requests import RequestException
-    try:
-        r = requests.get(
-            "https://v3.football.api-sports.io/fixtures",
-            headers={"x-apisports-key": api_key},
-            params={"date": date_str},
-            timeout=15,
-        )
-        r.raise_for_status()
-        return r.json().get("response", [])
-    except (RequestException, ValueError, KeyError) as e:
-        log.debug("API-Football error for date %s: %s", date_str, e)
-        return []
+    """Pobiera fixtures z API-Football dla całej daty (bez filtrowania po lidze).
+
+    Deleguje do `results_updater._fetch_fixtures_by_date` — wczesniej byla tu
+    WLASNA, identyczna kopia tego zapytania (surowy `requests.get` pod ten sam
+    endpoint). Kopia nie znala progu zasiegu darmowego planu, wiec przy kazdym
+    przebiegu pytala o daty, na ktore API z definicji odpowiada odmowa:
+    23.08 bylo to 21 kuponow z 14-15.08, po dwie daty kazdy, dwa razy dziennie.
+    """
+    from footstats.scrapers.results_updater import _fetch_fixtures_by_date
+
+    return _fetch_fixtures_by_date(api_key, date_str)
 
 
 def _get_matches_fdb(fdb_key: str, date_str: str) -> list[dict]:
@@ -277,7 +310,8 @@ def settle_active_coupons(
     if not rows:
         if verbose:
             print("[CouponSettlement] Brak ACTIVE kuponów do rozliczenia.")
-        return {"settled": 0, "partial": 0, "errors": 0, "voided": stale_voided}
+        return {"settled": 0, "partial": 0, "errors": 0, "voided": stale_voided,
+                "czekajace_w_zasiegu": 0}
 
     if verbose:
         print(f"[CouponSettlement] ACTIVE kuponów do sprawdzenia: {len(rows)}")
@@ -285,7 +319,8 @@ def settle_active_coupons(
     import os
     api_key = _get_api_key()
     fdb_key = os.getenv("FOOTBALL_API_KEY", "").strip()
-    stats = {"settled": 0, "partial": 0, "errors": 0, "voided": stale_voided}
+    stats = {"settled": 0, "partial": 0, "errors": 0, "voided": stale_voided,
+             "czekajace_w_zasiegu": 0}
     fixtures_cache: dict[str, list] = {}
     fdb_cache: dict[str, list] = {}
 
@@ -391,6 +426,11 @@ def settle_active_coupons(
                 except (OSError, ValueError) as e:
                     log.debug("Błąd zapisu partial legs_json dla #%s: %s", coupon_id, e)
             stats["partial"] += 1
+            # Rozdzielamy "czeka, bo jeszcze nie ma wyniku" od "czeka, bo wyniku
+            # juz nikt nie odda". Bez tego rozroznienia alarm o stojacym
+            # rozliczaniu nie da sie ustawic tak, zeby nie wyl codziennie.
+            if data_jeszcze_osiagalna(mdate):
+                stats["czekajace_w_zasiegu"] += 1
             if verbose:
                 print(f"  [PARTIAL] Kupon #{coupon_id} — czekam na brakujące wyniki\n")
             continue

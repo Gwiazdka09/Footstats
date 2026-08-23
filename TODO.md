@@ -367,6 +367,58 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - **Powód:** `settle_manual_coupons` rozlicza wyłącznie z NASZYCH `predictions`, a dla meczu Yunnan Yukun – Dalian Yingbo (15.08) predykcji **w ogóle nie ma** — przebieg o 11:00 tego dnia padł na parsowaniu JSON-a od Groqa. W bazie jest tylko Yunnan Yukun – Chengdu Rongcheng z 08.08, czyli inny mecz.
   - **Wniosek:** samo zadanie w Schedulerze jest bezpieczne (0 błędów) i tanie, ale rozlicza tylko mecze, które sami typowaliśmy. Reszta zostaje na ręczne oznaczenie w GUI — i tak działa zaprojektowana hybryda („co mamy = my, reszta = user ręcznie").
   - ⏳ **Decyzja usera:** wpiąć do Schedulera (dry-run pokazuje, że bezpieczne) czy zostawić trigger ręczny, skoro dziś i tak nie ma czego rozliczać.
+- [x] ✅ **D6 — ZROBIONE 23.08. Pytaliśmy źródła o daty, których z definicji nie oddadzą.**
+  Wyszło przy rozpoznaniu D5. Ślad z produkcji (`/api/cron/settle`, 06:00):
+  `{'settled': 0, 'partial': 21}` + `Free plans do not have access to this date,
+  try from 2026-08-22 to 2026-08-24` + `flashscore.mobi: offset -8`.
+  - **Oba źródła mają horyzont wstecz:** darmowy plan API-Football to okno `dziś ±1 dzień`,
+    `flashscore.mobi` ~7 dni. FlashScore **sam się pilnuje od początku**; API-Football
+    progu nie miał, więc przy każdym z dwóch dziennych przebiegów pytaliśmy o daty
+    skazane na odmowę: 21 kuponów × 2 daty (mecz i mecz+1) × 2 przebiegi.
+  - **Gorsze:** `coupon_settlement` miał WŁASNĄ kopię tego zapytania, wołaną surowym
+    `requests.get` z pominięciem licznika budżetu — zużycie limitu z tej ścieżki było
+    dla nas **niewidoczne**. Kopia usunięta, deleguje do wspólnej, strzeżonej funkcji.
+  - **Fix:** `data_w_zasiegu_af()` + próg `AF_HORYZONT_DNI` (default 1, env-strojony —
+    płatny plan nie ma tego ograniczenia). +14 testów.
+  - ⚠️ **Korekta mojej atrybucji w trakcie:** linie `Budzet AF 42/100` NIE pochodziły
+    z rozliczania — to licznik klienta `api_football.py`, którego na tej ścieżce nie ma.
+    To był równoległy cron w tym samym oknie czasowym.
+
+### 🔴 ZNALEZIONE PRZY OKAZJI — rozliczanie stało 8 dni
+
+Historia z logów (`cron_settle`), pełna sekwencja:
+
+| data | wynik |
+|---|---|
+| 15.08 21:30 | `settled 20, partial 24` — działało |
+| 16.08 06:00 → 23.08 | `settled 0` **za każdym razem** |
+
+Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
+**Dwie przyczyny po kolei:**
+1. **16.08:** `API-Football: Your account is suspended` — konto zawieszone.
+2. **23.08:** konto **znów działa** (`Free plans do not have access to this date`),
+   ale kupony zestarzały się w międzyczasie poza horyzont obu źródeł.
+
+- [ ] **D7 — 21 kuponów z 14-15.08 jest nie do odzyskania** z darmowych źródeł
+  (duńska, japońska, chińska liga + angielskie niższe — poza pokryciem football-data,
+  poza oknem AF, poza 7 dniami FlashScore). Zejdą przez VOID 24-25.08. Do decyzji:
+  pogodzić się ze stratą 20 punktów paper-tradingu czy szukać źródła z historią.
+- [x] ✅ **D8 — ZROBIONE 23.08. Alarm o stojącym rozliczaniu.** Osiem dni
+  `settled: 0` przy 20+ kuponach czekających przeszło bez sygnału; skutek zauważył
+  dopiero `pipeline-health`, i to pośrednio (`26 predykcji bez rozliczenia`).
+  - **Warunek CELOWO nie brzmi „rozliczono 0 przy niepustej kolejce".** Dziś to
+    prawda i będzie prawdą codziennie, bo w kolejce siedzą kupony poza horyzontem
+    źródeł. Taki alarm wyłby bez powodu — czyli powtórzyłby dokładnie błąd
+    naprawiany rano tego samego dnia, gdzie alarm o „ZERO predykcji" palił się
+    wiecznie i przez to przestał cokolwiek znaczyć.
+  - **Właściwy warunek:** rozliczono 0, **choć coś czekającego jest jeszcze
+    w zasięgu** (`HORYZONT_ZRODEL_DNI = 7`, najdłużej sięgające źródło). 16.08
+    alarm by się zapalił (kupony jednodniowe), dziś milczy (wszystko 8-9 dni) —
+    bo milczenie jest wtedy poprawną odpowiedzią, nic się już nie da zrobić.
+  - `settle_active_coupons` liczy `czekajace_w_zasiegu` osobno od `partial`.
+    Alarm wychodzi z `/cron/settle`, ERROR do logu + Telegram; padnięty Telegram
+    nie wywala crona. +15 testów.
+
 - [ ] **D5 — kupony na mecze BEZ naszej predykcji nie rozliczą się nigdy.** Wyszło przy D2. `settle_manual_coupons` czyta tylko `predictions`, a `coupon_settlement` dla kuponów AI ma osobną ścieżkę z czterema źródłami wyników (`_find_leg_result`). Dziennik użytkownika nie korzysta z żadnego z nich. Do rozważenia: dopuścić `_find_leg_result` również dla kuponów `manual` (kosztuje zapytania do API-Football, więc pod flagą).
 - [ ] **D3 — 231 predykcji z `odds_verified=0`** (kurs od Groqa) → ROI/CLV z historii nic nie znaczą. Decyzja: backfill kursów czy trwałe wykluczenie z raportów.
 - [ ] **I1 — wdrożenie jobów to ręczna pułapka.** Przy każdym buildzie 2 najnowsze digesty są BEZ TAGU (atestacja BuildKita); przypięcie takiego zatrzymało pipeline 30.07–02.08. API ma CD, joby nie. Fix: joby w `cd.yml`.

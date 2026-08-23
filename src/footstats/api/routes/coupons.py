@@ -747,11 +747,28 @@ def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
         stats = settle_active_coupons(days_back=days_back, dry_run=False, verbose=True)
         clear_response_cache()
         _log.info("cron_settle: %s", stats)
+
+        # D8: osiem dni `settled: 0` przy 20+ kuponach czekajacych przeszlo bez
+        # sygnalu (16-23.08, zawieszone konto API-Football). Alarmujemy tylko gdy
+        # cos, co JESZCZE da sie zdobyc, nie zostalo rozliczone — kolejka pelna
+        # kuponow poza horyzontem zrodel to normalny stan, nie awaria.
+        from footstats.core.coupon_settlement import rozliczanie_stoi
+        anomalia = rozliczanie_stoi(stats.get("settled", 0),
+                                    stats.get("czekajace_w_zasiegu", 0))
+        if anomalia:
+            _log.error("ALERT rozliczanie stoi: %s | %s", anomalia, stats)
+            try:
+                from footstats.utils.telegram_notify import send_alert
+                send_alert("FootStats — rozliczanie stoi", anomalia)
+            except (ImportError, OSError, RuntimeError) as e:
+                _log.warning("Alert o stojacym rozliczaniu nie poszedl: %s", e)
+
         return {
             "ok": True,
             "settled": stats.get("settled", 0),
             "partial": stats.get("partial", 0),
             "errors": stats.get("errors", 0),
+            "czekajace_w_zasiegu": stats.get("czekajace_w_zasiegu", 0),
         }
     except (ValueError, KeyError, RuntimeError) as e:
         _log.error("cron_settle error: %s", e, exc_info=True)

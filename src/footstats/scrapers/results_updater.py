@@ -124,8 +124,41 @@ def _liga_ids_dla_nazwy(league_str: str) -> list[int]:
     return []
 
 
+# Ile dni wstecz/wprzod API-Football w ogole odpowiada. Darmowy plan wpuszcza
+# wylacznie okno `dzis +/-1 dzien` i na wszystko poza nim zwraca odmowe:
+#   "Free plans do not have access to this date, try from 2026-08-22 to 2026-08-24"
+# Zapytanie o starsza date to WYDANY request bez szans na odpowiedz. Zmierzone
+# 23.08 na przebiegu rozliczenia o 06:00: 21 kuponow z 14-15.08 czekalo na wyniki,
+# a odpytywanie ich zjadlo 42 ze 100 dziennych zapytan — tego samego limitu
+# potrzebuje potok dzienny na sklady i sedziego.
+#
+# `flashscore.mobi` ma wlasny prog (~7 dni) i pilnuje go od poczatku; tu chodzi
+# o te sama dyscypline po stronie API-Football. Platny plan nie ma ograniczenia
+# — wtedy wystarczy rozsunac `AF_HORYZONT_DNI`.
+AF_HORYZONT_DNI = int(os.getenv("AF_HORYZONT_DNI", "1"))
+
+
+def data_w_zasiegu_af(date_str: str, dzis: date | None = None) -> bool:
+    """Czy API-Football w ogole odpowie na pytanie o te date.
+
+    Data nie do sparsowania → False: takie zapytanie i tak dostaloby odmowe,
+    wiec nie placimy za nie requestem.
+    """
+    try:
+        dzien = datetime.fromisoformat(str(date_str)[:10]).date()
+    except (TypeError, ValueError):
+        log.warning("Data %r nie do sparsowania — pomijam zapytanie do API-Football.",
+                    date_str)
+        return False
+    return abs((dzien - (dzis or date.today())).days) <= AF_HORYZONT_DNI
+
+
 def _fetch_fixtures(api_key: str, league_id: int, date_str: str) -> list[dict]:
     """Pobiera fixtures z API-Football dla danej ligi i daty (YYYY-MM-DD)."""
+    if not data_w_zasiegu_af(date_str):
+        log.info("Data %s poza zasiegiem API-Football (prog %d dni) —"
+                 " nie wydaje zapytania (liga=%s).", date_str, AF_HORYZONT_DNI, league_id)
+        return []
     try:
         r = requests.get(
             f"{API_BASE}/fixtures",
@@ -147,6 +180,10 @@ def _fetch_fixtures_by_date(api_key: str, date_str: str) -> list[dict]:
     _liga_ids_dla_nazwy zwraca [] i wynik trafiałby tylko do FlashScore
     (bez statystyk: rożne, kartki).
     """
+    if not data_w_zasiegu_af(date_str):
+        log.info("Data %s poza zasiegiem API-Football (prog %d dni) —"
+                 " nie wydaje zapytania.", date_str, AF_HORYZONT_DNI)
+        return []
     try:
         r = requests.get(
             f"{API_BASE}/fixtures",

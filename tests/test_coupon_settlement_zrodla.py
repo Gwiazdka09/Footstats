@@ -17,6 +17,8 @@ kaskady to decyzja projektowa, nie przypadek, wiec ma test.
 """
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 import requests
 
@@ -279,15 +281,22 @@ class _Odp:
         return self._dane
 
 
+# Data MUSI byc ruchoma. Od 23.08 `_get_fixtures_api` nie wychodzi do API dla dat
+# spoza okna darmowego planu, wiec data zaszyta na sztywno sprawia, ze test przestaje
+# sprawdzac to, co opisuje: dostaje pusta liste z progu, nie z badanego zachowania.
+# Progu pilnuje osobno `tests/test_horyzont_zrodel_wynikow.py`.
+_DZIS = date.today().isoformat()
+
+
 def test_fixtures_api_zwraca_liste(monkeypatch):
     monkeypatch.setattr(requests, "get",
                         lambda *a, **k: _Odp(200, {"response": [1, 2]}))
-    assert cs._get_fixtures_api("klucz", "2026-08-02") == [1, 2]
+    assert cs._get_fixtures_api("klucz", _DZIS) == [1, 2]
 
 
 def test_fixtures_api_blad_daje_pusta_liste(monkeypatch):
     monkeypatch.setattr(requests, "get", lambda *a, **k: _Odp(500))
-    assert cs._get_fixtures_api("klucz", "2026-08-02") == []
+    assert cs._get_fixtures_api("klucz", _DZIS) == []
 
 
 def test_fixtures_api_blad_sieci_daje_pusta_liste(monkeypatch):
