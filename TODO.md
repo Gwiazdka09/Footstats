@@ -360,7 +360,24 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - Koszt: jedno zapytanie do bazy na uwierzytelnione żądanie. Próg `except Exception` dla `api/auth.py` podniesiony 2 → 3 z uzasadnieniem.
   - **Zostaje z B1:** token nadal nie jest związany z urządzeniem (brak `jti`), więc skradziona kopia działa do unieważnienia albo wygaśnięcia. Wersja rozwiązuje „odbierz dostęp", nie „wykryj kopię".
 - [ ] **B2 — limity zapytań mogą liczyć zły adres.** `get_remote_address` = `request.client.host`, za Cloud Run to load balancer, nie klient. **Podejrzenie, nie fakt** — potwierdzić testem z dwóch sieci. Fix: `key_func` czytający `X-Forwarded-For`.
-- [ ] **B3 — python-jose → PyJWT**, żeby zdjąć `--ignore-vuln PYSEC-2026-1325` (ecdsa) z pip-audit.
+- [x] ✅ **B3 — ZROBIONE 23.08. python-jose → PyJWT, `--ignore-vuln` zdjęte.**
+  - **Zmierzone:** `python-jose`, `ecdsa`, `rsa`, `pyasn1` wypadły z obu locków;
+    `pip-audit` **bez żadnych wyciszeń** → `No known vulnerabilities found`.
+  - **Zakres mniejszy niż się wydawał:** kod produkcyjny wołał `jose` w **jednym**
+    pliku (`api/auth.py`), a PyJWT był już w obrazie jako zależność przechodnia —
+    podmiana niczego nie dokłada, tylko zdejmuje.
+  - **Największe ryzyko było w zgodności, nie w kodzie:** gdyby tokeny wystawione
+    starą biblioteką nie weryfikowały się nową, samo wdrożenie **wylogowałoby
+    wszystkich zalogowanych**. Test wystawia token dokładnie tak jak `python-jose`
+    i czyta go przez PyJWT — przeszedł, zanim tknąłem zależności. Pomija się sam,
+    gdy `jose` zniknie ze środowiska, bo pilnował momentu przejścia.
+  - **Odrzucenia zachowane:** obcy podpis, wygasły token, `alg: none`, śmieć —
+    każde nadal jest odrzuceniem. `PyJWTError` zastąpiło `JWTError` jako wspólna
+    klasa, inaczej część odrzuceń leciałaby jako 500 zamiast 401.
+  - **Pułapka złapana przez istniejący test:** `import jwt` pochodzi z paczki `pyjwt`,
+    ale na PyPI istnieje TEŻ osobna, niepowiązana paczka o nazwie `jwt`. Bez
+    mapowania obraz wciągnąłby cudzy projekt. Dopisane do `test_dependencies_declared`.
+  - Strażnik pilnuje, żeby `--ignore-vuln` nie wróciło do CI bez daty i powodu. +10 testów.
 - [x] ✅ **B4 — ZROBIONE 23.08. Zależności przypięte lockiem.**
   - **Korekta opisu:** `requirements.txt` (26 pozycji, 0 przypiętych) **nie jest używany
     przez obrazy** — to lustro dla skanera CVE w CI. Obrazy instalowały

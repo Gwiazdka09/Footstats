@@ -255,7 +255,7 @@ def test_token_niesie_wersje_ale_NIE_odcisk_urzadzenia(klient):
     aż do unieważnienia albo wygaśnięcia. Rozróżnienie jest istotne — wersja
     rozwiązuje „odbierz dostęp", nie rozwiązuje „wykryj kopię".
     """
-    from jose import jwt
+    import jwt
 
     from footstats.api.auth import _secret
 
@@ -268,7 +268,7 @@ def test_token_zyje_najwyzej_dobe(klient):
     """24h to długo dla tokenu bez możliwości odwołania — pilnujemy, by nie urosło."""
     from datetime import datetime, timezone
 
-    from jose import jwt
+    import jwt
 
     from footstats.api.auth import _secret
 
@@ -282,7 +282,7 @@ def test_token_podpisany_obcym_sekretem_odrzucony(klient):
     """Kontrola pozytywna: podrobienie tokenu NIE działa."""
     from datetime import datetime, timedelta, timezone
 
-    from jose import jwt
+    import jwt
 
     obcy = jwt.encode(
         {"sub": "admin", "uid": 1, "adm": True,

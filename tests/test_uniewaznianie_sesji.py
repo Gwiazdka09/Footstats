@@ -84,7 +84,7 @@ def test_STARY_token_bez_claimu_tv_dalej_dziala(klient, monkeypatch):
     wylogowałoby wszystkich przy samym wdrożeniu — kolumna startuje od 0."""
     from datetime import datetime, timedelta, timezone
 
-    from jose import jwt
+    import jwt
     stary = jwt.encode(
         {"sub": "admin", "uid": 1, "adm": False,
          "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
@@ -99,7 +99,7 @@ def test_stary_token_bez_tv_pada_po_pierwszym_uniewaznieniu(klient, monkeypatch)
     """Zgodność wstecz nie może oznaczać nieśmiertelności."""
     from datetime import datetime, timedelta, timezone
 
-    from jose import jwt
+    import jwt
     stary = jwt.encode(
         {"sub": "admin", "uid": 1, "adm": False,
          "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
@@ -126,7 +126,7 @@ def test_podrobiony_token_dalej_odrzucany(klient, monkeypatch):
     """Kontrola: wersja tokenu to DODATKOWA bramka, nie zamiennik podpisu."""
     from datetime import datetime, timedelta, timezone
 
-    from jose import jwt
+    import jwt
     obcy = jwt.encode(
         {"sub": "admin", "uid": 1, "adm": True, "tv": 0,
          "exp": datetime.now(timezone.utc) + timedelta(hours=1)},

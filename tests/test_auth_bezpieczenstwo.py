@@ -27,7 +27,7 @@ import bcrypt
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
-from jose import jwt
+import jwt
 
 import footstats.api.auth as auth
 

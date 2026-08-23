@@ -4,7 +4,7 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from jose import jwt
+import jwt
 
 os.environ.setdefault("JWT_SECRET", "testsecret1234567890abcdef12345678")
 

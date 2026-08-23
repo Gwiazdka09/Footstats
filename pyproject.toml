@@ -36,7 +36,12 @@ dependencies = [
     # rozliczen cicho nie dzialal (import pod try/except → BeautifulSoup=None).
     # Ten sam brak wywalal 3 testy understat na CI (job test instaluje bez [scraper]).
     "beautifulsoup4>=4.12",
-    "python-jose[cryptography]>=3.3",
+    # PyJWT zamiast `python-jose` (23.08): jose ciagnela `ecdsa` z PYSEC-2026-1325,
+    # ktore `pip-audit` musialo wyciszac. Wyciszona luka w bibliotece kryptograficznej
+    # to dlug rosnacy w ciszy — przy nastepnym CVE nikt nie odrozni "znane" od "nowe".
+    # PyJWT byl juz w obrazie jako zaleznosc przechodnia; teraz jest jawna, bo
+    # `api/auth.py` woła go wprost.
+    "pyjwt>=2.8",
     "bcrypt>=4.0",
     "slowapi>=0.1.9",
     "httpx>=0.27",

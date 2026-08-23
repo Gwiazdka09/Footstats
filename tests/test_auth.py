@@ -93,7 +93,7 @@ def test_protected_invalid_token(client):
 
 def test_protected_expired_token(client):
     from datetime import datetime, timedelta, timezone
-    from jose import jwt
+    import jwt
     secret = os.environ["JWT_SECRET"]
     expired = jwt.encode(
         {"sub": "admin", "exp": datetime.now(timezone.utc) - timedelta(seconds=1)},
@@ -107,7 +107,7 @@ def test_protected_expired_token(client):
 
 def test_admin_token_contains_adm_flag(client):
     resp = client.post("/api/auth/login", json={"username": "admin", "password": "testpass"})
-    from jose import jwt as _jwt
+    import jwt as _jwt
     payload = _jwt.decode(
         resp.json()["access_token"],
         os.environ["JWT_SECRET"],
@@ -123,7 +123,7 @@ def test_list_users_requires_admin(client):
 
 def test_list_users_rejects_non_admin_token(client):
     from datetime import datetime, timedelta, timezone
-    from jose import jwt as _jwt
+    import jwt as _jwt
     token = _jwt.encode(
         {"sub": "regular", "uid": 999, "adm": False, "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
         os.environ["JWT_SECRET"],
@@ -233,7 +233,7 @@ def test_create_and_deactivate_user(client, admin_token):
 
 
 def test_cannot_deactivate_own_account(client, admin_token):
-    from jose import jwt as _jwt
+    import jwt as _jwt
     payload = _jwt.decode(admin_token, os.environ["JWT_SECRET"], algorithms=["HS256"])
     own_id = payload["uid"]
     resp = client.delete(
@@ -247,7 +247,7 @@ def test_cannot_deactivate_own_account(client, admin_token):
 
 def _reset_token(uid: int, purpose: "str | None" = "reset", minutes: int = 60) -> str:
     from datetime import datetime, timedelta, timezone
-    from jose import jwt as _jwt
+    import jwt as _jwt
     claims = {"uid": uid, "exp": datetime.now(timezone.utc) + timedelta(minutes=minutes)}
     if purpose is not None:
         claims["purpose"] = purpose

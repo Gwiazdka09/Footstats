@@ -9,7 +9,17 @@ from typing import Optional
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+# PyJWT, nie `python-jose`: ta druga ciagnela `ecdsa` z PYSEC-2026-1325, ktore
+# CI musialo wyciszac przez `--ignore-vuln`. Wyciszona luka w bibliotece
+# kryptograficznej to dlug rosnacy w ciszy — przy nastepnym CVE nikt nie odrozni
+# "znane i zaakceptowane" od "nowe". PyJWT byl juz w obrazie jako zaleznosc
+# przechodnia, wiec podmiana niczego nie doklada.
+#
+# `PyJWTError` to wspolna klasa bazowa wszystkich odrzucen (zly podpis, wygasly,
+# smiec) — odpowiednik `JWTError` z jose. Bez niej czesc odrzucen uciekalaby
+# jako 500 zamiast 401.
+import jwt
+from jwt import PyJWTError
 from pydantic import BaseModel, field_validator
 
 from footstats.api.limiter import limiter
@@ -280,7 +290,7 @@ def require_auth(
         user_id: int | None = payload.get("uid")
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token — re-login required")
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     _sprawdz_wersje(payload, int(user_id))
     return int(user_id)
@@ -299,7 +309,7 @@ def require_admin(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token — re-login required")
         if not payload.get("adm", False):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     _sprawdz_wersje(payload, int(user_id))
     return int(user_id)
@@ -409,7 +419,7 @@ def reset_password(request: Request, req: ResetPasswordRequest):
     """Ustawia nowe hasło na podstawie tokenu resetu (purpose=reset, ≤1h)."""
     try:
         payload = jwt.decode(req.token, _secret(), algorithms=[_ALGORITHM])
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(status_code=400, detail="Nieprawidłowy lub wygasły token")
     if payload.get("purpose") != "reset" or not payload.get("uid"):
         raise HTTPException(status_code=400, detail="Nieprawidłowy token resetu")

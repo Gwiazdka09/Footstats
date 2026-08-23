@@ -35,7 +35,10 @@ _SRC = _ROOT / "src" / "footstats"
 # Nazwa modulu przy imporcie != nazwa paczki na PyPI.
 _ALIAS_PYPI = {
     "bs4": "beautifulsoup4",
-    "jose": "python-jose",
+    # UWAGA: `jwt` importuje sie z paczki `pyjwt`, ale na PyPI istnieje TEZ osobna,
+    # niepowiazana paczka o nazwie `jwt`. Bez tego mapowania `pip install jwt`
+    # w obrazie wciagnalby cudzy projekt zamiast biblioteki, ktorej uzywa `api/auth.py`.
+    "jwt": "pyjwt",
     "dotenv": "python-dotenv",
     "psycopg2": "psycopg2-binary",
     "sklearn": "scikit-learn",
