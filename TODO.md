@@ -205,7 +205,9 @@ Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakłada
 
 - [ ] **L1 — ZOSTAŁ TYLKO ADRES.** Reszta zrobiona 24.08: §1.2 regulaminu nie powołuje się już na nieistniejące JDG, jest sekcja identyfikacyjna wymagana przez art. 5 ustawy o świadczeniu usług drogą elektroniczną, polityka prywatności przestała żądać NIP-u, a **imię i nazwisko (Jakub Gwiazdowski) są wpisane w obu dokumentach**.
 
-  **Do zrobienia przez Ciebie — jedna rzecz:** założyć **skrytkę pocztową** i podać mi jej adres. Art. 5 ust. 2 pkt 2 uśude wymaga „miejsca zamieszkania i adresu", więc alternatywą byłby adres domowy na publicznej stronie — trwale, bo scrapery i archiwa nie zapominają. Skrytka to jedyny sposób, żeby spełnić przepis bez publikowania miejsca zamieszkania. **Decyzja z 24.08: skrytka.**
+  **Do zrobienia przez Ciebie — jedna rzecz:** założyć **skrytkę pocztową** (Poczta Polska, 90 zł/rok + 30 zł zamek i klucz) i podać mi jej adres. **Decyzja z 24.08: skrytka.**
+
+  Uczciwie o ryzyku: art. 5 ust. 2 pkt 2 uśude mówi o „miejscu zamieszkania i adresie", więc skrytka **nie jest literalnym spełnieniem przepisu** — jest ograniczeniem szkody. Cel przepisu (realna możliwość doręczenia i kontaktu) zostaje spełniony, a alternatywa to adres domowy na publicznej stronie, nieodwracalnie: scrapery i archiwa nie zapominają. Przy serwisie darmowym, bez płatności i bez skarg, ryzyko sporu o literalną zgodność jest niskie — ale to wybór świadomy, nie przeoczenie.
 
   Pilnuje tego odwrócony tripwire `test_adres_operatora_wciaz_do_uzupelnienia`: gdy adres wpiszesz, test zacznie padać i wymusi zamknięcie tej pozycji.
 
