@@ -28,6 +28,13 @@ log = logging.getLogger(__name__)
 KODY_LIG: dict[str, str] = {
     "E0": "Premier League",
     "E1": "Championship",
+    # Dopisane 2026-08-25. Selekcja typuje mecze klubow z tych dywizji (Grimsby,
+    # Barnet, Tranmere, Accrington...), a bez tych trzech plikow zaden darmowy
+    # kod nie mial ich wynikow: API-Football wisi zawieszone od 01.08, a
+    # FlashScore siega ~7 dni wstecz. Te same pliki CSV, ten sam parser.
+    "E2": "League One",
+    "E3": "League Two",
+    "EC": "National League",
     "SP1": "La Liga",
     "D1": "Bundesliga",
     "I1": "Serie A",

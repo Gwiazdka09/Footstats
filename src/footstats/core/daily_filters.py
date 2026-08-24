@@ -85,6 +85,7 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
     wynik = []
     odrzucone_liga = 0
     odrzucone_slabe = 0
+    bez_nazwy = 0
     nazwy_odrzuconych: dict[str, int] = {}
     for k in kandydaci:
         liga = (k.get("liga") or "").strip()
@@ -101,6 +102,15 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
             )
             continue
         # Kandydaci bez nazwy ligi (np. API-Football) — zawsze zachowywani.
+        #
+        # Ta galaz omija whiteliste CALKOWICIE i do 25.08 nie zostawiala sladu.
+        # Puchary nie sa na whiteliscie, a pucharowe kupony powstawaly (Carabao
+        # Cup: 38 ocen w model_log, z czego rozliczonych 5) — to najbardziej
+        # prawdopodobna droga, ktora tu wchodza. Licznik ma to ROZSTRZYGNAC,
+        # nie zaostrzyc filtra: odrzucanie kandydatow bez ligi zabiloby zrodla,
+        # ktore nazwy po prostu nie podaja.
+        if not liga:
+            bez_nazwy += 1
         if liga and LIGA_WHITELIST_ENFORCE and _norm_liga(liga) not in whitelist_norm:
             odrzucone_liga += 1
             nazwy_odrzuconych[liga] = nazwy_odrzuconych.get(liga, 0) + 1
@@ -133,4 +143,13 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
                         odrzucone_liga, opis)
     if odrzucone_slabe:
         logger.info("Gating słabych lig: odrzucono %d kandydatów (POL/ESP/FRA <50%%)", odrzucone_slabe)
+    if bez_nazwy and LIGA_WHITELIST_ENFORCE:
+        # WARNING, nie INFO: przy wlaczonej whiteliscie to jest obejscie kontroli,
+        # ktora ma decydowac, co wchodzi do kuponow. Jesli okaze sie codzienne,
+        # bedzie to znaczylo, ze whitelist nie rzadzi selekcja tak, jak zakladamy.
+        logger.warning(
+            "Whitelistę ominęło %d kandydatów BEZ nazwy ligi (z %d) — ta ścieżka"
+            " nie podlega filtrowi lig; tędy mogą wchodzić rozgrywki spoza listy",
+            bez_nazwy, len(kandydaci),
+        )
     return wynik

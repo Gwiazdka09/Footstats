@@ -282,6 +282,20 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
 
   **Hipoteza, która się NIE potwierdziła:** że selekcja bierze ligi spoza pokrycia źródeł. `_pre_filtruj_ligi` istnieje i działa (dziś ciął 25 kandydatów → 6), a dzisiejsze mecze z tych samych źródeł rozliczyły się bez problemu. Prawdziwa przyczyna to udokumentowane w `rozliczanie_stoi` osiem dni `settled: 0` (16–23.08) przy wynikach **wciąż w zasięgu** — zanim ktokolwiek zauważył, okno się zamknęło.
 
+- [x] ✅ **D10 — źródła wyników: trzy naprawy, jeden realny bug. 25.08.**
+
+  **1. `Sheffield United` == `Sheffield Wednesday` (0.800) i `Bristol City` == `Bristol Rovers` (0.696).** To NIE było szukane — strażnik nowych testów złapał to przy okazji. Oba wyniki **powyżej progów rozliczeń** (0.6 w `evening_agent`, 0.70 w `_znajdz_wynik`), czyli wynik jednego klubu mógł rozliczyć kupon na drugi. Mechanizm: aliasy skracają nazwy do `sheffield weds` / `bristol rvs`, a te skróty nie były członami odróżniającymi, więc reguła „ta sama baza + różne człony = różne kluby" **w ogóle się nie odpalała** i decydował wspólny przedrostek. Ten sam błąd co naprawiany 31.07, wpuszczony innymi drzwiami — nie przez listę sufiksów, tylko przez aliasy. Naprawione: `wednesday` do `_ROZROZNIAJACE`, `rvs`/`weds` do `_ROZ_SKROTY`. Oba spadły do 0.00.
+
+  **2. Alias `Bolton Wanderers` → `Bolton` — DODANY I WYCOFANY tego samego wieczoru.** Suita wykazała, że `test_normalize_kolizje.py` **wprost zabrania** tego sklejenia, traktując je tak samo jak `Newcastle United`/`Newcastle`, `Cardiff City`/`Cardiff`, `Ipswich Town`/`Ipswich`. To świadoma reguła fail-closed z 31.07: bez listy klubów nie da się odróżnić „Bolton" (jednoznaczne) od „Manchester" czy „Sheffield" (po dwa kluby), więc odmawiamy wszystkich krótkich form.
+
+  **Kod jest w tym punkcie wewnętrznie sprzeczny** — komentarz w `normalize.py` sugeruje alias dla Boltonu, test go zakazuje. Nie rozstrzygałem tego przy okazji, w module z historią błędnych rozliczeń, dla jednego kuponu za 2 zł. **Do decyzji osobno:** jawna, przejrzana lista aliasów dla jednoznacznych krótkich form (Bolton, Cardiff, Ipswich, Newcastle) kontra utrzymanie reguły ogólnej. Koszt reguły jest zmierzony i spisany w `test_kolizje_skrotow_klubow.py`.
+
+  **3. `E2`/`E3`/`EC` do `KODY_LIG`.** Pobieraliśmy 10 dywizji, z Anglii tylko Premier League i Championship, choć selekcja typuje kluby z League One/Two. Dla 15.08: **25 → 61 meczów**.
+
+  **Efekt na przepadających kuponach: 2 z 20 odzyskane** (#122 i #141, oba przegrane) zamiast zera. #124 był wygrany i przepada przez regułę krótkich form — to zmierzona cena tej reguły. Reszta to Carabao Cup i mecze azjatyckie, których CSV nie obejmuje.
+
+  **Licznik kandydatów bez nazwy ligi — hipoteza OBALONA.** Podejrzewałem, że puchary wchodzą do kuponów przez udokumentowany wyjątek „kandydaci bez nazwy ligi są zawsze zachowywani". Pomiar tego samego dnia: 48 kandydatów → 44 odrzucone, w tym **Carabao Cup (20)**, a ostrzeżenie o omijaniu whitelisty **nie padło ani razu**. Filtr działa, flaga `LIGA_WHITELIST_ENFORCE` jest włączona (nieustawiona w env jobu = domyślne 1), a `_pre_filtruj_ligi` woła zarówno `cloud_draft`, jak i `system_paper`. **Jak 20 pucharowych kuponów powstało 15.08 — nie wiem.** Licznik zostaje jako WARNING i rozstrzygnie, jeśli się powtórzy.
+
 - [ ] **A4 — 1 martwy wiersz z 23.08 został w bazie** (`2 (wygrana gościa)`, nie rozliczy
   się nigdy) plus 3 wiersze z `odds_verified=0`. Nowe już nie powstaną, ale te
   istnieją. Do decyzji: zostawić jako ślad, czy posprzątać (operacja na prod DB).

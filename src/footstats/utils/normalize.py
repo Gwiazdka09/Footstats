@@ -53,12 +53,24 @@ _SUFFIXES = {
 _ROZROZNIAJACE = {
     "city", "town", "united", "rovers", "wanderers",
     "athletic", "athletics", "hotspur", "albion", "county",
+    # Dopisane 2026-08-25. "Wednesday" jest czlonem tozsamosci dokladnie tak samo
+    # jak "United" — bez niego Sheffield United i Sheffield Wednesday dostawaly
+    # 0.800, czyli POWYZEJ progow rozliczen (0.6 w evening_agent, 0.70 w
+    # _znajdz_wynik). Ten sam blad co w lipcu, tylko innymi drzwiami.
+    "wednesday",
 }
 
 # Skróty tych samych członów — "Dundee Utd" to nadal Dundee United.
 # Bez tego reguła "różne człony = różne kluby" rozdzielałaby klub od jego
 # własnego skrótu.
-_ROZ_SKROTY = {"utd": "united", "athl": "athletic", "wdrs": "wanderers"}
+_ROZ_SKROTY = {
+    "utd": "united", "athl": "athletic", "wdrs": "wanderers",
+    # Skroty uzywane przez `_DEFAULT_MAPPINGS` i przez football-data.co.uk.
+    # Bez nich alias SKRACAJACY nazwe rozbrajal regule odrozniania klubow:
+    # "bristol rovers" -> "bristol rvs", a "rvs" nie bylo czlonem odrozniajacym,
+    # wiec para z "Bristol City" spadala do zwyklego SequenceMatchera (0.696).
+    "rvs": "rovers", "weds": "wednesday",
+}
 
 # Znaczniki drużyn rezerw i młodzieżowych.
 #
