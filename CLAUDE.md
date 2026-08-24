@@ -12,6 +12,8 @@ Lang: PL. Context: Soccer predictions (Poisson + RAG + LLM).
 - Autonomy: Python, pytest, git, files, subagents.
 - ASK: `pip install`, `.env` changes, destructive ops (reset/force push/rm).
 - Style: PEP8, Type hints, PL comments/logs.
+- Pieniądze / regulamin / teksty marketingowe → najpierw `.claude/rules/wypuszczenie-pl.md`
+  (zakaz afiliacji i obietnic skuteczności, limity działalności nierejestrowanej, braki L1-L4).
 
 ## Subagent team (.claude/agents/)
 Ja = orchestrator. Workflow feature: subagent-driven-development (planner→coder→reviewer, 2-stage review, branch+TDD+commit per task).
