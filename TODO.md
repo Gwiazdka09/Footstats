@@ -266,6 +266,8 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - **Powód:** `settle_manual_coupons` rozlicza wyłącznie z NASZYCH `predictions`, a dla meczu Yunnan Yukun – Dalian Yingbo (15.08) predykcji **w ogóle nie ma** — przebieg o 11:00 tego dnia padł na parsowaniu JSON-a od Groqa. W bazie jest tylko Yunnan Yukun – Chengdu Rongcheng z 08.08, czyli inny mecz.
   - **Wniosek:** samo zadanie w Schedulerze jest bezpieczne (0 błędów) i tanie, ale rozlicza tylko mecze, które sami typowaliśmy. Reszta zostaje na ręczne oznaczenie w GUI — i tak działa zaprojektowana hybryda („co mamy = my, reszta = user ręcznie").
   - ⏳ **Decyzja usera:** wpiąć do Schedulera (dry-run pokazuje, że bezpieczne) czy zostawić trigger ręczny, skoro dziś i tak nie ma czego rozliczać.
+  - **Zmierzone ponownie 24.08 na sześciu nowych kuponach dziennika (#164-169, seria 4):** predykcji brakuje dla **11 z 12 nóg**. Ma ją tylko Brøndby–Silkeborg, a `settle_manual_coupons` jest all-legs-or-nothing, więc rozliczyłby **zero z sześciu**. Wniosek z 17.08 potwierdzony na większej próbce i już nie na jednym kuponie: blokadą jest D5, nie brak zadania w Schedulerze.
+  - **Skąd ta luka:** kupony powstają z `quick_picks`/Bzzoiro (30 kandydatów dziennie), a `predictions` zapisuje wyłącznie ścieżka `top3`/`kupon_d` — 24.08 dała **2 wiersze**, 23.08 trzynaście, 20-22.08 zero (postój Groqa). Dziennik i predykcje patrzą więc na dwa różne, ledwo zachodzące na siebie zbiory meczów.
 
 ### 🔴 ZNALEZIONE PRZY OKAZJI — rozliczanie stało 8 dni
 
@@ -287,7 +289,7 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
   poza oknem AF, poza 7 dniami FlashScore). Zejdą przez VOID 24-25.08. Do decyzji:
   pogodzić się ze stratą 20 punktów paper-tradingu czy szukać źródła z historią.
 
-- [ ] **D5 — kupony na mecze BEZ naszej predykcji nie rozliczą się nigdy.** Wyszło przy D2. `settle_manual_coupons` czyta tylko `predictions`, a `coupon_settlement` dla kuponów AI ma osobną ścieżkę z czterema źródłami wyników (`_find_leg_result`). Dziennik użytkownika nie korzysta z żadnego z nich. Do rozważenia: dopuścić `_find_leg_result` również dla kuponów `manual` (kosztuje zapytania do API-Football, więc pod flagą).
+- [ ] **D5 — kupony na mecze BEZ naszej predykcji nie rozliczą się nigdy.** Wyszło przy D2. `settle_manual_coupons` czyta tylko `predictions`, a `coupon_settlement` dla kuponów AI ma osobną ścieżkę z czterema źródłami wyników (`_find_leg_result`). Dziennik użytkownika nie korzysta z żadnego z nich. Do rozważenia: dopuścić `_find_leg_result` również dla kuponów `manual` (kosztuje zapytania do API-Football, więc pod flagą). **24.08 to przestało być hipotetyczne** — w dzienniku leży sześć kuponów (#164-169), z których żaden nie rozliczy się automatycznie, dopóki ta ścieżka nie zostanie otwarta. Do tego czasu: ręczne oznaczenie w GUI.
 - [ ] **D3 — 231 predykcji z `odds_verified=0`** (kurs od Groqa) → ROI/CLV z historii nic nie znaczą. Decyzja: backfill kursów czy trwałe wykluczenie z raportów.
 - [ ] **I2 — licznik tokenów myli się 2×.** Heurystyka 1,4 znaku/token vs realne 2,86 (1338 vs **655** tokenów na szkielecie) → prompt bywa przycinany bez potrzeby. Fix: `tiktoken` — **wymaga `pip install`, czyli zgody**.
 - [ ] **J1 — połowa `except` milczy.** 271 z 546 bez logu i bez `raise`. Strażnik w testach pilnuje SZEROKOŚCI (`except Exception`), nie milczenia. Fix: drugie kryterium w tym samym strażniku.
