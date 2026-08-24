@@ -91,22 +91,61 @@ def test_nie_powoluje_sie_na_nieistniejaca_firme():
     assert "po rejestracji JDG" not in _regulamin()
 
 
-def test_placeholder_danych_operatora_wciaz_do_uzupelnienia():
+OPERATOR = "Jakub Gwiazdowski"
+
+
+@pytest.mark.parametrize("plik", [REGULAMIN, POLITYKA], ids=["regulamin", "polityka"])
+def test_operator_jest_wskazany_z_imienia_i_nazwiska(plik: Path):
+    """Art. 5 ust. 2 pkt 2 uśude: imię i nazwisko usługodawcy będącego osobą fizyczną.
+
+    Uzupełnione 2026-08-24 — przedtem oba dokumenty miały w tym miejscu placeholder,
+    więc serwis nie wskazywał NIKOGO jako administratora danych. Bez tego nie ma
+    adresata żądań z RODO ani strony reklamacji z §10.
+    """
+    tresc = plik.read_text(encoding="utf-8")
+
+    assert OPERATOR in tresc, f"{plik.name}: brak imienia i nazwiska operatora"
+    assert "PUBLIKACJĄ — imię" not in tresc, (
+        f"{plik.name}: został placeholder na imię i nazwisko"
+    )
+
+
+def test_adres_operatora_wciaz_do_uzupelnienia():
     """TRIPWIRE, nie asercja poprawności — świadomie odwrócona.
 
-    Ustawa o świadczeniu usług drogą elektroniczną (art. 5) wymaga podania imienia,
-    nazwiska i adresu. Tych danych nie ma w repozytorium i nie mogę ich wymyślić.
-    Dopóki w dokumencie siedzi placeholder, ten test przechodzi i przypomina,
-    że **publikacja jest zablokowana na L1**.
+    Art. 5 ust. 2 pkt 2 uśude wymaga obok imienia i nazwiska także **miejsca
+    zamieszkania i adresu**. Ustawa mówi wprost o miejscu zamieszkania, więc dla
+    osoby fizycznej oznacza to adres domowy na publicznej stronie — trwale, bo
+    scrapery i archiwa nie zapominają.
 
-    Gdy dane zostaną wpisane, test zacznie padać — i to jest cel: wymusza
-    zamknięcie L1 w TODO oraz odwrócenie tej asercji na `not in`.
+    DECYZJA 2026-08-24: zamiast adresu domowego idzie **skrytka pocztowa**.
+    Dopóki jej nie ma, dokumenty zostają z placeholderem, a ten test przechodzi
+    i przypomina, że **publikacja jest zablokowana na L1**.
+
+    Gdy adres zostanie wpisany, test zacznie padać — i to jest cel: wymusza
+    zamknięcie L1 w TODO.md oraz odwrócenie tej asercji na `not in`.
     """
     for plik in (REGULAMIN, POLITYKA):
         assert "UZUPEŁNIĆ PRZED PUBLIKACJĄ" in plik.read_text(encoding="utf-8"), (
             f"{plik.name}: placeholder zniknął — uzupełnij L1 w TODO.md "
             "i odwróć ten test na `not in`"
         )
+
+
+def test_kanal_kontaktowy_jest_ten_sam_w_obu_dokumentach():
+    """Reklamacje (§10), dane operatora i żądania z RODO muszą trafiać tam samo.
+
+    Rozjazd adresów jest cichy: dokument dalej wygląda poprawnie, a użytkownik pisze
+    pod adres, którego nikt nie czyta. Test wyłapie to przy przenosinach na osobną
+    skrzynkę projektową — wtedy podmiana MUSI objąć oba pliki naraz.
+    """
+    maile = {p.name: set(re.findall(r"mailto:([^\"']+)", p.read_text(encoding="utf-8")))
+             for p in (REGULAMIN, POLITYKA)}
+
+    for nazwa, adresy in maile.items():
+        assert len(adresy) == 1, f"{nazwa}: rozjechane adresy kontaktowe {adresy}"
+
+    assert maile[REGULAMIN.name] == maile[POLITYKA.name], maile
 
 
 def test_zaden_dokument_nie_zaklada_nip_ani_firmy():

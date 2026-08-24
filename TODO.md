@@ -125,7 +125,7 @@ formalne i niezawodność.
 - ~~**L2**~~ ✅ §5 przepisany na „Nieodpłatność Serwisu”.
 - ~~**L3**~~ ✅ §7 bez wyłączenia odpowiedzialności; dodane zdanie o braku przewagi nad rynkiem.
 - ~~**F8**~~ ✅ było już zrobione (`legalUrl()`), wpis nieaktualny.
-- **L1** — zostały wyłącznie **Twoje dane**: imię, nazwisko, adres korespondencyjny.
+- **L1** — imię i nazwisko ✅ wpisane 24.08. Został **adres korespondencyjny → skrytka pocztowa** (decyzja 24.08).
 
 **Znalezione przy okazji i naprawione, poza pierwotną listą:**
 - Regulamin **nie miał trybu reklamacyjnego**, którego wymaga art. 8 ustawy o świadczeniu usług drogą elektroniczną. Dodany: zgłoszenie e-mailem, odpowiedź w 14 dni, brak odpowiedzi = uznanie reklamacji.
@@ -203,7 +203,13 @@ Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakłada
 - [ ] **L6 — pytanie do prawnika, nie do księgowej.** Płatny serwis z typami stoi bliżej zakazu reklamy i promocji zakładów wzajemnych (art. 29 ustawy o grach hazardowych) niż darmowe statystyki. Nie jest zakazany, ale przy pobieraniu opłat lepiej mieć to potwierdzone przed startem niż po.
 - [ ] **L7 — ewidencja wpłat.** Prosty rejestr każdej wpłaty (data, kwota brutto) do pilnowania limitu kwartalnego. Da się wyprowadzić z webhooków operatora płatności.
 
-- [ ] **L1 — ZOSTAŁY TYLKO TWOJE DANE.** Reszta zrobiona 24.08: §1.2 regulaminu nie powołuje się już na nieistniejące JDG, jest sekcja identyfikacyjna (imię i nazwisko, adres, e-mail) wymagana przez art. 5 ustawy o świadczeniu usług drogą elektroniczną, a polityka prywatności przestała żądać NIP-u, którego osoba nieprowadząca działalności nie ma. **Do wpisania: imię, nazwisko i adres korespondencyjny** — w obu dokumentach stoi `[UZUPEŁNIĆ PRZED PUBLIKACJĄ]`. Pilnuje tego odwrócony tripwire `test_placeholder_danych_operatora_wciaz_do_uzupelnienia`: gdy dane wpiszesz, test zacznie padać i wymusi zamknięcie tej pozycji.
+- [ ] **L1 — ZOSTAŁ TYLKO ADRES.** Reszta zrobiona 24.08: §1.2 regulaminu nie powołuje się już na nieistniejące JDG, jest sekcja identyfikacyjna wymagana przez art. 5 ustawy o świadczeniu usług drogą elektroniczną, polityka prywatności przestała żądać NIP-u, a **imię i nazwisko (Jakub Gwiazdowski) są wpisane w obu dokumentach**.
+
+  **Do zrobienia przez Ciebie — jedna rzecz:** założyć **skrytkę pocztową** i podać mi jej adres. Art. 5 ust. 2 pkt 2 uśude wymaga „miejsca zamieszkania i adresu", więc alternatywą byłby adres domowy na publicznej stronie — trwale, bo scrapery i archiwa nie zapominają. Skrytka to jedyny sposób, żeby spełnić przepis bez publikowania miejsca zamieszkania. **Decyzja z 24.08: skrytka.**
+
+  Pilnuje tego odwrócony tripwire `test_adres_operatora_wciaz_do_uzupelnienia`: gdy adres wpiszesz, test zacznie padać i wymusi zamknięcie tej pozycji.
+
+  **Mail NIE blokuje publikacji.** W obu dokumentach stoi działający `jakubgwiazdowski12@gmail.com` (dane operatora, reklamacje §10, żądania z RODO) — art. 5 wymaga „adresu elektronicznego" i ten warunek jest spełniony. Decyzja z 24.08: przenieść się na osobną skrzynkę projektową (np. `kontakt.footstats@gmail.com`), żeby prywatny adres nie stał publicznie obok imienia i nazwiska. Zakładasz Ty, podmiana to jeden przebieg przez oba pliki — pilnuje jej `test_kanal_kontaktowy_jest_ten_sam_w_obu_dokumentach`, żeby reklamacje i RODO nie rozjechały się na dwa różne adresy.
 - [x] **L2 — ZROBIONE 24.08.** §5 „Subskrypcje i płatności” zastąpione przez „Nieodpłatność Serwisu”: wprost, że nie ma opłat, sprzedaży, subskrypcji, reklam ani odesłań afiliacyjnych, a wprowadzenie odpłatności wymaga zmiany regulaminu w trybie §9. Usunięta definicja „Subskrypcja”, dodana definicja „Dziennik kuponów” z zastrzeżeniem, że Serwis nie pośredniczy w zawieraniu zakładów.
 - [x] **L3 — ZROBIONE 24.08.** §7 nie ogranicza już odpowiedzialności do „opłat z ostatnich 30 dni” (przy darmowym = do zera). Zamiast tego zasady ogólne prawa polskiego plus klauzula, że nic w regulaminie nie ogranicza praw konsumenta z przepisów bezwzględnie obowiązujących. Dopisany też punkt mówiący wprost, że **model nie wykazuje przewagi nad kursami bukmacherskimi** — to samo, co mierzymy, powiedziane użytkownikowi.
 - [x] **L4 — BYŁO BŁĘDNE, już zrobione.** Pierwotny wpis powstał z przejrzenia samego `admin_users.py`. W rzeczywistości istnieje `DELETE /api/auth/me` (anonimizuje username, kasuje e-mail, losuje hash hasła, `is_active = FALSE`; kupony i predykcje zostają dla rozliczeń pod zanonimizowanym userem), wystawione w GUI jako „Potwierdzam — usuń konto” w `SettingsView.jsx`. Publiczna rejestracja `POST /auth/register` oraz reset hasła też działają, a regulamin i polityka są linkowane ze stopki i z CookieConsent.
