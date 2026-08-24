@@ -148,3 +148,63 @@ def test_padniety_telegram_nie_wywala_rozliczania(monkeypatch):
     odp = rc.cron_settle(x_cron_secret="sekret")
 
     assert odp["ok"] is True
+
+
+# ── mecz z DZISIAJ jeszcze się nie odbył — alarm nie ma prawa się zapalić ───
+#
+# ZMIERZONE NA PRODUKCJI 24.08 o 14:35 UTC: `/cron/settle` zwrócił
+# {settled: 0, partial: 33, czekajace_w_zasiegu: 14}, alarm poszedł na Telegram,
+# a wszystkie 14 „czekających w zasięgu" to kupony #150-163 na mecze z TEGO DNIA,
+# z których pierwszy zaczynał się dopiero o 15:30 UTC. Rozliczono zero, bo nie
+# było czego rozliczać.
+#
+# Sekwencja gwarantuje powtórkę CODZIENNIE: draft tworzy kupony o 05:30 UTC,
+# `settle-morning` rusza o 06:00 — pół godziny później, zawsze przed pierwszym
+# gwizdkiem. Alarm zapalałby się każdego ranka i po tygodniu przestałby cokolwiek
+# znaczyć, czyli dokładnie ten błąd, przed którym ostrzega docstring tego modułu.
+#
+# Dlaczego próg to CAŁA doba, a nie „dziś, ale po ostatnim meczu": kupon trzyma samą
+# DATĘ (`match_date_first`), bez godziny. Mecze brazylijskie z tej puli zaczynały się
+# o 22:30 i 23:00 UTC, więc nawet wieczorny przebieg o 21:30 UTC nie może zakładać,
+# że dzień jest zamknięty.
+
+def test_dzisiejszy_mecz_nie_liczy_sie_jako_zalegly():
+    from footstats.core.coupon_settlement import czeka_zbyt_dlugo
+
+    assert czeka_zbyt_dlugo(_dni_temu(0)) is False
+
+
+@pytest.mark.parametrize("dni,oczekiwane", [
+    (1, True), (7, True), (8, False), (30, False),
+])
+def test_zaleglosc_liczy_sie_od_wczoraj_do_horyzontu(dni: int, oczekiwane: bool):
+    from footstats.core.coupon_settlement import czeka_zbyt_dlugo
+
+    assert czeka_zbyt_dlugo(_dni_temu(dni)) is oczekiwane
+
+
+def test_data_z_przyszlosci_nie_jest_zalegloscia():
+    """Terminarz bywa przesuwany do przodu — to nie jest zaległość."""
+    from footstats.core.coupon_settlement import czeka_zbyt_dlugo
+
+    jutro = (date.today() + timedelta(days=1)).isoformat()
+    assert czeka_zbyt_dlugo(jutro) is False
+
+
+def test_smiec_zamiast_daty_nie_alarmuje():
+    from footstats.core.coupon_settlement import czeka_zbyt_dlugo
+
+    assert czeka_zbyt_dlugo("nie-data") is False
+
+
+def test_osiagalnosc_zrodel_zostaje_szersza_niz_zaleglosc():
+    """Dwa różne pytania: `data_jeszcze_osiagalna` = czy źródło ODPOWIE (0-7 dni),
+    `czeka_zbyt_dlugo` = czy brak wyniku jest już PODEJRZANY (1-7 dni).
+    Rozjechanie ich w jedną funkcję dało fałszywy alarm z 24.08."""
+    from footstats.core.coupon_settlement import (
+        czeka_zbyt_dlugo, data_jeszcze_osiagalna,
+    )
+
+    dzis = _dni_temu(0)
+    assert data_jeszcze_osiagalna(dzis) is True
+    assert czeka_zbyt_dlugo(dzis) is False

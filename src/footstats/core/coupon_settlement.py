@@ -47,6 +47,31 @@ def data_jeszcze_osiagalna(mdate: str, dzis: date | None = None) -> bool:
     return 0 <= ((dzis or date.today()) - dzien).days <= HORYZONT_ZRODEL_DNI
 
 
+def czeka_zbyt_dlugo(mdate: str, dzis: date | None = None) -> bool:
+    """Czy brak wyniku dla meczu z tej daty jest juz PODEJRZANY.
+
+    Wezsze niz `data_jeszcze_osiagalna` o jedna dobe i to jest caly sens. Tamta
+    odpowiada na pytanie "czy zrodlo w ogole odpowie", ta na "czy powinnismy juz
+    ten wynik miec". Zlanie obu w jedno dalo falszywy alarm 24.08 o 14:35 UTC:
+    `/cron/settle` zwrocil {settled: 0, czekajace_w_zasiegu: 14}, alarm poszedl
+    na Telegram, a wszystkie 14 kuponow bylo na mecze z TEGO DNIA, z ktorych
+    pierwszy zaczynal sie dopiero o 15:30. Rozliczono zero, bo nie bylo czego.
+
+    Powtarzaloby sie CODZIENNIE: draft tworzy kupony o 05:30 UTC, `settle-morning`
+    rusza o 06:00 — zawsze przed pierwszym gwizdkiem.
+
+    Prog to cala doba, nie "dzis po ostatnim meczu", bo kupon trzyma sama DATE
+    (`match_date_first`) bez godziny — mecze brazylijskie z tej puli zaczynaly sie
+    22:30 i 23:00 UTC, wiec nawet przebieg o 21:30 UTC nie moze zakladac, ze dzien
+    jest zamkniety.
+    """
+    try:
+        dzien = datetime.fromisoformat(str(mdate)[:10]).date()
+    except (TypeError, ValueError):
+        return False
+    return 1 <= ((dzis or date.today()) - dzien).days <= HORYZONT_ZRODEL_DNI
+
+
 def rozliczanie_stoi(settled: int, czekajace_w_zasiegu: int) -> str | None:
     """Opis cichej awarii rozliczania albo None, gdy stan wyglada zdrowo.
 
@@ -450,7 +475,9 @@ def settle_active_coupons(
             # Rozdzielamy "czeka, bo jeszcze nie ma wyniku" od "czeka, bo wyniku
             # juz nikt nie odda". Bez tego rozroznienia alarm o stojacym
             # rozliczaniu nie da sie ustawic tak, zeby nie wyl codziennie.
-            if data_jeszcze_osiagalna(mdate):
+            # `czeka_zbyt_dlugo`, nie `data_jeszcze_osiagalna`: mecz z DZISIAJ moze
+            # sie jeszcze nie odbyc, a wtedy brak wyniku jest stanem normalnym.
+            if czeka_zbyt_dlugo(mdate):
                 stats["czekajace_w_zasiegu"] += 1
             if verbose:
                 print(f"  [PARTIAL] Kupon #{coupon_id} — czekam na brakujące wyniki\n")
