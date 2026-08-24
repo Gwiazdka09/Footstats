@@ -46,8 +46,13 @@ class _RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# Endpointy wywołujące zewnętrzne API wynikowe (API-Football/FlashScore) - potrzebują więcej czasu
-_LONG_RUNNING_PATHS = {"/api/coupons/settle", "/api/cron/settle", "/api/cron/draft"}
+# Endpointy wywołujące zewnętrzne API wynikowe (API-Football/FlashScore) - potrzebują więcej czasu.
+# `/api/cron/settle-manual` dołączył 2026-08-24 wraz z D5 (`MANUAL_SETTLE_EXTERNAL`):
+# do tego dnia czytał wyłącznie naszą bazę i mieścił się w 10 s. Po włączeniu flagi
+# pierwsze wywołanie na produkcji wróciło 504 z tego właśnie middleware — a dla
+# Cloud Schedulera (attemptDeadline 180 s) wygląda to jak awaria endpointu i idzie w retry.
+_LONG_RUNNING_PATHS = {"/api/coupons/settle", "/api/cron/settle", "/api/cron/draft",
+                       "/api/cron/settle-manual"}
 _LONG_RUNNING_TIMEOUT = 120.0
 
 
