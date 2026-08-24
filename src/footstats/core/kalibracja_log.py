@@ -62,6 +62,13 @@ def init_kalibracja_log() -> None:
                 model_tip      TEXT,
                 actual_result  TEXT,
                 tip_correct    INTEGER,
+                -- Trafnosc rynkow GOLOWYCH, liczona z tego samego `actual_result`.
+                -- `tip_correct` mierzy wylacznie argmax 1X2, a to wlasnie rynki
+                -- golowe sa dzis glownym wyjsciem selekcji (18 z 20 kuponow z 15.08).
+                -- Bez tych dwoch kolumn `prob_over25` i `prob_btts` byly zapisywane
+                -- i nigdy z niczym nie porownywane.
+                over25_correct INTEGER,
+                btts_correct   INTEGER,
                 zrodlo         TEXT,
                 -- `zrodlo` to FAZA pipeline'u (final/evening), a to jest MODEL:
                 -- 'poisson-dc' albo 'bzzoiro-ml'. Bez tego dziennik miesza oceny
@@ -81,6 +88,11 @@ def init_kalibracja_log() -> None:
             "ALTER TABLE model_log ADD COLUMN IF NOT EXISTS model_source"
             " TEXT NOT NULL DEFAULT ''"
         )
+        # Ten sam powod co wyzej, tylko swiezszy: tabela zyje na produkcji od
+        # tygodni (595 wierszy 24.08), wiec `CREATE IF NOT EXISTS` jej nie ruszy
+        # i bez tych ALTER-ow kolumny istnialyby wylacznie w testach.
+        conn.execute("ALTER TABLE model_log ADD COLUMN IF NOT EXISTS over25_correct INTEGER")
+        conn.execute("ALTER TABLE model_log ADD COLUMN IF NOT EXISTS btts_correct INTEGER")
 
 
 def _argmax_1x2(pw: float, pr: float, pp: float) -> str:
@@ -189,8 +201,42 @@ def pobierz_nierozliczone(dni_wstecz: int = 14) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def oceny_rynkow(model_tip: str, wynik: str | None) -> dict[str, int] | None:
+    """Trafność modelu na TRZECH rynkach naraz, policzona z jednego wyniku.
+
+    `actual_result` trzyma pełny wynik (`"3-1"`), a nie sam znak 1/X/2 — więc
+    Over/Under i BTTS da się z niego rozliczyć dokładnie tak samo jak argmax.
+    Dziennik zapisywał `prob_over25` i `prob_btts` od początku i nigdy ich z
+    niczym nie porównywał; to jest brakująca druga strona.
+
+    Zwraca None, gdy wyniku nie ma albo nie da się z niego uczciwie rozliczyć
+    (dogrywka/karne). Wtedy wiersz zostaje w kolejce zamiast dostać zera —
+    „nie wiemy" to nie to samo co „model się pomylił", i dotyczy to wszystkich
+    trzech rynków naraz, nie tylko 1X2.
+    """
+    if not wynik:
+        return None
+    trafny = oblicz_tip_correct(model_tip, wynik)
+    if trafny is None:
+        return None
+    over25 = oblicz_tip_correct("Over 2.5", wynik)
+    btts = oblicz_tip_correct("BTTS", wynik)
+    if over25 is None or btts is None:
+        # Nie powinno wystapic: skoro 1X2 dalo sie rozliczyc, wynik jest poprawny.
+        # Jesli jednak — wiersz zostaje w kolejce, a my sie o tym dowiadujemy,
+        # zamiast zapisac polowe prawdy i uznac mecz za zmierzony.
+        log.warning("Wynik '%s' rozliczyl 1X2, ale nie rynki golowe"
+                    " (over25=%s, btts=%s)", wynik, over25, btts)
+        return None
+    return {
+        "tip_correct": trafny,
+        "over25_correct": over25,
+        "btts_correct": btts,
+    }
+
+
 def zapisz_wynik(wpis_id: int, wynik: str | None, model_tip: str) -> bool:
-    """Dopisuje wynik i trafność. Zwraca True gdy zapisano.
+    """Dopisuje wynik i trafność na trzech rynkach. Zwraca True gdy zapisano.
 
     `model_tip` jest WYMAGANY — bez niego nie da się policzyć trafności, a cichy
     zapis samego wyniku zostawiłby wiersz, który wygląda na rozliczony i nigdy
@@ -199,15 +245,57 @@ def zapisz_wynik(wpis_id: int, wynik: str | None, model_tip: str) -> bool:
     Wynik nierozliczalny NIE zapisuje trafności: „nie wiemy" to nie to samo co
     „model się pomylił", a zapis zera zafałszowałby kalibrację.
     """
-    if not wynik:
-        return False
-    trafny = oblicz_tip_correct(model_tip, wynik)
-    if trafny is None:
+    oceny = oceny_rynkow(model_tip, wynik)
+    if oceny is None:
         return False
 
     with _connect() as conn:
         conn.execute(
-            "UPDATE model_log SET actual_result = ?, tip_correct = ? WHERE id = ?",
-            (wynik, trafny, wpis_id),
+            "UPDATE model_log SET actual_result = ?, tip_correct = ?,"
+            " over25_correct = ?, btts_correct = ? WHERE id = ?",
+            (wynik, oceny["tip_correct"], oceny["over25_correct"],
+             oceny["btts_correct"], wpis_id),
         )
     return True
+
+
+def uzupelnij_rynki_golowe(dry_run: bool = True) -> dict:
+    """Liczy trafność rynków golowych dla wierszy, które JUŻ mają wynik.
+
+    Zmierzone 24.08: 388 z 595 wierszy ma `actual_result`, wszystkie mają
+    `prob_over25` i `prob_btts`. Ocena rynków golowych nie wymaga ani jednego
+    nowego meczu — wystarczy policzyć to, co leży w tabeli od tygodni. To jest
+    powód, dla którego `BTTS_TWO_WAY` może wyjść z „brakuje danych" od razu,
+    a nie za miesiąc.
+
+    Domyślnie `dry_run=True`: raportuje, ilu wierszy dotknie, i nie zapisuje nic.
+    """
+    init_kalibracja_log()
+
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, model_tip, actual_result FROM model_log"
+            " WHERE actual_result IS NOT NULL"
+            " AND (over25_correct IS NULL OR btts_correct IS NULL)"
+        ).fetchall()
+
+    stat = {"kandydaci": len(rows), "uzupelnione": 0, "pominiete": 0}
+
+    for r in rows:
+        oceny = oceny_rynkow(r["model_tip"] or "", r["actual_result"])
+        if oceny is None:
+            # Dogrywka/karne albo smieciowy zapis — zostawiamy nietkniete.
+            stat["pominiete"] += 1
+            continue
+        stat["uzupelnione"] += 1
+        if dry_run:
+            continue
+        with _connect() as conn:
+            conn.execute(
+                "UPDATE model_log SET over25_correct = ?, btts_correct = ?"
+                " WHERE id = ?",
+                (oceny["over25_correct"], oceny["btts_correct"], r["id"]),
+            )
+
+    log.info("uzupelnij_rynki_golowe(dry_run=%s): %s", dry_run, stat)
+    return stat

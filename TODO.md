@@ -391,7 +391,7 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   **Zostaje:** baseline'y na ścieżkach, którymi jedzie potok — `core/quick_picks.py` 10, `core/daily_phases.py` 9, `daily_agent.py` 8, `api/auth.py` 4, `api/main.py` 4, `core/coupon_settlement.py` 4. Świadomie zostaje 1 w `telegram_notify` (`except FileNotFoundError` przy pierwszym odczycie dedup — brak pliku to stan normalny, log przy każdym przebiegu byłby szumem).
 - [ ] **J2 — mypy sprawdza 1 katalog** (`scrapers/sources/`) ze 172 plików.
 - [ ] **J3 — schematy testowe dublują produkcyjny** (`test_backtest_db`, `test_evening_agent`) — bolało przy migracji 12 i 13. Fix: jedna fikstura z `init_db()`.
-- [ ] **M2 — trzy flagi czekają na walidację:** `SELECTION_MIN_CONF=65`, `LEAGUE_GATING=1`, `BTTS_TWO_WAY`. Wszystkie blokuje ten sam brak danych.
+- [ ] **M2 — trzy flagi czekały na walidację:** `SELECTION_MIN_CONF=65`, `LEAGUE_GATING=1`, `BTTS_TWO_WAY`. **Dla BTTS dane są od 24.08 (D4) i mówią: NIE FLIPOWAĆ.** Live n=385 nie pokazuje uporządkowania — koszyk <45% daje realnie 52,8%, a 50–55% tylko 45,5%. Offline (n=15 460) krzywa była monotoniczna, więc to kolejny rozjazd live vs offline, nie nowy wynik na korzyść flagi. Dwie pozostałe flagi dalej bez danych.
 - [ ] **M3 — cel M1 mierzy rynek, który przegrywa.** „55% win rate" liczone na 1X2, gdzie przy niezgodzie rynek 42,9% vs model 29,8%. Rozważyć ROI zamiast trafności.
 
 ### ⚪ Niskie
@@ -409,7 +409,25 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   dopiero w dniu, w którym ktoś weźmie listę kolumn z konfiguracji albo ze źródła.
   Jeden z testów sprawdza SKUTEK, nie sam wyjątek: po próbie wstrzyknięcia tabela
   `player_stats` ma dalej istnieć.
-- [ ] **D4 — `model_log` śledzi tylko argmax 1X2** → rynków golowych nie zweryfikujemy live. Dopisać `p_over25`/`p_btts` + wynik.
+- [x] ✅ **D4 — ZROBIONE 24.08. Rynki golowe zmierzone po raz pierwszy, n=385.** Premisa wpisu była częściowo błędna: `model_log` **od początku zapisywał** `prob_over25` i `prob_btts` (wszystkie 595 wierszy je ma). Brakowało wyłącznie strony wynikowej — `tip_correct` mierzył sam argmax 1X2. A ponieważ `actual_result` trzyma pełny wynik (`"3-1"`), całość dało się policzyć **wstecznie, bez jednego nowego meczu**.
+
+  Doszły kolumny `over25_correct` i `btts_correct` (idempotentny ALTER — tabela żyje na produkcji), czysta funkcja `oceny_rynkow()` licząca trzy rynki z jednego wyniku, `uzupelnij_rynki_golowe()` z `dry_run` i sekcja w `stan_uczenia.py`. Uzupełnione **385 wierszy, 3 pominięte** (mecze po karnych — nie dostają zer, bo „nie wiemy" to nie „model się pomylił"). 14 testów.
+
+  **WYNIK — Over 2.5 rozróżnia mecze, BTTS nie.**
+
+  | koszyk | Over 2.5 model → realnie | BTTS model → realnie |
+  |---|---|---|
+  | <45% | 40,4% → **40,9%** | 41,7% → **52,8%** |
+  | 45-50% | 47,1% → 53,0% | 48,1% → 50,6% |
+  | 50-55% | 52,2% → 53,6% | 52,5% → **45,5%** |
+  | 55-60% | 57,0% → 62,9% | 57,5% → 63,5% |
+  | 60%+ | 65,1% → **66,7%** | 63,9% → 60,3% |
+
+  Over 2.5: krzywa **monotoniczna**, rozpiętość 25,8 pp, trafia w obu końcach. Pierwszy rynek w tym projekcie z realną ROZDZIELCZOŚCIĄ — a to właśnie ją PLAN Bundesliga wskazał jako wąskie gardło, nie kalibrację. BTTS: brak uporządkowania, koszyk najniższy daje więcej niż środkowy.
+
+  **Koryguje wcześniejszy wniosek z 15.08** o „realnym sygnale BTTS": sam szczyt 60%+ faktycznie daje 60,3%, ale to efekt ogona, nie uporządkowanie. Zobacz M5.
+
+  **Czego to NIE dowodzi:** porównanie jest z WYNIKIEM, nie z rynkiem. Model może być świetnie skalibrowany i dalej przegrywać z kursami — dokładnie to wyszło dla 1X2 na n=15 460. Następny krok to zestawienie `prob_over25` z kursem zamykającym.
 - [ ] **F4 — PWA nie działa, ale NIE dlatego, że jej nie ma.** Backend serwuje OBA:
   `/manifest.json` (`main.py:455`) i `/sw.js` z pełnym cyklem install/activate/fetch.
   Problem jest węższy: **front ich nie podłącza**. W `gui/index.html` nie ma

@@ -172,6 +172,68 @@ def raport_dziennika(conn) -> dict:
     return {w["model_source"]: w for w in wiersze}
 
 
+def raport_rynkow_golowych(conn) -> None:
+    """Czy prawdopodobieństwo modelu ROZRÓŻNIA mecze — osobno dla Over 2.5 i BTTS.
+
+    D4, 2026-08-24. `model_log` od początku zapisywał `prob_over25` i `prob_btts`,
+    ale mierzył wyłącznie `tip_correct`, czyli argmax 1X2. Rynki golowe — dziś
+    główne wyjście selekcji — nie były sprawdzane z niczym. Wynik leżał w tej samej
+    tabeli jako pełny rezultat (`"3-1"`), więc dało się je ocenić wstecznie.
+
+    RAPORT POKAZUJE KOSZYKI, NIE ŚREDNIĄ, i to jest cały sens. Model, który zawsze
+    mówi 52% przy realnych 52%, jest idealnie skalibrowany i zupełnie bezużyteczny.
+    Dopiero rosnąca krzywa przez koszyki znaczy, że liczba cokolwiek rozróżnia.
+
+    UWAGA PRZY CZYTANIU: to porównanie z WYNIKIEM, nie z rynkiem. Model może być
+    świetnie skalibrowany i dalej przegrywać z kursami — tak właśnie wyszło dla
+    1X2 (pomiar 14.08, n=15 460).
+    """
+    # Zapytanie jest CELOWO rozpisane dwa razy zamiast sklejane z nazw kolumn.
+    # Wersja z f-stringiem czytala sie krocej, ale bandit slusznie ja blokowal
+    # (B608) — nazwa kolumny wstawiana w SQL to wzorzec, ktory raz uzyty zaczyna
+    # wedrowac po projekcie i konczy na wartosci z zewnatrz.
+    wiersze = _licz(conn, """
+        SELECT 'Over 2.5' AS rynek,
+               CASE WHEN prob_over25 < 45 THEN '<45%'
+                    WHEN prob_over25 < 50 THEN '45-50%'
+                    WHEN prob_over25 < 55 THEN '50-55%'
+                    WHEN prob_over25 < 60 THEN '55-60%'
+                    ELSE '60%+' END AS koszyk,
+               MIN(prob_over25) AS od, COUNT(*) AS n,
+               AVG(prob_over25) AS model,
+               100.0 * AVG(over25_correct) AS realnie
+        FROM model_log WHERE over25_correct IS NOT NULL
+        GROUP BY 1, 2
+        UNION ALL
+        SELECT 'BTTS',
+               CASE WHEN prob_btts < 45 THEN '<45%'
+                    WHEN prob_btts < 50 THEN '45-50%'
+                    WHEN prob_btts < 55 THEN '50-55%'
+                    WHEN prob_btts < 60 THEN '55-60%'
+                    ELSE '60%+' END,
+               MIN(prob_btts), COUNT(*),
+               AVG(prob_btts),
+               100.0 * AVG(btts_correct)
+        FROM model_log WHERE btts_correct IS NOT NULL
+        GROUP BY 1, 2
+        ORDER BY 1 DESC, 3
+    """)
+
+    for nazwa in ("Over 2.5", "BTTS"):
+        koszyki = [w for w in wiersze if w["rynek"] == nazwa]
+        print(f"\n=== {nazwa}: czy model rozróżnia mecze? (model_log) ===")
+        if not koszyki:
+            print("  BRAK DANYCH — uruchom `uzupelnij_rynki_golowe(dry_run=False)`.")
+            continue
+        for w in koszyki:
+            print(f"  {str(w['koszyk']):8} n={w['n']:4}"
+                  f"  model={float(w['model']):.1f}%  realnie={float(w['realnie']):.1f}%")
+        realne = [float(w["realnie"]) for w in koszyki]
+        rosnie = all(a <= b for a, b in zip(realne, realne[1:]))
+        werdykt = "ROSNIE — liczba rozroznia" if rosnie else "NIE rosnie — brak uporzadkowania"
+        print(f"  → krzywa {werdykt} (rozpietosc {max(realne) - min(realne):.1f} pp)")
+
+
 def raport_gotowosci(pred: dict, dziennik: dict | None = None) -> None:
     """Ile brakuje do werdyktu `porownaj_modele`.
 
@@ -199,6 +261,7 @@ def main() -> None:
         raport_lekcji(conn)
         raport_wzorcow(conn)
         dziennik = raport_dziennika(conn)
+        raport_rynkow_golowych(conn)
         raport_gotowosci(pred, dziennik)
 
 
