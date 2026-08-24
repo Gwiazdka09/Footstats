@@ -213,7 +213,7 @@ Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakłada
 
   **Mail NIE blokuje publikacji.** W obu dokumentach stoi działający `jakubgwiazdowski12@gmail.com` (dane operatora, reklamacje §10, żądania z RODO) — art. 5 wymaga „adresu elektronicznego" i ten warunek jest spełniony. Decyzja z 24.08 (skorygowana): mail **z własnej domeny**, patrz L9. Podmiana to jeden przebieg przez oba pliki, pilnuje jej `test_kanal_kontaktowy_jest_ten_sam_w_obu_dokumentach`, żeby reklamacje i RODO nie rozjechały się na dwa różne adresy.
 
-- [ ] **L9 — własna domena + mail z domeny.** Decyzja z 24.08. **Nie zdejmuje wymogu adresu z L1** — domena i adres korespondencyjny to dwie różne rzeczy, skrytka dalej potrzebna.
+- [ ] **L10 — własna domena + mail z domeny.** Decyzja z 24.08. **Nie zdejmuje wymogu adresu z L1** — domena i adres korespondencyjny to dwie różne rzeczy, skrytka dalej potrzebna.
 
   **Pułapka cenowa, ważniejsza niż cena startowa:** rejestracja .pl bywa za 5-10 zł, a odnowienie od 51 do 295 zł/rok. NASK bierze 40 zł netto hurtowo, więc uczciwe detaliczne to ~59-99 zł. **Sprawdzać cenę ODNOWIENIA, nie pierwszego roku.** Skrajny przykład z rynku: rejestracja 6,15 zł, odnowienie 246 zł.
 
@@ -376,7 +376,11 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
 - [x] **D5 — ZROBIONE 24.08.** `MANUAL_SETTLE_EXTERNAL=1` otwiera `_find_leg_result` dla nóg dziennika bez własnej predykcji. Nasze dane zachowują pierwszeństwo (darmowe, z tego samego przebiegu co typ), all-legs-or-nothing bez zmian, cache źródeł dzielony ponad pętlą kuponów, licznik `z_zewnatrz` w odpowiedzi endpointu. Domyślnie OFF — kosztuje limit planu. Regresji trybu domyślnego pilnuje `test_settle_manual_coupons.py` (fikstura wysadza test przy wywołaniu `_find_leg_result`). 15 testów.
 - [ ] **D3 — 231 predykcji z `odds_verified=0`** (kurs od Groqa) → ROI/CLV z historii nic nie znaczą. Decyzja: backfill kursów czy trwałe wykluczenie z raportów.
 - [ ] **I2 — licznik tokenów myli się 2×.** Heurystyka 1,4 znaku/token vs realne 2,86 (1338 vs **655** tokenów na szkielecie) → prompt bywa przycinany bez potrzeby. Fix: `tiktoken` — **wymaga `pip install`, czyli zgody**.
-- [ ] **J1 — połowa `except` milczy.** 271 z 546 bez logu i bez `raise`. Strażnik w testach pilnuje SZEROKOŚCI (`except Exception`), nie milczenia. Fix: drugie kryterium w tym samym strażniku.
+- [ ] **J1 — połowa `except` milczy. STRAŻNIK ZROBIONY 24.08, zostało schodzenie w dół.** Zmierzone analizą AST: **255 z 555** handlerów bez logu, bez `raise` i bez odwołania do złapanego wyjątku. `tests/test_ciche_except_audit.py` zamraża ten dług baselinem per plik, wymaga **zera w nowych plikach** i twardego zera w funkcjach alarmowych.
+
+  **Znalezione przy okazji, najostrzejsze w całym audycie:** `check_and_alert_agent_down` i `check_and_alert_accuracy` kończyły się `except (...): pass` + `return False`, a `False` znaczy „nie wysłano alertu", czyli w praktyce „jest dobrze". Padnięte zapytanie do bazy dawało odpowiedź „zdrowo" **bez jednej linijki w logach** — czujnik dymu meldował spokój, paląc się. Naprawione, `utils/telegram_notify.py` zszedł z 5 do 1.
+
+  **Zostaje:** baseline'y na ścieżkach, którymi jedzie potok — `core/quick_picks.py` 10, `core/daily_phases.py` 9, `daily_agent.py` 8, `api/auth.py` 4, `api/main.py` 4, `core/coupon_settlement.py` 4. Świadomie zostaje 1 w `telegram_notify` (`except FileNotFoundError` przy pierwszym odczycie dedup — brak pliku to stan normalny, log przy każdym przebiegu byłby szumem).
 - [ ] **J2 — mypy sprawdza 1 katalog** (`scrapers/sources/`) ze 172 plików.
 - [ ] **J3 — schematy testowe dublują produkcyjny** (`test_backtest_db`, `test_evening_agent`) — bolało przy migracji 12 i 13. Fix: jedna fikstura z `init_db()`.
 - [ ] **M2 — trzy flagi czekają na walidację:** `SELECTION_MIN_CONF=65`, `LEAGUE_GATING=1`, `BTTS_TWO_WAY`. Wszystkie blokuje ten sam brak danych.
