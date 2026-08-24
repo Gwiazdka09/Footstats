@@ -25,8 +25,8 @@ def _get_pool() -> "psycopg2.pool.ThreadedConnectionPool":
             except ImportError:
                 pass
         if not url:
-            raise RuntimeError("DATABASE_URL env var not set — add Neon.tech connection string to Cloud Run")
-        # Keepalives zapobiegają zrywaniu idle connections przez Neon/firewall.
+            raise RuntimeError("DATABASE_URL env var not set — dodaj connection string Supabase do Cloud Run")
+        # Keepalives zapobiegają zrywaniu idle connections przez pooler Supabase/firewall.
         _pool = _pg_pool.ThreadedConnectionPool(
             minconn=1, maxconn=10, dsn=url,
             keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,

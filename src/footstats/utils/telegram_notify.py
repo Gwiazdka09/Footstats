@@ -53,12 +53,27 @@ def _kupon_hash(dane: dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
+def _wczytaj_dedup() -> dict:
+    """Historia wysyłek. Brak pliku to stan normalny (pierwszy przebieg) — cisza.
+
+    Uszkodzony plik to co innego: rozjeżdża się wtedy CAŁA deduplikacja i ten sam
+    kupon może pójść drugi raz. Poprzednio oba przypadki wpadały do jednego
+    `except (FileNotFoundError, json.JSONDecodeError)` bez logu, więc uszkodzenie
+    było nieodróżnialne od pierwszego uruchomienia.
+    """
+    try:
+        return json.loads(_DEDUP_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
+        log.warning("Telegram: plik dedup uszkodzony (%s) — zaczynam od zera,"
+                    " możliwa powtórna wysyłka: %s", _DEDUP_FILE, e)
+        return {}
+
+
 def _already_sent_recently(h: str) -> bool:
     """Zwraca True jeśli hash wysłany w ostatnich _DEDUP_WINDOW_DAYS dniach."""
-    try:
-        data = json.loads(_DEDUP_FILE.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
-        data = {}
+    data = _wczytaj_dedup()
     today = datetime.now().date()
     for offset in range(_DEDUP_WINDOW_DAYS):
         dzien = (today - timedelta(days=offset)).strftime("%Y-%m-%d")
@@ -69,10 +84,7 @@ def _already_sent_recently(h: str) -> bool:
 
 def _mark_sent(h: str) -> None:
     dzis = datetime.now().strftime("%Y-%m-%d")
-    try:
-        data = json.loads(_DEDUP_FILE.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
-        data = {}
+    data = _wczytaj_dedup()
     data.setdefault(dzis, [])
     if h not in data[dzis]:
         data[dzis].append(h)
@@ -161,7 +173,13 @@ def send_message_to_user(user_id: int, text: str) -> bool:
                 "SELECT telegram_chat_id FROM users WHERE id = ?", (user_id,)
             ).fetchone()
         chat_id = row["telegram_chat_id"] if row else None
-    except Exception:  # noqa: BLE001 — powiadomienie nie może wywalić pipeline
+    # Wężej niż `except Exception` i Z LOGIEM. Poprzednia wersja zwracała `False`
+    # bez słowa, więc nieudane powiadomienie wyglądało tak samo jak użytkownik bez
+    # podpiętego Telegrama — a błąd w NASZYM kodzie (literówka, zły typ) znikał
+    # razem z nim. Powiadomienie nadal nie może wywalić potoku, ale ma zostawić ślad.
+    except (OSError, RuntimeError, KeyError, TypeError, ValueError) as e:
+        log.warning("Telegram: nie udało się pobrać chat_id użytkownika %s: %s",
+                    user_id, e)
         return False
     if not chat_id:
         return False
@@ -351,8 +369,12 @@ def check_and_alert_agent_down() -> bool:
             age = "brak danych" if last is None else f"{int((datetime.now()-last).total_seconds()/3600)}h temu"
             send_alert("Agent DOWN", f"Ostatnia predykcja: {age}. Sprawdź logi!")
             return True
-    except (OSError, ValueError, RuntimeError):
-        pass
+    except (OSError, ValueError, RuntimeError) as e:
+        # `return False` znaczy „nie wysłano alertu", czyli w praktyce „jest dobrze".
+        # Bez tego logu awaria SAMEGO CZUJNIKA wyglądała identycznie jak zdrowy stan
+        # i nie zostawiała ani jednej linijki. Alertu tu nie wysyłamy świadomie:
+        # skoro baza nie odpowiada, nie wiemy, czy agent faktycznie stoi.
+        log.warning("Sprawdzenie 'agent down' nie doszło do skutku: %s", e)
     return False
 
 
@@ -375,6 +397,7 @@ def check_and_alert_accuracy(threshold_pct: float = 35.0, window: int = 20) -> b
                     f"Rolling {window}: {acc:.1f}% < {threshold_pct}% progu. Sprawdź kalibrację!",
                 )
                 return True
-    except (OSError, ValueError, RuntimeError):
-        pass
+    except (OSError, ValueError, RuntimeError) as e:
+        # Jak wyżej: cisza tutaj znaczyłaby „trafność w normie", choć nikt jej nie policzył.
+        log.warning("Sprawdzenie trafności nie doszło do skutku: %s", e)
     return False

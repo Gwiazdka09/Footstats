@@ -87,7 +87,10 @@ BASELINE: dict[str, int] = {
     # utils/logging.py i utils/safe_http.py zniknely z baseline 2026-07-30:
     # jedyne szerokie lapania byly w `bezpieczna_funkcja` i
     # `BezpiecznePobieranie.wykonaj`, a obie usunieto jako martwy kod.
-    "utils/telegram_notify.py": 1,
+    # 1 -> 0 (2026-08-24, J1): `send_message_to_user` lapal `except Exception`
+    # i zwracal False bez slowa, wiec nieudane powiadomienie wygladalo tak samo
+    # jak uzytkownik bez podpietego Telegrama. Zawezone + log.
+    "utils/telegram_notify.py": 0,
     "weekly_report.py": 4,
 }
 
