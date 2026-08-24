@@ -12,6 +12,7 @@ import footstats.config as cfg
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from footstats.api.auth import require_auth
+from footstats.core.draft_health import PROG_STALE_DNI, ocena_swiezosci
 from footstats.utils.db import connect as _connect
 
 router = APIRouter(prefix="/api", tags=["status"])
@@ -128,6 +129,15 @@ def pipeline_health(
 ) -> dict:
     """Sprawdza, czy pipeline nadal produkuje. Alarm na Telegram tylko gdy ŹLE.
 
+    Trzy wymiary, wszystkie po SKUTKU (co jest w bazie), nie po procesie:
+      1. wiek najnowszej predykcji — czy analiza i typowanie żyją;
+      2. zaległości w rozliczeniach — czy pobieranie wyników żyje;
+      3. wiek najnowszego kuponu System — czy draft żyje.
+
+    Trzeci doszedł 24.08 i to nie jest kosmetyka: bez niego monitor przespał
+    OSIEM DNI bez kuponów (awaria I7), bo predykcje płynęły i dwa pierwsze
+    warunki były spełnione.
+
     Cisza przy zdrowym stanie jest celowa — alarm wysyłany codziennie
     "wszystko gra" przestaje być czytany po tygodniu.
     """
@@ -136,6 +146,7 @@ def pipeline_health(
     powody: list[str] = []
     wiek_h: float | None = None
     nierozliczone = 0
+    wiek_kuponu_dni: int | None = None
 
     try:
         with _connect() as conn:
@@ -175,6 +186,33 @@ def pipeline_health(
                     f"{nierozliczone} predykcji bez rozliczenia starszych niż 2 dni"
                     f" (próg {max_zaleglosci}) — pobieranie wyników mogło paść"
                 )
+
+            # TRZECI WYMIAR, dodany 24.08 po awarii I7.
+            #
+            # 15-23.08 kupony nie powstawały przez OSIEM DNI, a ten monitor świecił
+            # zielono. Sprawdzał wyłącznie predykcje i zaległości — a predykcje
+            # płynęły, bo pisze je job. Kupony robi `/api/cron/draft` na serwisie API,
+            # który padał na limicie 512 MiB i oddawał 503.
+            #
+            # Sygnał `stale_days` ISTNIAŁ, ale mieszkał WEWNĄTRZ draftu, czyli wewnątrz
+            # tego, co było zepsute. Endpoint, który umiera, nie zgłosi, że umarł —
+            # dokładnie ten sam błąd architektoniczny, przed którym ostrzega komentarz
+            # na górze tego pliku, tylko o poziom wyżej. Dlatego pytamy o kupony SAMI
+            # i znów po SKUTKU: „czy w bazie przybywa kuponów System".
+            row3 = conn.execute(
+                "SELECT MAX(cu.created_at) AS ostatni_kupon FROM coupons cu"
+                " JOIN users u ON u.id = cu.user_id WHERE u.username = 'System'"
+            ).fetchone()
+            ostatni_kupon = row3["ostatni_kupon"] if row3 else None
+            ocena = ocena_swiezosci(ostatni_kupon)
+            wiek_kuponu_dni = ocena["stale_days"]
+            if ocena["stale"]:
+                ile = ("nigdy" if wiek_kuponu_dni is None
+                       else f"od {wiek_kuponu_dni} dni")
+                powody.append(
+                    f"brak nowego kuponu System {ile} (próg {PROG_STALE_DNI} dni)"
+                    " — draft mógł paść, choć predykcje dalej przybywają"
+                )
     except Exception as e:  # noqa: BLE001 — monitor milczący przy własnej awarii
         # jest gorszy niż jego brak: sygnalizujemy problem zamiast zwracać 500,
         # bo 500 uruchamia retry Schedulera i zapętla alarm.
@@ -190,6 +228,9 @@ def pipeline_health(
         "ok": ok,
         "wiek_predykcji_h": wiek_h,
         "nierozliczone": nierozliczone,
+        # Liczba w odpowiedzi, nie tylko w alarmie — inaczej nie da się śledzić
+        # trendu ani sprawdzić stanu bez czekania, aż coś się zepsuje.
+        "wiek_kuponu_dni": wiek_kuponu_dni,
         "powody": powody,
         "alarm_wyslany": alarm_wyslany,
     }

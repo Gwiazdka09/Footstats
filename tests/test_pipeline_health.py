@@ -9,12 +9,15 @@ Job, który się nie uruchamia, nie wyśle alarmu o tym, że się nie uruchomił
 Dlatego ten endpoint stoi na serwisie API (osobny kontener, był zdrowy przez
 całą awarię) i pyta o SKUTEK, nie o proces: „czy w bazie przybywa predykcji".
 
-Sprawdza dwie rzeczy, obie po skutku:
+Sprawdza trzy rzeczy, wszystkie po skutku:
   * WIEK NAJNOWSZEJ PREDYKCJI — jeśli pipeline stoi, nic nie przybywa,
     niezależnie od tego, co jest przyczyną (obraz, klucz, limit, sieć);
   * ZALEGŁOŚCI W ROZLICZENIACH — predykcje bez wyniku starsze niż okno
     `update_pending` (2 dni) nigdy same się nie rozliczą, więc rosnąca sterta
-    znaczy, że pobieranie wyników padło.
+    znaczy, że pobieranie wyników padło;
+  * WIEK NAJNOWSZEGO KUPONU System — dodane 24.08 po awarii I7, w której
+    kuponów nie było przez OSIEM DNI, a monitor świecił zielono, bo predykcje
+    płynęły dalej. Szczegóły przy testach na dole pliku.
 
 Alarm ma być CICHY, gdy jest dobrze — inaczej po tygodniu nikt go nie czyta.
 """
@@ -48,11 +51,13 @@ class _Kursor:
 
 
 class _Conn:
-    """Atrapa bazy — oddaje wiek najnowszej predykcji i liczbę zaległości."""
+    """Atrapa bazy — wiek najnowszej predykcji, zaległości i wiek kuponu System."""
 
-    def __init__(self, wiek_h: float | None = 2.0, zaleglosci: int = 0):
+    def __init__(self, wiek_h: float | None = 2.0, zaleglosci: int = 0,
+                 wiek_kuponu_dni: int | None = 0):
         self.wiek_h = wiek_h
         self.zaleglosci = zaleglosci
+        self.wiek_kuponu_dni = wiek_kuponu_dni
         self.blad: Exception | None = None
         self.zapytania: list[str] = []
 
@@ -61,6 +66,14 @@ class _Conn:
             raise self.blad
         plaski = " ".join(sql.split())
         self.zapytania.append(plaski)
+        # Kolejność WAŻNA: zapytanie o kupony też zawiera MAX(...created_at),
+        # więc musi być rozpoznane PRZED gałęzią predykcji.
+        if "coupons" in plaski:
+            if self.wiek_kuponu_dni is None:
+                return _Kursor({"ostatni_kupon": None})
+            return _Kursor({
+                "ostatni_kupon": datetime.now() - timedelta(days=self.wiek_kuponu_dni)
+            })
         if "MAX(created_at)" in plaski or "max_created" in plaski:
             if self.wiek_h is None:
                 return _Kursor({"ostatnia": None})
@@ -322,3 +335,89 @@ def test_awaria_rozliczania_to_500_a_nie_cisza(srodowisko, monkeypatch):
     r = client.post("/api/cron/kalibracja-rozlicz", headers={"X-Cron-Secret": SEKRET})
 
     assert r.status_code == 500
+
+
+# ── TRZECI WYMIAR: czy kupony w ogóle powstają (dodane 24.08 po awarii I7) ──
+#
+# 15–23.08 kupony nie powstawały przez OSIEM DNI, a ten monitor świecił zielono
+# przez cały ten czas. Powód: sprawdzał WYŁĄCZNIE wiek predykcji i zaległości
+# w rozliczeniach. Predykcje płynęły (pisze je job), więc pierwszy warunek był
+# spełniony — a kupony robi `/api/cron/draft` na serwisie API, który padał na
+# przekroczeniu pamięci 512 MiB i oddawał 503.
+#
+# Sygnał `stale_days` ISTNIAŁ, ale mieszkał WEWNĄTRZ draftu — czyli wewnątrz tego,
+# co było zepsute. Endpoint, który umiera, nie zgłosi, że umarł. Dokładnie ten sam
+# błąd architektoniczny, przed którym ostrzega nagłówek tego pliku ("monitor nie
+# może żyć w tym, co monitoruje") — tylko o jeden poziom wyżej.
+#
+# Dlatego monitor pyta o kupony SAM, niezależnie od draftu, i znów po SKUTKU:
+# „czy w bazie przybywa kuponów System".
+
+def test_zdrowo_gdy_kupony_powstaja(srodowisko):
+    srodowisko["conn"].wiek_kuponu_dni = 0
+
+    r = _sprawdz()
+
+    assert r.json()["ok"] is True, r.json()
+    assert srodowisko["alarmy"] == []
+
+
+def test_alarm_gdy_kupony_nie_powstaja_od_dni(srodowisko):
+    """Sedno I7: przez osiem dni nikt się nie dowiedział."""
+    srodowisko["conn"].wiek_kuponu_dni = 8
+
+    r = _sprawdz()
+    dane = r.json()
+
+    assert dane["ok"] is False, dane
+    assert any("kupon" in p.lower() for p in dane["powody"]), dane["powody"]
+    assert srodowisko["alarmy"], "alarm o braku kuponow nie poszedl"
+
+
+def test_alarm_gdy_kuponow_nie_bylo_nigdy(srodowisko):
+    """Świeża baza albo skasowana tabela — brak wiersza to nie jest 'zdrowo'."""
+    srodowisko["conn"].wiek_kuponu_dni = None
+
+    dane = _sprawdz().json()
+
+    assert dane["ok"] is False
+    assert any("kupon" in p.lower() for p in dane["powody"]), dane["powody"]
+
+
+def test_swiezy_kupon_nie_wywoluje_alarmu_mimo_progu(srodowisko):
+    """Próg to 3 dni — dwa dni bez kuponu bywają normalne (przerwa w rozgrywkach)."""
+    srodowisko["conn"].wiek_kuponu_dni = 2
+
+    dane = _sprawdz().json()
+
+    assert dane["ok"] is True, dane
+
+
+def test_monitor_pyta_o_kupony_NIEZALEZNIE_od_draftu(srodowisko):
+    """Gdyby monitor czytał wynik draftu zamiast bazy, milczałby dokładnie wtedy,
+    gdy draft padł — a to była cała przyczyna, dla której I7 przeżyło tydzień."""
+    srodowisko["conn"].wiek_kuponu_dni = 8
+    _sprawdz()
+
+    zapytania = " ".join(srodowisko["conn"].zapytania).lower()
+
+    assert "coupons" in zapytania, "monitor nie odpytal tabeli kuponow"
+
+
+def test_wiek_kuponu_w_odpowiedzi(srodowisko):
+    """Liczba w odpowiedzi, nie tylko w alarmie — inaczej nie da się śledzić trendu."""
+    srodowisko["conn"].wiek_kuponu_dni = 5
+
+    dane = _sprawdz().json()
+
+    assert dane.get("wiek_kuponu_dni") == 5, dane
+
+
+def test_awaria_bazy_przy_kuponach_nie_ucisza_monitora(srodowisko):
+    """Monitor milczący przy własnej awarii jest gorszy niż jego brak."""
+    srodowisko["conn"].blad = RuntimeError("baza padla")
+
+    dane = _sprawdz().json()
+
+    assert dane["ok"] is False
+    assert dane["powody"]
