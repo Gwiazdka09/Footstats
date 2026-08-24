@@ -268,6 +268,7 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - ⏳ **Decyzja usera:** wpiąć do Schedulera (dry-run pokazuje, że bezpieczne) czy zostawić trigger ręczny, skoro dziś i tak nie ma czego rozliczać.
   - **Zmierzone ponownie 24.08 na sześciu nowych kuponach dziennika (#164-169, seria 4):** predykcji brakuje dla **11 z 12 nóg**. Ma ją tylko Brøndby–Silkeborg, a `settle_manual_coupons` jest all-legs-or-nothing, więc rozliczyłby **zero z sześciu**. Wniosek z 17.08 potwierdzony na większej próbce i już nie na jednym kuponie: blokadą jest D5, nie brak zadania w Schedulerze.
   - **Skąd ta luka:** kupony powstają z `quick_picks`/Bzzoiro (30 kandydatów dziennie), a `predictions` zapisuje wyłącznie ścieżka `top3`/`kupon_d` — 24.08 dała **2 wiersze**, 23.08 trzynaście, 20-22.08 zero (postój Groqa). Dziennik i predykcje patrzą więc na dwa różne, ledwo zachodzące na siebie zbiory meczów.
+  - ✅ **Odblokowane 24.08 przez D5.** Powód, dla którego wpięcie „nic by nie dało", przestał obowiązywać — przy `MANUAL_SETTLE_EXTERNAL=1` nogi bez naszej predykcji rozlicza `_find_leg_result`. Zostaje sama decyzja o wpięciu zadania.
 
 ### 🔴 ZNALEZIONE PRZY OKAZJI — rozliczanie stało 8 dni
 
@@ -284,12 +285,28 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
 2. **23.08:** konto **znów działa** (`Free plans do not have access to this date`),
    ale kupony zestarzały się w międzyczasie poza horyzont obu źródeł.
 
+**TRZECIA, GŁĘBSZA PRZYCZYNA — znaleziona 24.08.** Powyższe tłumaczy, czemu jedno
+źródło padło. Nie tłumaczy, czemu to wystarczyło, żeby zatrzymać wszystko.
+
+`FOOTBALL_API_KEY` był w Secret Managerze i na OBU jobach, ale **nie na serwisie
+`footstats-api`** — a to serwis obsługuje `/cron/settle` (schedulery
+`settle-morning`/`-evening` biją pod jego URL). `settle_active_coupons` czytało
+`os.getenv("FOOTBALL_API_KEY")`, dostawało pustkę i `_get_matches_fdb` kończyło się
+`return []` **bez jednego zapytania**. Czyli football-data.org — jedyne źródło
+z pełną historią, bo API-Football na planie darmowym sięga 1 dnia, a FlashScore ~7 —
+nigdy nie brało udziału w codziennym rozliczaniu. Warstwa zapasowa leżała obok,
+gotowa, nieużyta.
+
+Ten sam kształt co incydent logowania 27.07: brakujący sekret na Cloud Run, awaria
+wyglądająca na coś zupełnie innego. Naprawione — klucz w re-asercji `cd.yml`
++ strażnik `test_cd_serwis_sekrety.py`, który rośnie razem z kodem.
+
 - [ ] **D7 — 21 kuponów z 14-15.08 jest nie do odzyskania** z darmowych źródeł
   (duńska, japońska, chińska liga + angielskie niższe — poza pokryciem football-data,
   poza oknem AF, poza 7 dniami FlashScore). Zejdą przez VOID 24-25.08. Do decyzji:
   pogodzić się ze stratą 20 punktów paper-tradingu czy szukać źródła z historią.
 
-- [ ] **D5 — kupony na mecze BEZ naszej predykcji nie rozliczą się nigdy.** Wyszło przy D2. `settle_manual_coupons` czyta tylko `predictions`, a `coupon_settlement` dla kuponów AI ma osobną ścieżkę z czterema źródłami wyników (`_find_leg_result`). Dziennik użytkownika nie korzysta z żadnego z nich. Do rozważenia: dopuścić `_find_leg_result` również dla kuponów `manual` (kosztuje zapytania do API-Football, więc pod flagą). **24.08 to przestało być hipotetyczne** — w dzienniku leży sześć kuponów (#164-169), z których żaden nie rozliczy się automatycznie, dopóki ta ścieżka nie zostanie otwarta. Do tego czasu: ręczne oznaczenie w GUI.
+- [x] **D5 — ZROBIONE 24.08.** `MANUAL_SETTLE_EXTERNAL=1` otwiera `_find_leg_result` dla nóg dziennika bez własnej predykcji. Nasze dane zachowują pierwszeństwo (darmowe, z tego samego przebiegu co typ), all-legs-or-nothing bez zmian, cache źródeł dzielony ponad pętlą kuponów, licznik `z_zewnatrz` w odpowiedzi endpointu. Domyślnie OFF — kosztuje limit planu. Regresji trybu domyślnego pilnuje `test_settle_manual_coupons.py` (fikstura wysadza test przy wywołaniu `_find_leg_result`). 15 testów.
 - [ ] **D3 — 231 predykcji z `odds_verified=0`** (kurs od Groqa) → ROI/CLV z historii nic nie znaczą. Decyzja: backfill kursów czy trwałe wykluczenie z raportów.
 - [ ] **I2 — licznik tokenów myli się 2×.** Heurystyka 1,4 znaku/token vs realne 2,86 (1338 vs **655** tokenów na szkielecie) → prompt bywa przycinany bez potrzeby. Fix: `tiktoken` — **wymaga `pip install`, czyli zgody**.
 - [ ] **J1 — połowa `except` milczy.** 271 z 546 bez logu i bez `raise`. Strażnik w testach pilnuje SZEROKOŚCI (`except Exception`), nie milczenia. Fix: drugie kryterium w tym samym strażniku.
