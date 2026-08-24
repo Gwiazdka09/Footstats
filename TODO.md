@@ -115,16 +115,28 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
-## 🗄️ MONETYZACJA / LAUNCH (ARCHIWUM — pivot 2026-07-06, zero monetyzacji)
+## 🌍 WYPUSZCZENIE BEZ FIRMY (kierunek 2026-08-24)
 
-> Odłożone bezterminowo. Focus = predykcja (`docs/PREDICTION_ROADMAP.md`). Zostawione jako referencja gdyby wróciło.
+Darmowe udostępnienie **nie wymaga rejestracji działalności** — działalność gospodarcza jest z definicji *zarobkowa* (Prawo przedsiębiorców, art. 3). Ścieżka na drobne pieniądze bez JDG to działalność nierejestrowana (art. 5, próg 75% minimalnego wynagrodzenia, brak działalności przez 60 mies.).
 
-- [ ] **D8 — prawnik (ToS bukmacherów) + JDG (CEIDG)** — wstrzymane (koszt/ryzyko). Wrócić po walidacji.
-- [ ] **Resend** FROM `onboarding@resend.dev` (test) → zweryfikowana domena przed prod. (Reset hasła + Resend wpięte ✅.) Wymaga env `FRONTEND_URL`.
-- [ ] **Płatności** (Lemon Squeezy/Paddle, po JDG): cennik+auto-renewal, webhooks, email potwierdzenie/faktura, upgrade/proration.
-- [ ] **Faktura** (po płatnościach). Custom domain (opcjonalne).
+**Realne ryzyko to nie brak firmy, tylko reklama zakładów wzajemnych** (ustawa o grach hazardowych, art. 29) — dotyczy osoby fizycznej tak samo jak spółki. Serwis predykcyjny tego nie narusza (nie przyjmujemy zakładów). Stan na 24.08: **zero linków afiliacyjnych**, nazwy bukmacherów tylko jako lista wyboru w dzienniku („gdzie postawiłeś") = pole danych, nie promocja. **Nie dodawać afiliacji ani zachęt do gry.**
 
----
+RODO obowiązuje niezależnie od formy prawnej — mamy konta, więc jesteśmy administratorem danych.
+
+### Jeśli subskrypcja (rozważane 2026-08-24)
+
+Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakładać firmy**. Warunki: brak działalności przez ostatnie 60 miesięcy oraz limit przychodu, który **od 2026 liczy się KWARTALNIE** (225% minimalnego wynagrodzenia, ok. 10 813,50 zł brutto — kwotę sprawdzać na bieżąco, zmienia się co rok). Liczy się wpłata brutto klienta, przed prowizją operatora. Do tego ewidencja wpłat i PIT-36 raz w roku.
+
+**Merchant of Record vs własna bramka.** Lemon Squeezy / Paddle / naffy sprzedają formalnie we własnym imieniu i biorą na siebie VAT klientów z UE — jedna zbiorcza wypłata, zero rejestracji zagranicznych. Stripe daje pełną kontrolę, ale sprzedaż B2C do UE wymaga VAT-OSS, a sama prowizja Stripe (spółka irlandzka) to import usług → VAT-R z VAT-UE i miesięczne VAT-9M. Przy jednoosobowym projekcie MoR jest wyraźnie tańszy w papierologii.
+
+- [ ] **L5 — DECYZJA: co dokładnie sprzedajemy.** Waży więcej niż forma prawna. Model **nie bije rynku** — zmierzone: 14.08 n=15 460, 52 podzbiory, **zero przeżyło holdout**; 24.08 wszystkie 6 kuponów serii 4 ma EV ujemne liczone prawdopodobieństwami NASZEGO modelu (−21,5% łącznie). Sprzedawanie „nasze typy wygrywają” byłoby sprzedażą czegoś, co według własnych pomiarów przegrywa. Kierunek z 21.07 (dziennik kuponów + śledzenie postępu) **da się sprzedawać uczciwie**: narzędzie do mierzenia SIEBIE, nie obietnica wygranych. Przy okazji bezpieczniejsze wobec art. 29.
+- [ ] **L6 — pytanie do prawnika, nie do księgowej.** Płatny serwis z typami stoi bliżej zakazu reklamy i promocji zakładów wzajemnych (art. 29 ustawy o grach hazardowych) niż darmowe statystyki. Nie jest zakazany, ale przy pobieraniu opłat lepiej mieć to potwierdzone przed startem niż po.
+- [ ] **L7 — ewidencja wpłat.** Prosty rejestr każdej wpłaty (data, kwota brutto) do pilnowania limitu kwartalnego. Da się wyprowadzić z webhooków operatora płatności.
+
+- [ ] **L1 — regulamin zakłada firmę, której nie ma.** §1.2: „Operatorem Serwisu jest osoba fizyczna prowadząca działalność w Polsce (dane zostaną uzupełnione po rejestracji JDG)". Ustawa o świadczeniu usług drogą elektroniczną wymaga danych usługodawcy: imię, nazwisko, adres e-mail. Bez tego nie ma kanału kontaktu — a bez niego nie ma jak zrealizować praw z RODO.
+- [ ] **L2 — §5 „Subskrypcje i płatności” opisuje produkt, którego nie ma.** Abonamenty, auto-odnawianie, Lemon Squeezy/Paddle — napisane pod pivot sprzed 2026-07-06. **Kierunek do rozstrzygnięcia (24.08): darmo czy subskrypcja.** Przy darmowym sekcja wypada. Przy subskrypcji trzeba ją napisać na nowo i dołożyć prawo odstąpienia (14 dni) wraz z jego wyłączeniem dla treści cyfrowych za wyraźną zgodą — bez tego zwrot należy się zawsze.
+- [ ] **L3 — §7 ogranicza odpowiedzialność do „opłat z ostatnich 30 dni”.** Przy darmowym to zero, czyli całkowite wyłączenie odpowiedzialności wobec konsumenta; takie klauzule bywają uznawane za niedozwolone. Przy subskrypcji zapis ma sens, ale i tak wymaga przejrzenia pod kątem klauzul abuzywnych.
+- [ ] **L4 — użytkownik nie może usunąć własnego konta.** Jest wyłącznie `DELETE /users/{id}` dla admina i to miękkie (`is_active = FALSE`) — dezaktywacja, nie usunięcie danych. RODO art. 17 nie wymaga przycisku, ale wymaga realnej ścieżki.
 
 ## ⚪ OPCJONALNE
 
@@ -404,7 +416,7 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   pełny build z chromium. Do rozważenia `paths-ignore` na `*.md` — ale ostrożnie:
   filtr, który pominie zmianę w `src/`, przywraca dokładnie ten dryf między `main`
   a obrazem, który I1 likwidował.
-- [ ] **J4 — bramka pokrycia 8 pkt pod stanem faktycznym.** Zmierzone **80%**, `--cov-fail-under=72` → można skasować 8 pkt i build przejdzie. Najsłabsze: `football_data.py` 21%, `flashscore_results.py` 42%, `utils/cache.py` 56%, **`utils/db.py` 69%** (warstwa dostępu do bazy).
+- [x] **J4 — ZROBIONE 24.08.** Bramka `--cov-fail-under` podniesiona 72 → **78**. Pomiar z logu CI (run 2a86f2309): **80,31%**, lokalnie 81%. Przy progu 72 dało się skasować 8 pp pokrycia bez czerwonego builda — bramka chroniła przed katastrofą, nie przed regresją. 78 zostawia ~2,3 pp na wahania między przebiegami. Najsłabsze moduły bez zmian, do osobnej roboty: `football_data.py` 21%, `flashscore_results.py` 42%, `utils/cache.py` 56%, `utils/db.py` 69%.
 - [ ] **J5 — 4 pliki > 800 linii:** `daily_agent.py` 1022, `superbet.py` 867, `coupons.py` 832, `analyzer.py` 814.
 
 ### 🛡️ Odporność na ataki — ZMIERZONA 17.08 (`tests/test_odpornosc_ataki.py`, 25 testów)

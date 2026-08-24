@@ -109,16 +109,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev,api,ai]"
 
-      # --cov-fail-under: floor anty-regresyjny. UWAGA: mierz na CI (Linux/py3.11),
-      # NIE lokalnie (Win/py3.12) — CI skipuje więcej testów (opt-deps) → niższe %.
-      # Historia: 56 (start) → 60 → 64 (2026-07-30) → 72 (2026-08-01).
-      # Lokalnie 74.95%, ostatni pomiar CI był o ~0.45 pp nizszy od lokalnego,
-      # wiec realnie ~74.5%. Prog 72 zostawia ~2.5 pp zapasu.
+      # --cov-fail-under: floor anty-regresyjny. UWAGA: mierz na CI (Linux),
+      # NIE lokalnie (Windows) — CI skipuje więcej testów (opt-deps) → niższe %.
+      # Historia: 56 (start) → 60 → 64 (2026-07-30) → 72 (2026-08-01) → 78 (2026-08-24).
+      # Pomiar 2026-08-24 z logu CI (run 2a86f2309): 80.31%, lokalnie 81%.
+      # Prog 72 zostawial 8 pp luzu — tyle pokrycia dalo sie skasowac bez czerwonego
+      # builda, wiec bramka nie chronila przed regresja, tylko przed katastrofa.
+      # 78 zostawia ~2.3 pp na wahania miedzy przebiegami (opt-deps, skipy).
       # Cel docelowy 80% (jak mypy w lint) — zostalo ~700 instrukcji.
       - name: Run tests + coverage gate
         run: >
           python -m pytest tests/ --tb=short
-          --cov=src/footstats --cov-report=term-missing --cov-fail-under=72
+          --cov=src/footstats --cov-report=term-missing --cov-fail-under=78
 
       - name: Check imports
         run: python -c "import footstats; print('Import OK')"
