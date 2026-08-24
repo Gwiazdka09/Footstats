@@ -353,6 +353,46 @@ Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
      Sprawdzaj stan faktyczny (`describe`), nie kod wyjścia.
   2. **`--delete-tags` jest konieczne** dla obrazu z tagiem („Cannot delete image …
      because it is tagged"). Bez niego pierwszy przebieg dał **434 błędy na 436 prób**.
+- [x] ✅ **I8 — ZROBIONE 24.08. Monitoring, który realnie widzi całą pętlę.**
+  Po I7 najważniejsze pytanie brzmiało nie „czemu padło", tylko **„czemu nikt się nie
+  dowiedział przez 8 dni"**. Odpowiedź: monitoring był ślepy w dwóch miejscach naraz.
+  **1. `pipeline-health` nie widział kuponów w ogóle.** Sprawdzał wiek najnowszej
+  predykcji i zaległości w rozliczeniach. Predykcje płynęły (pisze je job), więc oba
+  warunki były spełnione i alarm milczał. Sygnał `stale_days` **istniał**, ale mieszkał
+  WEWNĄTRZ draftu — czyli wewnątrz tego, co było zepsute. Endpoint, który umiera, nie
+  zgłosi, że umarł. To ten sam błąd architektoniczny, przed którym ostrzega nagłówek
+  `status.py` („monitor nie może żyć w tym, co monitoruje"), tylko o poziom wyżej.
+  Trzeci wymiar pyta o kupony sam, po skutku, progiem `PROG_STALE_DNI` współdzielonym
+  z `draft_health`. **+7 testów.**
+  **2. Alarm o zaległościach palił się non stop i nigdy by nie zgasł.** Zmierzone:
+  liczył **25** przy progu 10, a z tych 25 **ZERO** było w zasięgu źródeł — najstarsze
+  to mecze z **maja 2026**. Wykluczenie działało po liczbie prób, więc utknęły w limbo:
+  za stare, żeby się rozliczyć, za mało prób, żeby przestać się liczyć. Kryterium
+  zmienione na osiągalność źródła (`HORYZONT_ZRODEL_DNI`), okno ma teraz obie granice.
+  **To prawdopodobnie współprzyczyna I7:** alarm świecący zawsze uczy go ignorować.
+  Po naprawie: `ok: True, nierozliczone: 0`. **+2 testy.**
+- [x] ✅ **I9 — ZROBIONE 24.08. Codzienny raport przebiegu na Telegram (14:00).**
+  `POST /api/cron/raport-dzienny` + zadanie `footstats-raport-dzienny`. Liczby z ostatniej
+  doby: kupony, predykcje, rozliczone. **Zero kuponów jawnie oznaczone `ok: false`** —
+  to dokładnie obraz I7. Jedna wiadomość dziennie, nie trzy. **+13 testów.**
+  **Różni się od alarmu celem:** alarm odpowiada „czy coś jest zepsute" i milczy, gdy
+  dobrze — słusznie. Ale cisza nie odróżnia „poszło dobrze" od „monitor też padł".
+  Raport odpowiada „ile dziś powstało"; spadek z 14 kuponów na 2 nie jest awarią
+  i alarmu nie wywoła, ale jest sygnałem.
+  ⚠️ **ODRZUCONY WARIANT — zaplanowany agent Claude w chmurze.** Użytkownik go wybrał,
+  ale okazał się niewykonalny: agent startuje z czystym checkoutem, **bez `gcloud`, bez
+  `DATABASE_URL`, bez `CRON_SECRET`**, a każdy endpoint mówiący cokolwiek o stanie wymaga
+  uwierzytelnienia (jedyny publiczny `/health` zwraca samo „żyję"). Zadziałałby tylko po
+  wklejeniu sekretu do przechowywanej konfiguracji rutyny — ten sam błąd, przez który
+  14.08 `CRON_SECRET` wyciekł i wymagał rotacji.
+- [x] ✅ **ROTACJA `CRON_SECRET` — 24.08.** Wypisałem wartość sekretu w treści sesji przy
+  odczycie nagłówków Schedulera. Rotacja wykonana od razu: nowa wersja w Secret Manager
+  → redeploy usługi (`:latest`) → podmiana nagłówka w **6 zadaniach** (dwa triggery jobów
+  idą przez OAuth, nie przez nagłówek). **Zweryfikowane trzema niezależnymi dowodami:**
+  nowy sekret → 200, stary → **401**, a wywołanie z `Google-Cloud-Scheduler` → 200.
+  Lekcja narzędziowa: `gcloud scheduler jobs describe --format="value(httpTarget.headers)"`
+  wypisuje **wartości** nagłówków. Do sprawdzenia OBECNOŚCI sekretu używać JSON-a
+  i patrzeć na klucze, nigdy na wartości.
 - [x] ✅ **I7 — ZROBIONE 23.08. Kupony nie powstawały od 8 dni: `/api/cron/draft` padał na OOM.**
   Znalezione przy pytaniu „czy wszystko działa produkcyjnie". Łańcuch urywał się na
   **trzecim ogniwie**: pobieranie ✅, analiza ✅, typowanie ✅ (13 predykcji dziś,
