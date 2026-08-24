@@ -272,6 +272,99 @@ def _wyslij_alarm(powody: list[str], wiek_h: float | None, nierozliczone: int) -
         return False
 
 
+@router.post("/cron/raport-dzienny")
+def raport_dzienny(x_cron_secret: str = Header(default="")) -> dict:
+    """Codzienne potwierdzenie, że przebieg poszedł. Wysyłane ZAWSZE, też gdy dobrze.
+
+    CZYM SIĘ RÓŻNI OD `pipeline-health`: alarm odpowiada na pytanie „czy coś jest
+    zepsute" i milczy, gdy jest dobrze — słusznie, bo codzienne „wszystko gra"
+    przestaje być czytane. Ale cisza nie odróżnia „poszło dobrze" od „monitor też
+    padł", a przy awarii I7 (kupony stanęły na osiem dni) znaczyła to drugie.
+
+    Raport odpowiada na pytanie „ile dziś powstało". Spadek z 14 kuponów na 2 nie
+    jest awarią i alarmu nie wywoła, ale jest sygnałem — i właśnie po to są liczby.
+
+    DLACZEGO TU, A NIE Z AGENTA W CHMURZE: agent startuje z czystym checkoutem, bez
+    `gcloud`, bez `DATABASE_URL` i bez `CRON_SECRET`, a każdy endpoint mówiący coś
+    o stanie wymaga uwierzytelnienia. Żeby działał, trzeba by wkleić sekret do
+    przechowywanej konfiguracji rutyny — ten sam błąd, przez który 14.08 `CRON_SECRET`
+    wyciekł i wymagał rotacji. Raport liczy tam, gdzie poświadczenia już są.
+    """
+    _sprawdz_cron_secret(x_cron_secret)
+
+    kupony = predykcje = rozliczone = 0
+    problemy: list[str] = []
+
+    try:
+        with _connect() as conn:
+            kupony = _licz(conn,
+                           "SELECT COUNT(*) AS n FROM coupons cu"
+                           " JOIN users u ON u.id = cu.user_id"
+                           " WHERE u.username = 'System'"
+                           "   AND cu.created_at > NOW() - INTERVAL '24 hours'")
+            predykcje = _licz(conn,
+                              "SELECT COUNT(*) AS n FROM predictions"
+                              " WHERE created_at > NOW() - INTERVAL '24 hours'")
+            rozliczone = _licz(conn,
+                               "SELECT COUNT(*) AS n FROM predictions"
+                               " WHERE tip_correct IS NOT NULL"
+                               "   AND created_at > NOW() - INTERVAL '7 days'")
+    # Raport milczący przy własnej awarii wygląda identycznie jak zdrowy dzień,
+    # więc problem musi trafić do treści zamiast wywalić endpoint.
+    # Węziej niż `Exception` świadomie: awaria bazy (psycopg2) i brak konfiguracji
+    # (RuntimeError z `_get_pool`) mają być połknięte, a błąd w NASZYM kodzie ma krzyczeć.
+    except (psycopg2.Error, RuntimeError) as e:
+        problemy.append(f"nie udało się odpytać bazy: {e}")
+        _log.error("raport-dzienny: baza niedostępna: %s", e)
+
+    # Zero kuponów to DOKŁADNIE obraz awarii I7 — dzień bez kuponów nie jest zdrowy,
+    # nawet jeśli predykcje powstały (wtedy właśnie powstawały).
+    if not problemy and kupony == 0:
+        problemy.append("ZERO kuponów w ostatniej dobie — draft mógł paść")
+
+    ok = not problemy
+    wyslany = _wyslij_raport(ok, kupony, predykcje, rozliczone, problemy)
+
+    return {
+        "ok": ok,
+        "kupony": kupony,
+        "predykcje": predykcje,
+        "rozliczone": rozliczone,
+        "problemy": problemy,
+        "wyslany": wyslany,
+    }
+
+
+def _licz(conn, sql: str) -> int:
+    row = conn.execute(sql).fetchone()
+    return int((row["n"] if row else 0) or 0)
+
+
+def _wyslij_raport(ok: bool, kupony: int, predykcje: int, rozliczone: int,
+                   problemy: list[str]) -> bool:
+    """Jedna wiadomość dziennie. Trzy osobne uczą wyciszać powiadomienia."""
+    try:
+        from footstats.utils.telegram_notify import _send
+
+        naglowek = ("✅ <b>FootStats: przebieg dzienny</b>" if ok
+                    else "⚠️ <b>FootStats: przebieg dzienny — uwaga</b>")
+        tresc = (
+            f"{naglowek}\n\n"
+            f"kupony (24h): <b>{kupony}</b>\n"
+            f"predykcje (24h): <b>{predykcje}</b>\n"
+            f"rozliczone (7 dni): <b>{rozliczone}</b>"
+        )
+        if problemy:
+            tresc += "\n\n" + "\n".join(f"• {p}" for p in problemy)
+        return bool(_send(tresc))
+    # Brak Telegrama nie może wywalić endpointu: Scheduler dostający 500 zapętla
+    # retry, a i tak nie ma komu wysłać. `OSError` pokrywa awarie sieci (requests
+    # dziedziczy z niego), `ImportError` brak zależności, `ValueError` złą odpowiedź.
+    except (OSError, ImportError, ValueError) as e:
+        _log.error("raport-dzienny: wiadomosc niewyslana: %s", e)
+        return False
+
+
 @router.post("/cron/kalibracja-rozlicz")
 def cron_kalibracja_rozlicz(
     x_cron_secret: str = Header(default=""),
