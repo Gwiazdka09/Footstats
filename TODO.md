@@ -261,49 +261,11 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   +13 testów. Flip dopiero po próbce, jak `SELECTION_MIN_CONF` i `LEAGUE_GATING`.
 
 ### 🟡 Średnie
-- [ ] **CI jest CZERWONE na każdym commicie od co najmniej 23.08.** Dwa niezależne kroki padają za każdym razem: `Gitleaks secret scan` i `pip-audit (dependency CVE)`. Kroki `lint`, `test`, `frontend`, `docker-build` przechodzą.
-  - **Dlaczego to jest ważniejsze niż wygląda:** CI, które świeci czerwono zawsze, nie odróżnia „zepsułeś coś" od „tło". Dokładnie ten sam mechanizm co alarm o zaległościach naprawiany 24.08 rano — sygnał palący się bez przerwy przestaje być czytany. Dziś dwa moje deploye padły i **zorientowałem się dopiero po ręcznym sprawdzeniu produkcji**, bo czerwone CI nic już nie znaczy.
-  - Do zrobienia: ustalić, czy gitleaks to fałszywy alarm (wtedy `.gitleaksignore`), i czy CVE z `pip-audit` da się załatać. Jeśli któreś ma zostać zignorowane — świadomie, z wpisem, a nie przez ciągłą czerwień.
-- [x] **D2 — ZROBIONE 24.08.** `footstats-settle-manual`, `30 6 * * *` UTC (po `settle-morning`, żeby nasze predykcje miały pierwszeństwo przed płatnymi źródłami). Flaga `MANUAL_SETTLE_EXTERNAL=1` na serwisie. Pierwszy przebieg 25.08 — do sprawdzenia `z_zewnatrz` w odpowiedzi. Historia problemu niżej: ⚠️ **Sprawdzone na sucho na produkcji 17.08: wpięcie go dziś NIC BY NIE DAŁO.**
-  - Dry-run zwrócił `{"settled": 0, "skipped": 1, "errors": 0}` — endpoint działa, znalazł jedyny kupon manualny (#149) i **pominął** go.
-  - **Powód:** `settle_manual_coupons` rozlicza wyłącznie z NASZYCH `predictions`, a dla meczu Yunnan Yukun – Dalian Yingbo (15.08) predykcji **w ogóle nie ma** — przebieg o 11:00 tego dnia padł na parsowaniu JSON-a od Groqa. W bazie jest tylko Yunnan Yukun – Chengdu Rongcheng z 08.08, czyli inny mecz.
-  - **Wniosek:** samo zadanie w Schedulerze jest bezpieczne (0 błędów) i tanie, ale rozlicza tylko mecze, które sami typowaliśmy. Reszta zostaje na ręczne oznaczenie w GUI — i tak działa zaprojektowana hybryda („co mamy = my, reszta = user ręcznie").
-  - ⏳ **Decyzja usera:** wpiąć do Schedulera (dry-run pokazuje, że bezpieczne) czy zostawić trigger ręczny, skoro dziś i tak nie ma czego rozliczać.
-  - **Zmierzone ponownie 24.08 na sześciu nowych kuponach dziennika (#164-169, seria 4):** predykcji brakuje dla **11 z 12 nóg**. Ma ją tylko Brøndby–Silkeborg, a `settle_manual_coupons` jest all-legs-or-nothing, więc rozliczyłby **zero z sześciu**. Wniosek z 17.08 potwierdzony na większej próbce i już nie na jednym kuponie: blokadą jest D5, nie brak zadania w Schedulerze.
-  - **Skąd ta luka:** kupony powstają z `quick_picks`/Bzzoiro (30 kandydatów dziennie), a `predictions` zapisuje wyłącznie ścieżka `top3`/`kupon_d` — 24.08 dała **2 wiersze**, 23.08 trzynaście, 20-22.08 zero (postój Groqa). Dziennik i predykcje patrzą więc na dwa różne, ledwo zachodzące na siebie zbiory meczów.
-  - ✅ **Odblokowane 24.08 przez D5.** Powód, dla którego wpięcie „nic by nie dało", przestał obowiązywać — przy `MANUAL_SETTLE_EXTERNAL=1` nogi bez naszej predykcji rozlicza `_find_leg_result`. Zostaje sama decyzja o wpięciu zadania.
-
-### 🔴 ZNALEZIONE PRZY OKAZJI — rozliczanie stało 8 dni
-
-Historia z logów (`cron_settle`), pełna sekwencja:
-
-| data | wynik |
-|---|---|
-| 15.08 21:30 | `settled 20, partial 24` — działało |
-| 16.08 06:00 → 23.08 | `settled 0` **za każdym razem** |
-
-Liczba PARTIAL spada wyłącznie przez VOID po 10 dniach, nie przez rozliczenia.
-**Dwie przyczyny po kolei:**
-1. **16.08:** `API-Football: Your account is suspended` — konto zawieszone.
-2. **23.08:** konto **znów działa** (`Free plans do not have access to this date`),
-   ale kupony zestarzały się w międzyczasie poza horyzont obu źródeł.
-
-**TRZECIA, GŁĘBSZA PRZYCZYNA — znaleziona 24.08.** Powyższe tłumaczy, czemu jedno
-źródło padło. Nie tłumaczy, czemu to wystarczyło, żeby zatrzymać wszystko.
-
-`FOOTBALL_API_KEY` był w Secret Managerze i na OBU jobach, ale **nie na serwisie
-`footstats-api`** — a to serwis obsługuje `/cron/settle` (schedulery
-`settle-morning`/`-evening` biją pod jego URL). `settle_active_coupons` czytało
-`os.getenv("FOOTBALL_API_KEY")`, dostawało pustkę i `_get_matches_fdb` kończyło się
-`return []` **bez jednego zapytania**. Czyli football-data.org — jedyne źródło
-z pełną historią, bo API-Football na planie darmowym sięga 1 dnia, a FlashScore ~7 —
-nigdy nie brało udziału w codziennym rozliczaniu. Warstwa zapasowa leżała obok,
-gotowa, nieużyta.
-
-Ten sam kształt co incydent logowania 27.07: brakujący sekret na Cloud Run, awaria
-wyglądająca na coś zupełnie innego. Naprawione — klucz w re-asercji `cd.yml`
-+ strażnik `test_cd_serwis_sekrety.py`, który rośnie razem z kodem.
-
+- [x] **CI czerwone od 23.08 — NAPRAWIONE 24.08.** Przyczyna: `Dockerfile.api`/`Dockerfile.jobs` startują z `python:3.12-slim`, oba locki kompilowane pod 3.12, a wszystkie trzy joby `ci.yml` stały na **3.11**. Krok `pip-audit` padał, odkąd B9 (23.08) przestawiło skan z ręcznego `requirements.txt` na locki — lock pisany pod 3.12 nie musi się rozwiązać na 3.11. Lokalnie ten sam skan: `No known vulnerabilities found`, exit 0.
+  - **Drugi, cichszy skutek:** job `test` też jechał na 3.11, więc suita potwierdzała interpreter, którego nigdzie nie uruchamiamy.
+  - **Skutek uboczny gorszy od samego błędu:** czerwień bez przerwy = brak sygnału. 24.08 dwa moje deploye padły i wyszło to dopiero przy ręcznym sprawdzeniu produkcji.
+  - Strażnik `test_ci_wersja_pythona.py`: CI == obraz, CI == lock, oba obrazy równe.
+  - ⚠️ **Zostaje do obserwacji:** job `secrets` (gitleaks) pada NIEregularnie — 2 z 12 ostatnich przebiegów, bez związku z treścią commita. Wygląda na flaki/limit po stronie akcji, nie na wyciek. Jeśli się powtórzy, dopiąć `GITHUB_TOKEN` do kroku i sprawdzić log.
 - [ ] **D7 — 21 kuponów z 14-15.08 jest nie do odzyskania** z darmowych źródeł
   (duńska, japońska, chińska liga + angielskie niższe — poza pokryciem football-data,
   poza oknem AF, poza 7 dniami FlashScore). Zejdą przez VOID 24-25.08. Do decyzji:
