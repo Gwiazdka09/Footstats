@@ -72,6 +72,14 @@ jobs:
             DATABASE_URL=DATABASE_URL:latest
             BZZOIRO_KEY=BZZOIRO_KEY:latest
             APISPORTS_KEY=APISPORTS_KEY:latest
+            # FOOTBALL_API_KEY doszedl 2026-08-24: sekret istnial i byl na OBU jobach,
+            # ale nie na serwisie — a to serwis obsluguje /cron/settle (scheduler
+            # footstats-settle-morning/-evening bije pod jego URL). Przez to
+            # `_get_matches_fdb` wychodzilo pustym `return []` bez jednego zapytania,
+            # czyli football-data.org — JEDYNE zrodlo z pelna historia — nigdy nie bralo
+            # udzialu w codziennym rozliczaniu. Dlatego zawieszenie konta API-Football
+            # 16.08 zatrzymalo rozliczanie na osiem dni: zapas lezal obok, nieuzyty.
+            FOOTBALL_API_KEY=FOOTBALL_API_KEY:latest
             ODDS_API_KEY=ODDS_API_KEY:latest
             CRON_SECRET=CRON_SECRET:latest
           secrets_update_strategy: merge

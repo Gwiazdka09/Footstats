@@ -145,6 +145,27 @@ def _znajdz_wynik_fdb(home: str, away: str, matches: list[dict]) -> str | None:
     return best_result
 
 
+def _manual_zrodla_zewnetrzne() -> bool:
+    """Czy dziennik kuponów może sięgnąć po wynik do źródeł zewnętrznych (D5).
+
+    DLACZEGO TA FLAGA ISTNIEJE: `settle_manual_coupons` rozlicza wyłącznie z naszych
+    `predictions` i jest all-legs-or-nothing, więc kupon na mecz, którego sami nie
+    typowaliśmy, nie rozliczy się NIGDY. Zmierzone 24.08 na sześciu kuponach
+    dziennika (#164-169): predykcję ma 1 noga z 12. To nie awaria, tylko dwa różne
+    zbiory meczów — kupony powstają z `quick_picks`/Bzzoiro (~30 kandydatów
+    dziennie), a `predictions` zapisuje tylko ścieżka `top3`/`kupon_d`.
+
+    DLACZEGO DOMYŚLNIE OFF: `_find_leg_result` odpytuje API-Football i football-data,
+    czyli zużywa limit darmowego planu — ten sam limit, którego brak zatrzymał
+    rozliczanie na osiem dni w sierpniu. Włączenie to świadoma decyzja o wydatku.
+
+    Czytane przy każdym wywołaniu — flip bez redeploya.
+    """
+    import os
+
+    return os.getenv("MANUAL_SETTLE_EXTERNAL", "").strip() in ("1", "true", "True")
+
+
 def _find_leg_result(
     home: str,
     away: str,
@@ -600,10 +621,16 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
     CAŁY kupon zostaje ACTIVE — konserwatywnie, bez rozliczenia częściowego;
     user domknie go ręcznie przez `set_coupon_result`.
 
-    ZERO zewnętrznych API — w odróżnieniu od `settle_active_coupons` (kupony
-    AI) ta funkcja NIE woła `_find_leg_result`/FlashScore/football-data, żeby
-    nie generować dodatkowego ruchu do zewnętrznych źródeł dla wpisów
-    ręcznych. Bankroll-neutralne: dziennik nie rusza `bankroll_state` ani
+    ZERO zewnętrznych API — DOMYŚLNIE. W odróżnieniu od `settle_active_coupons`
+    (kupony AI) ta funkcja nie woła `_find_leg_result`/FlashScore/football-data,
+    żeby nie generować dodatkowego ruchu do zewnętrznych źródeł dla wpisów
+    ręcznych.
+
+    D5: `MANUAL_SETTLE_EXTERNAL=1` otwiera ten fallback dla nóg, dla których NIE
+    mamy własnej predykcji z wynikiem — bez niego kupon na mecz spoza naszych
+    typów zostaje ACTIVE na zawsze (zmierzone 24.08: 11 z 12 nóg dziennika).
+    Nasze dane zachowują pierwszeństwo, all-legs-or-nothing zostaje bez zmian.
+    Patrz `_manual_zrodla_zewnetrzne`. Bankroll-neutralne: dziennik nie rusza `bankroll_state` ani
     `bankroll_history` (spójnie z `/api/coupon/manual` i ręcznym
     `set_coupon_result`). Bez RAG-feedbacku i bez Telegrama.
 
@@ -625,7 +652,7 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                WHERE status = 'ACTIVE' AND kupon_type = 'manual'"""
         ).fetchall()
 
-    stats = {"settled": 0, "skipped": 0, "errors": 0}
+    stats = {"settled": 0, "skipped": 0, "errors": 0, "z_zewnatrz": 0}
     if not rows:
         if verbose:
             print("[SettleManual] Brak ACTIVE kuponów manual do rozliczenia.")
@@ -633,6 +660,19 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
 
     if verbose:
         print(f"[SettleManual] ACTIVE kuponów manual do sprawdzenia: {len(rows)}")
+
+    # D5: fallback na zewnętrzne źródła wyników. Cache trzymamy PONAD pętlą kuponów —
+    # osobny cache na kupon mnożyłby zapytania o tę samą datę przez liczbę kuponów.
+    zewnetrzne = _manual_zrodla_zewnetrzne()
+    fixtures_cache: dict[str, list] = {}
+    fdb_cache: dict[str, list] = {}
+    api_key = fdb_key = ""
+    if zewnetrzne:
+        import os
+
+        from footstats.scrapers.results_updater import _get_api_key
+        api_key = _get_api_key() or ""
+        fdb_key = os.getenv("FOOTBALL_API_KEY", "").strip()
 
     for row in rows:
         coupon_id = row["id"]
@@ -645,11 +685,26 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
             leg_results: list[int] = []
             unresolved = False
             for leg in legs:
-                lr = match_linker.link_leg(leg.get("home", ""), leg.get("away", ""), mdate)
-                if not lr.matched or not lr.prediction or not lr.prediction.get("actual_result"):
+                home = leg.get("home", "")
+                away = leg.get("away", "")
+                lr = match_linker.link_leg(home, away, mdate)
+
+                # NASZE DANE PIERWSZE — są darmowe i pochodzą z tego samego
+                # przebiegu co typ. Zewnętrzne źródła to fallback, nie zamiennik.
+                if lr.matched and lr.prediction and lr.prediction.get("actual_result"):
+                    wynik = lr.prediction["actual_result"]
+                elif zewnetrzne:
+                    wynik = _find_leg_result(home, away, mdate, fixtures_cache,
+                                             fdb_cache, api_key, fdb_key)
+                    if wynik:
+                        stats["z_zewnatrz"] += 1
+                else:
+                    wynik = None
+
+                if not wynik:
                     unresolved = True
                     break
-                correct = oblicz_tip_correct(leg.get("tip", ""), lr.prediction["actual_result"])
+                correct = oblicz_tip_correct(leg.get("tip", ""), wynik)
                 if correct is None:
                     unresolved = True
                     break

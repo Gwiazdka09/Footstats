@@ -798,6 +798,10 @@ def cron_settle_manual(x_cron_secret: str = Header(default=""), dry_run: bool = 
             "settled": stats.get("settled", 0),
             "skipped": stats.get("skipped", 0),
             "errors": stats.get("errors", 0),
+            # D5: ile nóg rozliczyły źródła zewnętrzne. Zero przy włączonej fladze
+            # znaczy, że wydatek na API nic nie dał — to trzeba widzieć w odpowiedzi,
+            # nie tylko w logach.
+            "z_zewnatrz": stats.get("z_zewnatrz", 0),
         }
     except (ValueError, KeyError, RuntimeError) as e:
         _log.error("cron_settle_manual error: %s", e, exc_info=True)
