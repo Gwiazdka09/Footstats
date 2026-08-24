@@ -198,6 +198,9 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
                     "mecz": f"{w['gospodarz']} vs {w['goscie']}",
                     "tip": tip, "kurs": kurs, "prob": round(prob, 1),
                     "liga": w.get("liga", ""), "data": w.get("data"),
+                    # Bez godziny podglad nie pozwala zlozyc kuponu recznie —
+                    # `data` mowi tylko "dzis", a po poludniu czesc meczow trwa.
+                    "godzina": w.get("godzina") or "",
                 })
 
         # Niezależny punkt odniesienia: prognoza ClubElo (darmowa, bez klucza).

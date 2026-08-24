@@ -1068,7 +1068,8 @@
           _fillSettings({
             version:              cfg.version,
             pewniaczek_prog:      cfg.pewniaczek_prog,
-            kandydat_prog:        cfg.min_confidence ? (cfg.min_confidence * 100).toFixed(1) : '',
+            // min_confidence jest juz w procentach (patrz AGENT_KANDYDAT_PROG w config.py)
+            kandydat_prog:        cfg.min_confidence != null ? Number(cfg.min_confidence).toFixed(1) : '',
             kelly_fraction:       cfg.kelly_fraction,
             kelly_w1_multipliers: '0.7 / 1.0 / 1.1',
           });

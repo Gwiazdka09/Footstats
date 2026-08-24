@@ -49,7 +49,15 @@ PEWNIACZEK_DNI     = 7     # ile dni do przodu szukamy (tydzien)
 DOMWYJAZD_MIN_M    = 5     # min. mecze dom/wyjazd do analizy
 DOMWYJAZD_PODROZNIK= 0.20  # min. roznica wyjazd-dom w pkt/mecz -> "Podroznik"
 BZZOIRO_MAX_ROZN   = 20.0  # max. roznica (%) Poisson vs Bzzoiro ML bez alarmu
-AGENT_KANDYDAT_PROG = 0.55 # prog pewnosci dla daily_agent (nizszy niz PEWNIACZEK_PROG zeby dac Groq wiecej opcji)
+# Prog pewnosci kandydata dla daily_agent / cloud_draft. SKALA PROCENTOWA (0-100),
+# ta sama co PEWNIACZEK_PROG powyzej i MIN_PROB w `system_paper` — wartosc trafia do
+# `_typy_pewne`, ktore porownuje ja z pw/pr/pp/bt/o25/u25 wyrazonymi w procentach.
+#
+# BYLO `0.55` i to NIE byl prog 55%, tylko 0,55% — filtr kandydatow nie odrzucal
+# NICZEGO, a `/api/settings` mnozyl te wartosc przez 100 i pokazywal "55.0", wiec
+# panel raportowal prog, ktorego nie bylo. Zaden test tego toru nie dotykal.
+# Realnie odsiewal dopiero `najlepszy_typ` (MIN_PROB=40) juz na etapie selekcji.
+AGENT_KANDYDAT_PROG = float(os.getenv("AGENT_KANDYDAT_PROG", "50"))
 AGENT_BANKROLL      = 100.0 # bankroll do Kelly Criterion (PLN)
 AGENT_KELLY_FRACTION = 4    # bezpieczny fractional Kelly: f*/4 (bardziej konserwatywny dla 100 PLN)
 

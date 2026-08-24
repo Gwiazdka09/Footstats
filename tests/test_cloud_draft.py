@@ -187,3 +187,33 @@ def test_draft_live_zawiera_swiezosc(monkeypatch):
     _patch_pipeline(monkeypatch, {"n": 0})
     r = cd.generuj_system_draft(dry_run=False)
     assert "stale" in r and r["stale"] is False
+
+
+# ── godzina startu w nodze dry-runu ─────────────────────────────────────────
+#
+# Bez niej podglad draftu nie pozwala zbudowac kuponu recznie: `data` mowi tylko,
+# ze mecz jest "dzis", a przy podgladzie po poludniu czesc meczow juz trwa. Pole
+# `godzina` jest w wynikach `szybkie_pewniaczki_2dni` od zawsze — gubilo sie
+# dopiero przy skladaniu `legs`.
+
+def test_noga_dry_runu_ma_godzine_startu(monkeypatch):
+    _patch_pipeline(monkeypatch)
+    monkeypatch.setattr("footstats.core.quick_picks.szybkie_pewniaczki_2dni",
+                        lambda klient, prog, godziny: [
+                            {"gospodarz": "A", "goscie": "B", "liga": "ENG",
+                             "data": "2026-08-01", "godzina": "20:45",
+                             "odds": {"1": 1.8}},
+                        ])
+
+    r = cd.generuj_system_draft(dni=1, dry_run=True)
+
+    assert r["legs"][0]["godzina"] == "20:45", r["legs"][0]
+
+
+def test_brak_godziny_nie_wywala_draftu(monkeypatch):
+    """Zrodlo zapasowe (API-Football) nie zawsze poda godzine."""
+    _patch_pipeline(monkeypatch)
+
+    r = cd.generuj_system_draft(dni=1, dry_run=True)
+
+    assert r["ok"] and r["legs"][0]["godzina"] == ""

@@ -26,7 +26,8 @@ def get_settings(user_id: int = Depends(require_auth)):
     defaults = {
         "version": cfg.VERSION,
         "pewniaczek_prog": str(cfg.PEWNIACZEK_PROG),
-        "kandydat_prog": str(round(cfg.AGENT_KANDYDAT_PROG * 100, 1)),
+        # Bez `* 100` — stala jest juz w procentach (patrz komentarz w config.py).
+        "kandydat_prog": str(round(cfg.AGENT_KANDYDAT_PROG, 1)),
         "kelly_fraction": str(cfg.AGENT_KELLY_FRACTION),
         "kelly_w1_multipliers": "0.7 / 1.0 / 1.1",
     }
@@ -45,7 +46,7 @@ def get_settings(user_id: int = Depends(require_auth)):
     return {
         "version": data.get("version", cfg.VERSION),
         "pewniaczek_prog": float(data.get("pewniaczek_prog", cfg.PEWNIACZEK_PROG)),
-        "kandydat_prog": float(data.get("kandydat_prog", round(cfg.AGENT_KANDYDAT_PROG * 100, 1))),
+        "kandydat_prog": float(data.get("kandydat_prog", round(cfg.AGENT_KANDYDAT_PROG, 1))),
         "kelly_fraction": int(data.get("kelly_fraction", cfg.AGENT_KELLY_FRACTION)),
         "kelly_w1_multipliers": data.get("kelly_w1_multipliers", "0.7 / 1.0 / 1.1"),
         "kelly_w2_desc": "forma bota (3× streak WIN/LOSE)",
