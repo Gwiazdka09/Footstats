@@ -274,6 +274,14 @@ mimo że Poisson policzył je niezależnie. Potok jest uzależniony od LLM-a w t
 Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział poprawnie
 → **5 predykcji w bazie**. A1 słusznie się nie uruchomił. Wyszły trzy inne rzeczy.
 
+- [x] ✅ **D9 — 20 kuponów z 15.08 miało zniknąć po cichu. ZMIERZONE I ZAŁATANE 24.08.** Wisiały ACTIVE z wszystkimi nogami `result: null`. Mecze miały 9 dni, `HORYZONT_ZRODEL_DNI = 7`, więc żadne źródło już ich nie oddawało; 25.08 mijało `VOID_AFTER_DAYS = 10` i wszystkie 20 wypadłyby z accuracy oraz ROI.
+
+  **Sam VOID był poprawny** — wyniku naprawdę nie było skąd wziąć. Suchy przebieg to potwierdził: rozliczyło się 5 kuponów, wszystkie z dzisiejszej puli (Osasuna, Botoșani, Bologna, Brøndby, Malmö), a żaden z 15.08. Błędem była cisza: ścieżka „dogrywka/karne" woła `log.warning`, ścieżka „brak wyniku po N dniach" robiła wyłącznie `print` pod `verbose`, a obie zliczały się do tego samego `voided`. Nie dało się odróżnić serii dogrywek od awarii źródeł.
+
+  **Naprawione:** osobny licznik `voided_brak_wyniku`, `log.warning` z numerem kuponu i meczem, nowy alarm `kupony_przepadly()` podpięty do `/cron/settle` i wystawiony w odpowiedzi endpointu. Alarm jest **niezależny** od `rozliczanie_stoi`: tamten pyta „czy coś, co JESZCZE da się zdobyć, nie zostało rozliczone" i dla tych kuponów milczy poprawnie — właśnie dlatego przepadały bez sygnału. 8 testów.
+
+  **Hipoteza, która się NIE potwierdziła:** że selekcja bierze ligi spoza pokrycia źródeł. `_pre_filtruj_ligi` istnieje i działa (dziś ciął 25 kandydatów → 6), a dzisiejsze mecze z tych samych źródeł rozliczyły się bez problemu. Prawdziwa przyczyna to udokumentowane w `rozliczanie_stoi` osiem dni `settled: 0` (16–23.08) przy wynikach **wciąż w zasięgu** — zanim ktokolwiek zauważył, okno się zamknęło.
+
 - [ ] **A4 — 1 martwy wiersz z 23.08 został w bazie** (`2 (wygrana gościa)`, nie rozliczy
   się nigdy) plus 3 wiersze z `odds_verified=0`. Nowe już nie powstaną, ale te
   istnieją. Do decyzji: zostawić jako ślad, czy posprzątać (operacja na prod DB).

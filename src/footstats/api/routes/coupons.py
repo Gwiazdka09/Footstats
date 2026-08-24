@@ -763,11 +763,26 @@ def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
             except (ImportError, OSError, RuntimeError) as e:
                 _log.warning("Alert o stojacym rozliczaniu nie poszedl: %s", e)
 
+        # Drugi, NIEZALEZNY sygnal. Kupon poza horyzontem zrodel nie liczy sie do
+        # `czekajace_w_zasiegu`, wiec alarm wyzej milczy o nim poprawnie — a kupon
+        # i tak znika z accuracy oraz ROI. 24.08 tak wlasnie czekalo 20 sztuk.
+        from footstats.core.coupon_settlement import kupony_przepadly
+        przepadle = kupony_przepadly(stats.get("voided_brak_wyniku", 0))
+        if przepadle:
+            _log.error("ALERT kupony przepadly: %s | %s", przepadle, stats)
+            try:
+                from footstats.utils.telegram_notify import send_alert
+                send_alert("FootStats — kupony przepadly", przepadle)
+            except (ImportError, OSError, RuntimeError) as e:
+                _log.warning("Alert o przepadlych kuponach nie poszedl: %s", e)
+
         return {
             "ok": True,
             "settled": stats.get("settled", 0),
             "partial": stats.get("partial", 0),
             "errors": stats.get("errors", 0),
+            "voided": stats.get("voided", 0),
+            "voided_brak_wyniku": stats.get("voided_brak_wyniku", 0),
             "czekajace_w_zasiegu": stats.get("czekajace_w_zasiegu", 0),
         }
     except (ValueError, KeyError, RuntimeError) as e:

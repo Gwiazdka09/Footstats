@@ -93,6 +93,30 @@ def rozliczanie_stoi(settled: int, czekajace_w_zasiegu: int) -> str | None:
             f" — zrodla wynikow moglo zabraknac (konto? klucz? nazwy druzyn?)")
 
 
+def kupony_przepadly(ile: int) -> str | None:
+    """Opis kuponow skasowanych przez uplyw czasu albo None, gdy zaden nie przepadl.
+
+    ODDZIELONE od `rozliczanie_stoi` swiadomie. Tamten pyta "czy cos, co JESZCZE
+    da sie zdobyc, nie zostalo rozliczone" i dla tych kuponow milczy poprawnie —
+    mecz sprzed 9 dni jest poza `HORYZONT_ZRODEL_DNI`, wiec nie ma go skad wziac.
+    Tu pytamy o skutek, ktory tamten warunek z definicji przepuszcza: kupon
+    ZNIKA z accuracy i ROI, a system uznaje to za normalna prace.
+
+    ZMIERZONE 24.08: 20 kuponow z 15.08 czekalo na VOID nazajutrz. Same VOID-y byly
+    poprawne — wyniku naprawde nie bylo skad wziac po zawieszeniu konta API-Football.
+    Bledna byla cisza: jedyny slad to `print` pod `verbose`.
+
+    Alarm nie mowi "napraw rozliczanie", tylko "sprawdz, czy selekcja nie bierze
+    meczow, ktorych nie umiemy rozliczyc" — bo to jest zwykle prawdziwa przyczyna.
+    """
+    if ile <= 0:
+        return None
+    return (f"{ile} kuponow skasowanych (VOID) — mecz starszy niz"
+            f" {VOID_AFTER_DAYS} dni i zadne zrodlo nie oddalo wyniku."
+            " Te kupony wypadaja z accuracy i ROI. Sprawdz, czy zrodla zyja"
+            " i czy selekcja nie bierze lig spoza ich pokrycia.")
+
+
 
 def _get_fixtures_api(api_key: str, date_str: str) -> list[dict]:
     """Pobiera fixtures z API-Football dla całej daty (bez filtrowania po lidze).
@@ -357,7 +381,7 @@ def settle_active_coupons(
         if verbose:
             print("[CouponSettlement] Brak ACTIVE kuponów do rozliczenia.")
         return {"settled": 0, "partial": 0, "errors": 0, "voided": stale_voided,
-                "czekajace_w_zasiegu": 0}
+                "voided_brak_wyniku": 0, "czekajace_w_zasiegu": 0}
 
     if verbose:
         print(f"[CouponSettlement] ACTIVE kuponów do sprawdzenia: {len(rows)}")
@@ -366,7 +390,7 @@ def settle_active_coupons(
     api_key = _get_api_key()
     fdb_key = os.getenv("FOOTBALL_API_KEY", "").strip()
     stats = {"settled": 0, "partial": 0, "errors": 0, "voided": stale_voided,
-             "czekajace_w_zasiegu": 0}
+             "voided_brak_wyniku": 0, "czekajace_w_zasiegu": 0}
     fixtures_cache: dict[str, list] = {}
     fdb_cache: dict[str, list] = {}
 
@@ -458,6 +482,19 @@ def settle_active_coupons(
                             "UPDATE coupons SET status='VOID' WHERE id=?", (coupon_id,)
                         )
                 stats["voided"] += 1
+                stats["voided_brak_wyniku"] += 1
+                # Osobny licznik i log, bo to NIE jest to samo co VOID po karnych.
+                # Tamto jest normalną pracą systemu, to jest skutek awarii źródeł —
+                # kupon wypada z accuracy i ROI. Do 24.08 jedynym śladem był `print`
+                # pod `verbose`, więc 20 kuponów mogło zniknąć bez linijki w logu.
+                mecze = ", ".join(
+                    lg.get("mecz") or f"{lg.get('home', '?')} vs {lg.get('away', '?')}"
+                    for lg in updated_legs
+                ) or "?"
+                log.warning(
+                    "Kupon #%s → VOID: brak wyniku po %sd (mecz %s) — %s",
+                    coupon_id, VOID_AFTER_DAYS, mdate, mecze,
+                )
                 if verbose:
                     print(f"  [VOID] Kupon #{coupon_id} — brak wyniku po {VOID_AFTER_DAYS}d → VOID\n")
                 continue
