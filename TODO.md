@@ -115,6 +115,42 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 
 ---
 
+## 🚀 PLAN WYPUSZCZENIA (darmowe, ustalone 2026-08-24)
+
+Kierunek: **za darmo, bez firmy, bez reklam na starcie.** Prawo i podatki nie są blokadą
+(patrz `.claude/rules/wypuszczenie-pl.md`). Blokadą jest gotowość: cztery drobne braki
+formalne i niezawodność.
+
+### Faza 1 — formalności — ZROBIONA 24.08 (poza danymi osobowymi)
+- ~~**L2**~~ ✅ §5 przepisany na „Nieodpłatność Serwisu”.
+- ~~**L3**~~ ✅ §7 bez wyłączenia odpowiedzialności; dodane zdanie o braku przewagi nad rynkiem.
+- ~~**F8**~~ ✅ było już zrobione (`legalUrl()`), wpis nieaktualny.
+- **L1** — zostały wyłącznie **Twoje dane**: imię, nazwisko, adres korespondencyjny.
+
+**Znalezione przy okazji i naprawione, poza pierwotną listą:**
+- Regulamin **nie miał trybu reklamacyjnego**, którego wymaga art. 8 ustawy o świadczeniu usług drogą elektroniczną. Dodany: zgłoszenie e-mailem, odpowiedź w 14 dni, brak odpowiedzi = uznanie reklamacji.
+- §10 narzucał **sąd właściwy dla siedziby Operatora** — wobec konsumenta odbiera mu sąd miejsca zamieszkania. Zastąpione właściwością ustawową plus wzmianka o ODR.
+- Polityka prywatności wskazywała **Neon.tech** jako hosting bazy, a produkcja stoi na **Supabase** od 18.07 (zweryfikowane 24.08 na produkcji: host `*.pooler.supabase.com`). Wskazanie nieprawdziwego podprocesora jest poważniejsze niż nieaktualna wzmianka o płatnościach — RODO wymaga, by lista odbiorców odpowiadała stanowi faktycznemu. Poprawione, dopisany też Vercel.
+- Polityka wymieniała **Lemon Squeezy / Paddle** jako procesora płatności, który nie dostaje żadnych danych, i podawała okres retencji **„przez czas trwania subskrypcji”** — nieistniejącej. Oba zastąpione stanem faktycznym, z opisem, co dokładnie robi „Usuń konto”.
+- Polityka żądała **NIP-u** w danych administratora. Osoba nieprowadząca działalności go nie ma.
+
+Pilnuje tego `tests/test_strony_prawne.py` (20 testów) — sprawdza stan, nie brzmienie.
+
+### Faza 2 — niezawodność (zanim wejdą ludzie)
+- **J1** — 271 z 546 `except` milczy. **Zakres na teraz, nie wszystkie 271:** strażnik z baselinem
+  (żeby nie przybywało nowych) + naprawa ścieżek, które widzi użytkownik i którymi jedzie potok.
+  Uzasadnienie: 24.08 w jeden dzień pięć cichych awarii wyglądających na zdrowy system
+  (kupony stały 8 dni przy `exit=0`, próg selekcji nigdy nie działał, football-data nigdy nie
+  odpowiadało, CI świeciło czerwono aż przestało znaczyć, alarm miał wyć codziennie).
+  Przy jednym użytkowniku to koszt czasu. Przy stu — ktoś inny patrzy na pustą stronę.
+
+### Faza 3 — dopiero po tym publikacja
+- Wypuszczenie, obserwacja: czy ktokolwiek wraca.
+- **L5** (co sprzedajemy) i **L8** (reklamy) rozstrzygamy na podstawie ruchu, nie przed nim.
+
+### Świadomie NIE na starcie
+F4 (PWA), F10/F11 (dostępność), F5, J2/J3/J5 — realne, ale nie blokują pierwszych użytkowników.
+
 ## 🌍 WYPUSZCZENIE BEZ FIRMY (kierunek 2026-08-24)
 
 Darmowe udostępnienie **nie wymaga rejestracji działalności** — działalność gospodarcza jest z definicji *zarobkowa* (Prawo przedsiębiorców, art. 3). Ścieżka na drobne pieniądze bez JDG to działalność nierejestrowana (art. 5, próg 75% minimalnego wynagrodzenia, brak działalności przez 60 mies.).
@@ -122,6 +158,40 @@ Darmowe udostępnienie **nie wymaga rejestracji działalności** — działalno�
 **Realne ryzyko to nie brak firmy, tylko reklama zakładów wzajemnych** (ustawa o grach hazardowych, art. 29) — dotyczy osoby fizycznej tak samo jak spółki. Serwis predykcyjny tego nie narusza (nie przyjmujemy zakładów). Stan na 24.08: **zero linków afiliacyjnych**, nazwy bukmacherów tylko jako lista wyboru w dzienniku („gdzie postawiłeś") = pole danych, nie promocja. **Nie dodawać afiliacji ani zachęt do gry.**
 
 RODO obowiązuje niezależnie od formy prawnej — mamy konta, więc jesteśmy administratorem danych.
+
+### Reklamy — sprawdzone 2026-08-24, wynik: NIE na starcie
+
+**Art. 29 nie zabrania wszystkiego.** Reklama zakładów wzajemnych jest dozwolona dla operatorów
+z zezwoleniem, na warunkach art. 29b: bez kierowania do małoletnich, bez łączenia gry z łatwą
+wygraną, z obowiązkowym komunikatem o ryzyku i o posiadaniu zezwolenia. Ograniczenie godzinowe
+6:00–22:00 dotyczy TV, radia, kin i teatrów — nie internetu. Problem w tym, że **warunki dotyczą
+treści reklamy**, a przy sieci reklamowej nie kontrolujemy, co się wyświetli.
+
+**AdSense: Polski nie ma na liście.** „Publisher Restrictions” dopuszczają reklamy na treściach
+hazardowych w 17 krajach (AU, BR, CA, CO, FR, DE, GR, IE, IT, JP, MX, NL, PH, KR, ES, TR, UK, US).
+Polski tam nie ma. Definicja „gambling content” mówi o treściach *umożliwiających* grę na pieniądze
+(kasyna, bukmacherzy, „aggregator or affiliate sites that promote online gambling pages”) — my
+niczego nie umożliwiamy i nie mamy afiliacji, więc literalnie się nie łapiemy. Ale polityka
+reklamodawcza Google osobno wymienia „sports odds aggregator sites” jako treść ograniczoną,
+a egzekwowanie AdSense bywa zachowawcze. Realne ryzyko: odrzucenie zgłoszenia albo ograniczone
+wyświetlanie, bez możliwości odwołania.
+
+**Da się zabezpieczyć, ale kosztem sensu.** AdSense pozwala per-witryna zablokować kategorię
+„Gambling & Betting (18+)” (Brand Safety → Blocking Controls → Sensitive Categories). To zdejmuje
+ekspozycję na art. 29, ale usuwa jedyną kategorię, która na takim ruchu płaci cokolwiek.
+
+**Podatkowo reklamy są prostsze niż subskrypcja:** przychód osoby prywatnej z AdSense rozlicza się
+jako „przychody z innych źródeł” w rocznym PIT, według skali. Bez zaliczek miesięcznych,
+bez VAT-u, bez rejestracji VAT-UE.
+
+**Wniosek:** przy dzisiejszym ruchu (≈0) reklamy dają zero złotych i niezerowe ryzyko, a psują
+produkt, którego przewagą ma być uczciwość. Wracamy do tematu, kiedy będzie ruch — wtedy
+subskrypcja na dziennik jest i tak lepszym interesem niż CPM.
+
+- [ ] **L8 — (odłożone) reklamy.** Wrócić dopiero przy realnym ruchu. Jeśli tak: zablokować kategorię
+  „Gambling & Betting (18+)”, nigdy nie dodawać afiliacji, a przychód liczyć jako „inne źródła” w PIT.
+- [ ] **L9 — (opcjonalne, czyste) wsparcie dobrowolne.** Naffy / BuyCoffee zamiast reklam: zero polityk
+  reklamowych, zero ekspozycji na art. 29, działa dla osoby prywatnej. Nie wpływa na treść produktu.
 
 ### Jeśli subskrypcja (rozważane 2026-08-24)
 
@@ -133,10 +203,10 @@ Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakłada
 - [ ] **L6 — pytanie do prawnika, nie do księgowej.** Płatny serwis z typami stoi bliżej zakazu reklamy i promocji zakładów wzajemnych (art. 29 ustawy o grach hazardowych) niż darmowe statystyki. Nie jest zakazany, ale przy pobieraniu opłat lepiej mieć to potwierdzone przed startem niż po.
 - [ ] **L7 — ewidencja wpłat.** Prosty rejestr każdej wpłaty (data, kwota brutto) do pilnowania limitu kwartalnego. Da się wyprowadzić z webhooków operatora płatności.
 
-- [ ] **L1 — regulamin zakłada firmę, której nie ma.** §1.2: „Operatorem Serwisu jest osoba fizyczna prowadząca działalność w Polsce (dane zostaną uzupełnione po rejestracji JDG)". Ustawa o świadczeniu usług drogą elektroniczną wymaga danych usługodawcy: imię, nazwisko, adres e-mail. Bez tego nie ma kanału kontaktu — a bez niego nie ma jak zrealizować praw z RODO.
-- [ ] **L2 — §5 „Subskrypcje i płatności” opisuje produkt, którego nie ma.** Abonamenty, auto-odnawianie, Lemon Squeezy/Paddle — napisane pod pivot sprzed 2026-07-06. **Kierunek do rozstrzygnięcia (24.08): darmo czy subskrypcja.** Przy darmowym sekcja wypada. Przy subskrypcji trzeba ją napisać na nowo i dołożyć prawo odstąpienia (14 dni) wraz z jego wyłączeniem dla treści cyfrowych za wyraźną zgodą — bez tego zwrot należy się zawsze.
-- [ ] **L3 — §7 ogranicza odpowiedzialność do „opłat z ostatnich 30 dni”.** Przy darmowym to zero, czyli całkowite wyłączenie odpowiedzialności wobec konsumenta; takie klauzule bywają uznawane za niedozwolone. Przy subskrypcji zapis ma sens, ale i tak wymaga przejrzenia pod kątem klauzul abuzywnych.
-- [ ] **L4 — użytkownik nie może usunąć własnego konta.** Jest wyłącznie `DELETE /users/{id}` dla admina i to miękkie (`is_active = FALSE`) — dezaktywacja, nie usunięcie danych. RODO art. 17 nie wymaga przycisku, ale wymaga realnej ścieżki.
+- [ ] **L1 — ZOSTAŁY TYLKO TWOJE DANE.** Reszta zrobiona 24.08: §1.2 regulaminu nie powołuje się już na nieistniejące JDG, jest sekcja identyfikacyjna (imię i nazwisko, adres, e-mail) wymagana przez art. 5 ustawy o świadczeniu usług drogą elektroniczną, a polityka prywatności przestała żądać NIP-u, którego osoba nieprowadząca działalności nie ma. **Do wpisania: imię, nazwisko i adres korespondencyjny** — w obu dokumentach stoi `[UZUPEŁNIĆ PRZED PUBLIKACJĄ]`. Pilnuje tego odwrócony tripwire `test_placeholder_danych_operatora_wciaz_do_uzupelnienia`: gdy dane wpiszesz, test zacznie padać i wymusi zamknięcie tej pozycji.
+- [x] **L2 — ZROBIONE 24.08.** §5 „Subskrypcje i płatności” zastąpione przez „Nieodpłatność Serwisu”: wprost, że nie ma opłat, sprzedaży, subskrypcji, reklam ani odesłań afiliacyjnych, a wprowadzenie odpłatności wymaga zmiany regulaminu w trybie §9. Usunięta definicja „Subskrypcja”, dodana definicja „Dziennik kuponów” z zastrzeżeniem, że Serwis nie pośredniczy w zawieraniu zakładów.
+- [x] **L3 — ZROBIONE 24.08.** §7 nie ogranicza już odpowiedzialności do „opłat z ostatnich 30 dni” (przy darmowym = do zera). Zamiast tego zasady ogólne prawa polskiego plus klauzula, że nic w regulaminie nie ogranicza praw konsumenta z przepisów bezwzględnie obowiązujących. Dopisany też punkt mówiący wprost, że **model nie wykazuje przewagi nad kursami bukmacherskimi** — to samo, co mierzymy, powiedziane użytkownikowi.
+- [x] **L4 — BYŁO BŁĘDNE, już zrobione.** Pierwotny wpis powstał z przejrzenia samego `admin_users.py`. W rzeczywistości istnieje `DELETE /api/auth/me` (anonimizuje username, kasuje e-mail, losuje hash hasła, `is_active = FALSE`; kupony i predykcje zostają dla rozliczeń pod zanonimizowanym userem), wystawione w GUI jako „Potwierdzam — usuń konto” w `SettingsView.jsx`. Publiczna rejestracja `POST /auth/register` oraz reset hasła też działają, a regulamin i polityka są linkowane ze stopki i z CookieConsent.
 
 ## ⚪ OPCJONALNE
 
@@ -209,7 +279,7 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - Flaga `fs_cookie_consent` jest **czytana wyłącznie przez sam baner** — przycisk „Rozumiem" nie włącza ani nie wyłącza niczego.
   - Pod RODO/ePrivacy: cookies *ściśle niezbędne* zgody NIE wymagają, ale analityka **wymaga** i nie może odpalać przed zgodą. Obecny stan jest gorszy niż brak banera — to komunikat, który nie opisuje tego, co aplikacja robi.
   - **Do decyzji:** (A) usunąć Vercel Analytics — najprościej i zgodne z kierunkiem „prywatny użytek + znajomi", wtedy treść banera staje się prawdziwa i wystarczy jednolinijkowa notka zamiast paska; (B) bramkować analitykę zgodą i dopisać ją do polityki; (C) zostawić i tylko poprawić treść — najsłabsze, bo dalej brak bramki.
-- [ ] **F8 — link do polityki prywatności zaszyty na sztywno** jako surowy adres Cloud Run (`CookieConsent.jsx:21`), zamiast ścieżki względnej lub zmiennej środowiskowej. Po zmianie hostingu link umrze po cichu.
+- [x] **F8 — BYŁO JUŻ ZROBIONE.** Sprawdzone 24.08: istnieje helper `legalUrl()` (`gui/src/lib/api.js`), wszystkie trzy linki go używają, a w GUI nie ma ani jednego surowego adresu `run.app`. Wpis w TODO był nieaktualny.
 - [ ] **F10 — sześć klikalnych `<div>` do konwersji.** `HistoryCouponRow` (rozwijanie wiersza), `LeaderboardView` (wiersz rankingu), `ui.jsx`, `CouponWizard` (3×). Niedostępne z klawiatury i bez roli dla czytnika. Każdy wymaga `role="button"` + `tabIndex` + obsługi Enter/Spacji albo przepisania na `<button>`. Próg w strażniku obniżyć po każdej konwersji.
 - [ ] **F11 — reszta widoków bez audytu dostępności.** Zrobione: `LoginView`, `ManualCouponForm` (zamykanie), `App` (menu). Zostają: `SettingsView`, `AdminPanelView`, `CouponWizard`, `StatsView`, `LeaderboardView`, `TerminarzView`, `MatchAnalysisView` — głównie powiązanie etykiet z polami.
 - [ ] **F9 — inline'owe kolory to pozostałość po bugu CSS z F1.** ⚠️ **KOREKTA ZAKRESU 23.08:**

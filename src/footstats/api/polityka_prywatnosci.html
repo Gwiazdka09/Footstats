@@ -11,7 +11,7 @@
   <div class="wrap">
     <a href="/" class="back">&larr; Powrót do FootStats</a>
     <h1>Polityka Prywatności</h1>
-    <p class="subtitle">Ostatnia aktualizacja: 15.06.2026</p>
+    <p class="subtitle">Ostatnia aktualizacja: 24.08.2026</p>
 
     <div class="glass-card">
 
@@ -19,7 +19,10 @@
         <h2>1. Administrator danych</h2>
         <p>
           Administratorem danych osobowych przetwarzanych w ramach serwisu FootStats jest
-          <strong>[Imię i nazwisko / nazwa firmy], NIP: [NIP], e-mail kontaktowy: [adres e-mail]</strong>.
+          osoba fizyczna nieprowadząca działalności gospodarczej:
+          <strong>[UZUPEŁNIĆ PRZED PUBLIKACJĄ — imię i nazwisko]</strong>,
+          adres do korespondencji: <strong>[UZUPEŁNIĆ PRZED PUBLIKACJĄ]</strong>.
+          Serwis jest nieodpłatny, więc Administrator nie posiada numeru NIP ani REGON.
           Kontakt w sprawach związanych z przetwarzaniem danych: <a href="mailto:jakubgwiazdowski12@gmail.com">jakubgwiazdowski12@gmail.com</a>.
         </p>
       </section>
@@ -28,7 +31,7 @@
         <h2>2. Jakie dane zbieramy</h2>
         <ul>
           <li><strong>Dane konta:</strong> nazwa użytkownika, adres e-mail, hasło (przechowywane w formie zahaszowanej).</li>
-          <li><strong>Dane subskrypcji / płatności:</strong> status planu, historia transakcji — obsługiwane przez zewnętrznego operatora płatności (Lemon Squeezy / Paddle), który jako Merchant of Record samodzielnie przetwarza dane karty płatniczej. FootStats nie przechowuje numerów kart.</li>
+          <li><strong>Dane płatnicze:</strong> <strong>nie zbieramy żadnych.</strong> Serwis jest nieodpłatny, nie prowadzi sprzedaży ani subskrypcji i nie przetwarza płatności.</li>
           <li><strong>Dane techniczne:</strong> adres IP, typ urządzenia/przeglądarki, logi błędów (Sentry) — w celu diagnostyki i bezpieczeństwa.</li>
           <li><strong>Dane korzystania z usługi:</strong> historia wygenerowanych kuponów, ustawienia bankrollu, preferencje — niezbędne do działania funkcji serwisu.</li>
         </ul>
@@ -37,8 +40,7 @@
       <section>
         <h2>3. Cele i podstawy prawne przetwarzania</h2>
         <ul>
-          <li>Świadczenie usługi (konto, subskrypcja, generowanie analiz) — art. 6 ust. 1 lit. b RODO (umowa).</li>
-          <li>Rozliczenia i obowiązki podatkowe (faktury) — art. 6 ust. 1 lit. c RODO (obowiązek prawny).</li>
+          <li>Świadczenie usługi (konto, dziennik kuponów, generowanie analiz) — art. 6 ust. 1 lit. b RODO (umowa).</li>
           <li>Bezpieczeństwo i diagnostyka błędów (logi, Sentry) — art. 6 ust. 1 lit. f RODO (prawnie uzasadniony interes).</li>
           <li>Kontakt zwrotny (e-mail wsparcia) — art. 6 ust. 1 lit. f RODO.</li>
         </ul>
@@ -47,10 +49,10 @@
       <section>
         <h2>4. Odbiorcy danych (podprocesorzy)</h2>
         <ul>
-          <li><strong>Neon.tech</strong> — hosting bazy danych (PostgreSQL).</li>
+          <li><strong>Supabase</strong> — hosting bazy danych (PostgreSQL, region eu-west-1).</li>
           <li><strong>Google Cloud Platform (Cloud Run, region europe-west1)</strong> — hosting aplikacji.</li>
           <li><strong>Sentry</strong> — monitoring błędów aplikacji.</li>
-          <li><strong>Lemon Squeezy / Paddle</strong> — obsługa płatności i subskrypcji jako Merchant of Record.</li>
+          <li><strong>Vercel</strong> — hosting interfejsu użytkownika.</li>
         </ul>
         <p>Dane mogą być przetwarzane na serwerach znajdujących się w Europejskim Obszarze Gospodarczym (EOG).</p>
       </section>
@@ -58,9 +60,12 @@
       <section>
         <h2>5. Okres przechowywania danych</h2>
         <p>
-          Dane konta przechowujemy przez czas trwania subskrypcji oraz do 30 dni po jej zakończeniu —
-          po tym czasie konto i powiązane dane są usuwane, z wyjątkiem danych, których przechowywanie
-          wymagane jest przepisami prawa podatkowego (np. faktury — 5 lat).
+          Dane konta przechowujemy <strong>przez czas jego istnienia</strong>. Konto możesz usunąć
+          samodzielnie w każdej chwili (Ustawienia → „Usuń konto"). Usunięcie anonimizuje nazwę
+          użytkownika, kasuje adres e-mail i unieważnia hasło; zapisane kupony i predykcje pozostają
+          w formie <strong>pozbawionej powiązania z Twoją tożsamością</strong>, ponieważ służą do
+          rozliczania wyników i liczenia statystyk skuteczności modelu — art. 6 ust. 1 lit. f RODO.
+          Logi techniczne i błędów usuwane są zgodnie z politykami retencji dostawców hostingu.
         </p>
       </section>
 
