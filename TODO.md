@@ -261,7 +261,10 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   +13 testów. Flip dopiero po próbce, jak `SELECTION_MIN_CONF` i `LEAGUE_GATING`.
 
 ### 🟡 Średnie
-- [ ] **D2 — `/cron/settle-manual` NIE jest w Schedulerze.** ⚠️ **Sprawdzone na sucho na produkcji 17.08: wpięcie go dziś NIC BY NIE DAŁO.**
+- [ ] **CI jest CZERWONE na każdym commicie od co najmniej 23.08.** Dwa niezależne kroki padają za każdym razem: `Gitleaks secret scan` i `pip-audit (dependency CVE)`. Kroki `lint`, `test`, `frontend`, `docker-build` przechodzą.
+  - **Dlaczego to jest ważniejsze niż wygląda:** CI, które świeci czerwono zawsze, nie odróżnia „zepsułeś coś" od „tło". Dokładnie ten sam mechanizm co alarm o zaległościach naprawiany 24.08 rano — sygnał palący się bez przerwy przestaje być czytany. Dziś dwa moje deploye padły i **zorientowałem się dopiero po ręcznym sprawdzeniu produkcji**, bo czerwone CI nic już nie znaczy.
+  - Do zrobienia: ustalić, czy gitleaks to fałszywy alarm (wtedy `.gitleaksignore`), i czy CVE z `pip-audit` da się załatać. Jeśli któreś ma zostać zignorowane — świadomie, z wpisem, a nie przez ciągłą czerwień.
+- [x] **D2 — ZROBIONE 24.08.** `footstats-settle-manual`, `30 6 * * *` UTC (po `settle-morning`, żeby nasze predykcje miały pierwszeństwo przed płatnymi źródłami). Flaga `MANUAL_SETTLE_EXTERNAL=1` na serwisie. Pierwszy przebieg 25.08 — do sprawdzenia `z_zewnatrz` w odpowiedzi. Historia problemu niżej: ⚠️ **Sprawdzone na sucho na produkcji 17.08: wpięcie go dziś NIC BY NIE DAŁO.**
   - Dry-run zwrócił `{"settled": 0, "skipped": 1, "errors": 0}` — endpoint działa, znalazł jedyny kupon manualny (#149) i **pominął** go.
   - **Powód:** `settle_manual_coupons` rozlicza wyłącznie z NASZYCH `predictions`, a dla meczu Yunnan Yukun – Dalian Yingbo (15.08) predykcji **w ogóle nie ma** — przebieg o 11:00 tego dnia padł na parsowaniu JSON-a od Groqa. W bazie jest tylko Yunnan Yukun – Chengdu Rongcheng z 08.08, czyli inny mecz.
   - **Wniosek:** samo zadanie w Schedulerze jest bezpieczne (0 błędów) i tanie, ale rozlicza tylko mecze, które sami typowaliśmy. Reszta zostaje na ręczne oznaczenie w GUI — i tak działa zaprojektowana hybryda („co mamy = my, reszta = user ręcznie").
