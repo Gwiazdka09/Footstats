@@ -29,21 +29,46 @@ CD = KORZEN / ".github" / "workflows" / "cd.yml"
 ROZLICZANIE = KORZEN / "src" / "footstats" / "core" / "coupon_settlement.py"
 
 
+def _linie_bloku_sekretow() -> list[str]:
+    """Surowe, niepuste linie wcięte wewnątrz `secrets: |`, bez żadnej filtracji."""
+    # Szukamy LINII bedacej kluczem YAML, nie podciagu — komentarz nad blokiem
+    # cytuje `secrets: |` slownie i naiwny `split` lapal wlasnie jego.
+    wiersze = CD.read_text(encoding="utf-8").splitlines()
+    start = next((i for i, w in enumerate(wiersze)
+                  if re.match(r"^\s*secrets:\s*\|\s*$", w)), None)
+    assert start is not None, "cd.yml nie ma bloku `secrets: |`"
+
+    wciecie = len(wiersze[start]) - len(wiersze[start].lstrip()) + 2
+    linie = []
+    for surowa in wiersze[start + 1:]:
+        if not surowa.strip():
+            continue
+        if len(surowa) - len(surowa.lstrip()) < wciecie:
+            break          # koniec literal scalara (kolejny klucz YAML)
+        linie.append(surowa.strip())
+    return linie
+
+
 def _sekrety_z_cd() -> set[str]:
     """Nazwy z bloku `secrets:` deployu serwisu (`NAZWA=SECRET:latest`)."""
-    tresc = CD.read_text(encoding="utf-8")
-    blok = tresc.split("secrets: |", 1)
-    assert len(blok) == 2, "cd.yml nie ma bloku `secrets: |`"
-    nazwy = set()
-    for linia in blok[1].splitlines():
-        s = linia.strip()
-        if not s or s.startswith("#"):
-            continue
-        m = re.match(r"^([A-Z0-9_]+)=", s)
-        if not m:
-            break          # koniec bloku (kolejny klucz YAML)
-        nazwy.add(m.group(1))
-    return nazwy
+    return {m.group(1) for m in
+            (re.match(r"^([A-Z0-9_]+)=", s) for s in _linie_bloku_sekretow()) if m}
+
+
+def test_blok_sekretow_nie_zawiera_komentarzy():
+    """`secrets: |` to literal scalar — linia z `#` NIE jest komentarzem YAML.
+
+    Trafia do `deploy-cloudrun` jako treść i wywala deploy. Kosztowało mnie to dwa
+    położone deploye 2026-08-24, a poprzednia wersja tego strażnika przepuszczała
+    błąd, bo sama pomijała linie z `#` — modelowała parser, którego akcja nie ma.
+    Objaśnienia mają stać NAD blokiem, gdzie `#` jest prawdziwym komentarzem.
+    """
+    smieci = [s for s in _linie_bloku_sekretow()
+              if not re.match(r"^[A-Z0-9_]+=[A-Za-z0-9_.-]+:[A-Za-z0-9]+$", s)]
+
+    assert not smieci, (
+        f"w bloku `secrets: |` sa linie, ktore nie sa mapowaniem sekretu: {smieci}"
+    )
 
 
 @pytest.mark.parametrize("klucz", ["FOOTBALL_API_KEY", "APISPORTS_KEY"])

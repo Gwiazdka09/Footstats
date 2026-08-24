@@ -65,6 +65,17 @@ jobs:
           # szly dalej i awaria nie rzucala sie w oczy.
           # Kazdy sekret z tej listy MUSI istniec w Secret Managerze — dopisanie
           # nieistniejacego wywala deploy, wiec najpierw `gcloud secrets list`.
+          # UWAGA NA KOMENTARZE: `secrets: |` to literal scalar, wiec linia z `#`
+          # NIE jest komentarzem YAML — trafia do akcji jako tresc i wywala deploy.
+          # Wszystkie objasnienia musza stac TUTAJ, nad blokiem. Sprawdzone na wlasnej
+          # skorze 2026-08-24: komentarz wstawiony miedzy wpisy polozyl dwa deploye.
+          # FOOTBALL_API_KEY doszedl 2026-08-24: sekret istnial i byl na OBU jobach, ale
+          # nie na serwisie — a to serwis obsluguje /cron/settle (schedulery
+          # settle-morning/-evening bija pod jego URL). Przez to `_get_matches_fdb`
+          # wychodzilo pustym `return []` bez jednego zapytania, czyli football-data.org
+          # — JEDYNE zrodlo z pelna historia — nigdy nie bralo udzialu w codziennym
+          # rozliczaniu. Dlatego zawieszenie konta API-Football 16.08 zatrzymalo
+          # rozliczanie na osiem dni: zapas lezal obok, gotowy, nieuzyty.
           secrets: |
             JWT_SECRET=JWT_SECRET:latest
             FOOTSTATS_USER=FOOTSTATS_USER:latest
@@ -72,13 +83,6 @@ jobs:
             DATABASE_URL=DATABASE_URL:latest
             BZZOIRO_KEY=BZZOIRO_KEY:latest
             APISPORTS_KEY=APISPORTS_KEY:latest
-            # FOOTBALL_API_KEY doszedl 2026-08-24: sekret istnial i byl na OBU jobach,
-            # ale nie na serwisie — a to serwis obsluguje /cron/settle (scheduler
-            # footstats-settle-morning/-evening bije pod jego URL). Przez to
-            # `_get_matches_fdb` wychodzilo pustym `return []` bez jednego zapytania,
-            # czyli football-data.org — JEDYNE zrodlo z pelna historia — nigdy nie bralo
-            # udzialu w codziennym rozliczaniu. Dlatego zawieszenie konta API-Football
-            # 16.08 zatrzymalo rozliczanie na osiem dni: zapas lezal obok, nieuzyty.
             FOOTBALL_API_KEY=FOOTBALL_API_KEY:latest
             ODDS_API_KEY=ODDS_API_KEY:latest
             CRON_SECRET=CRON_SECRET:latest
