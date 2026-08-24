@@ -421,3 +421,54 @@ def test_awaria_bazy_przy_kuponach_nie_ucisza_monitora(srodowisko):
 
     assert dane["ok"] is False
     assert dane["powody"]
+
+
+# ── alarm, ktory nigdy nie gasnie (naprawione 24.08) ────────────────────────
+#
+# ZMIERZONE NA PRODUKCJI 24.08: monitor liczył 25 zaległych rozliczeń przy progu
+# 10, więc alarm palił się bez przerwy. Z tych 25 **ZERO** było w zasięgu źródeł —
+# najstarsze to mecze z MAJA 2026. Żadne źródło ich nie odda.
+#
+# Dlaczego nie wypadły jako „porzucone": wykluczenie działa po liczbie prób
+# (`settle_attempts >= MAX_PROB_ROZLICZENIA`), a te mają prób mniej niż 5, bo
+# pętla nadrabiania sięga tylko po świeże. Wiszą w limbo: za stare, żeby się
+# rozliczyć, za mało prób, żeby przestać się liczyć.
+#
+# Właściwym kryterium nie jest liczba prób, tylko OSIĄGALNOŚĆ ŹRÓDŁA — ta sama
+# granica `HORYZONT_ZRODEL_DNI`, którą wprowadziło D6. Starsze mecze to nie
+# zaległość, tylko trupy.
+#
+# To nie jest kosmetyka. Alarm, który świeci zawsze, uczy go ignorować — a przy
+# ignorowanym alarmie awaria kuponów (I7) przeleżała OSIEM DNI.
+
+def test_zaleglosci_ograniczone_do_zasiegu_zrodel():
+    """Zapytanie MUSI mieć dolną granicę okna, nie tylko górną.
+
+    Sprawdzamy SQL, bo atrapa bazy zwraca liczbę niezależnie od parametrów —
+    test na samej liczbie przeszedłby także dla zapytania bez granicy.
+    """
+    import inspect
+
+    from footstats.core.coupon_settlement import HORYZONT_ZRODEL_DNI
+
+    zrodlo = inspect.getsource(st.pipeline_health)
+
+    assert "HORYZONT_ZRODEL_DNI" in zrodlo, (
+        "zapytanie o zaleglosci nie ogranicza sie do zasiegu zrodel — bedzie "
+        "liczyc mecze, ktorych zadne zrodlo juz nie odda, i alarm nie zgasnie"
+    )
+    assert HORYZONT_ZRODEL_DNI >= 2, "okno zaleglosci byloby puste"
+
+
+def test_okno_zaleglosci_ma_obie_granice(srodowisko):
+    """Dolna granica bez górnej liczyłaby mecze sprzed dwóch dni, które jeszcze
+    mają prawo się nie rozliczyć; górna bez dolnej liczy trupy."""
+    srodowisko["conn"].zaleglosci = 3
+    _sprawdz()
+
+    sql = " ".join(srodowisko["conn"].zapytania)
+    zapytanie = next(z for z in sql.split("SELECT") if "settle_attempts" in z)
+
+    assert zapytanie.count("match_date") >= 2, (
+        f"okno zaleglosci ma tylko jedna granice: {zapytanie}"
+    )

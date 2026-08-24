@@ -171,13 +171,30 @@ def pipeline_health(
             # alert palil sie niezaleznie od stanu potoku i zagluszyl prawdziwa
             # awarie (wycofany model Groqa). Alarm, ktory nigdy nie gasnie, uczy
             # go ignorowac.
+            from footstats.core.coupon_settlement import HORYZONT_ZRODEL_DNI
             from footstats.scrapers.results_updater import MAX_PROB_ROZLICZENIA
 
+            # DOLNA granica okna, dodana 24.08 — bez niej alarm NIGDY nie gasł.
+            #
+            # ZMIERZONE NA PRODUKCJI: monitor liczył 25 zaległości przy progu 10,
+            # a z tych 25 **ZERO** było w zasięgu źródeł — najstarsze to mecze
+            # z MAJA 2026. Wykluczenie po liczbie prób ich nie łapało, bo pętla
+            # nadrabiania sięga tylko po świeże, więc utknęły z `settle_attempts`
+            # poniżej limitu: za stare, żeby się rozliczyć, za mało prób, żeby
+            # przestać się liczyć.
+            #
+            # Właściwym kryterium nie jest liczba prób, tylko OSIĄGALNOŚĆ ŹRÓDŁA —
+            # ta sama granica `HORYZONT_ZRODEL_DNI`, którą wprowadziło D6.
+            # Starszy mecz to nie zaległość, tylko trup. Alarm, który świeci
+            # zawsze, uczy go ignorować — a przy ignorowanym alarmie awaria
+            # kuponów (I7) przeleżała osiem dni.
             row2 = conn.execute(
                 "SELECT COUNT(*) AS n FROM predictions"
                 " WHERE tip_correct IS NULL AND match_date < ?"
+                "   AND match_date >= ?"
                 "   AND COALESCE(settle_attempts, 0) < ?",
                 ((datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d"),
+                 (datetime.now() - timedelta(days=HORYZONT_ZRODEL_DNI)).strftime("%Y-%m-%d"),
                  MAX_PROB_ROZLICZENIA),
             ).fetchone()
             nierozliczone = (row2["n"] if row2 else 0) or 0
