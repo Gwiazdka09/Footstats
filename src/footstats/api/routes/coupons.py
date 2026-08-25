@@ -808,6 +808,21 @@ def cron_settle_manual(x_cron_secret: str = Header(default=""), dry_run: bool = 
         stats = settle_manual_coupons(dry_run=dry_run, verbose=True)
         clear_response_cache()
         _log.info("cron_settle_manual: %s", stats)
+
+        # Lustro alarmu z `/cron/settle`. Tam kupon po VOID_AFTER_DAYS cicho
+        # ZNIKAŁ; tu cicho ZOSTAJE — i zostanie na zawsze, bo nasze źródła tej
+        # ligi nie pokrywają. Statusu nie ruszamy (patrz `dziennik_utknal`),
+        # więc jedynym wyjściem jest powiedzieć o tym człowiekowi.
+        from footstats.core.coupon_settlement import dziennik_utknal
+        utkniete = dziennik_utknal(stats.get("przeterminowane", 0))
+        if utkniete:
+            _log.warning("ALERT dziennik utknal: %s | %s", utkniete, stats)
+            try:
+                from footstats.utils.telegram_notify import send_alert
+                send_alert("FootStats — dziennik czeka na Ciebie", utkniete)
+            except (ImportError, OSError, RuntimeError) as e:
+                _log.warning("Alert o utknietym dzienniku nie poszedl: %s", e)
+
         return {
             "ok": True,
             "settled": stats.get("settled", 0),
@@ -817,6 +832,8 @@ def cron_settle_manual(x_cron_secret: str = Header(default=""), dry_run: bool = 
             # znaczy, że wydatek na API nic nie dał — to trzeba widzieć w odpowiedzi,
             # nie tylko w logach.
             "z_zewnatrz": stats.get("z_zewnatrz", 0),
+            # Podzbiór `skipped`, którego nikt już nie rozliczy automatycznie.
+            "przeterminowane": stats.get("przeterminowane", 0),
         }
     except (ValueError, KeyError, RuntimeError) as e:
         _log.error("cron_settle_manual error: %s", e, exc_info=True)

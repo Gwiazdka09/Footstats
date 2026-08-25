@@ -117,6 +117,50 @@ def kupony_przepadly(ile: int) -> str | None:
             " i czy selekcja nie bierze lig spoza ich pokrycia.")
 
 
+def dziennik_utknal(ile: int) -> str | None:
+    """Opis kuponow dziennika, ktore nie doczekaja sie wyniku, albo None.
+
+    LUSTRO `kupony_przepadly`, ale skutek jest odwrotny i dlatego alarm tez musi
+    byc inny. Tamten mowi "kupon ZNIKNAL"; ten mowi "kupon ZOSTAL i zostanie".
+
+    ZMIERZONE 25.08: kupon #149 (chinska ekstraklasa, mecz 15.08) wisi ACTIVE
+    dziesiaty dzien. `settle_manual_coupons` nie ma progu czasowego — sprawdza
+    kupon w kolko, za kazdym razem trafia na `unresolved` i za kazdym razem
+    liczy go jako zwykly `skipped`, nie do odroznienia od kuponu z wczoraj.
+
+    DLACZEGO NIE VOID: `set_coupon_result` przyjmuje wylacznie kupony ACTIVE
+    (CAS-guard). Automatyczne skasowanie odebraloby uzytkownikowi jedyna droge
+    wpisania wyniku, ktory on moze znac, a my nie. Dziennik jest jego zapisem —
+    my tylko przyznajemy sie, ze nie umiemy go sprawdzic.
+    """
+    if ile <= 0:
+        return None
+    return (f"{ile} kuponow z dziennika czeka na wynik dluzej niz"
+            f" {VOID_AFTER_DAYS} dni i same sie nie rozlicza. Zostaja ACTIVE"
+            " celowo — domknac je mozna tylko recznie w Historii"
+            " (WYGRANY / PRZEGRANY / ANULOWANY). Zwykle powod: liga spoza"
+            " zasiegu naszych zrodel wynikow.")
+
+
+def _poza_terminem(mdate: str) -> bool:
+    """Czy mecz z dziennika jest juz tak stary, ze wynik nie przyjdzie sam.
+
+    Prog wspolny z kuponami AI (`VOID_AFTER_DAYS`) — po nim system uznaje,
+    ze zrodla juz nic nie oddadza.
+    """
+    try:
+        dzien = date.fromisoformat((mdate or "")[:10])
+    except (TypeError, ValueError):
+        # Daty nie da sie odczytac — nie zgadujemy, wiec kupon liczy sie jako
+        # zwykly `skipped` i alarm o nim milczy. Ale MILCZEC O SAMEJ ZLEJ DACIE
+        # nie wolno: taki wpis nigdy nie zostanie uznany za przeterminowany,
+        # czyli wypada z jedynego mechanizmu, ktory go pilnuje.
+        log.warning("Kupon dziennika z nieczytelna data meczu (%r) — pomijam"
+                    " w liczeniu przeterminowanych", mdate)
+        return False
+    return (date.today() - dzien).days >= VOID_AFTER_DAYS
+
+
 
 def _get_fixtures_api(api_key: str, date_str: str) -> list[dict]:
     """Pobiera fixtures z API-Football dla całej daty (bez filtrowania po lidze).
@@ -716,7 +760,8 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                WHERE status = 'ACTIVE' AND kupon_type = 'manual'"""
         ).fetchall()
 
-    stats = {"settled": 0, "skipped": 0, "errors": 0, "z_zewnatrz": 0}
+    stats = {"settled": 0, "skipped": 0, "errors": 0, "z_zewnatrz": 0,
+             "przeterminowane": 0}
     if not rows:
         if verbose:
             print("[SettleManual] Brak ACTIVE kuponów manual do rozliczenia.")
@@ -783,6 +828,10 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
 
             if unresolved:
                 stats["skipped"] += 1
+                # `skipped` sam w sobie nie odroznia "poczekamy do jutra" od
+                # "nie doczekamy sie nigdy" — a to druga sytuacja wymaga czlowieka.
+                if _poza_terminem(mdate):
+                    stats["przeterminowane"] += 1
                 if verbose:
                     print(f"  [ACTIVE] Kupon manual #{coupon_id} — noga bez pewnego wyniku, zostaje ACTIVE")
                 continue
@@ -814,6 +863,16 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
         except (KeyError, TypeError, ValueError, OSError) as e:
             log.error("Błąd rozliczania kuponu manual ID=%s: %s", coupon_id, e)
             stats["errors"] += 1
+
+    if stats["przeterminowane"]:
+        # WARNING, nie `print` pod `verbose` — w Cloud Logging nie ma stdout tej
+        # funkcji, a bez tej linijki kupon utknięty na stałe wygląda w logach
+        # dokładnie tak samo jak wczorajszy, który jeszcze się rozliczy.
+        log.warning(
+            "Dziennik: %d kuponów ACTIVE mimo %d dni od meczu — wynik nie przyjdzie"
+            " sam, domknąć może tylko użytkownik (set_coupon_result)",
+            stats["przeterminowane"], VOID_AFTER_DAYS,
+        )
 
     if verbose:
         print(
