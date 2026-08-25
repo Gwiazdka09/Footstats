@@ -1,4 +1,6 @@
+import logging
 import os
+from collections import Counter
 from datetime import datetime, timedelta
 from rich.table import Table
 from rich.panel import Panel
@@ -10,6 +12,35 @@ from footstats.core.weekly_picks import _typy_pewne
 # Cel proxowania w testach (mock.patch). Kalibracja per-wynik wyłączona po Cel B
 # (patrz komentarz przy budowie pewnosci), import zostaje jako stabilny patch-target.
 from footstats.core.probability_calibrator import calibrate_confidence  # noqa: F401
+
+log = logging.getLogger(__name__)
+
+
+def raport_pokrycia_poissona(blended: int, razem: int, powody: dict) -> None:
+    """Jedna linijka na przebieg: ile meczow policzyl Poisson, ile fallback.
+
+    PO CO: `cloud_draft._wykryj_model_source()` melduje "poisson-dc", bo sprawdza
+    JEDYNIE, czy parquet sie laduje. Zmierzone 25.08 na `model_log`: Poisson
+    policzyl 2 z 21 meczow (9%), 24.08 — 7 z 25, 20.08 — 11 z 49. Etykieta per
+    mecz jest uczciwa, ale nikt jej nie czytal, a sam przebieg milczal.
+
+    NIE alarmujemy per mecz. Pojedyncza para bez historii to stan normalny —
+    komentarz przy `model_source` mowi o tym wprost — a log przy kazdej z nich
+    bylby szumem, ktory niszczy alarmy tak samo skutecznie jak cisza. Liczy sie
+    PROPORCJA i POWODY: inaczej nie odroznisz "brak historii dla 3 par" od
+    "wyjatek w naszym kodzie wywala wszystko".
+    """
+    if razem <= 0 or blended >= razem:
+        return
+    # Brak powodow to NIE to samo co "brak historii" — to znaczy, ze fallback
+    # zaszedl droga, ktorej nie zliczamy. Nie zgaduj w logu; powiedz, ze nie wiesz.
+    opis = ", ".join(f"{nazwa}: {ile}" for nazwa, ile in
+                     sorted(powody.items(), key=lambda kv: -kv[1])) or "NIEZNANE"
+    log.warning(
+        "Poisson policzyl %d z %d meczow (%d%%) — reszta poszla na fallback"
+        " Bzzoiro-ML. Powody: %s",
+        blended, razem, 100 * blended // razem, opis,
+    )
 
 #  MODUL 13d – SZYBKIE PEWNIACZKI (2 DNI) + SCOUT BOT  (v2.7.1)
 # ================================================================
@@ -74,7 +105,14 @@ def szybkie_pewniaczki_2dni(
             if df_mecze is not None and _use_poisson not in ("0", "false", "False"):
                 from footstats.core.wf_harness import adapt_to_prod_schema
                 df_mecze = adapt_to_prod_schema(df_mecze)
-        except (FileNotFoundError, ImportError, OSError, ValueError):
+        except (FileNotFoundError, ImportError, OSError, ValueError) as e:
+            # To NIE jest odpadniecie pojedynczej pary — to wylaczenie Poissona
+            # dla CALEGO przebiegu. Do 25.08 dzialo sie w ciszy, wiec brak
+            # parquetu albo brak pyarrow wygladal identycznie jak zdrowy stan
+            # (dokladnie ten przypadek opisuje komentarz przy `model_source`).
+            log.warning("Dane historyczne niedostepne (%s: %s) — Poisson pominiety"
+                        " dla calego przebiegu, zostaje Bzzoiro-ML",
+                        type(e).__name__, e)
             df_mecze = None
 
     # Data-quality guard: waliduj df_mecze (kolumny/typy) przed użyciem w Poissonie.
@@ -150,6 +188,13 @@ def szybkie_pewniaczki_2dni(
     console.print(f"[dim]   Pobrano {len(lista_ml)} wydarzen.[/dim]")
 
     wyniki = []
+    # Pokrycie Poissona liczone PER PRZEBIEG. Bez tego jedyna informacja o tym,
+    # ktory model realnie policzyl stawke, siedziala w `model_log` i nikt jej
+    # nie czytal — 25.08 Poisson policzyl 2 z 21 meczow, a `/cron/draft` dalej
+    # meldowal `model_source: poisson-dc`.
+    _poisson_ok = 0
+    _poisson_razem = 0
+    _poisson_powody: Counter = Counter()
     for ev in lista_ml:
         g    = str(ev.get("gosp",  "") or "").strip()
         a    = str(ev.get("gosc",  "") or "").strip()
@@ -247,6 +292,12 @@ def szybkie_pewniaczki_2dni(
                     h2h_g=_h2h_g, h2h_a=_h2h_a,
                     fortress_g=_fort_g, klasyfikacja=_klas,
                 )
+                if not _pred_p:
+                    # NAJCZESTSZY powod fallbacku i do 25.08 zupelnie niewidoczny:
+                    # `predict_match` nic nie zwraca (brak historii pary w parquecie),
+                    # BEZ wyjatku. Licznik wyjatkow tego nie widzial, wiec przebieg
+                    # wygladal na czysty, choc 90% stawki liczyl fallback.
+                    _poisson_powody["predict_match: brak wyniku"] += 1
                 if _pred_p:
                     _p_pois = {"pw": _pred_p["p_wygrana"], "pr": _pred_p["p_remis"],
                                "pp": _pred_p["p_przegrana"], "bt": _pred_p["btts"],
@@ -270,8 +321,16 @@ def szybkie_pewniaczki_2dni(
                     o25 = round(_fin["o25"], 1)
                     u25 = round(100.0 - o25, 1)
                     poisson_blend = True
-            except (ImportError, AttributeError, ValueError, KeyError, TypeError):
-                pass  # Poisson niedostępny → zostaw Bzzoiro
+            except (ImportError, AttributeError, ValueError, KeyError, TypeError) as e:
+                # Poisson niedostępny → zostaw Bzzoiro. Powód ZAPISUJEMY, bo bez
+                # niego brak historii dla pary (stan normalny) wygląda identycznie
+                # jak wyjątek w naszym kodzie. Log idzie zbiorczo po pętli —
+                # per mecz byłby szumem przy kilkudziesięciu kandydatach.
+                _poisson_powody[type(e).__name__] += 1
+
+        _poisson_razem += 1
+        if poisson_blend:
+            _poisson_ok += 1
 
         # Źródło bez ML, w którym Poisson też nie dał rady → brak jakichkolwiek prob.
         if not ma_ml and not poisson_blend:
@@ -344,6 +403,8 @@ def szybkie_pewniaczki_2dni(
         })
 
     # Sortuj: najpierw czasowo, potem najlepsza szansa malejaco
+    raport_pokrycia_poissona(_poisson_ok, _poisson_razem, dict(_poisson_powody))
+
     wyniki.sort(key=lambda x: (x["dt"], -max(v for _, v in x["typy"])))
     return wyniki
 

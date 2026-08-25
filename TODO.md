@@ -296,6 +296,25 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
 
   **Licznik kandydatów bez nazwy ligi — hipoteza OBALONA.** Podejrzewałem, że puchary wchodzą do kuponów przez udokumentowany wyjątek „kandydaci bez nazwy ligi są zawsze zachowywani". Pomiar tego samego dnia: 48 kandydatów → 44 odrzucone, w tym **Carabao Cup (20)**, a ostrzeżenie o omijaniu whitelisty **nie padło ani razu**. Filtr działa, flaga `LIGA_WHITELIST_ENFORCE` jest włączona (nieustawiona w env jobu = domyślne 1), a `_pre_filtruj_ligi` woła zarówno `cloud_draft`, jak i `system_paper`. **Jak 20 pucharowych kuponów powstało 15.08 — nie wiem.** Licznik zostaje jako WARNING i rozstrzygnie, jeśli się powtórzy.
 
+- [ ] **D11 — model pokrywa 10% tego, na czym typujemy. ZMIERZONE 25.08, DIAGNOSTYKA WDROŻONA, decyzja otwarta.**
+
+  `/cron/draft` melduje `model_source: poisson-dc`, bo `_wykryj_model_source()` sprawdza **wyłącznie, czy parquet się ładuje**. Realnie, z `model_log` (etykieta jest per mecz i uczciwa — `quick_picks.py:336`):
+
+  | data | poisson-dc | bzzoiro-ml | Poisson |
+  |---|---|---|---|
+  | 25.08 | 2 | 19 | **9%** |
+  | 24.08 | 7 | 18 | 28% |
+  | 23.08 | 19 | 29 | 39% |
+  | 20.08 | 11 | 38 | 22% |
+
+  Przebieg na żywo po wdrożeniu logu: **„Poisson policzył 5 z 48 meczów (10%). Powody: `predict_match: brak wyniku`: 43"**.
+
+  **To nie jest wyjątek ani awaria** — licznik wyjątków jest pusty. `predict_match` po prostu nic nie zwraca dla 43 z 48 par. Przyczyna jest strukturalna: selekcja bierze fixtures Bzzoiro z całego świata (chińska, japońska, brazylijska, turecka), a parquet Poissona zna głównie czołowe ligi europejskie. **Dwa różne wszechświaty meczów, nakładające się w 10%.**
+
+  Do 25.08 było to całkowicie niewidoczne: handler blendu to było gołe `pass`, a `quick_picks.py` **nie miał nawet loggera**. Naprawione — log zbiorczy raz na przebieg (nie per mecz, bo to byłby szum), z liczbami i powodami; osobny WARNING gdy parquet nie wstaje wcale i Poisson pada dla całego przebiegu.
+
+  **Decyzja do podjęcia, nie do zaimplementowania od ręki:** albo zawęzić selekcję do lig, które model zna (mniej kuponów, ale liczonych naszym modelem), albo rozszerzyć dataset o ligi spoza Europy, albo świadomie przyjąć, że większość kuponów liczy Bzzoiro-ML i przestać nazywać to „naszym modelem". Wiąże się z Celem B.
+
 - [ ] **A4 — 1 martwy wiersz z 23.08 został w bazie** (`2 (wygrana gościa)`, nie rozliczy
   się nigdy) plus 3 wiersze z `odds_verified=0`. Nowe już nie powstaną, ale te
   istnieją. Do decyzji: zostawić jako ślad, czy posprzątać (operacja na prod DB).
