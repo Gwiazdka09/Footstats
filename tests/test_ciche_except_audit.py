@@ -116,7 +116,10 @@ BASELINE: dict[str, int] = {
     "core/cloud_draft.py": 1,
     "core/clv_tracker.py": 1,
     "core/coupon_settlement.py": 4,
-    "core/daily_phases.py": 9,
+    # 9 -> 5 (2026-08-25). Naprawione w `_dodaj_kelly`: ciche wyjscie przy braku
+    # modulow (kupon bez stawek), podmiana kalibracji na tozsamosc i dwie awaryjne
+    # stawki 1.0 PLN udajace decyzje modelu.
+    "core/daily_phases.py": 5,
     "core/draft_health.py": 1,
     "core/ensemble.py": 1,
     "core/ensemble_optimizer.py": 1,
@@ -130,7 +133,10 @@ BASELINE: dict[str, int] = {
     "core/poisson.py": 2,
     "core/probability_calibrator.py": 2,
     "core/processing.py": 1,
-    "core/quick_picks.py": 10,
+    # 10 -> 8 (2026-08-25). Naprawione: brak danych historycznych (Poisson padal
+    # dla CALEGO przebiegu w ciszy) i handler blendu, ktory ukrywal, ze 90% stawki
+    # liczy fallback Bzzoiro-ML. Plik nie mial wczesniej nawet loggera.
+    "core/quick_picks.py": 8,
     "core/response_cache.py": 2,
     "core/system_paper.py": 2,
     "core/weekly_picks.py": 5,

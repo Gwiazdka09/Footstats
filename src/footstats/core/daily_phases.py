@@ -476,13 +476,50 @@ def _wzbogac_o_kursy_fallback(wyniki: list, top_n: int | None = None) -> None:
 
 # ── Krok 4b: Kelly Criterion ──────────────────────────────────────────────────
 
+def _kalibrator_pewnosci():
+    """Funkcja kalibrujaca pewnosc, a przy jej braku — tozsamosc, ale GLOSNO.
+
+    Fallback `lambda pct: pct / 100.0` jest poprawny (kupon bez stawki bylby
+    gorszy niz kupon ze stawka surowa), ale do 25.08 podmienial kalibracje
+    CALKOWICIE po cichu. Pewnosci przestawaly byc kalibrowane, stawki Kelly'ego
+    sie zmienialy, a w logu nie bylo ani slowa — nie do odroznienia od stanu
+    zdrowego.
+    """
+    try:
+        from footstats.core.probability_calibrator import calibrate_confidence
+        return calibrate_confidence
+    except ImportError as e:
+        log.warning("Kalibracja pewnosci niedostepna (%s) — stawki licza sie z"
+                    " pewnosci SUROWEJ (pct/100)", e)
+        return lambda pct: pct / 100.0
+
+
+def _bezpieczny_kelly(kelly_fn, p: float, odds: float, bankroll: float) -> float:
+    """Stawka Kelly'ego, a przy bledzie wejscia — 1.0 PLN, ale ze sladem.
+
+    Stawka 1.0 wyglada na produkcji jak swiadoma decyzja modelu. Bez logu nie da
+    sie jej odroznic od kursu 0, pewnosci None albo innego smiecia z Groqa.
+    """
+    try:
+        return kelly_fn(p, odds, bankroll=bankroll)
+    except (TypeError, ZeroDivisionError) as e:
+        log.warning("Kelly nie policzyl stawki (p=%s, kurs=%s): %s — awaryjnie 1.0 PLN",
+                    p, odds, e)
+        return 1.0
+
+
 def _dodaj_kelly(dane: dict, bankroll: float) -> None:
     """Dodaje kelly_stake do każdego zdarzenia w kuponach i top3."""
     try:
         from footstats.core.kelly import kelly_stake
         from footstats.config import AGENT_BANKROLL
         from footstats.core.calibration import get_stake_multiplier, calibration_summary
-    except ImportError:
+    except ImportError as e:
+        # Wyjscie BEZ wyliczenia stawek dla calego kuponu. Kupon powstaje
+        # normalnie, wiec z zewnatrz wyglada poprawnie — az ktos zapyta, czemu
+        # nie ma `kelly_stake`.
+        log.warning("Kelly/kalibracja nie wstaly (%s) — zdarzenia zostaja BEZ"
+                    " wyliczonej stawki", e)
         return
 
     # Guard: bankroll musi być dodatnią liczbą — DB może zwrócić None
@@ -503,28 +540,19 @@ def _dodaj_kelly(dane: dict, bankroll: float) -> None:
         multiplier = 1.0
     effective_bankroll = bankroll * multiplier
 
-    try:
-        from footstats.core.probability_calibrator import calibrate_confidence
-    except ImportError:
-        calibrate_confidence = lambda pct: pct / 100.0  # noqa: E731
+    calibrate_confidence = _kalibrator_pewnosci()
 
     # (x or {}) — Groq potrafi zwrócić kupon=None / zdarzenia=None (crash prod 20.07)
     for kupon_key in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
         for z in (dane.get(kupon_key) or {}).get("zdarzenia") or []:
             p    = calibrate_confidence(z.get("pewnosc_pct") or 50)
             odds = z.get("kurs") or 1.0
-            try:
-                z["kelly_stake"] = kelly_stake(p, odds, bankroll=effective_bankroll)
-            except (TypeError, ZeroDivisionError):
-                z["kelly_stake"] = 1.0
+            z["kelly_stake"] = _bezpieczny_kelly(kelly_stake, p, odds, effective_bankroll)
 
     for row in dane.get("top3") or []:
         p    = calibrate_confidence(row.get("pewnosc_pct") or 50)
         odds = row.get("kurs") or 1.0
-        try:
-            row["kelly_stake"] = kelly_stake(p, odds, effective_bankroll)
-        except (TypeError, ZeroDivisionError):
-            row["kelly_stake"] = 1.0
+        row["kelly_stake"] = _bezpieczny_kelly(kelly_stake, p, odds, effective_bankroll)
 
 
 # ── Krok 6: Walidacja Groq ────────────────────────────────────────────────────
