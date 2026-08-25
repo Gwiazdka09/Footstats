@@ -110,26 +110,104 @@ def test_operator_jest_wskazany_z_imienia_i_nazwiska(plik: Path):
     )
 
 
-def test_adres_operatora_wciaz_do_uzupelnienia():
-    """TRIPWIRE, nie asercja poprawności — świadomie odwrócona.
+@pytest.mark.parametrize("plik", [REGULAMIN, POLITYKA], ids=["regulamin", "polityka"])
+def test_dokumenty_bez_placeholderow(plik: Path):
+    """Publikacja z „[UZUPEŁNIĆ]" na stronie jest gorsza niż brak strony."""
+    assert "UZUPEŁNIĆ" not in plik.read_text(encoding="utf-8")
 
-    Art. 5 ust. 2 pkt 2 uśude wymaga obok imienia i nazwiska także **miejsca
-    zamieszkania i adresu**. Ustawa mówi wprost o miejscu zamieszkania, więc dla
-    osoby fizycznej oznacza to adres domowy na publicznej stronie — trwale, bo
-    scrapery i archiwa nie zapominają.
 
-    DECYZJA 2026-08-24: zamiast adresu domowego idzie **skrytka pocztowa**.
-    Dopóki jej nie ma, dokumenty zostają z placeholderem, a ten test przechodzi
-    i przypomina, że **publikacja jest zablokowana na L1**.
+# Znaczniki zarobkowości. Ich pojawienie się zmienia stan prawny serwisu.
+# Wzorce celowo z granicami słowa i wyjątkami — naiwne podciągi dawały fałszywe
+# trafienia na własnym regulaminie: „reklam" łapało **reklamacje** z §10 (tryb
+# wymagany przez art. 8 uśude, nic wspólnego z zarobkiem), a „płatnoś" łapało
+# **Nieodpłatność** z §5, czyli deklarację dokładnie odwrotną.
+ZNAKI_ZAROBKOWOSCI = [
+    r"reklam(?!ac)",      # reklama/reklamowy, ale NIE reklamacja
+    r"\bsubskrypcj",
+    r"\babonament",
+    r"\bpłatnoś",         # granica słowa odcina „nieodpłatność"
+    r"\bcennik",
+    r"\bafiliac",
+    r"\bsponsor",
+]
 
-    Gdy adres zostanie wpisany, test zacznie padać — i to jest cel: wymusza
-    zamknięcie L1 w TODO.md oraz odwrócenie tej asercji na `not in`.
+# Zaprzeczenia liczone w OKNIE przed wystąpieniem, nie regexem z lookbehindem.
+# Regulamin pisze „Serwis **nie wyświetla reklam**" i „**nie** prowadzi sprzedaży,
+# **nie** oferuje subskrypcji" — to deklaracje BRAKU zarobkowości, więc znacznik
+# w takim zdaniu nie może uruchamiać wymogu adresu.
+ZAPRZECZENIA = ("nie ", "bez ", "żadn", "zakaz")
+OKNO_ZAPRZECZENIA = 60
+
+
+def _znaki_zarobkowosci(tresc: str) -> list[str]:
+    """Znaczniki zarobkowości NIE poprzedzone zaprzeczeniem."""
+    znalezione = []
+    for znak in ZNAKI_ZAROBKOWOSCI:
+        for m in re.finditer(znak, tresc, re.IGNORECASE):
+            poprzedza = tresc[max(0, m.start() - OKNO_ZAPRZECZENIA):m.start()].lower()
+            if not any(z in poprzedza for z in ZAPRZECZENIA):
+                znalezione.append(znak)
+                break
+    return znalezione
+
+
+def test_adres_wymagany_dopiero_gdy_serwis_zarabia():
+    """WARUNEK PRAWNY ZAKODOWANY, nie przypomnienie w TODO.
+
+    Ustalone 2026-08-25 po sprawdzeniu, a nie z pamięci. Art. 5 uśude (dane
+    usługodawcy, w tym adres) nakłada obowiązki na **usługodawcę**, a art. 2
+    pkt 6 definiuje go jako osobę, która *prowadząc, chociażby ubocznie,
+    działalność ZAROBKOWĄ lub zawodową*, świadczy usługi drogą elektroniczną.
+    Serwis w całości darmowy, bez reklam i bez odesłań afiliacyjnych, tej
+    przesłanki nie spełnia — więc adresu pocztowego podawać nie musi. Sankcja
+    z art. 23 (grzywna) też dotyczy wyłącznie usługodawcy.
+
+    RODO obowiązuje NIEZALEŻNIE od tego, ale wymaga „tożsamości i danych
+    kontaktowych" administratora — imię, nazwisko i działający e-mail to
+    spełniają. Adres pocztowy jest tam dobrą praktyką, nie literą przepisu.
+
+    WCZEŚNIEJ BYŁO INACZEJ I BYŁO TO BŁĘDNE: 24.08 wpisałem, że brak adresu
+    blokuje publikację, czytając art. 5 bez definicji z art. 2. Blokada była
+    zmyślona, a jej kosztem miała być skrytka pocztowa za 120 zł i opóźnienie.
+
+    CO SIĘ ZMIENIA, GDY SERWIS ZACZNIE ZARABIAĆ: reklamy (L8), subskrypcje (L5)
+    albo afiliacja czynią działalność zarobkową — wtedy art. 5 stosuje się już
+    w pełni i adres staje się WYMAGANY. Ten test pilnuje tego przejścia: gdy
+    w regulaminie pojawi się którykolwiek znacznik zarobkowości, zażąda adresu.
     """
-    for plik in (REGULAMIN, POLITYKA):
-        assert "UZUPEŁNIĆ PRZED PUBLIKACJĄ" in plik.read_text(encoding="utf-8"), (
-            f"{plik.name}: placeholder zniknął — uzupełnij L1 w TODO.md "
-            "i odwróć ten test na `not in`"
-        )
+    zarobkowy = _znaki_zarobkowosci(_regulamin())
+
+    if not zarobkowy:
+        return  # serwis darmowy — adres nie jest wymagany
+
+    assert re.search(r"[Aa]dres do korespondencji|[Uu]l\.|[Ss]krytka pocztowa",
+                     _regulamin()), (
+        f"regulamin wskazuje na zarobkowość ({zarobkowy}), więc serwis jest"
+        " usługodawcą z art. 2 pkt 6 uśude — adres z art. 5 staje się wymagany"
+    )
+
+
+@pytest.mark.parametrize("tekst,ma_wykryc", [
+    ("Serwis wyświetla reklamy partnerów.", True),
+    ("Dostęp w ramach subskrypcji 19 zł miesięcznie.", True),
+    ("Linki afiliacyjne do partnerów.", True),
+    ("Cennik usług znajduje się poniżej.", True),
+    ("Miesięczny abonament wynosi 19 zł.", True),
+    # Deklaracje BRAKU zarobkowości — nie mogą uruchamiać wymogu adresu.
+    ("Serwis nie wyświetla reklam ani nie oferuje subskrypcji.", False),
+    ("Serwis nie pobiera żadnych opłat.", False),
+    # Fałszywe trafienia, na które ten detektor już raz się nabrał.
+    ("Reklamacje rozpatrujemy w terminie 14 dni.", False),
+    ("§5. Nieodpłatność Serwisu", False),
+])
+def test_detektor_zarobkowosci_nie_jest_pusty(tekst: str, ma_wykryc: bool):
+    """Dowód, że warunek wyżej zadziała, gdy przyjdzie co do czego.
+
+    Test warunkowy, który przy dzisiejszej treści wychodzi wcześniej, jest wart
+    dokładnie tyle, ile jego detektor. Ten sam detektor pomylił się już dwa razy
+    na naszym własnym regulaminie — stąd oba fałszywe trafienia w tabelce.
+    """
+    assert bool(_znaki_zarobkowosci(tekst)) is ma_wykryc
 
 
 def test_kanal_kontaktowy_jest_ten_sam_w_obu_dokumentach():

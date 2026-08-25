@@ -125,7 +125,7 @@ formalne i niezawodność.
 - ~~**L2**~~ ✅ §5 przepisany na „Nieodpłatność Serwisu”.
 - ~~**L3**~~ ✅ §7 bez wyłączenia odpowiedzialności; dodane zdanie o braku przewagi nad rynkiem.
 - ~~**F8**~~ ✅ było już zrobione (`legalUrl()`), wpis nieaktualny.
-- **L1** — imię i nazwisko ✅ wpisane 24.08. Został **adres korespondencyjny → skrytka pocztowa** (decyzja 24.08).
+- ~~**L1**~~ ✅ **ZAMKNIĘTE 25.08.** Imię, nazwisko i e-mail w obu dokumentach. Adres pocztowy **nie jest wymagany przy serwisie darmowym** — patrz L1 niżej; wpis z 24.08 o blokadzie był błędny.
 
 **Znalezione przy okazji i naprawione, poza pierwotną listą:**
 - Regulamin **nie miał trybu reklamacyjnego**, którego wymaga art. 8 ustawy o świadczeniu usług drogą elektroniczną. Dodany: zgłoszenie e-mailem, odpowiedź w 14 dni, brak odpowiedzi = uznanie reklamacji.
@@ -203,15 +203,17 @@ Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakłada
 - [ ] **L6 — pytanie do prawnika, nie do księgowej.** Płatny serwis z typami stoi bliżej zakazu reklamy i promocji zakładów wzajemnych (art. 29 ustawy o grach hazardowych) niż darmowe statystyki. Nie jest zakazany, ale przy pobieraniu opłat lepiej mieć to potwierdzone przed startem niż po.
 - [ ] **L7 — ewidencja wpłat.** Prosty rejestr każdej wpłaty (data, kwota brutto) do pilnowania limitu kwartalnego. Da się wyprowadzić z webhooków operatora płatności.
 
-- [ ] **L1 — ZOSTAŁ TYLKO ADRES.** Reszta zrobiona 24.08: §1.2 regulaminu nie powołuje się już na nieistniejące JDG, jest sekcja identyfikacyjna wymagana przez art. 5 ustawy o świadczeniu usług drogą elektroniczną, polityka prywatności przestała żądać NIP-u, a **imię i nazwisko (Jakub Gwiazdowski) są wpisane w obu dokumentach**.
+- [x] ✅ **L1 — ZAMKNIĘTE 25.08. Blokada publikacji była MOJĄ POMYŁKĄ, nie wymogiem prawa.**
 
-  **Do zrobienia przez Ciebie — jedna rzecz:** założyć **skrytkę pocztową** (Poczta Polska, 90 zł/rok + 30 zł zamek i klucz) i podać mi jej adres. **Decyzja z 24.08: skrytka.**
+  24.08 wpisałem, że brak adresu pocztowego blokuje publikację, i wyceniłem to na skrytkę za 120 zł plus opóźnienie. **Czytałem art. 5 uśude bez definicji z art. 2.** Art. 5 nakłada obowiązki na **usługodawcę**, a art. 2 pkt 6 definiuje go jako osobę, która *prowadząc, chociażby ubocznie, **działalność zarobkową lub zawodową**, świadczy usługi drogą elektroniczną*. Serwis w całości nieodpłatny, bez reklam i bez afiliacji, tej przesłanki **nie spełnia**. Grzywna z art. 23 też dotyczy wyłącznie usługodawcy.
 
-  Uczciwie o ryzyku: art. 5 ust. 2 pkt 2 uśude mówi o „miejscu zamieszkania i adresie", więc skrytka **nie jest literalnym spełnieniem przepisu** — jest ograniczeniem szkody. Cel przepisu (realna możliwość doręczenia i kontaktu) zostaje spełniony, a alternatywa to adres domowy na publicznej stronie, nieodwracalnie: scrapery i archiwa nie zapominają. Przy serwisie darmowym, bez płatności i bez skarg, ryzyko sporu o literalną zgodność jest niskie — ale to wybór świadomy, nie przeoczenie.
+  RODO obowiązuje niezależnie od formy prawnej, ale wymaga „tożsamości i **danych kontaktowych**" administratora — imię, nazwisko i działający e-mail to spełniają. Adres pocztowy jest tam dobrą praktyką, nie literą przepisu.
 
-  Pilnuje tego odwrócony tripwire `test_adres_operatora_wciaz_do_uzupelnienia`: gdy adres wpiszesz, test zacznie padać i wymusi zamknięcie tej pozycji.
+  **Stan dokumentów:** §1.2 regulaminu i §1 polityki podają imię, nazwisko i e-mail, bez placeholderów. Skrytka **niepotrzebna**. To nie jest porada prawna — przy pierwszej realnej wpłacie potwierdzić u prawnika.
 
-  **Mail NIE blokuje publikacji.** W obu dokumentach stoi działający `jakubgwiazdowski12@gmail.com` (dane operatora, reklamacje §10, żądania z RODO) — art. 5 wymaga „adresu elektronicznego" i ten warunek jest spełniony. Decyzja z 24.08 (skorygowana): mail **z własnej domeny**, patrz L9. Podmiana to jeden przebieg przez oba pliki, pilnuje jej `test_kanal_kontaktowy_jest_ten_sam_w_obu_dokumentach`, żeby reklamacje i RODO nie rozjechały się na dwa różne adresy.
+  **PRÓG, KTÓRY TO ODWRACA — zakodowany, nie zapisany na kartce:** reklamy (L8), subskrypcje/płatności (L5) albo afiliacja czynią działalność **zarobkową**, wtedy art. 5 stosuje się w pełni i adres staje się wymagany. Pilnuje tego `test_adres_wymagany_dopiero_gdy_serwis_zarabia` — gdy w regulaminie pojawi się znacznik zarobkowości, test zażąda adresu. Sam detektor ma 9 własnych testów, bo dwa razy pomylił się na naszym regulaminie: łapał „**reklamacje**" z §10 (tryb wymagany przez art. 8, nic wspólnego z zarobkiem) i „**Nieodpłatność**" z §5, czyli deklarację dokładnie odwrotną.
+
+  **Mail:** działający `jakubgwiazdowski12@gmail.com` w obu dokumentach (dane operatora, reklamacje §10, żądania z RODO). Przenosiny na skrzynkę z własnej domeny — patrz L10, nie blokuje.
 
 - [ ] **L10 — własna domena + mail z domeny.** Decyzja z 24.08. **Nie zdejmuje wymogu adresu z L1** — domena i adres korespondencyjny to dwie różne rzeczy, skrytka dalej potrzebna.
 
