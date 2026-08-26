@@ -22,6 +22,7 @@ from __future__ import annotations
 import pytest
 
 from footstats.core import kalibracja_log as kl
+from tests.pomoc_sql import kolumny_do_wartosci
 
 
 class _Kursor:
@@ -76,27 +77,28 @@ def baza(monkeypatch):
 
 # ── trafność trzech rynków z jednego wyniku ────────────────────────────────
 
-@pytest.mark.parametrize("wynik,tip,ocz_tip,ocz_o25,ocz_btts", [
-    # 3-1: gospodarz wygrał, 4 gole, obie strzeliły
-    ("3-1", "1", 1, 1, 1),
-    ("3-1", "X", 0, 1, 1),
+@pytest.mark.parametrize("wynik,tip,ocz_tip,ocz_o25,ocz_btts,ocz_draw", [
+    # 3-1: gospodarz wygrał, 4 gole, obie strzeliły, nie remis
+    ("3-1", "1", 1, 1, 1, 0),
+    ("3-1", "X", 0, 1, 1, 0),
     # 0-0: remis, brak goli, BTTS nie
-    ("0-0", "X", 1, 0, 0),
-    ("0-0", "1", 0, 0, 0),
+    ("0-0", "X", 1, 0, 0, 1),
+    ("0-0", "1", 0, 0, 0, 1),
     # 1-1: remis, 2 gole (Under), obie strzeliły
-    ("1-1", "X", 1, 0, 1),
-    # 2-0: gospodarz, 2 gole (Under), tylko jedna strzeliła
-    ("2-0", "1", 1, 0, 0),
-    # 4-2: gość przegrał, 6 goli, obie strzeliły
-    ("4-2", "2", 0, 1, 1),
+    ("1-1", "X", 1, 0, 1, 1),
+    # 2-0: gospodarz, 2 gole (Under), tylko jedna strzeliła, nie remis
+    ("2-0", "1", 1, 0, 0, 0),
+    # 4-2: gość przegrał, 6 goli, obie strzeliły, nie remis
+    ("4-2", "2", 0, 1, 1, 0),
 ])
-def test_jeden_wynik_ocenia_trzy_rynki(wynik, tip, ocz_tip, ocz_o25, ocz_btts):
+def test_jeden_wynik_ocenia_cztery_rynki(wynik, tip, ocz_tip, ocz_o25, ocz_btts, ocz_draw):
     oceny = kl.oceny_rynkow(tip, wynik)
 
     assert oceny == {
         "tip_correct": ocz_tip,
         "over25_correct": ocz_o25,
         "btts_correct": ocz_btts,
+        "draw_correct": ocz_draw,
     }, f"{wynik} przy typie {tip}"
 
 
@@ -125,15 +127,24 @@ def test_dogrywka_nie_zapisuje_zera(caplog):
 # ── zapis wyniku ───────────────────────────────────────────────────────────
 
 def test_zapisz_wynik_uzupelnia_oba_rynki_golowe(baza):
-    assert kl.zapisz_wynik(7, "3-1", "1") is True
+    """"3-0" ROZRÓŻNIA over25_correct (1) od btts_correct (0) — poprzednia
+    wersja testu użyła "3-1", gdzie OBIE kolumny wynoszą 1, więc `1 in params`
+    przechodziło niezależnie od kolejności parametrów. Zweryfikowane mutacją:
+    zamiana `over25_correct`/`btts_correct` miejscami w `zapisz_wynik` i
+    `uzupelnij_rynki_golowe` dawała zielony test — na produkcji krzywe
+    Over 2.5 i BTTS zamieniłyby się miejscami, a to na nich stoi werdykt
+    trzymający flagę `BTTS_TWO_WAY` na OFF.
+    """
+    assert kl.zapisz_wynik(7, "3-0", "1") is True
 
     update = baza["conn"].zawierajace("UPDATE model_log")
     assert update, "brak UPDATE"
     sql, params = update[0]
-    assert "over25_correct" in sql, sql
-    assert "btts_correct" in sql, sql
-    # 3-1 → Over trafiony, BTTS trafiony, typ "1" trafiony
-    assert 1 in params
+    wartosci = kolumny_do_wartosci(sql, params)
+    assert wartosci["tip_correct"] == 1, wartosci      # typ "1" trafiony
+    assert wartosci["over25_correct"] == 1, wartosci   # 3 gole
+    assert wartosci["btts_correct"] == 0, wartosci      # gosc nie strzelil
+    assert wartosci["draw_correct"] == 0, wartosci      # nie remis
 
 
 def test_zapisz_wynik_nierozliczalny_nic_nie_zapisuje(baza):
@@ -149,9 +160,14 @@ def test_zapisz_wynik_bez_wyniku_nic_nie_zapisuje(baza):
 # ── uzupełnienie wierszy historycznych ─────────────────────────────────────
 
 def test_uzupelnia_wiersze_ktore_juz_maja_wynik(monkeypatch):
-    """388 wierszy czeka z gotowym wynikiem — nie ma po co czekać na nowe mecze."""
+    """388 wierszy czeka z gotowym wynikiem — nie ma po co czekać na nowe mecze.
+
+    "3-0" rozróżnia over25_correct (1) od btts_correct (0) — bez wartości
+    sprawdzonej PO NAZWIE kolumny, zamiana tych dwóch miejscami w
+    `uzupelnij_rynki_golowe` przeszłaby niezauważona (zweryfikowane mutacją).
+    """
     conn = _Conn(do_uzupelnienia=[
-        {"id": 1, "model_tip": "1", "actual_result": "3-1"},
+        {"id": 1, "model_tip": "1", "actual_result": "3-0"},
         {"id": 2, "model_tip": "X", "actual_result": "0-0"},
     ])
     monkeypatch.setattr(kl, "_connect", lambda *a, **k: conn)
@@ -160,7 +176,11 @@ def test_uzupelnia_wiersze_ktore_juz_maja_wynik(monkeypatch):
     stat = kl.uzupelnij_rynki_golowe(dry_run=False)
 
     assert stat["uzupelnione"] == 2
-    assert len(conn.zawierajace("UPDATE model_log")) == 2
+    aktualizacje = conn.zawierajace("UPDATE model_log")
+    assert len(aktualizacje) == 2
+    wartosci = kolumny_do_wartosci(*aktualizacje[0])
+    assert wartosci["over25_correct"] == 1, wartosci   # 3-0: 3 gole
+    assert wartosci["btts_correct"] == 0, wartosci      # 3-0: gosc nie strzelil
 
 
 def test_uzupelnianie_na_sucho_nic_nie_zapisuje(monkeypatch):
