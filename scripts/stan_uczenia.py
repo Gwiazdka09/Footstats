@@ -26,6 +26,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 # Próg z `scripts/porownaj_modele.py` — poniżej niego werdykt nie zapada.
 MIN_ROZLICZONYCH = 30
 
+# Osobny od MIN_ROZLICZONYCH mimo tej samej wartości — tamten dotyczy CAŁEJ
+# próby przed werdyktem modelu, ten POJEDYNCZEGO koszyka w raporcie remisów.
+# To ostrzeżenie o mocy statystycznej, nie wyrok: koszyk „30%+” z 26.08 miał
+# n=33 i wypadł istotnie (test dwumianowy wobec bazy 23.6% dał p=0.024 po
+# korekcie Šidáka na 5 koszyków) mimo że ledwie przekracza próg.
+PROG_MALA_PROBA = 30
+
 
 def _licz(conn, zapytanie: str) -> list[dict]:
     return [dict(r) for r in conn.execute(zapytanie).fetchall()]
@@ -202,7 +209,7 @@ def raport_rynkow_golowych(conn) -> None:
                MIN(prob_over25) AS od, COUNT(*) AS n,
                AVG(prob_over25) AS model,
                100.0 * AVG(over25_correct) AS realnie
-        FROM model_log WHERE over25_correct IS NOT NULL
+        FROM model_log WHERE over25_correct IS NOT NULL AND prob_over25 IS NOT NULL
         GROUP BY 1, 2
         UNION ALL
         SELECT 'BTTS',
@@ -214,7 +221,7 @@ def raport_rynkow_golowych(conn) -> None:
                MIN(prob_btts), COUNT(*),
                AVG(prob_btts),
                100.0 * AVG(btts_correct)
-        FROM model_log WHERE btts_correct IS NOT NULL
+        FROM model_log WHERE btts_correct IS NOT NULL AND prob_btts IS NOT NULL
         GROUP BY 1, 2
         ORDER BY 1 DESC, 3
     """)
@@ -262,6 +269,8 @@ def raport_remisow(conn) -> None:
 
     # Zapytanie rozpisane wprost, bez sklejania nazw kolumn f-stringiem — patrz
     # komentarz w `raport_rynkow_golowych` (bandit B608 slusznie to blokuje).
+    # `prob_draw IS NOT NULL` obok `draw_correct IS NOT NULL`: bez tego wiersz
+    # z NULL w prob_draw wpadlby do CASE-owego ELSE, czyli koszyka '30%+'.
     koszyki = _licz(conn, """
         SELECT CASE WHEN prob_draw < 15 THEN '<15%'
                     WHEN prob_draw < 20 THEN '15-20%'
@@ -271,16 +280,21 @@ def raport_remisow(conn) -> None:
                MIN(prob_draw) AS od, COUNT(*) AS n,
                AVG(prob_draw) AS model,
                100.0 * AVG(draw_correct) AS realnie
-        FROM model_log WHERE draw_correct IS NOT NULL
+        FROM model_log WHERE draw_correct IS NOT NULL AND prob_draw IS NOT NULL
         GROUP BY 1
         ORDER BY 2
     """)
     if not koszyki:
         print("  BRAK DANYCH — uruchom `uzupelnij_rynki_golowe(dry_run=False)`.")
         return
+    # `ORDER BY 2` w zapytaniu sortuje po `od`, ale ta kolumna nigdzie sie nie
+    # drukuje — ktos moglby ja usunac jako "nieuzywana" i ORDER BY 2 zaczalby
+    # cicho sortowac po COUNT(*). Porzadek koszykow wymuszamy wiec jawnie tutaj.
+    koszyki = sorted(koszyki, key=lambda w: float(w["od"]))
     for w in koszyki:
+        znacznik = " — mala proba" if w["n"] < PROG_MALA_PROBA else ""
         print(f"  {str(w['koszyk']):8} n={w['n']:4}"
-              f"  model={float(w['model']):.1f}%  realnie={float(w['realnie']):.1f}%")
+              f"  model={float(w['model']):.1f}%  realnie={float(w['realnie']):.1f}%{znacznik}")
     realne = [float(w["realnie"]) for w in koszyki]
     rosnie = all(a <= b for a, b in zip(realne, realne[1:]))
     werdykt = "ROSNIE — liczba rozroznia" if rosnie else "NIE rosnie — brak uporzadkowania"

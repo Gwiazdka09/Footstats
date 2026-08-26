@@ -65,6 +65,19 @@ class _Conn:
         return [z for z in self.zapytania if fragment.upper() in z[0].upper()]
 
 
+def _kolumny_do_wartosci(sql: str, params: tuple) -> dict:
+    """Mapuje `SET kolumna = ?` na wartość z krotki parametrów, PO NAZWIE.
+
+    `assert 1 in params` przechodzi niezależnie od kolejności, jeśli dwie
+    kolumny mają tę samą wartość (np. "1-1": btts_correct=1 I draw_correct=1) —
+    zamiana kolumn miejscami zostałaby niezauważona. Odczyt po nazwie kolumny
+    wykrywa taką zamianę niezależnie od tego, jakim wynikiem testujemy.
+    """
+    czesc_set = sql.split("SET", 1)[1].split("WHERE")[0]
+    kolumny = [k.split("=")[0].strip() for k in czesc_set.split(",")]
+    return dict(zip(kolumny, params))
+
+
 @pytest.fixture
 def baza(monkeypatch):
     stan = {"conn": _Conn()}
@@ -111,13 +124,20 @@ def test_oceny_rynkow_zwraca_wszystkie_cztery_klucze():
 # ── zapis wyniku ────────────────────────────────────────────────────────────
 
 def test_zapisz_wynik_dopisuje_draw_correct(baza):
-    assert kl.zapisz_wynik(7, "1-1", "1") is True
+    """"3-1" ROZRÓŻNIA btts_correct (1) od draw_correct (0) — poprzednia wersja
+    testu użyła "1-1", gdzie OBIE kolumny wynoszą 1, więc `1 in params`
+    przechodziło niezależnie od kolejności parametrów. Zweryfikowane mutacją:
+    zamiana `btts_correct`/`draw_correct` miejscami w `zapisz_wynik` dawała
+    zielony test — na produkcji krzywa remisów pokazywałaby trafność BTTS.
+    """
+    assert kl.zapisz_wynik(7, "3-1", "1") is True
 
     update = baza["conn"].zawierajace("UPDATE model_log")
     assert update, "brak UPDATE"
     sql, params = update[0]
-    assert "draw_correct" in sql, sql
-    assert 1 in params  # 1-1 to remis, draw_correct=1
+    wartosci = _kolumny_do_wartosci(sql, params)
+    assert wartosci["btts_correct"] == 1, wartosci  # obie druzyny strzelily
+    assert wartosci["draw_correct"] == 0, wartosci  # 3-1 to NIE remis
 
 
 def test_zapisz_wynik_nierozliczalny_nic_nie_zapisuje(baza):
@@ -158,7 +178,8 @@ def test_uzupelnianie_dry_run_nic_nie_zapisuje(monkeypatch):
 
 
 def test_uzupelnianie_zapisuje_draw_correct(monkeypatch):
-    conn = _Conn(do_uzupelnienia=[{"id": 5, "model_tip": "1", "actual_result": "1-1"}])
+    """Jak wyżej: "3-1" rozróżnia btts_correct od draw_correct, "1-1" nie."""
+    conn = _Conn(do_uzupelnienia=[{"id": 5, "model_tip": "1", "actual_result": "3-1"}])
     monkeypatch.setattr(kl, "_connect", lambda *a, **k: conn)
     monkeypatch.setattr(kl, "init_kalibracja_log", lambda: None)
 
@@ -167,8 +188,9 @@ def test_uzupelnianie_zapisuje_draw_correct(monkeypatch):
     update = conn.zawierajace("UPDATE model_log")
     assert update, "brak UPDATE"
     sql, params = update[0]
-    assert "draw_correct" in sql, sql
-    assert 1 in params  # 1-1 to remis
+    wartosci = _kolumny_do_wartosci(sql, params)
+    assert wartosci["btts_correct"] == 1, wartosci
+    assert wartosci["draw_correct"] == 0, wartosci
 
 
 def test_uzupelnianie_pomija_nierozliczalne_dalej_dziala(monkeypatch):
@@ -266,3 +288,82 @@ def test_raport_remisow_nie_rosnie_gdy_krzywa_nieuporzadkowana(capsys):
 
     out = capsys.readouterr().out
     assert "NIE rosnie" in out
+
+
+def test_raport_remisow_sortuje_koszyki_niezaleznie_od_kolejnosci_z_bazy(capsys):
+    """`ORDER BY 2` w zapytaniu wisi na kolumnie `od`, ktora nigdzie sie nie
+    drukuje. Gdyby ktos usunal ja jako "nieuzywana", ORDER BY 2 zaczalby
+    sortowac po COUNT(*), a werdykt rosnie/nie-rosnie liczylby sie na zlej
+    kolejnosci bez zadnego bledu. Raport ma wiec sam porzadkowac koszyki w
+    Pythonie po `od`, niezaleznie od kolejnosci zwroconej przez baze.
+    """
+    conn = _ConnRaportu([
+        [{"n": 427, "realnie": 23.6}],
+        [
+            # celowo NIE w kolejnosci rosnacego prob_draw
+            {"koszyk": "20-25%", "od": 20.0, "n": 150, "model": 22.0, "realnie": 24.0},
+            {"koszyk": "<15%", "od": 7.3, "n": 40, "model": 12.0, "realnie": 15.0},
+            {"koszyk": "30%+", "od": 30.0, "n": 37, "model": 32.0, "realnie": 30.0},
+            {"koszyk": "15-20%", "od": 15.0, "n": 120, "model": 17.5, "realnie": 20.0},
+            {"koszyk": "25-30%", "od": 25.0, "n": 80, "model": 27.0, "realnie": 27.0},
+        ],
+    ])
+
+    stan_uczenia.raport_remisow(conn)
+
+    out = capsys.readouterr().out
+    linie = [w for w in out.splitlines() if w.strip().startswith(("<15%", "15-20%",
+                                                                    "20-25%", "25-30%", "30%+"))]
+    assert [w.split()[0] for w in linie] == ["<15%", "15-20%", "20-25%", "25-30%", "30%+"]
+    assert "ROSNIE" in out, "posortowane koszyki rosna monotonicznie"
+
+
+def test_raport_remisow_oznacza_mala_probe(capsys):
+    """Prog malej proby dotyczy realnie koszyka `<15%` (n=10 na 26.08), NIE
+    koszyka `30%+` — ten mial n=33 i test dwumianowy wobec bazy 23.6% dal
+    p=0.024 po korekcie Sidaka na 5 koszykow, czyli sygnal, nie szum. Znacznik
+    to ostrzezenie o mocy statystycznej, nie wyrok o konkretnym koszyku.
+    """
+    conn = _ConnRaportu([
+        [{"n": 427, "realnie": 23.6}],
+        [
+            {"koszyk": "<15%", "od": 7.3, "n": 10, "model": 12.0, "realnie": 15.0},
+            {"koszyk": "30%+", "od": 30.0, "n": 33, "model": 32.0, "realnie": 45.5},
+        ],
+    ])
+
+    stan_uczenia.raport_remisow(conn)
+
+    out = capsys.readouterr().out
+    linia_15 = next(w for w in out.splitlines() if w.strip().startswith("<15%"))
+    linia_30 = next(w for w in out.splitlines() if w.strip().startswith("30%+"))
+    assert "mala proba" in linia_15, linia_15
+    assert "mala proba" not in linia_30, linia_30
+
+
+def test_raport_remisow_zapytanie_wyklucza_null_prob_draw():
+    """`CASE ... ELSE '30%+'` bez jawnej galezi na NULL wrzucilby wiersz z
+    `prob_draw IS NULL` do najwyzszego koszyka. Dzis nieosiagalne (kandydat
+    bez `pr` jest odrzucany wczesniej w `zapisz_ocene`), ale warunek ma to
+    wykluczac jawnie, nie przez przypadek architektury gdzie indziej.
+    """
+    conn = _ConnRaportu([[{"n": 427, "realnie": 23.6}], []])
+
+    stan_uczenia.raport_remisow(conn)
+
+    zapytanie_koszykow = conn.zapytania[1].upper()
+    assert "PROB_DRAW IS NOT NULL" in zapytanie_koszykow, zapytanie_koszykow
+
+
+def test_raport_rynkow_golowych_wyklucza_null_prawdopodobienstwa():
+    """Bliźniak `raport_remisow` ma ten sam ksztalt braku — TU jest on realnie
+    osiagalny: `kandydat.get("o25")`/`("bt")` w `zapisz_ocene` nie ma guardu
+    na None, w przeciwienstwie do `pr` (remis).
+    """
+    conn = _ConnRaportu([[]])
+
+    stan_uczenia.raport_rynkow_golowych(conn)
+
+    zapytanie = conn.zapytania[0].upper()
+    assert "PROB_OVER25 IS NOT NULL" in zapytanie, zapytanie
+    assert "PROB_BTTS IS NOT NULL" in zapytanie, zapytanie
