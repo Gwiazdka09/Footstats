@@ -301,6 +301,72 @@ def raport_remisow(conn) -> None:
     print(f"  → krzywa {werdykt} (rozpietosc {max(realne) - min(realne):.1f} pp)")
 
 
+def raport_drugiego_wyboru(conn) -> None:
+    """ZADANIE D — czy DRUGI (albo trzeci) typ modelu trafia częściej niż GŁÓWNY.
+
+    `model_log` zapisuje wszystkie prawdopodobieństwa (1X2, Over/Under 2.5,
+    BTTS/NIE) i pełny wynik, ale liczy trafność wyłącznie dla argmaksu. Ten
+    raport porównuje pozycje #1/#2/#3 rankingu modelu (`ranking_rynkow`).
+
+    PUŁAPKA: bazy 7 rynków są rozstrzelone o 31 pp (n=424, 26.08: "1" 43.9%,
+    "X" 23.6%, "2" 32.5%, Over 2.5 55.0%, Under 2.5 45.0%, BTTS 52.6%).
+    Rynek dwustronny wygrywa argmax po surowym prawdopodobieństwie SAMĄ
+    definicją (jedna strona zawsze ≥50%) — dokładnie mechanizm `_pomijaj_btts`
+    z `system_paper.py:42`. WERDYKT liczy się więc po PRZEWADZE nad bazą
+    własnego rynku (`przewaga_nad_baza`), nie po surowej trafności — ta druga
+    koronowałaby Over 2.5 za samą bazę, nie za wiedzę modelu.
+    """
+    from footstats.core.ranking_rynkow import przewaga_nad_baza, rozklad_rynkow
+
+    print("\n=== DRUGI WYBÓR: czy pozycja #2/#3 bije #1? (model_log) ===")
+    # Bez sklejania nazw kolumn f-stringiem (bandit B608) — patrz komentarz
+    # w `raport_rynkow_golowych`. Kolumny sa tu wprost wypisane.
+    wiersze = _licz(conn, """
+        SELECT prob_home, prob_draw, prob_away, prob_over25, prob_btts, actual_result
+        FROM model_log
+        WHERE actual_result IS NOT NULL
+    """)
+    if not wiersze:
+        print("  BRAK DANYCH — model_log nie ma jeszcze żadnego rozliczonego wiersza.")
+        return
+
+    wyniki = {rank: przewaga_nad_baza(wiersze, rank) for rank in (1, 2, 3)}
+
+    print(f"  {'pozycja':8} {'n':>5} {'trafność':>10} {'baza':>8} {'przewaga':>10}")
+    for rank in (1, 2, 3):
+        w = wyniki[rank]
+        if not w["n"]:
+            print(f"  #{rank}       BRAK — żaden wiersz nie ma aż {rank} rynków z prawdopodobieństwem")
+            continue
+        znacznik = " — mala proba" if w["n"] < PROG_MALA_PROBA else ""
+        print(f"  #{rank}       {w['n']:5} {w['trafnosc']:9.1f}% {w['baza']:7.1f}%"
+              f" {w['przewaga']:+9.1f}pp{znacznik}")
+
+    rozklad = rozklad_rynkow(wiersze, rank=1)
+    if rozklad:
+        print("\n  rozkład rynków na pozycji #1 (stronniczość 2-way widać tutaj):")
+        # Sortowanie jawnie w Pythonie po liczbie wystapien, malejaco.
+        for rynek, n in sorted(rozklad.items(), key=lambda kv: kv[1], reverse=True):
+            print(f"    {rynek:10} {n}")
+
+    dostepne = {rank: w for rank, w in wyniki.items() if w["przewaga"] is not None}
+    if not dostepne:
+        print("\n  → brak rozliczalnych danych do werdyktu.")
+        return
+    najlepszy = max(dostepne, key=lambda rank: dostepne[rank]["przewaga"])
+    if najlepszy == 1 or 1 not in dostepne:
+        przewaga_1 = dostepne.get(1, {}).get("przewaga")
+        opis = f"{przewaga_1:+.1f}pp" if przewaga_1 is not None else "brak danych"
+        print(f"\n  → WERDYKT: pozycja #1 (typ główny) ma najwyższą przewagę"
+              f" ({opis}) — drugi/trzeci wybór jej NIE bije.")
+    else:
+        przewaga_1 = dostepne.get(1, {}).get("przewaga")
+        opis_1 = f"{przewaga_1:+.1f}pp" if przewaga_1 is not None else "brak danych"
+        print(f"\n  → WERDYKT: pozycja #{najlepszy} BIJE typ główny — przewaga"
+              f" {dostepne[najlepszy]['przewaga']:+.1f}pp vs #1 {opis_1}."
+              f" Model wie więcej, niż pokazuje typ główny.")
+
+
 def raport_gotowosci(pred: dict, dziennik: dict | None = None) -> None:
     """Ile brakuje do werdyktu `porownaj_modele`.
 
@@ -330,6 +396,7 @@ def main() -> None:
         dziennik = raport_dziennika(conn)
         raport_rynkow_golowych(conn)
         raport_remisow(conn)
+        raport_drugiego_wyboru(conn)
         raport_gotowosci(pred, dziennik)
 
 
