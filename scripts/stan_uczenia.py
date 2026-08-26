@@ -179,6 +179,88 @@ def raport_dziennika(conn) -> dict:
     return {w["model_source"]: w for w in wiersze}
 
 
+# Kolejnosc koszykow pewnosci 1X2 — stala, zeby nie zalezec od kolejnosci
+# zwroconej przez baze (patrz zasada „sortowanie koszykow jawnie w Pythonie”
+# w `raport_remisow`). Tutaj bucketing dzieje sie CALY w Pythonie, nie w SQL
+# CASE, wlasnie po to, zeby granice 40/50/60/70 dalo sie przetestowac wprost
+# na wartosciach granicznych, bez uruchamiania prawdziwej bazy.
+_KOSZYKI_1X2 = ("<40%", "40-50%", "50-60%", "60-70%", "70%+")
+
+
+def _koszyk_pewnosci(pewnosc: float) -> str:
+    """Koszyk pewnosci modelu we WLASNYM typie 1X2 (GREATEST z trzech prob).
+
+    Granice domkniete OD DOLU: 40.0 trafia juz do „40-50%”, nie do „<40%” —
+    ten sam ksztalt co CASE w `raport_rynkow_golowych`/`raport_remisow`.
+    """
+    if pewnosc < 40:
+        return "<40%"
+    if pewnosc < 50:
+        return "40-50%"
+    if pewnosc < 60:
+        return "50-60%"
+    if pewnosc < 70:
+        return "60-70%"
+    return "70%+"
+
+
+def raport_kalibracji_1x2(conn) -> None:
+    """Czy pewnosc modelu we WLASNYM typie 1X2 jest wiarygodna? (model_log)
+
+    PEWNOSC = GREATEST(prob_home, prob_draw, prob_away), czyli prawdopodobienstwo
+    przypisane do argmaksu — niezaleznie od tego, ktora z trzech opcji wygrala.
+    Zestawione z `tip_correct` (trafnosc TEGO argmaksu), a nie z pojedynczym
+    prob_home/prob_draw/prob_away — inaczej mieszalibysmy pewnosc typu "1" z
+    trafnoscia typu "X" w tym samym koszyku.
+
+    ROZNICA W PP (realna minus deklarowana) jest sednem raportu: dodatnia
+    znaczy, ze model jest NIEDOSZACOWANY w danym koszyku (realnie trafia
+    czesciej, niz sam deklaruje), ujemna — ze jest ZA PEWNY SIEBIE. Sama
+    krzywa rosnaca (jak w `raport_rynkow_golowych`/`raport_remisow`) mowi
+    tylko, czy liczba cokolwiek rozroznia — te dwie diagnozy sa rozne i
+    obie sa tu pokazane osobno.
+    """
+    print("\n=== KALIBRACJA 1X2: czy GREATEST(prob_home, prob_draw, prob_away)"
+          " jest wiarygodne? (model_log) ===")
+    # Bez sklejania nazw kolumn f-stringiem (bandit B608) — kolumny sa wprost
+    # wypisane, tak jak w `raport_rynkow_golowych`.
+    wiersze = _licz(conn, """
+        SELECT GREATEST(prob_home, prob_draw, prob_away) AS pewnosc, tip_correct
+        FROM model_log
+        WHERE tip_correct IS NOT NULL
+          AND prob_home IS NOT NULL AND prob_draw IS NOT NULL AND prob_away IS NOT NULL
+    """)
+    if not wiersze:
+        print("  BRAK DANYCH — model_log nie ma jeszcze zadnego rozliczonego wiersza"
+              " z kompletem prob_home/prob_draw/prob_away.")
+        return
+
+    grupy: dict[str, list[dict]] = {nazwa: [] for nazwa in _KOSZYKI_1X2}
+    for w in wiersze:
+        grupy[_koszyk_pewnosci(float(w["pewnosc"]))].append(w)
+
+    koszyki = []
+    for nazwa in _KOSZYKI_1X2:
+        wpisy = grupy[nazwa]
+        if not wpisy:
+            continue
+        n = len(wpisy)
+        model = sum(float(w["pewnosc"]) for w in wpisy) / n
+        realnie = 100.0 * sum(w["tip_correct"] for w in wpisy) / n
+        koszyki.append({"koszyk": nazwa, "n": n, "model": model, "realnie": realnie})
+
+    for k in koszyki:
+        roznica = k["realnie"] - k["model"]
+        znacznik = " — mala proba" if k["n"] < PROG_MALA_PROBA else ""
+        print(f"  {k['koszyk']:8} n={k['n']:4}  model={k['model']:.1f}%"
+              f"  realnie={k['realnie']:.1f}%  roznica={roznica:+.1f}pp{znacznik}")
+
+    realne = [k["realnie"] for k in koszyki]
+    rosnie = all(a <= b for a, b in zip(realne, realne[1:]))
+    werdykt = "ROSNIE — liczba rozroznia" if rosnie else "NIE rosnie — brak uporzadkowania"
+    print(f"  → krzywa {werdykt} (rozpietosc {max(realne) - min(realne):.1f} pp)")
+
+
 def raport_rynkow_golowych(conn) -> None:
     """Czy prawdopodobieństwo modelu ROZRÓŻNIA mecze — osobno dla Over 2.5 i BTTS.
 
@@ -399,6 +481,72 @@ def raport_drugiego_wyboru(conn) -> None:
               f" Model wie więcej, niż pokazuje typ główny.")
 
 
+def raport_przewagi_nad_kursem(conn) -> None:
+    """TO JEST LICZBA, KTORA PRZESADZA O FLAGACH SELEKCJI (tabela `coupons`).
+
+    Wszystkie pozostale raporty w tym pliku mierza przewage modelu nad WLASNA
+    baza czestosci wynikow w probce (kalibracja, rozroznianie miedzy meczami).
+    Ten mierzy cos innego i trudniejszego: czy bijemy CENE bukmachera. Model
+    moze byc lepszy od „zgadywania po bazie” i wciaz systematycznie przeplacac
+    wzgledem kursu — dopiero to drugie ma zwiazek z pieniedzmi (patrz
+    `.claude/rules/wypuszczenie-pl.md`: dodatnia przewaga nad baza NIE
+    oznacza zysku).
+
+    Hipoteza zerowa: kupon wchodzi z prawdopodobienstwem `1/kurs` (z marza
+    bukmachera). Test dokladny (Poisson-dwumianowy, `testy_przewagi.py`) —
+    zero przyblizenia normalnego, bo pojedyncze rynki tu bywaja jednocyfrowe.
+    """
+    from footstats.core.testy_przewagi import test_przewagi
+
+    print("\n=== PRZEWAGA NAD KURSEM BUKMACHERA (coupons, SINGLE, WON/LOST) ===")
+    # Bez sklejania nazw kolumn f-stringiem (bandit B608) — jak wszedzie w tym pliku.
+    wiersze = _licz(conn, """
+        SELECT status, total_odds, stake_pln, payout_pln, legs_json
+        FROM coupons
+        WHERE status IN ('WON', 'LOST') AND kupon_type = 'SINGLE'
+    """)
+    if not wiersze:
+        print("  BRAK DANYCH — brak rozliczonych kuponow SINGLE w `coupons`.")
+        return
+
+    wynik = test_przewagi(wiersze)
+    rynki = wynik["rynki"]
+    # DWIE ROZNE przyczyny pustego wyniku — sklejenie ich dawaloby falszywa
+    # diagnoze (patrz zasady zadania S i `raport_drugiego_wyboru`).
+    if wynik["pominieto_kurs"]:
+        print(f"  pominieto {wynik['pominieto_kurs']} kupon(y) z kursem <= 1.0"
+              " (dzielenie przez zero implikowanego prawdopodobienstwa)")
+    if wynik["pominieto_legs"]:
+        print(f"  pominieto {wynik['pominieto_legs']} kupon(y)"
+              " z uszkodzonym/pustym legs_json")
+
+    if not rynki:
+        print("  WSZYSTKO ODFILTROWANE — zaden kupon nie mial poprawnego"
+              " kursu/legs_json (a wiersze w bazie BYLY, patrz liczby wyzej).")
+        return
+
+    print(f"  {'rynek':12} {'n':>4} {'traf':>5} {'ocz.':>6} {'trafnosc':>9}"
+          f" {'prog':>7} {'ROI':>8} {'p (1-str.)':>11}")
+    posortowane = sorted(rynki.items(), key=lambda kv: kv[1]["n"], reverse=True)
+    for rynek, dane in posortowane:
+        trafnosc = 100.0 * dane["trafienia"] / dane["n"]
+        prog = 100.0 * dane["oczekiwane"] / dane["n"]
+        roi = f"{dane['roi']:+.1f}%" if dane["roi"] is not None else "—"
+        print(f"  {rynek:12} {dane['n']:4} {dane['trafienia']:5} {dane['oczekiwane']:6.1f}"
+              f" {trafnosc:8.1f}% {prog:6.1f}% {roi:>8} {dane['p_surowe']:11.4f}")
+
+    najgorszy_rynek, najgorsze_dane = min(posortowane, key=lambda kv: kv[1]["p_surowe"])
+    print(f"  korekta Sidaka na wybor najgorszego z {len(rynki)} rynkow:"
+          f" {najgorszy_rynek} {najgorsze_dane['p_surowe']:.4f}"
+          f" -> {najgorsze_dane['p_po_korekcie']:.4f}")
+    print(f"  UWAGA: powyzsza korekta liczy sie na WYBOR NAJGORSZEGO z {len(rynki)}"
+          " rynkow, nie na jeden z gory ustalony test — bez niej pojedynczy"
+          " „istotny” wynik wsrod kilku to zwykly efekt wielokrotnego szukania.")
+    print("  UWAGA: dodatnia przewaga nad BAZA (pozostale raporty w tym pliku)"
+          " NIE oznacza zysku — dopiero pobicie KURSU bukmachera (ten raport)"
+          " ma zwiazek z pieniedzmi.")
+
+
 def raport_gotowosci(pred: dict, dziennik: dict | None = None) -> None:
     """Ile brakuje do werdyktu `porownaj_modele`.
 
@@ -426,9 +574,11 @@ def main() -> None:
         raport_lekcji(conn)
         raport_wzorcow(conn)
         dziennik = raport_dziennika(conn)
+        raport_kalibracji_1x2(conn)
         raport_rynkow_golowych(conn)
         raport_remisow(conn)
         raport_drugiego_wyboru(conn)
+        raport_przewagi_nad_kursem(conn)
         raport_gotowosci(pred, dziennik)
 
 
