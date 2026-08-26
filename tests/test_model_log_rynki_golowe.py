@@ -76,27 +76,28 @@ def baza(monkeypatch):
 
 # ── trafność trzech rynków z jednego wyniku ────────────────────────────────
 
-@pytest.mark.parametrize("wynik,tip,ocz_tip,ocz_o25,ocz_btts", [
-    # 3-1: gospodarz wygrał, 4 gole, obie strzeliły
-    ("3-1", "1", 1, 1, 1),
-    ("3-1", "X", 0, 1, 1),
+@pytest.mark.parametrize("wynik,tip,ocz_tip,ocz_o25,ocz_btts,ocz_draw", [
+    # 3-1: gospodarz wygrał, 4 gole, obie strzeliły, nie remis
+    ("3-1", "1", 1, 1, 1, 0),
+    ("3-1", "X", 0, 1, 1, 0),
     # 0-0: remis, brak goli, BTTS nie
-    ("0-0", "X", 1, 0, 0),
-    ("0-0", "1", 0, 0, 0),
+    ("0-0", "X", 1, 0, 0, 1),
+    ("0-0", "1", 0, 0, 0, 1),
     # 1-1: remis, 2 gole (Under), obie strzeliły
-    ("1-1", "X", 1, 0, 1),
-    # 2-0: gospodarz, 2 gole (Under), tylko jedna strzeliła
-    ("2-0", "1", 1, 0, 0),
-    # 4-2: gość przegrał, 6 goli, obie strzeliły
-    ("4-2", "2", 0, 1, 1),
+    ("1-1", "X", 1, 0, 1, 1),
+    # 2-0: gospodarz, 2 gole (Under), tylko jedna strzeliła, nie remis
+    ("2-0", "1", 1, 0, 0, 0),
+    # 4-2: gość przegrał, 6 goli, obie strzeliły, nie remis
+    ("4-2", "2", 0, 1, 1, 0),
 ])
-def test_jeden_wynik_ocenia_trzy_rynki(wynik, tip, ocz_tip, ocz_o25, ocz_btts):
+def test_jeden_wynik_ocenia_cztery_rynki(wynik, tip, ocz_tip, ocz_o25, ocz_btts, ocz_draw):
     oceny = kl.oceny_rynkow(tip, wynik)
 
     assert oceny == {
         "tip_correct": ocz_tip,
         "over25_correct": ocz_o25,
         "btts_correct": ocz_btts,
+        "draw_correct": ocz_draw,
     }, f"{wynik} przy typie {tip}"
 
 

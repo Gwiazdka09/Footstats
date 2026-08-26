@@ -234,6 +234,59 @@ def raport_rynkow_golowych(conn) -> None:
         print(f"  → krzywa {werdykt} (rozpietosc {max(realne) - min(realne):.1f} pp)")
 
 
+def raport_remisow(conn) -> None:
+    """Czy `prob_draw` ROZRÓŻNIA mecze, skoro argmax 1X2 nigdy go nie wybiera.
+
+    Pomiar 26.08 (n=427 z wynikiem): `model_tip` = "X" wystąpił ZERO razy
+    (304x "1", 123x "2"), bo `prob_draw` ma maksimum 34% i nie może pokonać
+    dwóch pozostałych opcji w argmaksie. Remis to jednak 23.6% realnych wyników —
+    zdanie modelu o co czwartym meczu nie było zweryfikowane ani razu, bo
+    `tip_correct` strukturalnie go nie widzi. `draw_correct` (D-remis, ten sam
+    kształt co D4 dla Over 2.5/BTTS) liczy się z SAMEGO WYNIKU, niezależnie
+    od tego, co obstawił model.
+
+    KOSZYKI, NIE ŚREDNIA — jak w `raport_rynkow_golowych`: model mówiący zawsze
+    „24%" przy realnych 24% jest skalibrowany i bezużyteczny. Rosnąca krzywa
+    przez koszyki znaczy, że liczba cokolwiek rozróżnia.
+    """
+    print("\n=== REMISY: czy prob_draw rozróżnia mecze? (model_log) ===")
+    baza = _licz(conn, """
+        SELECT COUNT(*) AS n, 100.0 * AVG(draw_correct) AS realnie
+        FROM model_log WHERE draw_correct IS NOT NULL
+    """)
+    if not baza or not baza[0]["n"]:
+        print("  BRAK DANYCH — uruchom `uzupelnij_rynki_golowe(dry_run=False)`.")
+        return
+    print(f"  linia bazowa: n={baza[0]['n']}, realna czestosc remisow"
+          f" {float(baza[0]['realnie']):.1f}%")
+
+    # Zapytanie rozpisane wprost, bez sklejania nazw kolumn f-stringiem — patrz
+    # komentarz w `raport_rynkow_golowych` (bandit B608 slusznie to blokuje).
+    koszyki = _licz(conn, """
+        SELECT CASE WHEN prob_draw < 15 THEN '<15%'
+                    WHEN prob_draw < 20 THEN '15-20%'
+                    WHEN prob_draw < 25 THEN '20-25%'
+                    WHEN prob_draw < 30 THEN '25-30%'
+                    ELSE '30%+' END AS koszyk,
+               MIN(prob_draw) AS od, COUNT(*) AS n,
+               AVG(prob_draw) AS model,
+               100.0 * AVG(draw_correct) AS realnie
+        FROM model_log WHERE draw_correct IS NOT NULL
+        GROUP BY 1
+        ORDER BY 2
+    """)
+    if not koszyki:
+        print("  BRAK DANYCH — uruchom `uzupelnij_rynki_golowe(dry_run=False)`.")
+        return
+    for w in koszyki:
+        print(f"  {str(w['koszyk']):8} n={w['n']:4}"
+              f"  model={float(w['model']):.1f}%  realnie={float(w['realnie']):.1f}%")
+    realne = [float(w["realnie"]) for w in koszyki]
+    rosnie = all(a <= b for a, b in zip(realne, realne[1:]))
+    werdykt = "ROSNIE — liczba rozroznia" if rosnie else "NIE rosnie — brak uporzadkowania"
+    print(f"  → krzywa {werdykt} (rozpietosc {max(realne) - min(realne):.1f} pp)")
+
+
 def raport_gotowosci(pred: dict, dziennik: dict | None = None) -> None:
     """Ile brakuje do werdyktu `porownaj_modele`.
 
@@ -262,6 +315,7 @@ def main() -> None:
         raport_wzorcow(conn)
         dziennik = raport_dziennika(conn)
         raport_rynkow_golowych(conn)
+        raport_remisow(conn)
         raport_gotowosci(pred, dziennik)
 
 
