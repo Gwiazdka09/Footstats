@@ -48,7 +48,7 @@ def _fetch_predictions() -> list:
         client = BzzoiroClient(key)
         preds = client.predykcje_tygodnia()
         _log.info("Bzzoiro returned %d predictions", len(preds) if preds else 0)
-        return preds if preds else _fallback_predictions()
+        return preds or _fallback_predictions()
     except (OSError, ValueError, RuntimeError) as e:
         _log.error("_fetch_predictions error: %s", e, exc_info=True)
         return _fallback_predictions()
@@ -533,7 +533,7 @@ def preview_signal(req: PreviewSignalRequest, user_id: int = Depends(require_aut
             "prob_draw": pred["prob_draw"],
             "prob_away": pred["prob_away"],
             # LOW-2: agrees=None dopóki user nie wpisał typu (nie pokazuj "rozjazdu" przedwcześnie)
-            "agrees": None if not user_tip else user_tip.upper() == our_tip.strip().upper(),
+            "agrees": user_tip.upper() == our_tip.strip().upper() if user_tip else None,
         })
     return result
 
