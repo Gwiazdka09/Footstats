@@ -40,6 +40,97 @@
 - [x] ✅ Alarm o zaległościach wykluczał porzucone (97 → 48) — palił się wiecznie
   i **zagłuszył prawdziwą awarię**.
 
+## 2026-08-26
+
+### Plan „remisy / drugi wybór / raporty" — trzy zadania, trzy merge commity
+
+- [x] ✅ **R — remisy mierzone po raz pierwszy w historii projektu. `3bca868e5`**
+  (`8eba043fe`, `3e187d4d2`, `b93e6b83a`).
+  `model_log` zapisywał `prob_draw` od początku, ale nigdy go z niczym nie porównywał —
+  `tip_correct` mierzy argmax 1X2, a `prob_draw` ma maksimum 34,0% i argmaxu nie wygrywa
+  (zmierzone: `model_tip` = „X" **0 razy na 427** wierszy). Dodana kolumna `draw_correct`
+  liczona z SAMEGO WYNIKU (nie z `model_tip`), `oceny_rynkow` rozszerzone 3→4 rynki, warunek
+  backfillu w `uzupelnij_rynki_golowe`, raport `raport_remisow` w `stan_uczenia.py`.
+  Backfill na produkcji: **0 → 424** wierszy z `draw_correct`.
+  **Wynik:** baza remisów 23,6%; koszyki 20,0 / 24,4 / 17,7 / 24,1 / **45,5%** — krzywa NIE
+  rośnie monotonicznie, ale koszyk `30%+` (n=33, 15 remisów) bije bazę o 21,9 pp — dokładny
+  test dwumianowy p=0,0048, po korekcie Šidáka **p=0,024**. Próba mała, do dalszej obserwacji.
+  **Przy okazji domknięta dziura tego samego kształtu co D4:** `assert 1 in params` w
+  `test_model_log_rynki_golowe.py` była ślepa na zamianę kolumn `over25_correct` ↔
+  `btts_correct` (mutacja przechodziła 36/36, zweryfikowane) — przepisane na odczyt PO
+  NAZWIE kolumny. Helper `kolumny_do_wartosci` wydzielony do `tests/pomoc_sql.py`.
+
+- [x] ✅ **D — drugi wybór modelu: ranking 7 rynków z przewagą nad bazą. `0e5b9e842`**
+  (`99359d204`, `bff237cd7`). Nowy `src/footstats/core/ranking_rynkow.py` sortuje 7 rynków
+  (1, X, 2, Over 2.5, Under 2.5, BTTS, BTTS NIE) po prawdopodobieństwie modelu, trafność
+  liczona z `actual_result`. Główna miara to **przewaga nad bazą własnego rynku**, nie surowa
+  trafność — bazy rozjeżdżają się o 31 pp (X 23,6% vs Over 2.5 55,0%), więc surowa trafność
+  koronowałaby rynek dwustronny za samą bazę (ten sam mechanizm co `_pomijaj_btts` w
+  `system_paper.py`).
+  **Wynik na produkcji, n=424:** #1 trafność 59,9% / baza 47,9% / przewaga **+12,0 pp**;
+  #2 57,1% / 51,0% / +6,1 pp; #3 47,9% / 47,3% / +0,6 pp — przewaga spada monotonicznie
+  z pozycją. Holdout chronologiczny +10,0/+13,6 pp, test permutacyjny N=300 **p<0,003**.
+  Rynki dwustronne zajmują 317 z 424 pozycji #1 = **74,8%** — replikacja pomiaru 74% z 17.08
+  (`test_selekcja_stronniczosc_rynkow.py`) na niezależnej próbie.
+  **Rozbicie pozycji #1 ujawniło, że najczęstszy typ główny (BTTS, n=134) ma przewagę
+  UJEMNĄ −3,3 pp** — podstawa włączenia `SELECTION_SKIP_BTTS` na produkcji (patrz niżej).
+  Runda review (`bff237cd7`) domknęła: fałszywą diagnozę przy n==0, rozjazd mianowników
+  427 vs 424, werdykt przypisujący wygraną pozycji #1 bez rozliczalnych danych, test-tautologię.
+
+- [x] ✅ **S — kalibracja 1X2 i przewaga nad kursem bukmachera na stałe w `stan_uczenia.py`.
+  `af15657e9`** (`11548dec6`). Nowy `src/footstats/core/testy_przewagi.py` (rozkład
+  Poissona-dwumianowego liczony splotem DOKŁADNYM, nie przybliżeniem normalnym — n bywa <10;
+  korekta Šidáka na wybór najgorszego z N rynków) + dwa raporty: `raport_kalibracji_1x2`
+  (koszyki pewności `GREATEST(prob_home,prob_draw,prob_away)` vs `tip_correct`) i
+  `raport_przewagi_nad_kursem` (hipoteza zerowa = trafność implikowana kursem bukmachera,
+  po marży).
+  **Kalibracja 1X2, n=427:** 38,8 / 42,9 / 60,5 / 69,8 / 71,4% — krzywa **ROŚNIE**, rozpiętość
+  32,6 pp. Model niedoszacowany w środku skali (deklaruje 54,6%, trafia 60,5%), zbyt pewny na
+  górze (deklaruje 76,3%, trafia 71,4%).
+  **Przewaga nad kursem, n=133:** BTTS **−18,3%** (p=0,058 → **0,213** po korekcie Šidáka).
+  **Żaden rynek nie bije ceny** po korekcie. Wydruk raportu zawiera jawne zastrzeżenie, że
+  dodatnia przewaga nad BAZĄ (raporty R i D wyżej) nie oznacza zysku — dopiero pobicie KURSU
+  by to znaczyło.
+  ⚠️ *Uwaga kronikarza: commit potwierdza wprost tylko liczbę dla BTTS (−18,3%, p=0,058→0,213);
+  wartości dla Under 2.5/1X2/Over 2.5 z ustnego podsumowania sesji nie znalazłem ani w treści
+  commitów, ani w repozytorium — nieujęte tutaj jako niepotwierdzone.*
+
+### Decyzja produkcyjna — `SELECTION_SKIP_BTTS=1` włączone
+
+Ustawione na `footstats-api` i obu jobach (`footstats-final`, `footstats-evening`) przez
+`--update-env-vars`; zweryfikowane zarówno w opisie zmiany sesji (17→18 / 13→14 zmiennych,
+zero zgubionych), jak i bezpośrednio na produkcji przez `gcloud run services/jobs describe`
+(kronikarz, 26.08): `SELECTION_SKIP_BTTS=1` obecne na wszystkich trzech usługach. Przeżyło
+późniejszy deploy CD (`cd-jobs.yml` aktualizuje wyłącznie `--image`) — rewizja API poszła
+dalej (00474 → 00477 w chwili weryfikacji), flaga została.
+Podstawa: zadanie D wyżej — BTTS jako typ główny ma przewagę −3,3 pp (n=134), replikującą
+się w obu połowach chronologicznych (−2,5 / −5,0 pp). Po wyrzuceniu BTTS wskakuje Over 2.5
+(112 z 136 przypadków), przewaga na tych samych meczach **−3,3 pp → +5,0 pp**.
+⚠️ **To INNA flaga niż `BTTS_TWO_WAY`** (zostaje OFF, dane dalej mówią „nie flipować") —
+nie mylić. Do sprawdzenia 27.08 po 05:31 UTC: czy w kuponach faktycznie nie ma BTTS.
+
+- [x] ✅ **style(coupons) — dwa uproszczenia zgłoszone przez Sourcery. `1135db057`.**
+  `preds if preds else X` → `preds or X`; `None if not user_tip else <warunek>` →
+  `<warunek> if user_tip else None`. Zero zmiany zachowania.
+
+## 2026-08-25
+
+- [x] ✅ **Kupon dziennika bez źródła wyników wisiał ACTIVE na zawsze. `a8622e24b`**
+  (+10 testów). Lustro usterki D9 (naprawionej dzień wcześniej dla kuponów AI): tam kupon
+  po `VOID_AFTER_DAYS` cicho ZNIKAŁ, tu cicho ZOSTAJE. Zmierzone na produkcji: kupon #149
+  (Yunnan Yukun vs Dalian Yingbo FC, chińska ekstraklasa, mecz 15.08) miał status ACTIVE
+  dziesiąty dzień i zostałby ACTIVE na zawsze — `settle_manual_coupons` nie miał progu
+  czasowego, za każdym razem trafiał na `unresolved` i liczył to jako zwykły `skipped`, nie
+  do odróżnienia od kuponu z wczoraj.
+  **Dlaczego NIE auto-VOID:** `set_coupon_result` przyjmuje wyłącznie kupony ACTIVE
+  (CAS-guard `expected_status='ACTIVE'`). Automatyczne skasowanie odebrałoby użytkownikowi
+  jedyną drogę wpisania wyniku, który on może znać, a system nie.
+  **Fix:** licznik `stats["przeterminowane"]` (podzbiór `skipped`, wspólny próg
+  `VOID_AFTER_DAYS` z kuponami AI) + `log.warning` po pętli (`verbose` nie istnieje w Cloud
+  Logging) + alarm `dziennik_utknal()` na Telegram z `/cron/settle-manual` (treść kieruje na
+  człowieka, nie na „napraw rozliczanie") + licznik w odpowiedzi endpointu. Zadziałał na
+  produkcji 26.08 o 06:30 UTC.
+
 ## 2026-08-23
 
 - [x] ✅ **A1 — ZROBIONE 23.08.** Zapis predykcji odcięty od odpowiedzi LLM-a.

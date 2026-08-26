@@ -31,13 +31,24 @@
 | # | Zadanie | Kod | Blokada | Status |
 |---|---------|-----|---------|--------|
 | **P0** | **Model musi realnie grać live** — parquet w obrazach jobów i API → Poisson-DC zamiast `bzzoiro-ml` | **A** | — | ✅ **13.08** — `poisson-dc` 65.2% (15/23) w `model_log` |
-| **P1** | **Pętla settle→kalibracja** — `calibration_monitor.py` + `flip_advisor` co 2-3 dni → progi flipów | — | brakuje **7** rozliczonych poisson-dc do progu 30 | ⏳ **JEDYNA ŻYWA BLOKADA** |
+| **P1** | **Pętla settle→kalibracja** — `calibration_monitor.py` + `flip_advisor` co 2-3 dni → progi flipów | — | zob. werdykt 26.08 niżej | 🟡 **werdykt modelu NIEROZSTRZYGNIĘTY** |
 | **P2** | **Więcej danych → lepsze λ** — backfill Neon→Supabase | **B** | — | ✅ **14.08** — backfill był już zrobiony, reszta danych odpuszczona |
 | **P3** | **RAG feedback domyka sygnał** — puste `factors` | **C** | — | ✅ **13.08 NIE bug** — wąskie gardło = liczba predykcji |
 
 > Szczegóły zamkniętych P0/P2/P3 → `CHANGELOG.md` (13-14.08).
 > Zostaje z P3 do zapamiętania: TWIERDZA wymaga serii ≥5 (`FORTRESS_MECZE`), a na losowej próbce
 > 300 meczów tagi zapalają się w 31.7% — mechanizm żyje, po prostu potrzebuje wolumenu.
+
+> **⚠️ 26.08 — KOREKTA wpisu P1.** Wcześniejsza wersja mówiła „brakuje 7 rozliczonych poisson-dc
+> do progu 30 — JEDYNA ŻYWA BLOKADA". Nieprawda. `python -m scripts.porownaj_modele` (26.08):
+> `predictions`: bzzoiro-ml 50/129 = 38,8% [30,8–47,4], poisson-dc 16/29 = 55,2% [37,5–71,6]
+> → brakuje **1**, nie 7. `model_log`: bzzoiro-ml 154/300 = 51,3% [45,7–56,9], poisson-dc
+> 68/127 = 53,5% [44,9–62,0] → **przedziały ufności się nakładają, różnica może być szumem**.
+> **P0 („model musi realnie grać live") nie dał dotąd mierzalnej poprawy na poziomie modelu** —
+> oba modele są dziś statystycznie nie do odróżnienia. Nawet gdy `predictions` dobije do 30,
+> przedziały najpewniej dalej się nałożą, więc werdykt zostanie nierozstrzygnięty. Dochodzi
+> confound z **D11**: Poisson liczy ~10% meczów, więc te 29 predykcji to wyselekcjonowany
+> podzbiór, nie losowa próbka.
 
 ---
 
@@ -88,6 +99,8 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 > **Zbieranie leci PC-niezależnie** (cloud draft 07:30 + settle) — brak wąskiego gardła danych.
 
 - [ ] **Co kilka dni:** `python scripts/stan_uczenia.py` (read-only) — licznik do werdyktu, teraz z `model_log`. Uzupełniająco `scripts/calibration_monitor.py` + flip-advisor (`core/flip_advisor.py`): rekomenduje flip `SELECTION_MIN_CONF` i ligi do `LEAGUE_GATING` (<50%, n≥8).
+- [ ] **26.08 — kalibracja 1X2 i przewaga nad kursem zmierzone po raz pierwszy wprost (zadanie S).** `raport_kalibracji_1x2` + `raport_przewagi_nad_kursem` w `stan_uczenia.py`. Kalibracja n=427: 38,8/42,9/60,5/69,8/71,4% — krzywa **ROŚNIE** (rozpiętość 32,6 pp), ale nierówno: model niedoszacowany w środku skali (deklaruje 54,6%, trafia 60,5%), zbyt pewny na górze (76,3% deklarowane vs 71,4% trafień). Przewaga nad kursem bukmachera n=133: BTTS −18,3% (p=0,058 → 0,213 po korekcie Šidáka) — **żaden rynek nie bije ceny** po korekcie. Do decyzji: czy krzywa kalibracji uzasadnia już ruch progu `SELECTION_MIN_CONF`, czy n=427 to wciąż za mało.
+- [ ] **26.08 — remisy zmierzone po raz pierwszy (zadanie R), samodzielny sygnał otwarty do dalszej obserwacji.** `draw_correct` backfillowane 0→424 wierszy. Baza 23,6%; koszyki po `prob_draw`: 20,0/24,4/17,7/24,1/**45,5%** — krzywa NIE rośnie monotonicznie, ale koszyk `30%+` (n=33, 15 remisów) bije bazę o 21,9 pp (dokładny test dwumianowy p=0,0048 → p=0,024 po korekcie Šidáka). Próba mała — obserwować, nie budować na tym flagi.
 - [ ] **D3 — pełna decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled z zapisanym prob. Zwaliduj że guard pomaga, dostrój próg. (D3 cz.1+2 prob+guard ZROBIONE 06-22.)
 - [ ] **Po ~88 settled → D2 auto-refit sam** (delta +30 od n_train); gdy krzywa zdrowa → włącz `CALIBRATION_ENABLED=1`.
 - [ ] **🆕 Dług testowy:** `config.py` robi `load_dotenv(override=True)` → testy integracyjne biją w `DATABASE_URL` z `.env`.
@@ -215,7 +228,7 @@ Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakłada
 
   **Mail:** działający `jakubgwiazdowski12@gmail.com` w obu dokumentach (dane operatora, reklamacje §10, żądania z RODO). Przenosiny na skrzynkę z własnej domeny — patrz L10, nie blokuje.
 
-- [ ] **L10 — własna domena + mail z domeny.** Decyzja z 24.08. **Nie zdejmuje wymogu adresu z L1** — domena i adres korespondencyjny to dwie różne rzeczy, skrytka dalej potrzebna.
+- [ ] **L10 — własna domena + mail z domeny.** Decyzja z 24.08. ⚠️ **Poprawka 26.08:** to zdanie brzmiało „nie zdejmuje wymogu adresu z L1 — skrytka dalej potrzebna" i było nieaktualne od **25.08** — L1 niżej jest **zamknięte**, adres pocztowy **nie jest wymagany**, dopóki serwis jest darmowy (art. 2 pkt 6 uśude — brak przesłanki działalności zarobkowej/zawodowej). Domena i mail projektowy to osobna, niezależna decyzja (wygoda/profesjonalizm, nie wymóg prawny).
 
   **Pułapka cenowa, ważniejsza niż cena startowa:** rejestracja .pl bywa za 5-10 zł, a odnowienie od 51 do 295 zł/rok. NASK bierze 40 zł netto hurtowo, więc uczciwe detaliczne to ~59-99 zł. **Sprawdzać cenę ODNOWIENIA, nie pierwszego roku.** Skrajny przykład z rynku: rejestracja 6,15 zł, odnowienie 246 zł.
 
@@ -411,6 +424,7 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - **Skutek uboczny gorszy od samego błędu:** czerwień bez przerwy = brak sygnału. 24.08 dwa moje deploye padły i wyszło to dopiero przy ręcznym sprawdzeniu produkcji.
   - Strażnik `test_ci_wersja_pythona.py`: CI == obraz, CI == lock, oba obrazy równe.
   - ⚠️ **Zostaje do obserwacji:** job `secrets` (gitleaks) pada NIEregularnie — 2 z 12 ostatnich przebiegów, bez związku z treścią commita. Wygląda na flaki/limit po stronie akcji, nie na wyciek. Jeśli się powtórzy, dopiąć `GITHUB_TOKEN` do kroku i sprawdzić log.
+- [ ] **26.08 (kronikarz) — pełna suita niestabilna między przebiegami lokalnie.** Trzy pełne przebiegi (`DATABASE_URL="" pytest tests/`): **5130 zebranych, 11 skipped stabilnie**, ale `passed` waha się **5111–5119** z pojedynczym losowym `FAILED` w różnych testach niepowiązanych z sesją (`test_odpornosc_ataki.py::test_blokada_konta_po_serii_bledow_DZIALA`, `test_checkpoint.py::TestCheckpointRecovery::test_recovery_list_most_recent`) — oba zielone w izolacji. Wygląda na zanieczyszczenie stanu między testami (timing/limiter albo mtime plików), nie na regresję z tej sesji — testy R/D/S (`test_remisy_mierzone`, `test_ranking_rynkow`, `test_testy_przewagi`) nie zawiodły w żadnym przebiegu. Nie diagnozowane dalej (poza zakresem kronikarza).
 - [ ] **D7 — 21 kuponów z 14-15.08 jest nie do odzyskania** z darmowych źródeł
   (duńska, japońska, chińska liga + angielskie niższe — poza pokryciem football-data,
   poza oknem AF, poza 7 dniami FlashScore). Zejdą przez VOID 24-25.08. Do decyzji:
@@ -427,6 +441,7 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
 - [ ] **J2 — mypy sprawdza 1 katalog** (`scrapers/sources/`) ze 172 plików.
 - [ ] **J3 — schematy testowe dublują produkcyjny** (`test_backtest_db`, `test_evening_agent`) — bolało przy migracji 12 i 13. Fix: jedna fikstura z `init_db()`.
 - [ ] **M2 — trzy flagi czekały na walidację:** `SELECTION_MIN_CONF=65`, `LEAGUE_GATING=1`, `BTTS_TWO_WAY`. **Dla BTTS dane są od 24.08 (D4) i mówią: NIE FLIPOWAĆ.** Live n=385 nie pokazuje uporządkowania — koszyk <45% daje realnie 52,8%, a 50–55% tylko 45,5%. Offline (n=15 460) krzywa była monotoniczna, więc to kolejny rozjazd live vs offline, nie nowy wynik na korzyść flagi. Dwie pozostałe flagi dalej bez danych.
+  ⚠️ **26.08 — INNA flaga, nie mylić z powyższą.** `SELECTION_SKIP_BTTS` (zbudowana 23.08 jako M5, domyślnie OFF) została **włączona na produkcji** (`footstats-api` rew. `00474-dlg` + oba joby, `--update-env-vars`, zweryfikowane 17→18 / 13→14 zmiennych). Podstawa: zadanie D (ranking 7 rynków) pokazało, że BTTS jako typ główny modelu ma przewagę **−3,3 pp** (n=134), replikującą się w obu połowach chronologicznych (−2,5 / −5,0 pp); po wyrzuceniu BTTS wskakuje Over 2.5 (112/136), przewaga na tych samych meczach **−3,3 pp → +5,0 pp**. `BTTS_TWO_WAY` **zostaje OFF bez zmian** — to osobna decyzja (granie strony NIE), a dane dalej mówią „nie flipować". Do sprawdzenia **27.08 po 05:31 UTC**: czy w kuponach faktycznie nie ma BTTS.
 - [ ] **M3 — cel M1 mierzy rynek, który przegrywa.** „55% win rate" liczone na 1X2, gdzie przy niezgodzie rynek 42,9% vs model 29,8%. Rozważyć ROI zamiast trafności.
 
 ### ⚪ Niskie
@@ -635,7 +650,7 @@ klikalne elementy to `<button>`, nie `<div>`.
 **Wnioski do decyzji:**
 1. ✅ **Hipoteza „model działa na specyficznych meczach" SPRAWDZONA 14.08 — nie potwierdza się.** Patrz sekcja niżej.
 2. ⚠️ **+9,2% na ligach czołowych NIE replikuje się** — patrz sekcja niżej. Tę liczbę trzeba uznać za szum.
-3. **`model_log` śledzi wyłącznie argmax 1X2** — rynków golowych nie da się dziś zweryfikować live bez rozszerzenia dziennika.
+3. ⚠️ **Nieaktualne od D4 (24.08), tym bardziej od 26.08.** Wpis mówił, że `model_log` śledzi wyłącznie argmax 1X2 i rynków golowych nie da się dziś zweryfikować live. Dziś mierzymy live: 1X2, Over 2.5, BTTS (D4), remisy (R, `draw_correct`) oraz ranking wszystkich 7 rynków z przewagą nad bazą własnego rynku (D) — szczegóły `CHANGELOG.md` 26.08.
 
 ### 🔬 Test podzbiorów BTTS i O/U (14.08, n=15 460, 39 lig) — NIC NIE PRZEŻYŁO
 Metoda: próba podzielona **po dacie**. Podzbiory szukane wyłącznie na starszej części

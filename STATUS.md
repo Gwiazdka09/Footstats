@@ -1,9 +1,10 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-08-14
+**Last Updated:** 2026-08-26
 **Current Version:** v3.4-stable
 **System State:** FUNCTIONAL — PRODUCTION (pipeline PC-off na Cloud Run Jobs, DB = Supabase, dziennik kuponów J1-J6 live)
-**Suite:** **4375 testów** (11 skipped), ruff + bandit czyste
+**Suite:** **5130 testów zebranych**, 11 skipped (stabilnie w 3 przebiegach kronikarza; `passed` wahał się 5111–5119 między przebiegami z pojedynczym losowym FAILED za każdym razem w innym, niepowiązanym z sesją teście — `test_odpornosc_ataki.py`/`test_checkpoint.py`, oba zielone w izolacji; nie diagnozowane dalej). CI raportowane jako **8/8 zielone** (nie zweryfikowane bezpośrednio przez kronikarza — `gh` niedostępny w tym środowisku)
+**Nowe (08-26):** trzy zadania z planu „remisy/drugi wybór/raporty" (wszystkie zmergowane): **R** — remisy mierzone pierwszy raz (`draw_correct`, backfill 0→424, koszyk 30%+ bije bazę o 21,9pp po korekcie Šidáka p=0,024) · **D** — ranking 7 rynków z przewagą nad bazą (n=424, #1 +12,0pp monotonicznie malejąco, permutacja p<0,003; BTTS jako typ główny −3,3pp) · **S** — kalibracja 1X2 (n=427, krzywa rośnie 38,8→71,4%) + test przewagi nad kursem bukmachera (Poisson-dwumianowy dokładny + korekta Šidáka; żaden rynek nie bije ceny po korekcie). Decyzja produkcyjna: **`SELECTION_SKIP_BTTS=1`** włączone na API + oba joby (zweryfikowane na produkcji). Plus fix dziennika: kupon bez źródła wyników już nie wisi ACTIVE po cichu (`dziennik_utknal` alarm).
 **Nowe (08-14):** rozliczenia przestały gubić predykcje (okno bez nadrabiania → 95 sierot; migracja 12 + limit prób) · rozjazd wag ensemble zlikwidowany (joby = API = 0.70) · `CRON_SECRET` → `secretKeyRef` + rotacja · wyłączona wersja 1 sekretu `DATABASE_URL` (zawierała hasło Neona)
 **Nowe (08-13):** siła drużyny liczona też ze strzałów celnych (Brier 0.6454→0.6064) · raport uczenia czyta `model_log` · lekcje także z trafień
 **Nowe (07-27):** auth hardening po incydencie logowania (malformed hash → 401 nie 500, MCP tylko poza prod, CD re-asercje sekretów, LoginView rozróżnia błąd serwera od złych danych) + skrypt backfillu users Neon→Supabase
@@ -16,7 +17,8 @@
 | Metric | Status | Value |
 |--------|--------|-------|
 | **Accuracy (model offline)** | ✅ | Walk-forward 10 lig: DC **51.3%** > baseline 49.6% (NED 54.9%), kalibracja monotoniczna |
-| **Accuracy (live)** | 🟡 | 231 predykcji / 133 rozliczonych. Backfill z Neona **zrobiony**. Główne źródło to `model_log` (oceny PRZED filtrami): poisson-dc **65.2%** (15/23), bzzoiro-ml 50.0% (41/82) — próba wciąż mała |
+| **Accuracy (live)** | 🟡 | `model_log` **656 wierszy (427 z wynikiem)** — główne źródło (oceny PRZED filtrami). 26.08 (`scripts.porownaj_modele`): `predictions` poisson-dc 55,2% (16/29) vs bzzoiro-ml 38,8% (50/129) — brakuje 1 do progu 30; `model_log` poisson-dc 53,5% (68/127) vs bzzoiro-ml 51,3% (154/300) — **przedziały ufności się nakładają, modele statystycznie nie do odróżnienia**. Confound: Poisson liczy ~10% meczów (D11) |
+| **Kupony / ROI (paper)** | 🟡 | **141+ rozliczonych.** ROI System SINGLE **−7,1%** na n=133. Ranking 7 rynków (26.08, n=424): #1 bije bazę własnego rynku o +12,0pp, ale to przewaga nad BAZĄ, nie nad KURSEM — nad kursem bukmachera (n=133) żaden rynek nie wygrywa po korekcie Šidáka |
 | **Model faktycznie grający live** | ✅ | **`poisson-dc`** — parquet w obrazach jobów i API (08-13), a `QUICK_PICKS_USE_POISSON_CACHE` przestawione 0→1 na API (14.08). Przy `=0` draft z definicji chodził na `bzzoiro-ml`, stąd 218 vs 10 w historii |
 | **Czy model bije rynek (1X2)** | 🔴 | **NIE.** WF 14.08, n=3578, 3 grupy: przy niezgodzie model↔rynek (510 meczów) rynek trafia **42.9%**, model **29.8%**. ROI ujemne przy KAŻDEJ wadze. Poprawki z 13.08 tego nie zmieniły |
 | **RAG factors** | 🟡 | `factors='[]'` to **NIE bug** (werdykt 13.08) — odtworzenie łańcucha offline na tych samych 18 meczach daje 0/18 tak samo jak live. TWIERDZA wymaga serii ≥5, grane drużyny miały 0-3. Na próbce 300 meczów tagi zapalają się w 31.7%. Wąskie gardło = liczba predykcji |
@@ -105,6 +107,7 @@
 
 | Funkcja | Data |
 |---------|------|
+| **Remisy mierzone + ranking 7 rynków + testy przewagi nad kursem** — `draw_correct` (backfill 0→424), `core/ranking_rynkow.py` (przewaga nad bazą własnego rynku, n=424, #1 +12,0pp), `core/testy_przewagi.py` (Poisson-dwumianowy dokładny + korekta Šidáka). Decyzja: `SELECTION_SKIP_BTTS=1` na produkcji (BTTS jako typ główny miał −3,3pp). Dziennik: kupon bez źródła wyników już nie wisi ACTIVE po cichu | 08-25/26 |
 | **Auth hardening po incydencie logowania** — redeploy zgubił env Cloud Run (JWT_SECRET itd.) → login 500 udający „złe hasło". Fix rev 00313-mf5 + `335df65bb` (malformed hash → 401) + `0cded9b4d` (`/mcp` off w prod) + `b5c49484a` (CD re-asercje sekretów) + `cc4574d16` (LoginView) + `17a2ecea4` (backfill users Neon→Supabase) | 07-27 |
 | **Dziennik kuponów J1-J6** — statystyki usera (`core/user_stats.py`) + `StatsView` + krzywa postępu (recharts) + ręczny wpis kuponu + leaderboard v2 (sort/filtr dni) + predykcja jako sygnał w formularzu. Match-linking (`core/match_linker.py`) + auto-settle manual (`/cron/settle-manual`, nie wpięty) | 07-21/22 |
 | **Migracja DB → Supabase** (Neon quota-block) + `.gcloudignore` fix (image jobs bez `footstats.data`) + None-guardy Groq (`kupon=None` crash) — pierwszy zielony `footstats-final` od 13.07 | 07-20 |
