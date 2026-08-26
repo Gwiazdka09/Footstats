@@ -121,7 +121,12 @@ def _verify_password(plain: str, hashed: str) -> bool:
     """
     try:
         return bcrypt.checkpw(plain.encode(), hashed.encode())
-    except (ValueError, TypeError, AttributeError):
+    except (ValueError, TypeError, AttributeError) as e:
+        # DECYZJA: cisza tu ukrywała awarię — to nie jest "zwykłe złe hasło",
+        # tylko uszkodzone DANE w bazie (zły hash, placeholder, None). Bez logu
+        # nie da się odróżnić userów z zepsutym hashem od zwykłych pomyłek hasła.
+        # Logujemy WYŁĄCZNIE typ wyjątku — plain/hashed to sekret (hasło/hash).
+        log.warning("Weryfikacja hasla: uszkodzony hash w bazie (%s)", type(e).__name__)
         return False
 
 
@@ -161,7 +166,14 @@ def konto_zablokowane(user: dict) -> bool:
     if isinstance(do_kiedy, str):
         try:
             do_kiedy = datetime.fromisoformat(do_kiedy)
-        except ValueError:
+        except ValueError as e:
+            # DECYZJA: nieparsowalna wartosc traktujemy jak "nie zablokowane"
+            # (fail-open, spojnie z reszta B7 przy awarii bazy) — ale to CICHO
+            # wylaczalo ochrone przed zgadywaniem hasla dla TEGO konta. Logujemy
+            # id konta i tresc bledu (zawiera samą wadliwą datę, nie hasło/hash
+            # — `user` ma tez password_hash, ktorego tu celowo NIE logujemy).
+            log.warning("konto_zablokowane: nieparsowalny locked_until dla uid=%s: %s",
+                        user.get("id"), e)
             return False
     if do_kiedy.tzinfo is None:
         do_kiedy = do_kiedy.replace(tzinfo=timezone.utc)
@@ -285,16 +297,25 @@ def register(request: Request, req: RegisterRequest) -> TokenResponse:
                 " VALUES (?, ?, ?) ON CONFLICT (user_id) DO NOTHING",
                 (row["id"], AGENT_BANKROLL, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             )
-    except psycopg2.Error:
-        pass
+    except psycopg2.Error as e:
+        # DECYZJA: rejestracja MA się udać mimo awarii tego zapisu (konto już
+        # istnieje w `users`) — ale bez logu user zostaje BEZ startowego salda
+        # i nikt się o tym nie dowie aż do reklamacji "gdzie moje środki".
+        log.warning("register: nie udało się zainicjować bankroll_state dla uid=%s: %s",
+                    row["id"], e)
 
     # Email powitalny (Resend) — nie może blokować rejestracji (graceful).
     # send_welcome_email sam łapie błędy sieci/HTTP; tu łapiemy import/nieoczekiwane.
+    # DECYZJA: cisza jest tu świadoma, nie przeoczeniem — rejestracja NIE MOŻE
+    # zależeć od maila powitalnego. Mimo to zostaje log.debug (nie warning), żeby
+    # rzadka awaria (brak modułu, literówka importu) była widoczna, a nie znikała
+    # bez śladu — typ wyjątku tylko, treść może nieść e-mail/dane z payloadu.
     try:
         from footstats.utils.mailer import send_welcome_email
         send_welcome_email(req.email, req.username)
-    except (ImportError, OSError, RuntimeError, ValueError):
-        pass
+    except (ImportError, OSError, RuntimeError, ValueError) as e:
+        log.debug("register: powitalny e-mail nie wysłany dla uid=%s (best-effort): %s",
+                  row["id"], type(e).__name__)
 
     return TokenResponse(access_token=_make_token(row["username"], row["id"], False))
 
