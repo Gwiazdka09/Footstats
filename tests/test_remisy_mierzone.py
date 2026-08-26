@@ -19,6 +19,7 @@ import pytest
 
 from footstats.core import kalibracja_log as kl
 from scripts import stan_uczenia
+from tests.pomoc_sql import kolumny_do_wartosci
 
 
 # ── atrapa bazy dla kalibracja_log (wzorowana na D4: test_model_log_rynki_golowe) ──
@@ -63,19 +64,6 @@ class _Conn:
 
     def zawierajace(self, fragment: str) -> list[tuple]:
         return [z for z in self.zapytania if fragment.upper() in z[0].upper()]
-
-
-def _kolumny_do_wartosci(sql: str, params: tuple) -> dict:
-    """Mapuje `SET kolumna = ?` na wartość z krotki parametrów, PO NAZWIE.
-
-    `assert 1 in params` przechodzi niezależnie od kolejności, jeśli dwie
-    kolumny mają tę samą wartość (np. "1-1": btts_correct=1 I draw_correct=1) —
-    zamiana kolumn miejscami zostałaby niezauważona. Odczyt po nazwie kolumny
-    wykrywa taką zamianę niezależnie od tego, jakim wynikiem testujemy.
-    """
-    czesc_set = sql.split("SET", 1)[1].split("WHERE")[0]
-    kolumny = [k.split("=")[0].strip() for k in czesc_set.split(",")]
-    return dict(zip(kolumny, params))
 
 
 @pytest.fixture
@@ -135,7 +123,7 @@ def test_zapisz_wynik_dopisuje_draw_correct(baza):
     update = baza["conn"].zawierajace("UPDATE model_log")
     assert update, "brak UPDATE"
     sql, params = update[0]
-    wartosci = _kolumny_do_wartosci(sql, params)
+    wartosci = kolumny_do_wartosci(sql, params)
     assert wartosci["btts_correct"] == 1, wartosci  # obie druzyny strzelily
     assert wartosci["draw_correct"] == 0, wartosci  # 3-1 to NIE remis
 
@@ -188,7 +176,7 @@ def test_uzupelnianie_zapisuje_draw_correct(monkeypatch):
     update = conn.zawierajace("UPDATE model_log")
     assert update, "brak UPDATE"
     sql, params = update[0]
-    wartosci = _kolumny_do_wartosci(sql, params)
+    wartosci = kolumny_do_wartosci(sql, params)
     assert wartosci["btts_correct"] == 1, wartosci
     assert wartosci["draw_correct"] == 0, wartosci
 
