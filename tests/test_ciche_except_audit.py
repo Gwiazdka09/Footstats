@@ -101,7 +101,12 @@ BASELINE: dict[str, int] = {
     "ai/client.py": 1,
     "ai/rag.py": 2,
     "ai/trainer.py": 2,
-    "api/auth.py": 4,
+    # 4 -> 0 (2026-08-26, J1). Naprawione: `_verify_password` (uszkodzony hash
+    # w bazie), `konto_zablokowane` (nieparsowalny `locked_until` cicho gasil
+    # blokade B7), oba `except` w `register` (bankroll_state i mail powitalny).
+    # Kontekst: 27.07 zgubiony JWT_SECRET udawal "zle haslo" — cisza tu ma inna
+    # wage niz gdzie indziej.
+    "api/auth.py": 0,
     "api/main.py": 4,
     "api/routes/coupons.py": 1,
     "api/routes/status.py": 1,
