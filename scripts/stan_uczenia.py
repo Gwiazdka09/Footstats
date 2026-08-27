@@ -204,6 +204,124 @@ def _koszyk_pewnosci(pewnosc: float) -> str:
     return "70%+"
 
 
+# Piec wyjsc mierzonych przez `raport_obciazenia_modelu` — (etykieta,
+# kolumna prawdopodobienstwa w `model_log`, tip rozpoznawany przez
+# `oblicz_tip_correct`). Szosty wiersz (typ #1, argmax 1X2) liczony osobno,
+# bo laczy trzy kolumny naraz.
+_WYJSCIA_OBCIAZENIA: tuple[tuple[str, str, str], ...] = (
+    ("1 (prob_home)", "prob_home", "1"),
+    ("X (prob_draw)", "prob_draw", "X"),
+    ("2 (prob_away)", "prob_away", "2"),
+    ("Over 2.5", "prob_over25", "OVER 2.5"),
+    ("BTTS", "prob_btts", "BTTS"),
+)
+
+
+def _prob01(wartosc) -> float | None:
+    """Normalizuje prawdopodobienstwo do skali 0–1.
+
+    `model_log` zapisuje prawdopodobienstwa jako procenty (np. 54.6), ale
+    obronnie obslugujemy oba zapisy — dzielimy przez 100 tylko gdy
+    wartosc przekracza 1.0.
+    """
+    if wartosc is None:
+        return None
+    wartosc = float(wartosc)
+    return wartosc / 100.0 if wartosc > 1.0 else wartosc
+
+
+def raport_obciazenia_modelu(conn) -> None:
+    """Mocny test obciazenia — CALA proba naraz, nie kubelki (model_log).
+
+    PO CO: 26.08 dwa razy odczytano gola kolumne `roznica` w kubelkach
+    `raport_kalibracji_1x2` (+6.5pp przy n=113) jako "model jest zle
+    wyskalowany". To 1.4 bledu standardowego — czysty szum; jedyna bramka
+    ostroznosci (`PROG_MALA_PROBA = 30`) przez niego przechodzi. Test na
+    calej probie naraz ma 1 stopien swobody zamiast rozbicia na kubelki,
+    wiec duzo wieksza moc — i pokazuje, ze model NIE jest obciazony na
+    zadnym wyjsciu (|z| < 1.3 wszedzie, pomiar 26.08).
+
+    Ma isc PRZED tabelami kubelkowymi (`raport_kalibracji_1x2` i in.) —
+    czytelnik ma najpierw zobaczyc mocny wynik na calej probie, dopiero
+    potem czytac szczegoly kubelkowe przez jego pryzmat.
+    """
+    from footstats.core.bledy_pomiaru import sprawdz_obciazenie
+    from footstats.utils.betting import oblicz_tip_correct
+
+    print("\n=== OBCIĄŻENIE MODELU: test na całej próbie naraz (model_log) ===")
+    # Bez sklejania nazw kolumn f-stringiem (bandit B608) — jak wszedzie w tym pliku.
+    wiersze = _licz(conn, """
+        SELECT prob_home, prob_draw, prob_away, prob_over25, prob_btts, actual_result
+        FROM model_log
+        WHERE actual_result IS NOT NULL
+    """)
+    if not wiersze:
+        print("  BRAK DANYCH — model_log nie ma jeszcze żadnego rozliczonego wiersza.")
+        return
+
+    wyniki: list[tuple[str, dict]] = []
+    for nazwa, klucz, tip in _WYJSCIA_OBCIAZENIA:
+        pary: list[tuple[float, int]] = []
+        for w in wiersze:
+            p = _prob01(w.get(klucz))
+            if p is None:
+                continue
+            trafiony = oblicz_tip_correct(tip, w["actual_result"])
+            if trafiony is None:
+                continue
+            pary.append((p, trafiony))
+        wynik = sprawdz_obciazenie(pary)
+        if wynik is not None:
+            wyniki.append((nazwa, wynik))
+
+    # Typ #1 — argmax z trzech znormalizowanych prawdopodobienstw 1X2
+    # (suma do 1), zestawiony z tym, czy TEN argmax trafil.
+    pary_typ1: list[tuple[float, int]] = []
+    for w in wiersze:
+        skladniki = (
+            ("1", _prob01(w.get("prob_home"))),
+            ("X", _prob01(w.get("prob_draw"))),
+            ("2", _prob01(w.get("prob_away"))),
+        )
+        if any(p is None for _, p in skladniki):
+            continue
+        suma = sum(p for _, p in skladniki)
+        if suma == 0.0:
+            continue
+        tip, p_argmax = max(skladniki, key=lambda skladnik: skladnik[1])
+        trafiony = oblicz_tip_correct(tip, w["actual_result"])
+        if trafiony is None:
+            continue
+        pary_typ1.append((p_argmax / suma, trafiony))
+    wynik_typ1 = sprawdz_obciazenie(pary_typ1)
+    if wynik_typ1 is not None:
+        wyniki.append(("typ #1 (argmax 1X2)", wynik_typ1))
+
+    if not wyniki:
+        print("  BRAK DANYCH — po odfiltrowaniu None/nierozliczalnych nic nie zostalo.")
+        return
+
+    for nazwa, w in wyniki:
+        etykieta = "ISTOTNE" if w["istotne"] else "szum"
+        print(f"  {nazwa:20} n={w['n']:4}  deklarowane={w['deklarowane_pct']:.1f}%"
+              f"  zaszlo={w['zaszlo_pct']:.1f}%  roznica={w['roznica_pp']:+.1f}pp"
+              f"  z={w['z']:+.2f}  p={w['p_value']:.3f}  {etykieta}")
+
+    istotne = [(nazwa, w) for nazwa, w in wyniki if w["istotne"]]
+    if not istotne:
+        print("\n  → WERDYKT: model nie wykazuje systematycznego obciazenia na"
+              " zadnym wyjsciu (test na calej probie, wieksza moc niz kubelki)."
+              " Pojedyncze odchylenia w tabelach kubelkowych ponizej czytaj przez"
+              " pryzmat tego wyniku — maja mniejsza liczebnosc per koszyk, wiec"
+              " szum jest tam bardziej prawdopodobny niz tutaj.")
+    else:
+        opisy = []
+        for nazwa, w in istotne:
+            kierunek = "model zanizza" if w["roznica_pp"] > 0 else "model zawyza"
+            opisy.append(f"{nazwa} ({kierunek}, {w['roznica_pp']:+.1f}pp)")
+        print(f"\n  → WERDYKT: model wykazuje istotne obciazenie na: {', '.join(opisy)}.")
+
+
 def raport_kalibracji_1x2(conn) -> None:
     """Czy pewnosc modelu we WLASNYM typie 1X2 jest wiarygodna? (model_log)
 
@@ -219,6 +337,13 @@ def raport_kalibracji_1x2(conn) -> None:
     krzywa rosnaca (jak w `raport_rynkow_golowych`/`raport_remisow`) mowi
     tylko, czy liczba cokolwiek rozroznia — te dwie diagnozy sa rozne i
     obie sa tu pokazane osobno.
+
+    UWAGA 26.08: sama roznica w pp bez przedzialu ufnosci wprowadzala w blad —
+    konkretnie koszyk "50-60%" z n=113 mial roznice +6.5pp, co dwa razy
+    odczytano jako "model zle skalibrowany", a to mieści się w przedziale
+    Wilsona (szum, nie sygnal). Dlatego kazdy koszyk jest tu zestawiony
+    z przedzialem Wilsona dla wartosci realnej — oznaczenie "ROZBIEZNOSC"
+    pada TYLKO, gdy `model` lezy POZA tym przedzialem.
     """
     print("\n=== KALIBRACJA 1X2: czy GREATEST(prob_home, prob_draw, prob_away)"
           " jest wiarygodne? (model_log) ===")
@@ -235,6 +360,8 @@ def raport_kalibracji_1x2(conn) -> None:
               " z kompletem prob_home/prob_draw/prob_away.")
         return
 
+    from footstats.core.bledy_pomiaru import przedzial_wilsona
+
     grupy: dict[str, list[dict]] = {nazwa: [] for nazwa in _KOSZYKI_1X2}
     for w in wiersze:
         grupy[_koszyk_pewnosci(float(w["pewnosc"]))].append(w)
@@ -246,14 +373,26 @@ def raport_kalibracji_1x2(conn) -> None:
             continue
         n = len(wpisy)
         model = sum(float(w["pewnosc"]) for w in wpisy) / n
-        realnie = 100.0 * sum(w["tip_correct"] for w in wpisy) / n
-        koszyki.append({"koszyk": nazwa, "n": n, "model": model, "realnie": realnie})
+        trafienia = sum(w["tip_correct"] for w in wpisy)
+        realnie = 100.0 * trafienia / n
+        koszyki.append({"koszyk": nazwa, "n": n, "model": model,
+                         "realnie": realnie, "trafienia": trafienia})
 
     for k in koszyki:
         roznica = k["realnie"] - k["model"]
+        dol, gora = przedzial_wilsona(k["trafienia"], k["n"])
+        dol_pct, gora_pct = dol * 100.0, gora * 100.0
+        # Jedyny sygnal "tu cos jest": model lezy POZA przedzialem Wilsona
+        # dla wartosci realnej — nie sama wielkosc roznicy w pp.
+        poza_przedzialem = not (dol_pct <= k["model"] <= gora_pct)
         znacznik = " — mala proba" if k["n"] < PROG_MALA_PROBA else ""
+        if poza_przedzialem:
+            ocena = " — ROZBIEZNOSC: model poza przedzialem Wilsona"
+        else:
+            ocena = " — roznica miesci sie w niepewnosci pomiaru (Wilson 95%)"
         print(f"  {k['koszyk']:8} n={k['n']:4}  model={k['model']:.1f}%"
-              f"  realnie={k['realnie']:.1f}%  roznica={roznica:+.1f}pp{znacznik}")
+              f"  realnie={k['realnie']:.1f}% [{dol_pct:.1f}-{gora_pct:.1f}]%"
+              f"  roznica={roznica:+.1f}pp{znacznik}{ocena}")
 
     realne = [k["realnie"] for k in koszyki]
     rosnie = all(a <= b for a, b in zip(realne, realne[1:]))
@@ -574,6 +713,7 @@ def main() -> None:
         raport_lekcji(conn)
         raport_wzorcow(conn)
         dziennik = raport_dziennika(conn)
+        raport_obciazenia_modelu(conn)
         raport_kalibracji_1x2(conn)
         raport_rynkow_golowych(conn)
         raport_remisow(conn)
