@@ -175,6 +175,34 @@ class TestObliczTipCorrect:
 
     # ── Nazwane rynki BetBuilder (betbuilder_rules) — muszą się rozliczać ──────
 
+    # ── Rozwlekly zapis 1X2 z opisem w nawiasie (typ #249 z produkcji) ────────
+
+    def test_wariant_rozwlekly_2_wygrana_goscia(self):
+        # dokladny wiersz #249 z produkcji: "2 (wygrana gościa)" + "0-3"
+        assert oblicz_tip_correct("2 (wygrana gościa)", "0-3") == 1
+
+    def test_wariant_rozwlekly_1_wygrana_gospodarza(self):
+        assert oblicz_tip_correct("1 (wygrana gospodarza)", "2-1") == 1
+        assert oblicz_tip_correct("1 (wygrana gospodarza)", "0-3") == 0
+
+    def test_wariant_rozwlekly_x_remis(self):
+        assert oblicz_tip_correct("X (remis)", "1-1") == 1
+        assert oblicz_tip_correct("X (remis)", "2-1") == 0
+
+    def test_regula_nawiasowa_nie_przechwytuje_innych_rynkow(self):
+        """Antyregresja: nawias w typie 1X2 nie moze rozszerzyc sie na rynki,
+        ktore nawiasu w ogole nie uzywaja jako czesci typu — musza rozliczac
+        sie DOKLADNIE tak jak przed dodaniem rodziny "N (opis)"."""
+        assert oblicz_tip_correct("OVER 2.5", "2-1") == 1
+        assert oblicz_tip_correct("BTTS", "1-1") == 1
+        assert oblicz_tip_correct("Handicap +1 Gość", "1-1") == 1
+        assert oblicz_tip_correct("Handicap +1 Gość", "2-0") == 0
+
+    def test_nawias_w_typie_nie_rozbraja_kontroli_nawiasu_w_wyniku(self):
+        # "1-1 (Pen- 4-5)" jest nierozliczalne (karne) niezaleznie od tego,
+        # ze sam TYP tez ma nawias — kontrola wyniku ma pierwszenstwo.
+        assert oblicz_tip_correct("2 (wygrana gościa)", "1-1 (Pen- 4-5)") is None
+
     def test_gospodarz_over_05_liczy_gole_gospodarza_nie_total(self):
         # 0-1: total=1 (>0.5) ale gospodarz=0 → NIE trafione (regresja: łapało total)
         assert oblicz_tip_correct("Gospodarz Over 0.5", "0-1") == 0

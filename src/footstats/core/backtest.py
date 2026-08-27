@@ -362,6 +362,59 @@ def get_pending_results() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def uzupelnij_tip_correct(dry_run: bool = True) -> dict:
+    """Dolicza `tip_correct` wierszom, ktore MAJA juz wynik, a trafnosci nie maja.
+
+    PO CO TO ISTNIEJE: `get_pending_results` (wyzej) pyta WYLACZNIE
+    `WHERE actual_result IS NULL` — to jedyne kryterium, po ktorym pipeline
+    rozpoznaje "jeszcze nie wiemy". Wiersz, ktoremu `update_result` wpisal wynik,
+    a `oblicz_tip_correct` przy tym zwrocil `None` (typ wtedy nieobslugiwany albo
+    wynik nierozliczalny — dogrywka/karne), zapisuje sie z `tip_correct = NULL`
+    i od tej chwili jest dla `get_pending_results` NIEWIDOCZNY NA ZAWSZE: ma juz
+    wynik, wiec zaden kolejny przebieg juz go nie odwiedzi.
+
+    Zmierzone na produkcji 27.08: 3 z 161 wierszy z wynikiem mialy taka dziure.
+    Dwa z nich (predykcje #74, #90, typ "Handicap +1 Gość") parser rozumie JUZ
+    DZIS, ale zostaly zapisane jako NULL, zanim wsparcie dla tego typu powstalo —
+    i nic ich nigdy nie odwiedzilo ponownie. Ta funkcja to reczny przebieg
+    naprawczy uruchamiany PO KAZDEJ zmianie `oblicz_tip_correct` — dogania
+    wiersze, ktore parser juz umie policzyc, ale ktore osiadly z NULL zanim
+    wsparcie powstalo. Celowo NIE jest podpieta pod zaden job ani scheduler.
+
+    `None` z `oblicz_tip_correct` (dogrywka/karne albo typ dalej nieobslugiwany)
+    zostawia wiersz NIETKNIETY — zapis zera zafalszowalby statystyki trafnosci.
+
+    Domyslnie `dry_run=True`: raportuje, ilu wierszy dotknie, i nie zapisuje nic.
+    """
+    init_db()
+
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, ai_tip, actual_result FROM predictions"
+            " WHERE actual_result IS NOT NULL AND tip_correct IS NULL"
+        ).fetchall()
+
+    stat = {"kandydaci": len(rows), "uzupelnione": 0, "pominiete": 0}
+
+    for r in rows:
+        wynik = oblicz_tip_correct(r["ai_tip"], r["actual_result"])
+        if wynik is None:
+            # Dogrywka/karne albo typ dalej nieobslugiwany — zostawiamy NULL.
+            stat["pominiete"] += 1
+            continue
+        stat["uzupelnione"] += 1
+        if dry_run:
+            continue
+        with _connect() as conn:
+            conn.execute(
+                "UPDATE predictions SET tip_correct = ? WHERE id = ?",
+                (wynik, r["id"]),
+            )
+
+    logger.info("uzupelnij_tip_correct(dry_run=%s): %s", dry_run, stat)
+    return stat
+
+
 def zwieksz_probe_rozliczenia(ids: list[int]) -> int:
     """Podbija licznik nieudanych prob rozliczenia. Zwraca liczbe wierszy.
 
