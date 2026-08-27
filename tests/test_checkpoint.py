@@ -1,4 +1,7 @@
 """Tests for prediction batch checkpointing."""
+import json
+import logging
+import os
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -7,6 +10,8 @@ import pytest
 
 from footstats.core.checkpoint import (
     CheckpointStore,
+    _checkpoint_sort_key,
+    _parse_checkpoint_timestamp,
     cleanup_old_checkpoints,
     list_checkpoints,
     load_predictions_batch,
@@ -15,16 +20,16 @@ from footstats.core.checkpoint import (
 
 
 @pytest.fixture
-def clean_checkpoint_dir():
-    """Clean checkpoint directory before and after test."""
-    from footstats.core.checkpoint import CHECKPOINT_DIR
-    if CHECKPOINT_DIR.exists():
-        for file in CHECKPOINT_DIR.glob("*.jsonl"):
-            file.unlink()
-    yield
-    if CHECKPOINT_DIR.exists():
-        for file in CHECKPOINT_DIR.glob("*.jsonl"):
-            file.unlink()
+def clean_checkpoint_dir(tmp_path, monkeypatch):
+    """
+    Izoluje checkpointy testu w `tmp_path` zamiast w `cache/checkpoints`.
+
+    `cache/checkpoints` to stała ścieżka względem repo — dwa równoległe przebiegi
+    pytest (np. dwa agenty naraz) kasowały sobie tam nawzajem pliki w trakcie, co
+    dawało niedeterministyczne wyniki niezależne od logiki produkcyjnej.
+    """
+    monkeypatch.setenv("CHECKPOINT_DIR", str(tmp_path))
+    yield tmp_path
 
 
 class TestSaveLoadCheckpoint:
@@ -201,3 +206,72 @@ class TestCheckpointRecovery:
         batch_ids = [cp["batch_id"] for cp in checkpoints]
         assert "daily_202605_0800" in batch_ids
         assert "daily_202605_0801" in batch_ids
+
+
+class TestSortowaniePoNazwiePlikuNieMtime:
+    """
+    Regresja: „najnowszy" checkpoint musi wynikać ze znacznika w NAZWIE pliku
+    (intencja writera, mikrosekundy), nie z `st_mtime` systemu plików (milisekundy,
+    remisy są normą przy kilku zapisach pod rząd).
+    """
+
+    def test_remis_mtime_najnowszy_wg_znacznika_w_nazwie(self, clean_checkpoint_dir):
+        """
+        Dwa checkpointy o RÓŻNYCH znacznikach w nazwie, ale WYRÓWNANYM `st_mtime`
+        (`os.utime`). Bez wyrównania mtime prawie zawsze się różni i test niczego
+        by nie dowodził — tu wymuszamy dokładnie ten remis, który w kodzie
+        sprzed poprawki dawał arbitralną (nie najnowszą) kolejność.
+        """
+        batch_id = "regresja_mtime"
+        starszy_ts = datetime(2026, 8, 20, 10, 0, 0, 123456)
+        nowszy_ts = datetime(2026, 8, 20, 10, 0, 1, 654321)
+
+        starszy_plik = Path(save_predictions_batch([{"wersja": "stara"}], batch_id, starszy_ts))
+        nowszy_plik = Path(save_predictions_batch([{"wersja": "nowa"}], batch_id, nowszy_ts))
+
+        wspolny_mtime = time.time()
+        os.utime(starszy_plik, (wspolny_mtime, wspolny_mtime))
+        os.utime(nowszy_plik, (wspolny_mtime, wspolny_mtime))
+        assert starszy_plik.stat().st_mtime == nowszy_plik.stat().st_mtime, (
+            "test wymaga faktycznego remisu mtime, inaczej niczego nie dowodzi"
+        )
+
+        # Klucz sortowania wprost: nowszy znacznik w nazwie musi dać większy klucz.
+        assert _checkpoint_sort_key(nowszy_plik) > _checkpoint_sort_key(starszy_plik)
+
+        # Ścieżka load_predictions_batch (odczyt konkretnego batcha).
+        loaded = load_predictions_batch(batch_id)
+        assert loaded[0]["wersja"] == "nowa"
+
+        # Ścieżka list_checkpoints (przegląd/recovery po wielu batchach).
+        checkpoints = list_checkpoints()
+        assert checkpoints[0]["file"] == nowszy_plik.name
+
+    def test_batch_id_z_podkresleniami_parsuje_sie_poprawnie(self, clean_checkpoint_dir):
+        """`batch_id` typu "league_pl_2026w20" (z docstringa) nie myli granicy ze znacznikiem."""
+        batch_id = "league_pl_2026w20"
+        timestamp = datetime(2026, 8, 20, 12, 30, 0, 111111)
+
+        path = Path(save_predictions_batch([{"id": 1}], batch_id, timestamp))
+
+        assert _parse_checkpoint_timestamp(path.stem) == timestamp
+
+        checkpoints = list_checkpoints()
+        batch_ids = [cp["batch_id"] for cp in checkpoints]
+        assert batch_id in batch_ids
+
+    def test_nieparsowalna_nazwa_zostaje_na_liscie_i_loguje_ostrzezenie(
+        self, clean_checkpoint_dir, caplog
+    ):
+        """Plik, którego nazwy nie da się rozłożyć na znacznik, nie znika po cichu."""
+        zly_plik = clean_checkpoint_dir / "cos_bez_daty.jsonl"
+        zly_plik.write_text(json.dumps({"id": 1}) + "\n", encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING, logger="footstats.core.checkpoint"):
+            checkpoints = list_checkpoints()
+
+        pliki = [cp["file"] for cp in checkpoints]
+        assert "cos_bez_daty.jsonl" in pliki, "plik o nieparsowalnej nazwie nie może wypaść z listy"
+        assert any(
+            "nie sparsowano znacznika czasu" in rec.message for rec in caplog.records
+        ), "brak/awaria parsowania musi zostać zalogowana, nie ukryta"

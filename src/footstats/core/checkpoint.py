@@ -11,18 +11,72 @@ Exports:
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-CHECKPOINT_DIR = Path("cache/checkpoints")
+_DEFAULT_CHECKPOINT_DIR = "cache/checkpoints"
 
 
-def _ensure_checkpoint_dir() -> None:
-    """Create checkpoint directory if needed."""
-    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+def _checkpoint_dir() -> Path:
+    """
+    Katalog checkpointów, czytany z env przy KAŻDYM wywołaniu (nie raz przy imporcie) —
+    ten sam wzorzec co `SELECTION_SKIP_BTTS` w `core/system_paper.py`. Pozwala testom
+    podmienić katalog na `tmp_path` (izolacja równoległych przebiegów pytest) bez
+    zmiany domyślnej ścieżki produkcyjnej.
+    """
+    return Path(os.getenv("CHECKPOINT_DIR", _DEFAULT_CHECKPOINT_DIR))
+
+
+def _ensure_checkpoint_dir() -> Path:
+    """Create checkpoint directory if needed and return its path."""
+    checkpoint_dir = _checkpoint_dir()
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    return checkpoint_dir
+
+
+def _parse_checkpoint_timestamp(stem: str) -> datetime:
+    """
+    Odtwarza znacznik czasu zakodowany w nazwie pliku (odwrotność transformacji
+    z `save_predictions_batch`: `timestamp.isoformat().replace(":", "-")`).
+
+    `batch_id` sam może zawierać `_` (np. "league_pl_2026w20"), więc granicę między
+    nim a znacznikiem czasu wyznacza OSTATNI `_` w nazwie (ts_str nigdy nie zawiera
+    `_`) — ta sama konwencja, co przy odczycie `batch_id` w `list_checkpoints`.
+
+    Podnosi ValueError, gdy nazwa nie parsuje się wg tego schematu; wołający
+    (`_checkpoint_sort_key`) łapie to i loguje awaryjne przejście na mtime.
+    """
+    last_underscore = stem.rfind("_")
+    ts_part = stem[last_underscore + 1:] if last_underscore != -1 else stem
+    if last_underscore == -1 or "T" not in ts_part:
+        raise ValueError(f"Nie znaleziono znacznika czasu w nazwie: {stem}")
+    date_part, _, time_part = ts_part.partition("T")
+    iso_candidate = f"{date_part}T{time_part.replace('-', ':')}"
+    return datetime.fromisoformat(iso_candidate)
+
+
+def _checkpoint_sort_key(path: Path) -> datetime:
+    """
+    Klucz sortowania „najnowszy pierwszy".
+
+    Priorytet ma znacznik zakodowany w nazwie pliku (intencja writera, rozdzielczość
+    mikrosekundowa) — `st_mtime` systemu plików ma rozdzielczość rzędu milisekund i przy
+    kilku checkpointach zapisanych szybko po sobie regularnie daje remisy, przy których
+    sortowanie zwraca arbitralną kolejność zamiast faktycznie najnowszego pliku. mtime
+    zostaje wyłącznie jako awaryjny tiebreak dla nazw, których nie da się sparsować.
+    """
+    try:
+        return _parse_checkpoint_timestamp(path.stem)
+    except ValueError as e:
+        logger.warning(
+            f"Checkpoint {path.name}: nie sparsowano znacznika czasu z nazwy ({e}), "
+            "używam mtime jako awaryjnego klucza sortowania"
+        )
+        return datetime.fromtimestamp(path.stat().st_mtime)
 
 
 def save_predictions_batch(
@@ -41,10 +95,10 @@ def save_predictions_batch(
     Returns:
         Path to saved checkpoint file
     """
-    _ensure_checkpoint_dir()
+    checkpoint_dir = _ensure_checkpoint_dir()
     timestamp = timestamp or datetime.now()
     ts_str = timestamp.isoformat().replace(":", "-")
-    filename = CHECKPOINT_DIR / f"{batch_id}_{ts_str}.jsonl"
+    filename = checkpoint_dir / f"{batch_id}_{ts_str}.jsonl"
 
     try:
         with open(filename, "w", encoding="utf-8") as f:
@@ -67,10 +121,10 @@ def load_predictions_batch(batch_id: str) -> list[dict[str, Any]]:
     Returns:
         List of prediction dicts, or empty list if not found
     """
-    _ensure_checkpoint_dir()
+    checkpoint_dir = _ensure_checkpoint_dir()
     matching = sorted(
-        CHECKPOINT_DIR.glob(f"{batch_id}_*.jsonl"),
-        key=lambda p: p.name,
+        checkpoint_dir.glob(f"{batch_id}_*.jsonl"),
+        key=_checkpoint_sort_key,
         reverse=True,
     )
 
@@ -102,12 +156,12 @@ def list_checkpoints(limit: int = 20) -> list[dict[str, Any]]:
     Returns:
         List of dicts with checkpoint info (path, batch_id, size, timestamp)
     """
-    _ensure_checkpoint_dir()
+    checkpoint_dir = _ensure_checkpoint_dir()
     checkpoints = []
 
     for file in sorted(
-        CHECKPOINT_DIR.glob("*.jsonl"),
-        key=lambda p: p.stat().st_mtime,
+        checkpoint_dir.glob("*.jsonl"),
+        key=_checkpoint_sort_key,
         reverse=True,
     )[:limit]:
         try:
@@ -144,11 +198,11 @@ def cleanup_old_checkpoints(days: int = 7) -> int:
     Returns:
         Number of files removed
     """
-    _ensure_checkpoint_dir()
+    checkpoint_dir = _ensure_checkpoint_dir()
     cutoff = datetime.now() - timedelta(days=days)
     removed = 0
 
-    for file in CHECKPOINT_DIR.glob("*.jsonl"):
+    for file in checkpoint_dir.glob("*.jsonl"):
         mtime = datetime.fromtimestamp(file.stat().st_mtime)
         if mtime < cutoff:
             try:
