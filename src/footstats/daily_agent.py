@@ -631,6 +631,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _zbierz_migawke_kursow(dry_run: bool = False) -> dict | None:
+    """Pilot rozrzutu kursow — delegacja do `core.odds_store.zbierz_i_zapisz`.
+
+    Cala obsluga bledow siedzi TAM, nie tutaj: audyt trzyma ten plik na zerze
+    szerokich handlerow, a pilot potrzebuje wlasnie takiego (nie ma prawa
+    wywrocic potoku). Ten sam zabieg co przy Superbet BB, przeniesionym
+    z tego pliku do `core/daily_phases.py`.
+    """
+    from footstats.core.odds_store import zbierz_i_zapisz
+    return zbierz_i_zapisz(dry_run=dry_run)
+
 def main():
     from dotenv import load_dotenv
     load_dotenv()
@@ -641,6 +652,12 @@ def main():
     skonfiguruj_logi_json()
 
     args = _build_parser().parse_args()
+
+    # Pilot rozrzutu kursow — PRZED sprawdzeniami stop-loss, bo zbieranie kwot
+    # nie ma zwiazku z obstawianiem i ma sie odbyc takze wtedy, gdy agent jest
+    # zapauzowany. Nie moze wywrocic potoku (patrz _zbierz_migawke_kursow).
+    if args.faza == "final":
+        _zbierz_migawke_kursow(dry_run=bool(args.dry_run))
 
     from footstats.core.bankroll import (
         get_current_bankroll, check_daily_stop_loss,

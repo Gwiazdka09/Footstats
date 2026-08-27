@@ -188,6 +188,38 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     "ALTER TABLE users ADD COLUMN locked_until TIMESTAMP",
                 ],
             ),
+            # Pilot rozrzutu kursow (spec 2026-08-27). Zbieramy SUROWE kwoty per
+            # bukmacher — `odds_api.mapuj_wydarzenie` bierze mediane i gubi nazwe
+            # ksiazki, przez co rozrzut byl liczony i wyrzucany przy kazdym zapytaniu.
+            # `line` NOT NULL DEFAULT 0: w Postgresie dwa NULL-e sa rozne, wiec
+            # NULL rozbroilby indeks unikalny i ten sam wiersz h2h dalby sie
+            # wstawic wielokrotnie. 0 = rynek bez linii, 2.5 = linia totals.
+            (
+                16,
+                "create_odds_snapshots",
+                [
+                    """CREATE TABLE IF NOT EXISTS odds_snapshots (
+                        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                        captured_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        snapshot_date TEXT NOT NULL,
+                        sport_key     TEXT NOT NULL,
+                        event_id      TEXT NOT NULL,
+                        commence_time TEXT,
+                        team_home     TEXT NOT NULL,
+                        team_away     TEXT NOT NULL,
+                        market        TEXT NOT NULL,
+                        line          REAL NOT NULL DEFAULT 0,
+                        outcome       TEXT NOT NULL,
+                        bookmaker     TEXT NOT NULL,
+                        price         REAL NOT NULL
+                    )""",
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_odds_snapshots_dzien"
+                    " ON odds_snapshots (snapshot_date, event_id, market, line,"
+                    " outcome, bookmaker)",
+                    "CREATE INDEX IF NOT EXISTS ix_odds_snapshots_sport"
+                    " ON odds_snapshots (sport_key, snapshot_date)",
+                ],
+            ),
         ]
     else:  # postgresql
         return [
@@ -356,6 +388,38 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     " failed_attempts INTEGER DEFAULT 0",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS"
                     " locked_until TIMESTAMP",
+                ],
+            ),
+            # Pilot rozrzutu kursow (spec 2026-08-27). Zbieramy SUROWE kwoty per
+            # bukmacher — `odds_api.mapuj_wydarzenie` bierze mediane i gubi nazwe
+            # ksiazki, przez co rozrzut byl liczony i wyrzucany przy kazdym zapytaniu.
+            # `line` NOT NULL DEFAULT 0: w Postgresie dwa NULL-e sa rozne, wiec
+            # NULL rozbroilby indeks unikalny i ten sam wiersz h2h dalby sie
+            # wstawic wielokrotnie. 0 = rynek bez linii, 2.5 = linia totals.
+            (
+                16,
+                "create_odds_snapshots",
+                [
+                    """CREATE TABLE IF NOT EXISTS odds_snapshots (
+                        id            SERIAL PRIMARY KEY,
+                        captured_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        snapshot_date DATE NOT NULL,
+                        sport_key     TEXT NOT NULL,
+                        event_id      TEXT NOT NULL,
+                        commence_time TIMESTAMP,
+                        team_home     TEXT NOT NULL,
+                        team_away     TEXT NOT NULL,
+                        market        TEXT NOT NULL,
+                        line          DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        outcome       TEXT NOT NULL,
+                        bookmaker     TEXT NOT NULL,
+                        price         DOUBLE PRECISION NOT NULL
+                    )""",
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_odds_snapshots_dzien"
+                    " ON odds_snapshots (snapshot_date, event_id, market, line,"
+                    " outcome, bookmaker)",
+                    "CREATE INDEX IF NOT EXISTS ix_odds_snapshots_sport"
+                    " ON odds_snapshots (sport_key, snapshot_date)",
                 ],
             ),
         ]

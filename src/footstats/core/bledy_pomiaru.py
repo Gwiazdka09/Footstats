@@ -138,3 +138,45 @@ def ece(pary: list[tuple[float, int]], szerokosc: int = 10) -> float | None:
         for k in kubelki
     )
     return suma_wazona / n_calkowite
+
+
+# Ponizej tylu obserwacji rangi ze statystyk pozycyjnych schodza poza zakres
+# proby i przedzial przestaje cokolwiek znaczyc — uczciwiej oddac caly zakres.
+_MIN_N_MEDIANY = 6
+
+
+def przedzial_mediany(
+    wartosci: list[float],
+    z: float = 1.96,
+) -> tuple[float, float] | None:
+    """
+    Bezrozkładowy przedział ufności dla mediany (statystyki pozycyjne).
+
+    `przedzial_wilsona` dotyczy PROPORCJI. Dla wielkości ciągłej — jak `edge`
+    w pilocie rozrzutu kursów — potrzebny jest przedział oparty na rangach:
+    granicami są j-ta i k-ta wartość z posortowanej próbki, gdzie
+
+        j = floor(n/2 − z·√n/2)
+        k = ceil(1 + n/2 + z·√n/2)
+
+    Nie zakłada normalności rozkładu, co tu ma znaczenie: rozkład `edge` jest
+    skośny, bo kursy są ograniczone od dołu przez 1.0, a od góry nie.
+
+    PO CO: próg zabicia pilota (+2%) stosujemy do DOLNEJ granicy, nie do punktu.
+    Przy ~20 meczach na ligę tygodniowo mediana ma szeroki przedział i „+2,3%"
+    może nie różnić się istotnie od „+1,7%". Gołe liczby bez miary niepewności
+    dwa razy 26.08 doprowadziły w tym projekcie do fałszywego wniosku.
+
+    Zwraca None dla pustej listy; przy n < 6 zwraca (min, max).
+    """
+    if not wartosci:
+        return None
+    posortowane = sorted(float(w) for w in wartosci)
+    n = len(posortowane)
+    if n < _MIN_N_MEDIANY:
+        return (posortowane[0], posortowane[-1])
+    polowa = z * math.sqrt(n) / 2.0
+    j = max(1, int(math.floor(n / 2.0 - polowa)))
+    k = min(n, int(math.ceil(1.0 + n / 2.0 + polowa)))
+    return (posortowane[j - 1], posortowane[k - 1])
+
