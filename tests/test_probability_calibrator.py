@@ -140,7 +140,7 @@ class _FakeConnPredictions:
             data_od = params[0]
             wiersze = [r for r in wiersze if r["match_date"] >= data_od]
         if "ai_confidence > 0" in sql:
-            wiersze = [r for r in wiersze if r.get("ai_confidence", 0) > 0]
+            wiersze = [r for r in wiersze if (r.get("ai_confidence") or 0) > 0]
         if "COUNT(" in sql.upper():
             return _FakeCursor([{"n": len(wiersze)}])
         return _FakeCursor(wiersze)
@@ -184,6 +184,27 @@ def test_count_settled_i_load_calibration_licza_ten_sam_zbior(monkeypatch):
     n_settled = pc._count_settled_predictions()
     assert n_settled == len(predicted)
     assert n_settled == 2
+
+
+def test_count_settled_pomija_wiersze_bez_pewnosci_tak_jak_loader(monkeypatch):
+    """Antyregresyjny, wariant uśpiony: wiersz rozliczony, w oknie, ale z pustą
+    `ai_confidence` nie może być policzony przez licznik, skoro fit go odrzuca.
+
+    Na produkcji 27.08 oba zapytania dawały 48 (żaden rozliczony wiersz nie miał pustej
+    pewności), więc rozjazd był NIEWIDOCZNY — a wystarczy jeden taki wiersz, żeby
+    `settled - n_train` przestało się domykać i refit ruszył w kółko co noc. Dlatego
+    `ai_confidence > 0` siedzi we wspólnej stałej `_WHERE_ROZLICZONE_OD_OKNA`, a nie
+    w samym loaderze."""
+    import footstats.core.probability_calibrator as pc
+
+    rows = [
+        {"match_date": "2026-08-10", "ai_confidence": 65, "tip_correct": 1},
+        {"match_date": "2026-08-11", "ai_confidence": None, "tip_correct": 0},  # bez pewnosci
+        {"match_date": "2026-08-12", "ai_confidence": 0, "tip_correct": 1},     # pewnosc zerowa
+    ]
+    monkeypatch.setattr("footstats.utils.db.connect", lambda: _FakeConnPredictions(rows))
+    predicted, _ = pc._load_calibration_data()
+    assert pc._count_settled_predictions() == len(predicted) == 1
 
 
 def test_fit_calibrator_zapisuje_od_daty(tmp_path, monkeypatch):

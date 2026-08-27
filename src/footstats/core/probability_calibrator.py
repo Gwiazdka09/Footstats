@@ -43,19 +43,30 @@ _FALLBACK_TABLE: dict[int, float] = {
 _POCZATEK_CZYSTYCH_DANYCH = "2026-07-01"
 
 # Fragment WHERE dzielony fizycznie między _load_calibration_data i
-# _count_settled_predictions — jedna stała, żeby okna czasowego nie dało się rozjechać
-# (dodać w jednym miejscu, zapomnieć w drugim). Bez tego maybe_refit_calibration liczy
-# deltę (settled − n_train) między dwoma różnymi zbiorami i nigdy jej nie domyka →
+# _count_settled_predictions — jedna stała, żeby zbioru nie dało się rozjechać
+# (dodać warunek w jednym miejscu, zapomnieć w drugim). Bez tego maybe_refit_calibration
+# liczy deltę (settled − n_train) między dwoma różnymi zbiorami i nigdy jej nie domyka →
 # refit odpalałby się co noc w nieskończoność.
-_WHERE_ROZLICZONE_OD_OKNA = "tip_correct IS NOT NULL AND match_date >= ?"
+#
+# `ai_confidence > 0` NALEŻY do tej stałej, nie do samego loadera. Dziś oba zapytania i tak
+# dają 48 (żaden rozliczony wiersz nie ma pustej pewności), więc rozjazd jest UŚPIONY — ale
+# pierwszy wiersz z ai_confidence NULL/0 sprawiłby, że licznik widzi go, a fit nie, i delta
+# przestaje się domykać. Warunek musi obowiązywać oba zapytania, bo `n_train` zapisywany do
+# calibration.json to liczba wierszy, które przeszły przez FIT.
+_WHERE_ROZLICZONE_OD_OKNA = (
+    "tip_correct IS NOT NULL AND match_date >= ? AND ai_confidence > 0"
+)
 
 
 def _load_calibration_data() -> tuple[list[float], list[float]]:
     """Load (predicted, actual) pairs from DB predictions table (od _POCZATEK_CZYSTYCH_DANYCH)."""
     with _db.connect() as conn:
         rows = conn.execute(
+            # B608: f-string wstawia wyłącznie stałą modułową, nigdy danych z zewnątrz;
+            # data okna idzie parametrem. Uzasadnienie nad linią — bandit parsuje tekst
+            # PO `nosec` jako listę ID testów i krztusi się na polskich słowach.
             "SELECT ai_confidence, tip_correct FROM predictions "
-            f"WHERE {_WHERE_ROZLICZONE_OD_OKNA} AND ai_confidence > 0",  # nosec B608 — stała modułowa, nie input użytkownika
+            f"WHERE {_WHERE_ROZLICZONE_OD_OKNA}",  # nosec B608
             (_POCZATEK_CZYSTYCH_DANYCH,),
         ).fetchall()
     predicted = [r["ai_confidence"] / 100.0 for r in rows]
@@ -112,7 +123,8 @@ def _count_settled_predictions() -> int:
     co _load_calibration_data — patrz _WHERE_ROZLICZONE_OD_OKNA)."""
     with _db.connect() as conn:
         row = conn.execute(
-            f"SELECT COUNT(*) AS n FROM predictions WHERE {_WHERE_ROZLICZONE_OD_OKNA}",  # nosec B608 — stała modułowa, nie input użytkownika
+            # B608: jak wyżej — sklejana jest stała modułowa, data idzie parametrem.
+            f"SELECT COUNT(*) AS n FROM predictions WHERE {_WHERE_ROZLICZONE_OD_OKNA}",  # nosec B608
             (_POCZATEK_CZYSTYCH_DANYCH,),
         ).fetchone()
     return int(row["n"]) if row else 0
