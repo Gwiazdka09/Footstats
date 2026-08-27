@@ -266,4 +266,18 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
         lo, hi = int(mg.group(1)), int(mg.group(2))
         return 1 if lo <= total_goals <= hi else 0
 
+    # Rozwlekły zapis 1X2 z opisem słownym: "2 (wygrana gościa)", "1 (wygrana
+    # gospodarza)", "X (remis)" — to samo co samo "1"/"X"/"2", tylko ubrane w
+    # slownictwo modelu jezykowego. Dokladny wiersz z produkcji: predykcja #249,
+    # typ "2 (wygrana gościa)" + wynik "0-3", zapisana z tip_correct=NULL na
+    # zawsze (patrz `uzupelnij_tip_correct` w core/backtest.py).
+    #
+    # Umieszczone celowo na SAMYM KONCU, po wszystkich bardziej specyficznych
+    # formatach z nawiasem (m.in. handicap europejski "1 (-1.5)" wyzej) — dzieki
+    # temu regula jest wazka i nie przechwytuje niczego, co juz ma wlasna,
+    # bardziej szczegolowa obsluge.
+    opisowy = re.match(r"^([1X2])\s*\(.*\)$", tip)
+    if opisowy:
+        return 1 if match_result == opisowy.group(1) else 0
+
     return None

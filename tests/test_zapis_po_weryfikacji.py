@@ -144,12 +144,15 @@ def test_typ_bez_pokrycia_w_kursach_NIE_trafia_do_bazy(zapisy):
 def test_typ_z_dopiskiem_llm_nigdy_nie_dotrze_do_bazy(zapisy):
     """A2, dokładny wiersz z produkcji 23.08.
 
-    `2 (wygrana gościa)` nie rozlicza się (`oblicz_tip_correct` → None), więc
-    taki wiersz byłby martwy od chwili zapisu. Weryfikacja go nie zna, bo nie ma
-    go w `_TYP_DO_ODDS_KEY` — i to wystarczy, żeby nie wszedł.
+    AKTUALIZACJA 27.08 (fix/tip-correct-backfill): `oblicz_tip_correct` umie już
+    rozliczyć rozwlekłą rodzinę "N (opis)" (`2 (wygrana gościa)` → jak samo "2").
+    To NIE zmienia sedna tego testu — filtr działa niezależnie, na poziomie
+    weryfikacji kursów: `_TYP_DO_ODDS_KEY` zna wyłącznie krótkie klucze ("1",
+    "2", "over 2.5"...), więc opisowy zapis nie ma tam pokrycia i nadal nie
+    wejdzie do bazy, choć teraz — gdyby jednak wszedł — dałby się rozliczyć.
     """
     from footstats.utils.betting import oblicz_tip_correct
-    assert oblicz_tip_correct("2 (wygrana gościa)", "1-2") is None, "zalozenie testu"
+    assert oblicz_tip_correct("2 (wygrana gościa)", "1-2") == 1, "zalozenie testu zmienione 27.08"
 
     w = _mecz()
     dane = {"top3": [{"mecz": "Legia vs Lech", "typ": "2 (wygrana gościa)", "kurs": 6.0}]}
