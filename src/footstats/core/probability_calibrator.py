@@ -32,13 +32,31 @@ _FALLBACK_TABLE: dict[int, float] = {
     80: 0.333,
 }
 
+# 08-27: okno czasowe danych treningowych kalibracji. Pomiar obciążenia pewności Groqa
+# per miesiąc (n=158, tip_correct rozliczone): 2026-05 (n=9) deklaruje 77,0% vs trafia
+# 22,2% (−54,8pp, z=−4,16, ISTOTNE); 2026-06 (n=101, 64% całej tabeli) deklaruje 59,2%
+# vs trafia 37,6% (−21,6pp, z=−4,82, ISTOTNE) — to era SPRZED fixów Cel B (patrz komentarz
+# przy _CALIBRATION_ENABLED: "41 odwróconych próbek"). 2026-07 (n=14): −5,4pp = szum.
+# 2026-08 (n=34): +2,8pp = szum. Fit na całej tabeli byłby zdominowany przez czerwiec
+# (64% wierszy), mimo że jest zmierzony jako obciążony. Granica 2026-07-01 odcina znane
+# skażenie danych — NIE usuwać/przesuwać bez nowego pomiaru per-miesiąc.
+_POCZATEK_CZYSTYCH_DANYCH = "2026-07-01"
+
+# Fragment WHERE dzielony fizycznie między _load_calibration_data i
+# _count_settled_predictions — jedna stała, żeby okna czasowego nie dało się rozjechać
+# (dodać w jednym miejscu, zapomnieć w drugim). Bez tego maybe_refit_calibration liczy
+# deltę (settled − n_train) między dwoma różnymi zbiorami i nigdy jej nie domyka →
+# refit odpalałby się co noc w nieskończoność.
+_WHERE_ROZLICZONE_OD_OKNA = "tip_correct IS NOT NULL AND match_date >= ?"
+
 
 def _load_calibration_data() -> tuple[list[float], list[float]]:
-    """Load (predicted, actual) pairs from DB predictions table."""
+    """Load (predicted, actual) pairs from DB predictions table (od _POCZATEK_CZYSTYCH_DANYCH)."""
     with _db.connect() as conn:
         rows = conn.execute(
             "SELECT ai_confidence, tip_correct FROM predictions "
-            "WHERE tip_correct IS NOT NULL AND ai_confidence > 0"
+            f"WHERE {_WHERE_ROZLICZONE_OD_OKNA} AND ai_confidence > 0",  # nosec B608 — stała modułowa, nie input użytkownika
+            (_POCZATEK_CZYSTYCH_DANYCH,),
         ).fetchall()
     predicted = [r["ai_confidence"] / 100.0 for r in rows]
     actual = [float(r["tip_correct"]) for r in rows]
@@ -46,7 +64,15 @@ def _load_calibration_data() -> tuple[list[float], list[float]]:
 
 
 def fit_calibrator() -> None:
-    """Fit isotonic regression on historical predictions, save to calibration.json."""
+    """Fit isotonic regression on historical predictions (od _POCZATEK_CZYSTYCH_DANYCH),
+    save to calibration.json.
+
+    Isotonic regression potrzebuje wielokrotnie więcej próbek niż dolny próg 20 poniżej —
+    poprzedni fit na 41 (szerszych, sprzed okna) próbkach wyszedł zdegenerowany, płaska
+    krzywa (patrz komentarz przy _CALIBRATION_ENABLED). Po zawężeniu okna do lipca/sierpnia
+    zostaje rząd ~48 wierszy: fit się wykona (próg to tylko 20), ale to wciąż za mało —
+    CALIBRATION_ENABLED ma zostać WYŁĄCZONE, dopóki próbka nie urośnie.
+    """
     try:
         from sklearn.isotonic import IsotonicRegression
     except ImportError:
@@ -55,7 +81,11 @@ def fit_calibrator() -> None:
 
     predicted, actual = _load_calibration_data()
     if len(predicted) < 20:
-        _log.warning("Too few samples (%d) for calibration", len(predicted))
+        _log.warning(
+            "Too few samples (%d) for calibration (okno od %s) — isotonic regression "
+            "potrzebuje wielokrotnie więcej niż ten próg; zostaw CALIBRATION_ENABLED=0",
+            len(predicted), _POCZATEK_CZYSTYCH_DANYCH,
+        )
         return
 
     ir = IsotonicRegression(out_of_bounds="clip")
@@ -66,16 +96,24 @@ def fit_calibrator() -> None:
     x_pts = np.linspace(0.40, 0.95, 56).tolist()
     y_pts = ir.predict(x_pts).tolist()
 
-    payload = {"x": x_pts, "y": y_pts, "n_train": len(predicted)}
+    payload = {
+        "x": x_pts,
+        "y": y_pts,
+        "n_train": len(predicted),
+        "od_daty": _POCZATEK_CZYSTYCH_DANYCH,
+    }
     _CALIBRATION_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    _log.info("Calibrator fitted on %d samples → %s", len(predicted), _CALIBRATION_PATH)
+    _log.info("Calibrator fitted on %d samples (od %s) → %s",
+               len(predicted), _POCZATEK_CZYSTYCH_DANYCH, _CALIBRATION_PATH)
 
 
 def _count_settled_predictions() -> int:
-    """Liczba rozliczonych predykcji (baza treningowa kalibracji)."""
+    """Liczba rozliczonych predykcji od _POCZATEK_CZYSTYCH_DANYCH (ten sam zbiór/okno
+    co _load_calibration_data — patrz _WHERE_ROZLICZONE_OD_OKNA)."""
     with _db.connect() as conn:
         row = conn.execute(
-            "SELECT COUNT(*) AS n FROM predictions WHERE tip_correct IS NOT NULL"
+            f"SELECT COUNT(*) AS n FROM predictions WHERE {_WHERE_ROZLICZONE_OD_OKNA}",  # nosec B608 — stała modułowa, nie input użytkownika
+            (_POCZATEK_CZYSTYCH_DANYCH,),
         ).fetchone()
     return int(row["n"]) if row else 0
 

@@ -4,6 +4,9 @@
 zdegenerowany). Mechanizm krzywej/fallbacku testowany przez `_calibrate_raw`;
 `calibrate_confidence` (produkcja) testowane osobno (identity gdy off, krzywa gdy on).
 """
+import json
+import logging
+
 import pytest
 from unittest.mock import patch
 
@@ -104,3 +107,118 @@ def test_calibrate_candidates_identity_gdy_off():
     with patch("footstats.core.probability_calibrator._CALIBRATION_ENABLED", False):
         result = calibrate_candidates([{"ai_confidence": 70}])
     assert result[0]["pewnosc_kalibrowana"] == pytest.approx(0.70)  # identity, nie 0.392
+
+
+# ── Okno czasowe danych treningowych (08-27) ─────────────────────────────
+# Maj/czerwiec 2026 to era sprzed fixów Cel B, istotnie obciążona (patrz komentarz
+# przy _POCZATEK_CZYSTYCH_DANYCH w module) — fit nie może jej brać pod uwagę.
+
+class _FakeCursor:
+    """Kursor zwracający zadaną listę wierszy (fetchall) lub pierwszy z nich (fetchone)."""
+
+    def __init__(self, rows: list[dict]) -> None:
+        self._rows = rows
+
+    def fetchall(self) -> list[dict]:
+        return self._rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+
+class _FakeConnPredictions:
+    """Atrapa `predictions` filtrująca wiersze WEDŁUG treści zapytania/parametrów —
+    nie kanonuje odpowiedzi, dzięki temu łapie rozjazd okna między dwoma zapytaniami
+    (jeśli któreś zapomni dołożyć `match_date >= ?`, test to zobaczy jako różnicę liczb)."""
+
+    def __init__(self, rows: list[dict]) -> None:
+        self._rows = rows
+
+    def execute(self, sql: str, params: tuple = ()):
+        wiersze = [r for r in self._rows if r.get("tip_correct") is not None]
+        if "match_date >= ?" in sql:
+            data_od = params[0]
+            wiersze = [r for r in wiersze if r["match_date"] >= data_od]
+        if "ai_confidence > 0" in sql:
+            wiersze = [r for r in wiersze if r.get("ai_confidence", 0) > 0]
+        if "COUNT(" in sql.upper():
+            return _FakeCursor([{"n": len(wiersze)}])
+        return _FakeCursor(wiersze)
+
+    def __enter__(self) -> "_FakeConnPredictions":
+        return self
+
+    def __exit__(self, *_a) -> bool:
+        return False
+
+
+def test_load_calibration_data_pomija_wiersz_sprzed_okna(monkeypatch):
+    import footstats.core.probability_calibrator as pc
+
+    rows = [
+        {"match_date": "2026-06-15", "ai_confidence": 70, "tip_correct": 1},  # przed oknem
+        {"match_date": "2026-08-15", "ai_confidence": 60, "tip_correct": 0},  # w oknie
+    ]
+    monkeypatch.setattr("footstats.utils.db.connect", lambda: _FakeConnPredictions(rows))
+    predicted, actual = pc._load_calibration_data()
+    assert predicted == pytest.approx([0.6])
+    assert actual == pytest.approx([0.0])
+
+
+def test_count_settled_i_load_calibration_licza_ten_sam_zbior(monkeypatch):
+    """Antyregresyjny: `_count_settled_predictions` i `_load_calibration_data` muszą
+    liczyć ten sam zbiór wierszy (to samo okno czasowe) — inaczej `maybe_refit_calibration`
+    porównuje dwa różne zbiory i delta (settled - n_train) nigdy się nie domyka,
+    co odpala refit w kółko co noc."""
+    import footstats.core.probability_calibrator as pc
+
+    rows = [
+        {"match_date": "2026-05-10", "ai_confidence": 80, "tip_correct": 1},  # przed oknem
+        {"match_date": "2026-06-15", "ai_confidence": 70, "tip_correct": 0},  # przed oknem
+        {"match_date": "2026-07-05", "ai_confidence": 65, "tip_correct": 1},  # w oknie
+        {"match_date": "2026-08-15", "ai_confidence": 60, "tip_correct": 0},  # w oknie
+        {"match_date": "2026-08-20", "ai_confidence": 55, "tip_correct": None},  # nierozliczone
+    ]
+    monkeypatch.setattr("footstats.utils.db.connect", lambda: _FakeConnPredictions(rows))
+    predicted, _actual = pc._load_calibration_data()
+    n_settled = pc._count_settled_predictions()
+    assert n_settled == len(predicted)
+    assert n_settled == 2
+
+
+def test_fit_calibrator_zapisuje_od_daty(tmp_path, monkeypatch):
+    import footstats.core.probability_calibrator as pc
+
+    plik = tmp_path / "calibration.json"
+    monkeypatch.setattr(pc, "_CALIBRATION_PATH", plik)
+    predicted = [0.40 + 0.02 * i for i in range(25)]
+    actual = [float(i % 2) for i in range(25)]
+    monkeypatch.setattr(pc, "_load_calibration_data", lambda: (predicted, actual))
+
+    pc.fit_calibrator()
+
+    payload = json.loads(plik.read_text(encoding="utf-8"))
+    assert payload["od_daty"] == pc._POCZATEK_CZYSTYCH_DANYCH
+
+
+def test_last_fit_n_train_dziala_bez_klucza_od_daty(tmp_path, monkeypatch):
+    """Kompatybilność wsteczna: stary plik calibration.json bez klucza `od_daty`
+    (wygenerowany przed tą zmianą) nie może wywrócić `_last_fit_n_train`."""
+    import footstats.core.probability_calibrator as pc
+
+    plik = tmp_path / "calibration.json"
+    plik.write_text(json.dumps({"x": [0.5], "y": [0.3], "n_train": 41}), encoding="utf-8")
+    monkeypatch.setattr(pc, "_CALIBRATION_PATH", plik)
+
+    assert pc._last_fit_n_train() == 41
+
+
+def test_fit_calibrator_za_malo_wierszy_loguje_liczbe_i_date_okna(monkeypatch, caplog):
+    import footstats.core.probability_calibrator as pc
+
+    monkeypatch.setattr(pc, "_load_calibration_data", lambda: ([0.5] * 10, [1.0] * 10))
+    with caplog.at_level(logging.WARNING, logger="footstats.core.probability_calibrator"):
+        pc.fit_calibrator()
+
+    assert "10" in caplog.text
+    assert pc._POCZATEK_CZYSTYCH_DANYCH in caplog.text
