@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 
 
-def test_obciazenia(pary: list[tuple[float, int]]) -> dict | None:
+def sprawdz_obciazenie(pary: list[tuple[float, int]]) -> dict | None:
     """
     Test czy model jest systematycznie obciążony na danym wyjściu.
 

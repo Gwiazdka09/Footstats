@@ -14,15 +14,15 @@ from __future__ import annotations
 
 import math
 
-# Alias importu: funkcja produkcyjna nazywa się `test_obciazenia` (wymóg specyfikacji),
-# ale zaimportowana wprost pod tą nazwą zostałaby przez pytest omyłkowo skolekcjonowana
-# jako kolejny test w tym pliku (nazwa modułowa zaczynająca się od "test_"). Alias na
-# import omija kolizję, nie zmieniając nazwy w module produkcyjnym.
+# UWAGA na nazewnictwo: funkcja produkcyjna nazywa się `sprawdz_obciazenie`, a nie
+# `test_obciazenia`, celowo. Pytest kolekcjonuje każdą nazwę `test_*` widoczną w pliku
+# testowym — także zaimportowaną — i próbowałby uruchomić funkcję produkcyjną jako test,
+# wywalając się na "fixture 'pary' not found". Nie nazywaj tak funkcji w `src/`.
 from footstats.core.bledy_pomiaru import ece, kubelki_z_bledem, przedzial_wilsona
-from footstats.core.bledy_pomiaru import test_obciazenia as sprawdz_obciazenie
+from footstats.core.bledy_pomiaru import sprawdz_obciazenie
 
 
-# --- test_obciazenia -------------------------------------------------------
+# --- sprawdz_obciazenie -------------------------------------------------------
 
 
 def test_obciazenia_model_idealny_nie_jest_istotny() -> None:
