@@ -252,3 +252,25 @@ def test_przedzial_mediany_nie_wychodzi_poza_dane() -> None:
     assert dol >= min(dane)
     assert gora <= max(dane)
 
+
+def test_przedzial_mediany_szerszy_przy_wyzszej_pewnosci() -> None:
+    """Bezposredni test skladnika z·√n/2. Test zwezania go NIE sprawdza:
+    przy `polowa = 0` przedzial kurczy sie do odstepu miedzy sasiednimi
+    obserwacjami, ktory maleje z n tak samo — wiec tamten test przechodzi
+    na zielono nawet przy calkowicie wylaczonej szerokosci."""
+    from footstats.core.bledy_pomiaru import przedzial_mediany
+    dane = [float(i) for i in range(100)]
+    waski = przedzial_mediany(dane, z=0.5)
+    szeroki = przedzial_mediany(dane, z=1.96)
+    assert (szeroki[1] - szeroki[0]) > (waski[1] - waski[0])
+
+
+def test_przedzial_mediany_ma_konkretne_rangi() -> None:
+    """Przypina wzor do liczb. n=100, z=1.96:
+        j = floor(50 − 1.96·10/2) = floor(40.2) = 40
+        k = ceil(1 + 50 + 9.8)    = ceil(60.8)  = 61
+    czyli granice to 40. i 61. wartosc, indeksy 39 i 60."""
+    from footstats.core.bledy_pomiaru import przedzial_mediany
+    dane = [float(i) for i in range(100)]
+    assert przedzial_mediany(dane) == (39.0, 60.0)
+
