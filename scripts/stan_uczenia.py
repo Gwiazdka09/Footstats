@@ -33,6 +33,23 @@ MIN_ROZLICZONYCH = 30
 # korekcie Šidáka na 5 koszyków) mimo że ledwie przekracza próg.
 PROG_MALA_PROBA = 30
 
+# Rynek kwotowany przez mniej ksiazek niz tyle nie ma miedzy czym sie rozjechac.
+# Rynek roznych mial ich dokladnie dwie (pomiar 27.08) i efektowna rozpietosc
+# bylaby tam artefaktem, nie sygnalem.
+PROG_CIENKIEGO_RYNKU = 3
+
+# Prog zabicia pilota rozrzutu kursow: mniej wiecej prowizja gieldy. Ponizej
+# tego nie ma czego zbierac, chocby rozpietosc wygladala efektownie. Stosowany
+# do DOLNEJ granicy przedzialu ufnosci, nie do punktu — przy ~20 meczach na
+# lige tygodniowo mediana ma szeroki przedzial i "+2,3%" moze nie roznic sie
+# istotnie od "+1,7%".
+PROG_EDGE = 0.02
+
+# Ponizej tylu rynkow werdykt sie nie wydaje. Przy n < 6 `przedzial_mediany`
+# zwraca (min, max), co dla n=1 degeneruje sie do PUNKTU — a wtedy regula
+# 'prog na dolnej granicy' daje falszywa pewnosc zamiast przed nia chronic.
+PROG_MIN_RYNKOW = 6
+
 
 def _licz(conn, zapytanie: str) -> list[dict]:
     return [dict(r) for r in conn.execute(zapytanie).fetchall()]
@@ -686,6 +703,142 @@ def raport_przewagi_nad_kursem(conn) -> None:
           " ma zwiazek z pieniedzmi.")
 
 
+def raport_rozrzutu_kursow(conn) -> None:
+    """Czy ktorakolwiek ksiazka jest systematycznie powyzej ceny uczciwej?
+
+    Pomiar NIE potrzebuje wynikow meczow: edge = kurs * p_uczciwe - 1, gdzie
+    p_uczciwe pochodzi ze zdewigowanej ksiazki referencyjnej. Dlatego tydzien
+    wystarcza tam, gdzie pomiary oparte na wynikach potrzebowaly tysiecy
+    obserwacji — wariancja wyniku meczu w ogole nie wchodzi do rownania.
+
+    Spec: docs/superpowers/specs/2026-08-27-rozrzut-kursow-pilot-design.md
+    """
+    from statistics import median
+
+    from footstats.core.bledy_pomiaru import przedzial_mediany
+    from footstats.core.rozrzut_kursow import (
+        WYNIKI_RYNKU, cena_referencyjna, edge_bukmacherow, rozrzut,
+    )
+
+    print()
+    print("=== ROZRZUT KURSOW MIEDZY BUKMACHERAMI (odds_snapshots) ===")
+    wiersze = _licz(conn, """
+        SELECT snapshot_date, sport_key, event_id, market, line,
+               outcome, bookmaker, price
+        FROM odds_snapshots
+        ORDER BY sport_key, snapshot_date, event_id, market, line
+    """)
+    if not wiersze:
+        print("  BRAK DANYCH — tabela odds_snapshots jest pusta."
+              " Kolektor startuje razem z jobem footstats-final (11:00 UTC).")
+        return
+
+    # Grupowanie do postaci, ktorej oczekuja czyste funkcje:
+    # (liga, dzien, mecz, rynek, linia) -> {bukmacher: {outcome: cena}}
+    grupy: dict[tuple, dict[str, dict[str, float]]] = {}
+    for w in wiersze:
+        klucz = (w["sport_key"], str(w["snapshot_date"]), w["event_id"],
+                 w["market"], float(w["line"]))
+        grupy.setdefault(klucz, {}).setdefault(w["bookmaker"], {})[w["outcome"]] = (
+            float(w["price"]))
+
+    per_liga: dict[str, dict] = {}
+    for (liga, _dzien, _event, rynek, _linia), kwoty in grupy.items():
+        stan = per_liga.setdefault(liga, {
+            "rynkow": 0, "ksiazek": [], "referencje": {}, "bez_referencji": 0,
+            "rozpietosci": [], "najlepszy_edge": [], "edge_per_ksiazka": {},
+        })
+        stan["rynkow"] += 1
+        stan["ksiazek"].append(len(kwoty))
+
+        for nazwa_outcome in {o for c in kwoty.values() for o in c}:
+            r = rozrzut(kwoty, nazwa_outcome)
+            if r and r["ksiazek"] >= 2:
+                stan["rozpietosci"].append(r["rozpietosc_pct"])
+
+        # Typ rynku MUSI isc do cena_referencyjna. Bez niego ksiazka kwotujaca
+        # 2 z 3 wynikow 1X2 zostaje referencja, a devig po okrojonym zestawie
+        # zawyza KAZDY edge (zmierzone 27.08: +37.8% zamiast +6.24%).
+        ref = cena_referencyjna(kwoty, oczekiwane_wyniki=WYNIKI_RYNKU.get(rynek))
+        if ref is None:
+            stan["bez_referencji"] += 1
+            continue
+        nazwa_ref, p_uczciwe = ref
+        stan["referencje"][nazwa_ref] = stan["referencje"].get(nazwa_ref, 0) + 1
+
+        # Ksiazka referencyjna ma edge rowny wlasnej marzy — nie porownujemy jej
+        # z soba sama.
+        edges = [e for e in edge_bukmacherow(kwoty, p_uczciwe)
+                 if e["bookmaker"] != nazwa_ref]
+        if not edges:
+            continue
+        stan["najlepszy_edge"].append(max(e["edge"] for e in edges))
+        for e in edges:
+            stan["edge_per_ksiazka"].setdefault(e["bookmaker"], []).append(e["edge"])
+
+    for liga in sorted(per_liga):
+        s = per_liga[liga]
+        med_ksiazek = median(s["ksiazek"]) if s["ksiazek"] else 0
+        cienki = (f" — ZBYT CIENKI (ponizej progu {PROG_CIENKIEGO_RYNKU} ksiazek)"
+                  if med_ksiazek < PROG_CIENKIEGO_RYNKU else "")
+        print()
+        print(f"  {liga}  rynkow={s['rynkow']}"
+              f"  ksiazek={int(med_ksiazek)} (mediana){cienki}")
+
+        refy = ", ".join(f"{k}x{v}" for k, v in
+                         sorted(s["referencje"].items(), key=lambda kv: -kv[1]))
+        print(f"    referencja: {refy or 'BRAK'}")
+        if s["bez_referencji"]:
+            udzial = 100.0 * s["bez_referencji"] / s["rynkow"]
+            print(f"    NIEWYCENIALNE: {s['bez_referencji']} rynkow ({udzial:.0f}%)"
+                  " — zadna ksiazka nie kwotowala pelnego rynku."
+                  " To NIE jest 'brak przewagi', tylko brak pomiaru.")
+
+        if s["rozpietosci"]:
+            print(f"    mediana rozpietosci cen: {median(s['rozpietosci']):.1f}%"
+                  f"  (n={len(s['rozpietosci'])})")
+
+        if not s["najlepszy_edge"]:
+            print("    brak porownan — po odjeciu ksiazki referencyjnej nic nie zostalo")
+            continue
+
+        med = median(s["najlepszy_edge"])
+        przedzial = przedzial_mediany(s["najlepszy_edge"])
+        dol, gora = przedzial if przedzial else (med, med)
+        print(f"    mediana NAJLEPSZEGO edge w rynku: {100.0 * med:+.2f}%"
+              f"  [{100.0 * dol:+.2f}%, {100.0 * gora:+.2f}%]"
+              f"  (n={len(s['najlepszy_edge'])})")
+
+        if len(s["najlepszy_edge"]) < PROG_MIN_RYNKOW:
+            print(f"    -> ZA MALO RYNKOW ({len(s['najlepszy_edge'])} < "
+                  f"{PROG_MIN_RYNKOW}) — przedzial degeneruje sie do punktu"
+                  " i kazdy werdykt bylby falszywa pewnoscia")
+        elif dol > PROG_EDGE:
+            print(f"    -> PRZEKRACZA prog {100.0 * PROG_EDGE:.0f}% dolna granica"
+                  " przedzialu — warto ciagnac")
+        elif med > PROG_EDGE:
+            print(f"    -> mediana powyzej progu, ale dolna granica"
+                  f" ({100.0 * dol:+.2f}%) nie — za malo danych, zeby orzec")
+        else:
+            print(f"    -> PONIZEJ progu {100.0 * PROG_EDGE:.0f}%"
+                  " (~prowizja gieldy) — nie ma czego zbierac")
+
+        top = sorted(
+            ((k, median(v), len(v)) for k, v in s["edge_per_ksiazka"].items()
+             if len(v) >= 3),
+            key=lambda t: -t[1],
+        )[:5]
+        for ksiazka, m, n in top:
+            print(f"      {ksiazka:22} mediana edge {100.0 * m:+6.2f}%   n={n}")
+
+    print()
+    print("  UWAGA: edge liczony wzgledem ZDEWIGOWANEJ ksiazki referencyjnej,"
+          " nie wzgledem wyniku meczu — mierzy rozjazd CEN, nie trafnosc.")
+    print("  UWAGA: referencja 'mediana' znaczy, ze zadna z ksiazek sharp"
+          " (pinnacle/betfair_ex_eu/matchbook) nie kwotowala tego rynku."
+          " Wniosek jest wtedy znacznie slabszy.")
+
+
 def raport_gotowosci(pred: dict, dziennik: dict | None = None) -> None:
     """Ile brakuje do werdyktu `porownaj_modele`.
 
@@ -719,6 +872,7 @@ def main() -> None:
         raport_remisow(conn)
         raport_drugiego_wyboru(conn)
         raport_przewagi_nad_kursem(conn)
+        raport_rozrzutu_kursow(conn)
         raport_gotowosci(pred, dziennik)
 
 
