@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 # UWAGA na nazewnictwo: funkcja produkcyjna nazywa się `sprawdz_obciazenie`, a nie
 # `test_obciazenia`, celowo. Pytest kolekcjonuje każdą nazwę `test_*` widoczną w pliku
 # testowym — także zaimportowaną — i próbowałby uruchomić funkcję produkcyjną jako test,
@@ -197,3 +199,56 @@ def test_ece_nie_stosuje_min_n_obejmuje_calosc() -> None:
     wynik = ece(pary, szerokosc=10)
     assert wynik is not None
     assert wynik >= 0.0
+
+
+# --- przedzial_mediany -------------------------------------------------------
+
+def test_przedzial_mediany_stalej_listy_jest_punktem() -> None:
+    from footstats.core.bledy_pomiaru import przedzial_mediany
+    dol, gora = przedzial_mediany([0.05] * 30)
+    assert dol == pytest.approx(0.05)
+    assert gora == pytest.approx(0.05)
+
+
+def test_przedzial_mediany_zawiera_mediane() -> None:
+    from statistics import median
+
+    from footstats.core.bledy_pomiaru import przedzial_mediany
+    dane = [i / 100.0 for i in range(40)]
+    dol, gora = przedzial_mediany(dane)
+    assert dol <= median(dane) <= gora
+
+
+def test_przedzial_mediany_zweza_sie_gdy_probka_rosnie() -> None:
+    """Sedno progu ze specu: przy malej probie przedzial ma byc szeroki, zeby
+    '+2,3%' nie udawalo wyniku istotnego.
+
+    UWAGA na konstrukcje: obie proby musza pochodzic z TEGO SAMEGO zakresu
+    [0, 1]. Porownanie range(10)/100 z range(200)/100 mierzyloby rozciagniecie
+    danych, nie niepewnosc — szerszy przedzial wyszedlby przy WIEKSZYM n."""
+    from footstats.core.bledy_pomiaru import przedzial_mediany
+    maly = przedzial_mediany([i / 9.0 for i in range(10)])
+    duzy = przedzial_mediany([i / 199.0 for i in range(200)])
+    assert (duzy[1] - duzy[0]) < (maly[1] - maly[0])
+
+
+def test_przedzial_mediany_pustej_listy_zwraca_none() -> None:
+    from footstats.core.bledy_pomiaru import przedzial_mediany
+    assert przedzial_mediany([]) is None
+
+
+def test_przedzial_mediany_malej_proby_daje_pelny_zakres() -> None:
+    """Ponizej 6 obserwacji rangi schodza poza zakres proby — uczciwiej oddac
+    caly zakres niz udawac przedzial."""
+    from footstats.core.bledy_pomiaru import przedzial_mediany
+    assert przedzial_mediany([0.01, 0.09, 0.05]) == (0.01, 0.09)
+
+
+def test_przedzial_mediany_nie_wychodzi_poza_dane() -> None:
+    """Rangi musza byc przyciete do [1, n] — inaczej indeks wyjdzie poza liste."""
+    from footstats.core.bledy_pomiaru import przedzial_mediany
+    dane = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    dol, gora = przedzial_mediany(dane)
+    assert dol >= min(dane)
+    assert gora <= max(dane)
+
