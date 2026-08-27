@@ -186,3 +186,28 @@ def test_przy_wystarczajacej_liczbie_rynkow_werdykt_zapada(capsys):
     su.raport_rozrzutu_kursow(_Conn(wiersze))
     assert "PRZEKRACZA" in capsys.readouterr().out
 
+
+def test_mediana_powyzej_progu_ale_dolna_granica_nie_daje_werdyktu(capsys):
+    """Rozdziela PUNKT od DOLNEJ GRANICY — bez tego testu zamiana jednego na
+    drugie przechodzi na zielono.
+
+    Osiem rynkow o ROZNYCH edge: [-5%, -2%, +1%, +2.5%, +3.5%, +6%, +9%, +15%].
+    Mediana = +3% (powyzej progu +2%), ale dolna granica przedzialu = -5%
+    (ponizej). Poprawna odpowiedz brzmi 'za malo danych, zeby orzec'.
+
+    Poprzedni test pozytywny uzywal osmiu IDENTYCZNYCH rynkow, wiec mediana
+    rownala sie dolnej granicy i roznicy nie bylo jak zobaczyc."""
+    edge_docelowe = [-0.05, -0.02, 0.01, 0.025, 0.035, 0.06, 0.09, 0.15]
+    wiersze = []
+    for i, e in enumerate(edge_docelowe):
+        # pinnacle 2.00/2.00 -> cena uczciwa 0.5 na kazdy wynik.
+        # soft Over = 2*(1+e) daje dokladnie edge = e; Under 1.60 daje -20%,
+        # wiec najlepszym edge w rynku jest zawsze Over.
+        wiersze += _rynek_totals(
+            {"pinnacle": (2.00, 2.00), "soft": (round(2.0 * (1.0 + e), 4), 1.60)},
+            event=f"e{i}")
+    su.raport_rozrzutu_kursow(_Conn(wiersze))
+    out = capsys.readouterr().out
+    assert "dolna granica" in out
+    assert "PRZEKRACZA" not in out, "prog musi isc do dolnej granicy, nie do mediany"
+
