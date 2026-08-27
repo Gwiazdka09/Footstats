@@ -631,6 +631,36 @@ def _build_parser() -> argparse.ArgumentParser:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _zbierz_migawke_kursow(dry_run: bool = False) -> dict | None:
+    """Pilot rozrzutu kursow — zbiera SUROWE kwoty trzech lig i zapisuje.
+
+    Opakowane szeroko i CELOWO: to jedyne miejsce w tym projekcie, gdzie
+    polkniecie wyjatku jest zamierzone. Kolektor jest eksperymentem wpietym
+    w potok produkcyjny i nie ma prawa go zatrzymac. Glosno (log.error z pelnym
+    sladem), ale nieblokujaco.
+
+    Spec: docs/superpowers/specs/2026-08-27-rozrzut-kursow-pilot-design.md
+    """
+    try:
+        from footstats.core.odds_store import zapisz_migawke
+        from footstats.scrapers.odds_snapshot import LIGI_PILOTA, zamiataj_pilota
+
+        zamiecione = zamiataj_pilota()
+        if zamiecione["zatrzymany_przez_kredyty"]:
+            log.warning("Migawka kursow przerwana przez prog kredytowy"
+                        " (zostalo %s) — zebrano %d lig z %d",
+                        zamiecione["kredyty"], zamiecione["ligi"], len(LIGI_PILOTA))
+        stat = zapisz_migawke(zamiecione["wiersze"], dry_run=dry_run)
+        log.info("Migawka kursow: ligi=%s wierszy=%s zapis=%s kredyty=%s",
+                 zamiecione["ligi"], zamiecione["wierszy"], stat,
+                 zamiecione["kredyty"])
+        return stat
+    except Exception:  # noqa: BLE001 — patrz docstring
+        log.error("Migawka kursow nieudana — pilot pomijam, potok jedzie dalej",
+                  exc_info=True)
+        return None
+
+
 def main():
     from dotenv import load_dotenv
     load_dotenv()
@@ -641,6 +671,12 @@ def main():
     skonfiguruj_logi_json()
 
     args = _build_parser().parse_args()
+
+    # Pilot rozrzutu kursow — PRZED sprawdzeniami stop-loss, bo zbieranie kwot
+    # nie ma zwiazku z obstawianiem i ma sie odbyc takze wtedy, gdy agent jest
+    # zapauzowany. Nie moze wywrocic potoku (patrz _zbierz_migawke_kursow).
+    if args.faza == "final":
+        _zbierz_migawke_kursow(dry_run=bool(args.dry_run))
 
     from footstats.core.bankroll import (
         get_current_bankroll, check_daily_stop_loss,
