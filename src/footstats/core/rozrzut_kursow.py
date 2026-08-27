@@ -10,7 +10,10 @@ Zero I/O, zero dostepu do bazy. Wejscie: `kwoty` = {bukmacher: {outcome: cena}}.
 """
 from __future__ import annotations
 
+import logging
 from statistics import median
+
+log = logging.getLogger(__name__)
 
 # Kolejnosc ma znaczenie: pierwsza ksiazka z KOMPLETNYM rynkiem wygrywa.
 # Pinnacle to sharp o najwezszej marzy; gieldy (betfair, matchbook) sa jeszcze
@@ -51,9 +54,14 @@ def devig_proporcjonalny(ceny: dict[str, float]) -> dict[str, float]:
     for nazwa, kurs in ceny.items():
         try:
             k = float(kurs)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            log.debug("devig: nieparsowalny kurs %r dla %r (%s) — cala ksiazka"
+                      " odpada, bo niepelny rynek zafalszowalby cene uczciwa",
+                      kurs, nazwa, e)
             return {}
         if k <= 1.0:
+            log.debug("devig: kurs %r dla %r nie jest kwotowaniem — ksiazka odpada",
+                      kurs, nazwa)
             return {}
         odwrotnosci[nazwa] = 1.0 / k
     suma = sum(odwrotnosci.values())
@@ -68,10 +76,13 @@ def _zdrowe_ceny(ceny: dict[str, float] | None) -> dict[str, float]:
     for nazwa, kurs in (ceny or {}).items():
         try:
             k = float(kurs)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            log.debug("odrzucam nieparsowalny kurs %r dla %r (%s)", kurs, nazwa, e)
             continue
         if k > 1.0:
             czyste[nazwa] = k
+        else:
+            log.debug("odrzucam kurs %r dla %r — nie jest kwotowaniem", kurs, nazwa)
     return czyste
 
 
@@ -162,9 +173,13 @@ def edge_bukmacherow(
                 continue
             try:
                 k = float(kurs)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as e:
+                log.debug("edge: pomijam nieparsowalny kurs %r (%s / %s): %s",
+                          kurs, ksiazka, nazwa, e)
                 continue
             if k <= 1.0:
+                log.debug("edge: pomijam kurs %r (%s / %s) — nie jest kwotowaniem",
+                          kurs, ksiazka, nazwa)
                 continue
             wynik.append({
                 "bookmaker": ksiazka,
@@ -188,10 +203,15 @@ def rozrzut(kwoty: dict[str, dict[str, float]], outcome: str) -> dict | None:
         kurs = (c or {}).get(outcome)
         try:
             k = float(kurs)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            log.debug("rozrzut: pomijam nieparsowalny kurs %r dla %r (%s)",
+                      kurs, outcome, e)
             continue
         if k > 1.0:
             ceny.append(k)
+        else:
+            log.debug("rozrzut: pomijam kurs %r dla %r — nie jest kwotowaniem",
+                      kurs, outcome)
     if not ceny:
         return None
     lo, hi = min(ceny), max(ceny)

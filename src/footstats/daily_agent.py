@@ -632,34 +632,15 @@ def _build_parser() -> argparse.ArgumentParser:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def _zbierz_migawke_kursow(dry_run: bool = False) -> dict | None:
-    """Pilot rozrzutu kursow — zbiera SUROWE kwoty trzech lig i zapisuje.
+    """Pilot rozrzutu kursow — delegacja do `core.odds_store.zbierz_i_zapisz`.
 
-    Opakowane szeroko i CELOWO: to jedyne miejsce w tym projekcie, gdzie
-    polkniecie wyjatku jest zamierzone. Kolektor jest eksperymentem wpietym
-    w potok produkcyjny i nie ma prawa go zatrzymac. Glosno (log.error z pelnym
-    sladem), ale nieblokujaco.
-
-    Spec: docs/superpowers/specs/2026-08-27-rozrzut-kursow-pilot-design.md
+    Cala obsluga bledow siedzi TAM, nie tutaj: audyt trzyma ten plik na zerze
+    szerokich handlerow, a pilot potrzebuje wlasnie takiego (nie ma prawa
+    wywrocic potoku). Ten sam zabieg co przy Superbet BB, przeniesionym
+    z tego pliku do `core/daily_phases.py`.
     """
-    try:
-        from footstats.core.odds_store import zapisz_migawke
-        from footstats.scrapers.odds_snapshot import LIGI_PILOTA, zamiataj_pilota
-
-        zamiecione = zamiataj_pilota()
-        if zamiecione["zatrzymany_przez_kredyty"]:
-            log.warning("Migawka kursow przerwana przez prog kredytowy"
-                        " (zostalo %s) — zebrano %d lig z %d",
-                        zamiecione["kredyty"], zamiecione["ligi"], len(LIGI_PILOTA))
-        stat = zapisz_migawke(zamiecione["wiersze"], dry_run=dry_run)
-        log.info("Migawka kursow: ligi=%s wierszy=%s zapis=%s kredyty=%s",
-                 zamiecione["ligi"], zamiecione["wierszy"], stat,
-                 zamiecione["kredyty"])
-        return stat
-    except Exception:  # noqa: BLE001 — patrz docstring
-        log.error("Migawka kursow nieudana — pilot pomijam, potok jedzie dalej",
-                  exc_info=True)
-        return None
-
+    from footstats.core.odds_store import zbierz_i_zapisz
+    return zbierz_i_zapisz(dry_run=dry_run)
 
 def main():
     from dotenv import load_dotenv

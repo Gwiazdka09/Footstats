@@ -56,7 +56,9 @@ def _zapamietaj_kredyty(odpowiedz) -> None:
     global _ostatnie_kredyty
     try:
         _ostatnie_kredyty = int(odpowiedz.headers.get("x-requests-remaining"))
-    except (TypeError, ValueError, AttributeError):
+    except (TypeError, ValueError, AttributeError) as e:
+        log.warning("odds_snapshot: brak naglowka x-requests-remaining (%s) —"
+                    " bezpiecznik kredytowy leci na ostatniej znanej wartosci", e)
         return
     log.info("The Odds API: pozostalo %s kredytow", _ostatnie_kredyty)
 
@@ -94,9 +96,13 @@ def _wiersze_z_wydarzenia(wydarzenie: dict, sport_key: str) -> list[dict]:
                     linia = 0.0
                 try:
                     cena = float(outcome.get("price"))
-                except (TypeError, ValueError):
+                except (TypeError, ValueError) as e:
+                    log.debug("odds_snapshot: nieparsowalna cena %r (%s / %s / %s):"
+                              " %s", outcome.get("price"), klucz_b, rynek, nazwa, e)
                     continue
                 if cena <= 1.0:
+                    log.debug("odds_snapshot: cena %r (%s / %s / %s) nie jest"
+                              " kwotowaniem — pomijam", cena, klucz_b, rynek, nazwa)
                     continue
                 wiersze.append({
                     "sport_key": sport_key,

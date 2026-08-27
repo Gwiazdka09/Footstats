@@ -115,3 +115,38 @@ def zapisz_migawke(
 
     log.info("zapisz_migawke(dry_run=%s, dzien=%s): %s", dry_run, dzien, stat)
     return stat
+
+
+def zbierz_i_zapisz(dry_run: bool = False) -> dict | None:
+    """Pilot rozrzutu kursow: zamiata trzy ligi i zapisuje surowe kwoty.
+
+    SZEROKI `except Exception` jest tu ZAMIERZONY i to jedyne takie miejsce
+    w tym pilocie. Kolektor jest eksperymentem wpietym w potok produkcyjny
+    (job footstats-final) i nie ma prawa go zatrzymac — glosno (log.error
+    z pelnym sladem), ale nieblokujaco.
+
+    Funkcja mieszka TUTAJ, a nie w `daily_agent.py`, celowo: audyt
+    `tests/test_broad_except_audit.py` trzyma `daily_agent.py` na zerze
+    szerokich handlerow i projekt juz raz przenosil taki handler stamtad
+    gdzie indziej (patrz wpis `core/daily_phases.py` w BASELINE).
+
+    Spec: docs/superpowers/specs/2026-08-27-rozrzut-kursow-pilot-design.md
+    """
+    try:
+        from footstats.scrapers.odds_snapshot import LIGI_PILOTA, zamiataj_pilota
+
+        zamiecione = zamiataj_pilota()
+        if zamiecione["zatrzymany_przez_kredyty"]:
+            log.warning("Migawka kursow przerwana przez prog kredytowy"
+                        " (zostalo %s) — zebrano %d lig z %d",
+                        zamiecione["kredyty"], zamiecione["ligi"], len(LIGI_PILOTA))
+        stat = zapisz_migawke(zamiecione["wiersze"], dry_run=dry_run)
+        log.info("Migawka kursow: ligi=%s wierszy=%s zapis=%s kredyty=%s",
+                 zamiecione["ligi"], zamiecione["wierszy"], stat,
+                 zamiecione["kredyty"])
+        return stat
+    except Exception:  # noqa: BLE001 — patrz docstring
+        log.error("Migawka kursow nieudana — pilot pomijam, potok jedzie dalej",
+                  exc_info=True)
+        return None
+

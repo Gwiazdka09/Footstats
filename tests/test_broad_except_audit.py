@@ -53,6 +53,10 @@ BASELINE: dict[str, int] = {
     "core/quick_picks.py": 1,
     "core/response_cache.py": 2,
     "core/weekly_picks.py": 3,
+    # Pilot rozrzutu kursow: eksperyment wpiety w job footstats-final nie ma
+    # prawa go zatrzymac. Handler jest GLOSNY (log.error + exc_info), tylko
+    # nieblokujacy. Przeniesiony tu z daily_agent.py, zeby tamten zostal na 0.
+    "core/odds_store.py": 1,
     "daily_agent.py": 0,
     "dashboard.py": 5,
     "data/context_scraper.py": 1,
