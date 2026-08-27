@@ -4,7 +4,7 @@ RAPORT 1 (`raport_kalibracji_1x2`): czy pewność modelu we WŁASNYM typie
 (GREATEST z trzech prawdopodobieństw 1X2) jest wiarygodna — koszyki pewności
 zestawione z realną trafnością, jak w `raport_rynkow_golowych`/`raport_remisow`.
 
-RAPORT 2 (`test_przewagi` + `raport_przewagi_nad_kursem`): TO JEST LICZBA,
+RAPORT 2 (`policz_przewage` + `raport_przewagi_nad_kursem`): TO JEST LICZBA,
 KTÓRA PRZESĄDZA O FLAGACH SELEKCJI. Wszystkie pozostałe raporty w tym pliku
 mierzą przewagę modelu nad WŁASNĄ bazą częstości. Ten mierzy, czy bijemy CENĘ
 bukmachera — jedyna poprzeczka mająca związek z pieniędzmi (patrz
@@ -16,14 +16,15 @@ import json
 
 import pytest
 
-# `test_przewagi` importowane pod aliasem — pytest kolekcjonuje kazda funkcje
-# o nazwie `test_*` w module testowym, a bez aliasu probowalby ja uruchomic
-# jako test bez argumentow (fixture `kupony` nie istnieje).
+# UWAGA na nazewnictwo: funkcja produkcyjna nazywa sie `policz_przewage`, a nie
+# `test_przewagi`, celowo. Pytest kolekcjonuje kazda nazwe `test_*` widoczna w pliku
+# testowym — takze zaimportowana — i probowalby uruchomic funkcje produkcyjna jako test,
+# wywalajac sie na braku fixture `kupony`. Nie nazywaj tak funkcji w `src/`.
 from footstats.core.testy_przewagi import (
     korekta_sidaka,
     kupon_z_legs,
     poisson_binomial_cdf,
-    test_przewagi as policz_przewage,
+    policz_przewage,
 )
 from scripts import stan_uczenia
 
@@ -96,7 +97,7 @@ def test_kupon_z_legs_uszkodzony_lub_pusty_zwraca_none(legs_json):
     assert kupon_z_legs({"legs_json": legs_json}) is None
 
 
-# ── test_przewagi: budowa kuponów pomocnicza ────────────────────────────────
+# ── policz_przewage: budowa kuponów pomocnicza ────────────────────────────────
 
 def _kupon(status: str, total_odds: float, tip: str = "1",
            stake: float = 10.0, payout: float | None = None) -> dict:

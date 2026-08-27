@@ -88,7 +88,7 @@ def kupon_z_legs(rekord: dict) -> dict | None:
     return {**rekord, "rynek": rynek}
 
 
-def test_przewagi(kupony: list[dict]) -> dict:
+def policz_przewage(kupony: list[dict]) -> dict:
     """Test przewagi nad kursem bukmachera, osobno per rynek.
 
     Wejście to SUROWE wiersze `coupons` (`status`, `total_odds`, `stake_pln`,

@@ -635,7 +635,7 @@ def raport_przewagi_nad_kursem(conn) -> None:
     bukmachera). Test dokladny (Poisson-dwumianowy, `testy_przewagi.py`) —
     zero przyblizenia normalnego, bo pojedyncze rynki tu bywaja jednocyfrowe.
     """
-    from footstats.core.testy_przewagi import test_przewagi
+    from footstats.core.testy_przewagi import policz_przewage
 
     print("\n=== PRZEWAGA NAD KURSEM BUKMACHERA (coupons, SINGLE, WON/LOST) ===")
     # Bez sklejania nazw kolumn f-stringiem (bandit B608) — jak wszedzie w tym pliku.
@@ -648,7 +648,7 @@ def raport_przewagi_nad_kursem(conn) -> None:
         print("  BRAK DANYCH — brak rozliczonych kuponow SINGLE w `coupons`.")
         return
 
-    wynik = test_przewagi(wiersze)
+    wynik = policz_przewage(wiersze)
     rynki = wynik["rynki"]
     # DWIE ROZNE przyczyny pustego wyniku — sklejenie ich dawaloby falszywa
     # diagnoze (patrz zasady zadania S i `raport_drugiego_wyboru`).
