@@ -219,7 +219,14 @@ BASELINE: dict[str, int] = {
     "scrapers/sources/thesportsdb_source.py": 1,
     "scrapers/sts_inspiracje.py": 1,
     "scrapers/sts_kursy.py": 2,
-    "scrapers/superbet.py": 14,
+    # 29.08: 14 -> 8. ZOSTAJACE 8 SA UZASADNIONE I OPISANE W KODZIE:
+    #   5x sonda po selektorach w `zaloguj` — nietrafiony selektor to stan
+    #      normalny; glosny jest WYNIK petli (dodane sprawdzenia po 3 z 5),
+    #   1x `_on_response` — wisi na KAZDEJ odpowiedzi sieciowej strony (setki),
+    #   2x skan po liniach kuponu w poszukiwaniu kursu/stawki.
+    # Naprawiona przy okazji DZIURA: gdy zaden selektor hasla nie zadzialal, kod
+    # klikal submit z PUSTYM polem. Testy: `tests/test_superbet_nie_milczy.py`.
+    "scrapers/superbet.py": 8,
     "scrapers/superbet_bb.py": 1,
     "scrapers/superbet_parsing.py": 8,
     "scrapers/terminarz.py": 4,

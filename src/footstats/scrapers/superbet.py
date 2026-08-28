@@ -102,6 +102,7 @@ def zaloguj(page) -> bool:
         time.sleep(1)
 
         # Kliknij przycisk Zaloguj żeby otworzyć modal
+        otwarto_modal = False
         for sel in [
             "button:has-text('Zaloguj')",
             "a:has-text('Zaloguj')",
@@ -112,10 +113,16 @@ def zaloguj(page) -> bool:
                 page.wait_for_selector(sel, timeout=5000)
                 page.click(sel)
                 logger.info(f"[Superbet] Kliknieto przycisk logowania ({sel})")
+                otwarto_modal = True
                 time.sleep(3)
                 break
+            # Cisza celowa — sonda po selektorach; glosny jest WYNIK petli.
             except (PWTimeout, PWError):
                 continue
+
+        if not otwarto_modal:
+            logger.warning("[Superbet] Zaden selektor przycisku logowania nie zadzialal"
+                           " — licze na to, ze formularz jest juz widoczny")
 
         # Krok 2: poczekaj na formularz logowania
         logger.info("[Superbet] Czekam na formularz logowania...")
@@ -152,19 +159,33 @@ def zaloguj(page) -> bool:
             return False
 
         # Krok 4: wpisz hasło
+        haslo_wpisane = False
         for sel in ["input[type='password']", "input[name='password']", "input[id*='password']"]:
             try:
                 page.fill(sel, haslo, timeout=3000)
                 logger.info("[Superbet] Haslo wpisane")
+                haslo_wpisane = True
                 time.sleep(0.4)
                 break
+            # CISZA W SRODKU PETLI JEST CELOWA: to sonda po selektorach, wiec
+            # nietrafiony selektor to stan NORMALNY. Glosny musi byc WYNIK petli.
             except (PWTimeout, PWError):
                 continue
+
+        if not haslo_wpisane:
+            # Do 29.08 tej kontroli NIE BYLO: gdy zaden selektor hasla nie zadzialal,
+            # kod leciał dalej i klikał submit z PUSTYM polem. Logowanie konczylo sie
+            # wtedy niepowodzeniem "z nieznanego powodu".
+            logger.error("[Superbet] BLAD: nie znaleziono pola hasla —"
+                         " przerywam zamiast wysylac formularz bez hasla")
+            page.screenshot(path="superbet_debug_nopass.png")
+            return False
 
         page.screenshot(path="superbet_debug_filled.png")
         logger.info("[Superbet] Screenshot po wpisaniu: superbet_debug_filled.png")
 
         # Krok 5: zatwierdź
+        submit_klikniety = False
         for sel in [
             "button[type='submit']",
             "button:has-text('Zaloguj się')",
@@ -177,10 +198,18 @@ def zaloguj(page) -> bool:
                 if el and el.is_visible():
                     el.click()
                     logger.info(f"[Superbet] Submit klikniety ({sel})")
+                    submit_klikniety = True
                     time.sleep(5)
                     break
+            # Cisza celowa — sonda po selektorach; glosny jest WYNIK petli.
             except (PWTimeout, PWError):
                 continue
+
+        if not submit_klikniety:
+            logger.error("[Superbet] BLAD: nie znaleziono przycisku zatwierdzenia —"
+                         " formularz wypelniony, ale NIE wyslany")
+            page.screenshot(path="superbet_debug_nosubmit.png")
+            return False
 
         # Krok 6: sprawdź czy zalogowany
         zalogowany = False
@@ -202,7 +231,10 @@ def zaloguj(page) -> bool:
                 continue
 
         if not zalogowany:
-            logger.info("[Superbet] Nie potwierdzono logowania — sprawdz screenshot")
+            # WARNING, nie INFO: idziemy dalej NIEZALOGOWANI, wiec wszystko ponizej
+            # zobaczy tresc publiczna i zwroci mniej danych, wygladajac na sukces.
+            logger.warning("[Superbet] Nie potwierdzono logowania — jade dalej jako"
+                           " NIEZALOGOWANY, dane beda niepelne; sprawdz screenshot")
             page.screenshot(path="superbet_debug_login_fail.png")
         return True  # kontynuuj nawet jeśli nie pewne
 
@@ -242,6 +274,10 @@ def pobierz_kupony_api(page, max_kupony: int = 50) -> list:
                 return
             data = response.json()
             api_dane.append({'url': url, 'data': data})
+        # CISZA CELOWA: ten handler wisi na KAZDEJ odpowiedzi sieciowej strony
+        # (setki na przebieg). Naglowek mowiacy `json`, ktory nie jest poprawnym
+        # JSON-em, zdarza sie na produkcyjnych stronach rutynowo — log zalalby
+        # wszystko inne.
         except (ValueError, KeyError):
             pass
 
@@ -416,7 +452,9 @@ def pobierz_typerzy(page, max_typerzy: int = 30) -> list:
                     timeout=8000
                 )
             except PWTimeout:
-                pass
+                logger.warning("[Superbet] Karty typerow nie pojawily sie w 8s —"
+                               " skrobie mimo to; puste wyniki ponizej moga znaczyc"
+                               " zmieniony layout, a nie brak typerow")
 
             # Scroll
             for _ in range(4):
@@ -490,7 +528,9 @@ def pobierz_typerzy(page, max_typerzy: int = 30) -> list:
                 })
                 if len(typerzy) >= max_typerzy:
                     break
-            except (PWTimeout, PWError, AttributeError):
+            except (PWTimeout, PWError, AttributeError) as e:
+                logger.warning("[Superbet] Karta typera nie do odczytania (%s: %s) —"
+                               " ten typer wypada z listy", type(e).__name__, e)
                 continue
 
         if typerzy:
@@ -538,7 +578,8 @@ def pobierz_kupony_typera(page, typer: dict) -> list:
                 timeout=8000
             )
         except PWTimeout:
-            pass
+            logger.warning("  [%s] Kupony nie pojawily sie w 8s — skrobie mimo to;"
+                           " '0 kuponow' ponizej moze znaczyc zmieniony layout", nick)
 
         # Przewiń żeby załadować wszystkie
         for _ in range(3):
@@ -567,7 +608,9 @@ def pobierz_kupony_typera(page, typer: dict) -> list:
                 kupon = _parsuj_element_kuponu(el, nick)
                 if kupon:
                     kupony.append(kupon)
-            except (PWTimeout, PWError, ValueError, KeyError):
+            except (PWTimeout, PWError, ValueError, KeyError) as e:
+                logger.warning("  [%s] Kupon nie do sparsowania (%s: %s) — wypada",
+                               nick, type(e).__name__, e)
                 continue
 
         # Jeśli brak kuponów przez selektory — fallback na surowy tekst strony
@@ -600,6 +643,9 @@ def _parsuj_element_kuponu(el, nick: str) -> dict | None:
                 if 1.01 < k < 50000:
                     kurs_laczny = k
                     break
+            # CISZA CELOWA: skan po WSZYSTKICH liniach kuponu w poszukiwaniu
+            # pierwszej liczby wygladajacej na kurs. Nietrafiona linia to stan
+            # normalny — log lecialby kilkanascie razy na kazdy kupon.
             except ValueError:
                 pass
 
@@ -611,6 +657,7 @@ def _parsuj_element_kuponu(el, nick: str) -> dict | None:
             try:
                 stawka = float(m.group(1).replace(",", "."))
                 break
+            # CISZA CELOWA, jak wyzej: skan po liniach, nietrafienie jest normalne.
             except ValueError:
                 pass
 
@@ -665,7 +712,10 @@ def _parsuj_fallback(page, nick: str, url: str) -> dict | None:
             "zrodlo":      "superbet_social_fallback",
             "pobrano":     datetime.now().strftime("%Y-%m-%d %H:%M"),
         }
-    except (ValueError, KeyError, AttributeError, IndexError):
+    except (ValueError, KeyError, AttributeError, IndexError) as e:
+        logger.warning("  [%s] Fallback na surowy tekst profilu nie zadzialal"
+                       " (%s: %s) — z tego profilu nie bedzie ZADNEGO kuponu",
+                       nick, type(e).__name__, e)
         return None
 
 
@@ -745,7 +795,8 @@ def main():
             try:
                 max_top = int(sys.argv[i + 1])
             except ValueError:
-                pass
+                logger.warning("[Superbet] --top %r nie jest liczba — zostaje"
+                               " domyslne %d", sys.argv[i + 1], max_top)
 
     logger.info(f"[Superbet] SuperSocial Scraper — top {max_top} typerów")
     logger.info(f"[Superbet] AI: {'wylaczone' if brak_ai else 'wlaczone (Groq)'}")
