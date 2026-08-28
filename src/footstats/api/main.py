@@ -96,118 +96,16 @@ from footstats.api.routes.user_stats import router as user_stats_router
 from footstats.api.routes.analyses import router as analyses_router
 
 def _init_db() -> None:
+    """Tabele bazowe. DDL siedzi w `footstats.db.schema` — jedyne zrodlo.
+
+    Wczesniej ta funkcja miala wlasna kopie schematu, a `core/backtest.init_db()`
+    druga, ROZNA (patrz naglowek `db/schema.py`). Obie pisaly do tej samej bazy.
+    """
+    from footstats.db.schema import utworz_schemat_bazowy
     from footstats.utils.db import connect
+
     with connect() as conn:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS coupons (
-                id               SERIAL PRIMARY KEY,
-                created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                phase            TEXT NOT NULL DEFAULT '',
-                status           TEXT NOT NULL DEFAULT 'DRAFT',
-                kupon_type       TEXT NOT NULL DEFAULT '',
-                legs_json        TEXT NOT NULL DEFAULT '[]',
-                total_odds       REAL,
-                stake_pln        REAL,
-                payout_pln       REAL,
-                roi_pct          REAL,
-                groq_reasoning   TEXT,
-                decision_score   INTEGER,
-                match_date_first TEXT
-            );
-            CREATE INDEX IF NOT EXISTS idx_coupon_status  ON coupons(status);
-            CREATE INDEX IF NOT EXISTS idx_coupon_created ON coupons(created_at);
-
-            CREATE TABLE IF NOT EXISTS predictions (
-                id                   SERIAL PRIMARY KEY,
-                created_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                match_date           TEXT NOT NULL,
-                team_home            TEXT NOT NULL,
-                team_away            TEXT NOT NULL,
-                league               TEXT NOT NULL DEFAULT '',
-                ai_tip               TEXT NOT NULL DEFAULT '',
-                ai_confidence        INTEGER NOT NULL DEFAULT 0 CHECK(ai_confidence BETWEEN 0 AND 100),
-                ai_reasoning         TEXT NOT NULL DEFAULT '',
-                odds                 REAL,
-                actual_result        TEXT,
-                tip_correct          INTEGER CHECK(tip_correct IN (0, 1)),
-                kupon_type           TEXT DEFAULT '',
-                kodeks_rules_checked TEXT NOT NULL DEFAULT '[]',
-                prompt_version       TEXT NOT NULL DEFAULT '',
-                factors              TEXT NOT NULL DEFAULT '[]',
-                match_stats          TEXT,
-                coupon_id            INTEGER REFERENCES coupons(id),
-                -- Ktory model policzyl predykcje: 'poisson-dc' albo 'bzzoiro-ml'.
-                -- Puste = nie wiadomo. Migracja 10 uzupelnia stare wiersze.
-                model_source         TEXT NOT NULL DEFAULT ''
-            );
-            CREATE INDEX IF NOT EXISTS idx_match_date  ON predictions(match_date);
-            CREATE INDEX IF NOT EXISTS idx_tip_correct ON predictions(tip_correct);
-            CREATE INDEX IF NOT EXISTS idx_kupon_type  ON predictions(kupon_type);
-            CREATE INDEX IF NOT EXISTS idx_league      ON predictions(league);
-
-            CREATE TABLE IF NOT EXISTS ai_feedback (
-                id                  SERIAL PRIMARY KEY,
-                match_id            INTEGER NOT NULL REFERENCES predictions(id),
-                prediction_details  TEXT NOT NULL DEFAULT '{}',
-                reason_for_failure  TEXT NOT NULL DEFAULT '',
-                created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE INDEX IF NOT EXISTS idx_ai_feedback_match ON ai_feedback(match_id);
-            CREATE INDEX IF NOT EXISTS idx_ai_feedback_date  ON ai_feedback(created_at);
-
-            CREATE TABLE IF NOT EXISTS ai_feedback_embeddings (
-                feedback_id INTEGER PRIMARY KEY REFERENCES ai_feedback(id) ON DELETE CASCADE,
-                embedding   BYTEA NOT NULL,
-                model_name  TEXT NOT NULL,
-                dim         INTEGER NOT NULL,
-                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS bankroll_state (
-                id         INTEGER PRIMARY KEY CHECK (id = 1),
-                balance    REAL NOT NULL,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS bankroll_history (
-                id          SERIAL PRIMARY KEY,
-                timestamp   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                change_pln  REAL NOT NULL,
-                new_balance REAL NOT NULL,
-                type        TEXT NOT NULL,
-                description TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS bot_settings (
-                key        TEXT PRIMARY KEY,
-                value      TEXT NOT NULL,
-                updated_at TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS wf_results (
-                id         SERIAL PRIMARY KEY,
-                run_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                league     TEXT NOT NULL,
-                match_date TEXT NOT NULL,
-                home       TEXT NOT NULL,
-                away       TEXT NOT NULL,
-                actual_hg  INTEGER,
-                actual_ag  INTEGER,
-                actual_res TEXT,
-                pred_res   TEXT,
-                pred_conf  REAL,
-                pred_tip   TEXT,
-                lambda_h   REAL,
-                lambda_a   REAL,
-                form_h     REAL,
-                form_a     REAL,
-                elo_diff   REAL,
-                correct    INTEGER,
-                market     TEXT
-            );
-            CREATE INDEX IF NOT EXISTS idx_wf_league  ON wf_results(league);
-            CREATE INDEX IF NOT EXISTS idx_wf_correct ON wf_results(correct)
-        """)
+        utworz_schemat_bazowy(conn)
 
 import logging as _logging
 

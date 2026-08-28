@@ -574,7 +574,31 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   pomijane, z logiem. Drugi to kontrawariancja handlera Starlette vs slowapi —
   wyciszona punktowo z kodem błędu.
   **Zostaje:** `core`/`scrapers`/`utils`/`ai` do spłacenia, potem kolejny ratchet.
-- [ ] **J3 — schematy testowe dublują produkcyjny** (`test_backtest_db`, `test_evening_agent`) — bolało przy migracji 12 i 13. Fix: jedna fikstura z `init_db()`.
+- [x] **J3 — CZĘŚĆ PRODUKCYJNA ZROBIONA 28.08, testowa dalej otwarta.** Wpis mówił
+  o schematach w testach; szukając ich znalazłem ten sam problem w PRODUKCJI, i gorszy.
+  `predictions` było definiowane w **dwóch** miejscach piszących do **tej samej** bazy
+  (`utils.db.connect` jest wyłącznie Postgresem): `api/main._init_db` (8 tabel, bez
+  `prob_home/prob_draw/prob_away/settle_attempts/odds_verified`) i `core/backtest.init_db`
+  (2 tabele, z tymi kolumnami, ale z `REFERENCES coupons(id)` przy braku `coupons`).
+  Na pustej bazie wygrywała ta, która wykonała się pierwsza — a wykonuje się RÓŻNA
+  zależnie od obrazu: `api/main` nie jest importowany w obrazie jobs, gdzie
+  `backtest.init_db()` wołają evening_agent, ai/rag, post_match_analyzer,
+  results_updater ×2 i coupon_settlement ×2.
+  **Dlaczego nie wybuchło:** dwa niezależne przypadki naraz — baza produkcyjna już
+  istnieje, a Postgres ma `ADD COLUMN IF NOT EXISTS`. Gałąź SQLite tego nie ma.
+  DDL → `db/schema.py`, oba bootstrapy go wołają. Strażnik znalazł jeszcze **trzy
+  kopie**: `wf_results`, `coupons`, `ai_feedback_embeddings`; kopia `coupons` miała
+  `bookmaker` i `user_id`, których wersja w `api/main` nie miała.
+  ⚠️ **Niezmiennik jest celowo słabszy niż „jedna definicja":** `wf_results`
+  w `walkforward.py` to INNY magazyn (własny `_connect` na SQLite, `AUTOINCREMENT`
+  zamiast `SERIAL`), więc dialekt musi się różnić. Pilnowany jest **zestaw kolumn**.
+  4 testy, 4 mutacje, wszystkie złapane.
+- [ ] **J3b — schematy w TESTACH (pierwotny zakres wpisu).** 33 pliki testowe mają
+  własne `CREATE TABLE`. Teraz jest do czego je podłączyć (`db.schema.SCHEMAT_BAZOWY`),
+  ale to SQLite, a wspólne DDL jest postgresowe (`SERIAL`, `BYTEA`) — potrzebny
+  przekład dialektu albo fikstura budująca z migracji. Nie robię tego jednym ruchem
+  na 33 plikach bez pomiaru, które z nich realnie kopiują produkcyjny schemat,
+  a które trzymają własne, celowo minimalne tabelki.
 - [ ] **M2 — trzy flagi czekały na walidację:** `SELECTION_MIN_CONF=65`, `LEAGUE_GATING=1`, `BTTS_TWO_WAY`. **Dla BTTS dane są od 24.08 (D4) i mówią: NIE FLIPOWAĆ.** Live n=385 nie pokazuje uporządkowania — koszyk <45% daje realnie 52,8%, a 50–55% tylko 45,5%. Offline (n=15 460) krzywa była monotoniczna, więc to kolejny rozjazd live vs offline, nie nowy wynik na korzyść flagi. Dwie pozostałe flagi dalej bez danych.
   ⚠️ **26.08 — INNA flaga, nie mylić z powyższą.** `SELECTION_SKIP_BTTS` (zbudowana 23.08 jako M5, domyślnie OFF) została **włączona na produkcji** (`footstats-api` rew. `00474-dlg` + oba joby, `--update-env-vars`, zweryfikowane 17→18 / 13→14 zmiennych). Podstawa: zadanie D (ranking 7 rynków) pokazało, że BTTS jako typ główny modelu ma przewagę **−3,3 pp** (n=134), replikującą się w obu połowach chronologicznych (−2,5 / −5,0 pp); po wyrzuceniu BTTS wskakuje Over 2.5 (112/136), przewaga na tych samych meczach **−3,3 pp → +5,0 pp**. `BTTS_TWO_WAY` **zostaje OFF bez zmian** — to osobna decyzja (granie strony NIE), a dane dalej mówią „nie flipować". Do sprawdzenia **27.08 po 05:31 UTC**: czy w kuponach faktycznie nie ma BTTS.
 - [ ] **M3 — cel M1 mierzy rynek, który przegrywa.** „55% win rate" liczone na 1X2, gdzie przy niezgodzie rynek 42,9% vs model 29,8%. Rozważyć ROI zamiast trafności.
