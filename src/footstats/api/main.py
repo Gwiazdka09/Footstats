@@ -237,7 +237,11 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Starlette deklaruje handler jako przyjmujacy `Exception`, a slowapi dostarcza
+# wezszy, na `RateLimitExceeded`. W runtime jest poprawnie (Starlette woła go
+# WYLACZNIE dla zarejestrowanego typu), ale sygnatura jest kontrawariantna
+# i mypy slusznie to widzi. Wyciszamy PUNKTOWO, z podanym kodem bledu.
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(_MetricsMiddleware)
 app.add_middleware(_TimeoutMiddleware, timeout=10.0)

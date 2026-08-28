@@ -51,6 +51,13 @@ def _build_cards(events: list[dict]) -> list[dict]:
             continue
         ml = m.get("pred_ml") or {}
         home, away = m.get("gosp"), m.get("gosc")
+        if not home or not away:
+            # Zdarzenie bez nazw druzyn szlo do `get_team_stats(None, ...)`.
+            # Karta meczu bez nazw i tak jest bezuzyteczna — pomijamy, ale
+            # GLOSNO: cisza tutaj chowalaby uszkodzone zrodlo zdarzen.
+            log.warning("Zdarzenie bez nazw druzyn (gosp=%r, gosc=%r, liga=%r)"
+                        " — pomijam karte meczu", home, away, m.get("liga"))
+            continue
         match = {
             "gospodarz": home, "goscie": away, "liga": m.get("liga"), "data": m.get("data"),
             "pw": _norm(ml.get("prob_home_win")), "pr": _norm(ml.get("prob_draw")),

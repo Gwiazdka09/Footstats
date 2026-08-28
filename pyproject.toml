@@ -144,7 +144,14 @@ select = ["E9", "F"]
 # Lenient na starcie (legacy nietypowany): brak strict, milczące importy.
 # Gate CI obejmuje wąski czysty zakres (scrapers/sources) — ratchet w górę.
 [tool.mypy]
-python_version = "3.11"
+# 3.12, bo TYLE JEST WSZEDZIE: CI (setup-python 3.12), oba obrazy
+# (python:3.12-slim) i oba locki (uv --python-version 3.12). Wpis "3.11" byl
+# stary i nie byl kosmetyka — stuby numpy uzywaja skladni `type` z 3.12, wiec
+# mypy przerywal analize bledem `Type statement is only supported in Python
+# 3.12 and greater` PRZY PIERWSZYM module importujacym numpy. Waski zakres
+# bramki (`scrapers/sources/`) przechodzil nie dlatego, ze reszta jest brudna,
+# tylko dlatego, ze tamten katalog jako jedyny numpy nie dotyka.
+python_version = "3.12"
 ignore_missing_imports = true
 follow_imports = "silent"
 warn_unused_ignores = false

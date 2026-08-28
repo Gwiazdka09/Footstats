@@ -27,9 +27,14 @@ jobs:
       - name: Ruff lint
         run: python -m ruff check src/ tests/
 
-      # mypy: wąski czysty zakres (scrapers/sources) — ratchet w górę z czasem.
+      # mypy: ratchet 28.08 — scrapers/sources + db + api (wszystkie na zero bledow).
+      # Zakres byl waski NIE Z WYBORU: `python_version = "3.11"` w pyproject
+      # wywalalo mypy na stubach numpy (skladnia `type` z 3.12) przy pierwszym
+      # module importujacym numpy, wiec dalo sie bramkowac tylko katalog, ktory
+      # numpy nie dotyka. Po naprawie widac reszte dlugu: core 69, scrapers 36,
+      # utils 17, ai 11 bledow. Kolejny ratchet po ich splaceniu.
       - name: Mypy type-check (scrapers/sources)
-        run: python -m mypy src/footstats/scrapers/sources/
+        run: python -m mypy src/footstats/scrapers/sources/ src/footstats/db/ src/footstats/api/
 
   security:
     runs-on: ubuntu-latest

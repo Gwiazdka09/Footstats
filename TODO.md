@@ -524,7 +524,21 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   `factors`), `core/daily_phases.py` 9, `daily_agent.py` 8, `api/auth.py` 4,
   `api/main.py` 4, `core/coupon_settlement.py` 4. Plus 1 świadomy w `telegram_notify`
   (`except FileNotFoundError` przy pierwszym odczycie dedup — brak pliku to norma).
-- [ ] **J2 — mypy sprawdza 1 katalog** (`scrapers/sources/`) ze 172 plików.
+- [x] **J2 — ZROBIONE 28.08. Zakres był wąski NIE Z WYBORU — mypy był zepsuty.**
+  `python_version = "3.11"` w `[tool.mypy]` przy stubach numpy w składni 3.12 dawało
+  `Type statement is only supported in Python 3.12 and greater` i **przerywało analizę
+  przy pierwszym module importującym numpy**. `scrapers/sources/` przechodziło jako
+  jedyne dlatego, że jako jedyne numpy nie dotyka. Wpis 3.11 był zwyczajnie stary:
+  CI, oba obrazy (`python:3.12-slim`) i oba locki są na 3.12.
+  **Po naprawie widać prawdziwy dług:** `core` 69 błędów, `scrapers` 36, `utils` 17,
+  `ai` 11, `api` 3, `db` 0.
+  **Bramka CI rozszerzona** z 1 do 3 katalogów: `scrapers/sources/` + `db/` + `api/`
+  (22 pliki, zero błędów). `api` domknięte przy okazji — z 3 błędów jeden był
+  **realny**: `m.get("gosp")` może być `None`, a `get_team_stats` przyjmuje `str`,
+  więc zdarzenie bez nazw drużyn szło do wyszukiwania statystyk jako `None`. Teraz
+  pomijane, z logiem. Drugi to kontrawariancja handlera Starlette vs slowapi —
+  wyciszona punktowo z kodem błędu.
+  **Zostaje:** `core`/`scrapers`/`utils`/`ai` do spłacenia, potem kolejny ratchet.
 - [ ] **J3 — schematy testowe dublują produkcyjny** (`test_backtest_db`, `test_evening_agent`) — bolało przy migracji 12 i 13. Fix: jedna fikstura z `init_db()`.
 - [ ] **M2 — trzy flagi czekały na walidację:** `SELECTION_MIN_CONF=65`, `LEAGUE_GATING=1`, `BTTS_TWO_WAY`. **Dla BTTS dane są od 24.08 (D4) i mówią: NIE FLIPOWAĆ.** Live n=385 nie pokazuje uporządkowania — koszyk <45% daje realnie 52,8%, a 50–55% tylko 45,5%. Offline (n=15 460) krzywa była monotoniczna, więc to kolejny rozjazd live vs offline, nie nowy wynik na korzyść flagi. Dwie pozostałe flagi dalej bez danych.
   ⚠️ **26.08 — INNA flaga, nie mylić z powyższą.** `SELECTION_SKIP_BTTS` (zbudowana 23.08 jako M5, domyślnie OFF) została **włączona na produkcji** (`footstats-api` rew. `00474-dlg` + oba joby, `--update-env-vars`, zweryfikowane 17→18 / 13→14 zmiennych). Podstawa: zadanie D (ranking 7 rynków) pokazało, że BTTS jako typ główny modelu ma przewagę **−3,3 pp** (n=134), replikującą się w obu połowach chronologicznych (−2,5 / −5,0 pp); po wyrzuceniu BTTS wskakuje Over 2.5 (112/136), przewaga na tych samych meczach **−3,3 pp → +5,0 pp**. `BTTS_TWO_WAY` **zostaje OFF bez zmian** — to osobna decyzja (granie strony NIE), a dane dalej mówią „nie flipować". Do sprawdzenia **27.08 po 05:31 UTC**: czy w kuponach faktycznie nie ma BTTS.

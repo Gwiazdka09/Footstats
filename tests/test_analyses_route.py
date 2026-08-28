@@ -38,3 +38,37 @@ def test_norm():
     assert analyses._norm(56) == 56       # już %
     assert analyses._norm(0.56) == 56.0   # 0-1 → %
     assert analyses._norm(None) is None
+
+
+# ── J2: typy zlapaly realny przypadek, nie kosmetyke ────────────────────────
+
+def test_mecz_bez_nazw_druzyn_jest_pomijany_a_nie_odpytywany_z_None():
+    """Znalezione mypy po naprawie `python_version` (J2), nie recznym czytaniem.
+
+    `m.get("gosp")` i `m.get("gosc")` moga byc None, a `get_team_stats`
+    i `team_goal_shares_recent` przyjmuja `str`. Zdarzenie bez nazw druzyn
+    szlo wiec do wyszukiwania statystyk jako None — a karta meczu bez nazw
+    i tak jest bezuzyteczna. Pomijamy je i mowimy o tym w logu.
+    """
+    from footstats.api.routes import analyses
+
+    zdarzenia = [
+        {"liga": "Premier League", "gosp": None, "gosc": "Chelsea", "pred_ml": {}},
+        {"liga": "Premier League", "gosp": "Arsenal", "gosc": None, "pred_ml": {}},
+        {"liga": "Premier League", "gosp": "", "gosc": "", "pred_ml": {}},
+    ]
+    assert analyses._build_cards(zdarzenia) == []
+
+
+def test_mecz_z_kompletem_nazw_dalej_buduje_karte(monkeypatch):
+    """Kontrola pozytywna — bramka nie moze odsiac poprawnych meczow."""
+    from footstats.api.routes import analyses
+
+    monkeypatch.setattr(analyses, "get_team_stats", lambda *a, **k: {})
+    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda *a, **k: {})
+    monkeypatch.setattr(analyses, "build_match_card", lambda *a, **k: {"ok": True})
+
+    karty = analyses._build_cards(
+        [{"liga": "Premier League", "gosp": "Arsenal", "gosc": "Chelsea", "pred_ml": {}}]
+    )
+    assert len(karty) == 1
