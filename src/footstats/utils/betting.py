@@ -53,6 +53,8 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
         try:
             actual_result = f"{actual_result[0]}-{actual_result[1]}"
         except (IndexError, TypeError):
+            log.warning("Wynik jako %s nie ma dwoch elementow (%r) — noga zostaje"
+                        " NIEROZLICZONA", type(actual_result).__name__, actual_result)
             return None
 
     actual_result = str(actual_result)
@@ -93,6 +95,8 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
             ht_home = int(ht_parts[0].strip())
             ht_away = int(ht_parts[1].strip())
         except (ValueError, IndexError):
+            log.warning("Sufiks HT nie do sparsowania (%r) — rynki pierwszej polowy"
+                        " zostaja NIEROZLICZONE, rynki FT licza sie normalnie", ht_part)
             ht_home = ht_away = None
 
     # Upewniamy się, że res jest stringiem przed strip()
@@ -108,7 +112,11 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
             home_g = int(parts[0].strip())
             away_g = int(parts[1].strip())
         except (ValueError, IndexError):
-            pass
+            # To jest DOKLADNIE ten ksztalt, ktory 28.08 zatrzymal 218 wierszy
+            # w kolejce dziennika: format wyniku, ktorego nie umiemy przeczytac,
+            # znikal bez sladu i wpis wracal do kolejki w nieskonczonosc.
+            log.warning("Wynik %r nie ma formatu 'g-a' — noga zostaje NIEROZLICZONA;"
+                        " jesli ten format sie powtarza, brakuje mu obslugi", res)
 
     # Wyznacz wynik 1/X/2 z bramek
     if home_g is not None and away_g is not None:
@@ -204,13 +212,24 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
         if total_goals is None: return None
         try:
             val_match = re.search(r"(\d+\.\d+|\d+)", tip)
-            if not val_match: return None
+            if not val_match:
+                # CICHY POWROT, ktorego audyt `except` nie widzi, bo to nie handler.
+                # Typ OVER/UNDER bez progu liczbowego generujemy MY — to blad po
+                # naszej stronie, nie w danych z zewnatrz.
+                log.warning("Typ %r nie zawiera progu liczbowego — to NASZ typ,"
+                            " wiec blad jest po stronie generowania; noga zostaje"
+                            " NIEROZLICZONA", tip)
+                return None
             val = float(val_match.group(1))
             if "OVER" in tip:
                 return 1 if total_goals > val else 0
             else:
                 return 1 if total_goals < val else 0
-        except (AttributeError, ValueError):
+        except (AttributeError, ValueError) as e:
+            # Straz na wypadek zmiany wzorca wyzej. Przy obecnym `if not val_match`
+            # ten handler jest NIEOSIAGALNY — sprawdzone testem 28.08.
+            log.warning("Nie umiem odczytac progu z typu %r (%s: %s) — noga zostaje"
+                        " NIEROZLICZONA", tip, type(e).__name__, e)
             return None
 
     # BTTS
