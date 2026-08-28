@@ -103,7 +103,23 @@ Kalibracja/selekcja (P0/P1 niżej) NIE jest już celem samym w sobie — to **fe
 - [ ] **26.08 — remisy zmierzone po raz pierwszy (zadanie R), samodzielny sygnał otwarty do dalszej obserwacji.** `draw_correct` backfillowane 0→424 wierszy. Baza 23,6%; koszyki po `prob_draw`: 20,0/24,4/17,7/24,1/**45,5%** — krzywa NIE rośnie monotonicznie, ale koszyk `30%+` (n=33, 15 remisów) bije bazę o 21,9 pp (dokładny test dwumianowy p=0,0048 → p=0,024 po korekcie Šidáka). Próba mała — obserwować, nie budować na tym flagi.
 - [ ] **D3 — pełna decyzja a/b/c** (próg guardu, czy argmax na stałe) — po ~20 ŚWIEŻYCH settled z zapisanym prob. Zwaliduj że guard pomaga, dostrój próg. (D3 cz.1+2 prob+guard ZROBIONE 06-22.)
 - [ ] **Po ~88 settled → D2 auto-refit sam** (delta +30 od n_train); gdy krzywa zdrowa → włącz `CALIBRATION_ENABLED=1`.
-- [ ] **🆕 Dług testowy:** `config.py` robi `load_dotenv(override=True)` → testy integracyjne biją w `DATABASE_URL` z `.env`.
+- [x] **Dług testowy — ZAMKNIĘTE 28.08, ale opis był NIEAKTUALNY.** Sam wyciek („testy biją
+  w `DATABASE_URL` z `.env`") zamknął się już po incydencie 29.07: `pytest_configure`
+  w `tests/conftest.py` przerywa sesję, gdy URL wskazuje produkcję. Uwaga do `config.py`
+  też mija się z kodem — `load_dotenv(ENV_FILE)` w linii 343 jest **bez** `override`,
+  więc zmienna ze środowiska wygrywa (na tym stoi `DATABASE_URL=""`); `override=True`
+  siedzi w osobnej funkcji przeładowującej.
+  **Co było realnie zepsute:** guard był **denylistą** trzech znanych hostów
+  (`supabase.co`, `supabase.com`, `neon.tech`). Taka lista gnije w jedną stronę —
+  baza przeprowadziła się już raz (Neon → Supabase 18.07) i lista przetrwała tylko
+  dlatego, że ktoś ją dopisał ręcznie. Po następnej przeprowadzce guard dalej wyglądałby
+  na działający i nie chroniłby przed niczym.
+  **Fix:** odwrócony na **allowlistę** (`_powod_odmowy`): wolno tylko brak URL, host
+  lokalny albo baza z „test" w nazwie; wszystko inne wymaga `FOOTSTATS_ALLOW_PROD_DB=1`.
+  Nieznany host jest teraz blokowany domyślnie. Komunikat pokazuje host i nazwę bazy,
+  **nigdy loginu ani hasła** (leci na stdout CI).
+  **Plus:** `tests/test_guard_bazy_testowej.py` — pierwszy test tego mechanizmu w ogóle.
+  Jedyna rzecz chroniąca całą suitę przed zapisem do proda sama nie była niczym pilnowana.
   - ✅ **Zrobione 07-29:** `DATABASE_URL` wskazuje już Supabase (prod), stary Neon zachowany jako `DATABASE_URL_NEON` (źródło backfillu). Naprawia narzędzia/skrypty diagnostyczne, które dotąd trafiały w martwego Neona.
   - ⚠️ **KOREKTA:** to NIE jest fix długu testowego. Część tych testów **pisze** (`test_auth` zakłada userów, `test_settle_*` zmienia statusy kuponów) — uruchomienie ich teraz celowałoby w PRODUKCJĘ. Suitę dalej odpalamy z `DATABASE_URL=""` (guard sieciowy w `conftest`).
   - Fix docelowy bez zmian: marker `@pytest.mark.integration` + oddzielny test-DB.

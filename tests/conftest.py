@@ -28,8 +28,53 @@ if "FOOTSTATS_PASSWORD_HASH" not in os.environ:
         b"testpass", _bcrypt.gensalt()
     ).decode()
 
-# Hosty baz PRODUKCYJNYCH. Suita nie ma prawa ich dotknąć.
+# Znane hosty baz PRODUKCYJNYCH — służą już TYLKO do ostrzejszego komunikatu,
+# nie do decyzji. Decyzję podejmuje `_powod_odmowy` na zasadzie ALLOWLISTY.
 _HOSTY_PROD = ("supabase.co", "supabase.com", "neon.tech")
+
+# Hosty, na których baza z definicji nie jest produkcją.
+_HOSTY_LOKALNE = ("localhost", "127.0.0.1", "::1", "host.docker.internal", "db", "postgres")
+
+# Znacznik, po którym poznajemy bazę przeznaczoną do testów.
+_ZNACZNIK_TESTOWY = "test"
+
+
+def _powod_odmowy(url: str) -> str | None:
+    """Powód, dla którego suita NIE MOŻE użyć tej bazy, albo None gdy wolno.
+
+    ALLOWLISTA, nie denylista — i to jest cała zmiana względem wersji z 29.07.
+    Tamta wypisywała znane hosty produkcyjne i przepuszczała wszystko inne.
+    Taka lista gnije w jedną stronę: przeprowadzka Neon → Supabase (18.07)
+    zostawiłaby guard, który dalej wygląda na działający i nie chroni już przed
+    niczym. Ten sam kształt błędu co reszta cichych degradacji w tym projekcie.
+
+    Wolno: brak URL (tryb unit), host lokalny, baza z „test" w nazwie.
+    Wszystko inne wymaga świadomej decyzji przez `FOOTSTATS_ALLOW_PROD_DB=1`.
+
+    Komunikat NIE zawiera loginu ani hasła — wyłącznie host i nazwę bazy.
+    """
+    if not url:
+        return None
+
+    from urllib.parse import urlsplit
+
+    try:
+        czesci = urlsplit(url)
+        host = (czesci.hostname or "").lower()
+        baza = (czesci.path or "").lstrip("/").lower()
+    except ValueError:
+        return "nie da sie sparsowac DATABASE_URL"
+
+    if host in _HOSTY_LOKALNE:
+        return None
+    if _ZNACZNIK_TESTOWY in baza or _ZNACZNIK_TESTOWY in host:
+        return None
+
+    znany_prod = next((h for h in _HOSTY_PROD if h in host), None)
+    if znany_prod:
+        return f"wskazuje ZNANA produkcje ({znany_prod})"
+    return (f"wskazuje baze '{baza or '?'}' na hoscie '{host or '?'}', ktora nie jest"
+            f" ani lokalna, ani oznaczona jako testowa")
 
 # Świadome obejście — TYLKO gdy naprawdę chcesz uderzyć w prod (diagnostyka).
 _ENV_OBEJSCIE = "FOOTSTATS_ALLOW_PROD_DB"
@@ -69,16 +114,17 @@ def pytest_configure(config):
     wyłącznie gdy DATABASE_URL jest pusty, czyli dokładnie nie w tym przypadku.
 
     Testy integracyjne uruchamiaj przeciw OSOBNEJ bazie, nie przeciw prod.
+
+    28.08: warunek odwrócony z denylisty na ALLOWLISTĘ — patrz `_powod_odmowy`.
+    Lista znanych hostów prod przetrwała przeprowadzkę Neon → Supabase tylko
+    dlatego, że ktoś ją dopisał ręcznie; następnej mogłaby nie przetrwać.
     """
     if os.environ.get(_ENV_OBEJSCIE) == "1":
         return
-    url = _efektywny_database_url()
-    if not url:
-        return
-    trafiony = next((h for h in _HOSTY_PROD if h in url), None)
-    if trafiony:
+    powod = _powod_odmowy(_efektywny_database_url())
+    if powod:
         raise pytest.UsageError(
-            f"STOP: DATABASE_URL wskazuje produkcję ({trafiony}). Testy PISZĄ do bazy "
+            f"STOP: DATABASE_URL {powod}. Testy PISZĄ do bazy "
             f"(zakładają userów, zmieniają salda i statusy kuponów).\n"
             f"  Suita unit:        DATABASE_URL=\"\" pytest tests/\n"
             f"  Testy integracyjne: DATABASE_URL=<osobna baza testowa> pytest tests/\n"
