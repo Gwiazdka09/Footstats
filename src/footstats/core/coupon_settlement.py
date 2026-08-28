@@ -734,6 +734,14 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
     żeby nie generować dodatkowego ruchu do zewnętrznych źródeł dla wpisów
     ręcznych.
 
+    Kolejność źródeł (każde kolejne to fallback):
+      1. `predictions` przez `link_leg` — nasza predykcja z wynikiem;
+      2. `model_log` przez `wynik_z_model_log` — TA SAMA nasza baza, tylko
+         szersza (161 vs 424 wiersze na prod 28.08), bo `predictions` zapisuje
+         wyłącznie ścieżkę `top3`/`kupon_d`, a dziennik kalibracyjny każdy
+         oceniony mecz. Darmowe, więc PRZED zewnętrznymi API;
+      3. źródła zewnętrzne — tylko pod flagą (niżej).
+
     D5: `MANUAL_SETTLE_EXTERNAL=1` otwiera ten fallback dla nóg, dla których NIE
     mamy własnej predykcji z wynikiem — bez niego kupon na mecz spoza naszych
     typów zostaje ACTIVE na zawsze (zmierzone 24.08: 11 z 12 nóg dziennika).
@@ -761,7 +769,7 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
         ).fetchall()
 
     stats = {"settled": 0, "skipped": 0, "errors": 0, "z_zewnatrz": 0,
-             "przeterminowane": 0}
+             "z_model_log": 0, "przeterminowane": 0}
     if not rows:
         if verbose:
             print("[SettleManual] Brak ACTIVE kuponów manual do rozliczenia.")
@@ -802,6 +810,13 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                 # przebiegu co typ. Zewnętrzne źródła to fallback, nie zamiennik.
                 if lr.matched and lr.prediction and lr.prediction.get("actual_result"):
                     wynik = lr.prediction["actual_result"]
+                elif (z_dziennika := match_linker.wynik_z_model_log(home, away, mdate)):
+                    # `model_log` to TA SAMA nasza baza, tylko szersza:
+                    # `predictions` zapisuje jedynie ścieżkę top3/kupon_d
+                    # (161 wierszy na prod 28.08), `model_log` każdy oceniony
+                    # mecz (424). Darmowe, więc pytane PRZED zewnętrznymi API.
+                    wynik = z_dziennika
+                    stats["z_model_log"] += 1
                 elif zewnetrzne:
                     wynik = _find_leg_result(home, away, mdate, fixtures_cache,
                                              fdb_cache, api_key, fdb_key)
