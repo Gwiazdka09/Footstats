@@ -46,59 +46,18 @@ except ImportError:
 
 
 def init_db() -> None:
-    """Tworzy tabele jeśli nie istnieją. Bezpieczne przy wielokrotnym wywołaniu."""
-    with _connect() as conn:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS predictions (
-                id                   SERIAL PRIMARY KEY,
-                created_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                match_date           TEXT NOT NULL,
-                team_home            TEXT NOT NULL,
-                team_away            TEXT NOT NULL,
-                league               TEXT NOT NULL DEFAULT '',
-                ai_tip               TEXT NOT NULL DEFAULT '',
-                ai_confidence        INTEGER NOT NULL DEFAULT 0 CHECK(ai_confidence BETWEEN 0 AND 100),
-                ai_reasoning         TEXT NOT NULL DEFAULT '',
-                odds                 REAL,
-                actual_result        TEXT,
-                tip_correct          INTEGER CHECK(tip_correct IN (0, 1)),
-                kupon_type           TEXT DEFAULT '',
-                kodeks_rules_checked TEXT NOT NULL DEFAULT '[]',
-                prompt_version       TEXT NOT NULL DEFAULT '',
-                factors              TEXT NOT NULL DEFAULT '[]',
-                match_stats          TEXT,
-                coupon_id            INTEGER REFERENCES coupons(id),
-                prob_home            REAL,
-                prob_draw            REAL,
-                prob_away            REAL,
-                -- Ktory model policzyl te predykcje: 'poisson-dc' albo 'bzzoiro-ml'.
-                -- Puste = nie wiadomo (predykcja sprzed wprowadzenia stempla).
-                model_source         TEXT NOT NULL DEFAULT '',
-                -- Ile razy probowalismy juz sciagnac wynik. Po MAX_PROB_ROZLICZENIA
-                -- nieudanych probach rekord wypada z nadrabiania zaleglosci.
-                -- Istniejace bazy dostaja te kolumne migracja 12.
-                settle_attempts      INTEGER DEFAULT 0,
-                -- Czy kurs przeszedl anty-halucynacyjna weryfikacje (KROK 4).
-                -- Zapis dzieje sie w KROKU 3, wiec swiezy wiersz ma tu 0 i trzyma
-                -- kurs zaproponowany przez Groqa — nie nadaje sie do ROI ani CLV.
-                -- Istniejace bazy dostaja te kolumne migracja 13.
-                odds_verified        INTEGER DEFAULT 0
-            );
-            CREATE INDEX IF NOT EXISTS idx_match_date  ON predictions(match_date);
-            CREATE INDEX IF NOT EXISTS idx_tip_correct ON predictions(tip_correct);
-            CREATE INDEX IF NOT EXISTS idx_kupon_type  ON predictions(kupon_type);
-            CREATE INDEX IF NOT EXISTS idx_league      ON predictions(league);
+    """Tworzy tabele jesli nie istnieja. Bezpieczne przy wielokrotnym wywolaniu.
 
-            CREATE TABLE IF NOT EXISTS ai_feedback (
-                id                  SERIAL PRIMARY KEY,
-                match_id            INTEGER NOT NULL REFERENCES predictions(id),
-                prediction_details  TEXT NOT NULL DEFAULT '{}',
-                reason_for_failure  TEXT NOT NULL DEFAULT '',
-                created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE INDEX IF NOT EXISTS idx_ai_feedback_match ON ai_feedback(match_id);
-            CREATE INDEX IF NOT EXISTS idx_ai_feedback_date  ON ai_feedback(created_at)
-        """)
+    DDL siedzi w `footstats.db.schema` — jedyne zrodlo. Wczesniej ta funkcja
+    miala wlasna kopie schematu: tylko 2 tabele z 8, za to `predictions` z pieciu
+    kolumnami wiecej niz kopia w `api/main.py`, i z `REFERENCES coupons(id)` przy
+    braku `coupons`. W obrazie jobs to JEDYNY bootstrap schematu — `api/main` nie
+    jest tam importowany.
+    """
+    from footstats.db.schema import utworz_schemat_bazowy
+
+    with _connect() as conn:
+        utworz_schemat_bazowy(conn)
 
 
 # ── 1. save_prediction ────────────────────────────────────────────────────
