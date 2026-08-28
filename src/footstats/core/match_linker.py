@@ -38,6 +38,7 @@ from datetime import timedelta
 
 import psycopg2
 
+from footstats.utils.betting import powod_nierozliczalny
 from footstats.utils.db import connect
 from footstats.utils.normalize import _norm_ascii
 
@@ -230,4 +231,18 @@ def wynik_z_model_log(
               if r["actual_result"] and str(r["actual_result"]).strip()}
     if len(wyniki) != 1:
         return None
-    return wyniki.pop()
+
+    wynik = wyniki.pop()
+    # Kontrakt tej funkcji brzmi „daj wynik, KTÓRYM DA SIĘ ROZLICZYĆ". Od 28.08
+    # `model_log` trzyma także wyniki po dogrywce i karnych (wcześniej takie
+    # wiersze nie dostawały `actual_result` w ogóle i kręciły się w kolejce).
+    # Oddanie ich tutaj przerwałoby łańcuch źródeł w `settle_manual_coupons`:
+    # `elif` uznałby, że wynik jest, i nie zapytałby źródła zewnętrznego, które
+    # ma wynik regulaminowy. Kupon utknąłby przez dane, które właśnie dodaliśmy.
+    powod = powod_nierozliczalny(wynik)
+    if powod:
+        log.debug("model_log ma dla %s vs %s wynik '%s' (%s) — nierozliczalny"
+                  " dla rynkow 90-minutowych, oddaje pole kolejnemu zrodlu",
+                  home, away, wynik, powod)
+        return None
+    return wynik

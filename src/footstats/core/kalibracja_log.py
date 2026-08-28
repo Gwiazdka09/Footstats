@@ -26,7 +26,7 @@ import logging
 
 import psycopg2
 
-from footstats.utils.betting import oblicz_tip_correct
+from footstats.utils.betting import oblicz_tip_correct, powod_nierozliczalny
 from footstats.utils.db import connect as _connect
 
 # Awarie, ktore dziennik ma PRZEZYC: baza (psycopg2 + RuntimeError z puli),
@@ -189,6 +189,13 @@ def pobierz_nierozliczone(dni_wstecz: int = 14) -> list[dict]:
 
     Okno szersze niż w `update_pending` (2 dni), bo dziennik nie ściga się
     z rozliczaniem kuponów — może nadrabiać zaległości spokojnie.
+
+    Warunek na `actual_result` jest RÓWNIE WAŻNY co ten na `tip_correct`.
+    Mecz rozstrzygnięty po dogrywce ma wynik, którego nie da się rozliczyć
+    NIGDY (rynki 90-minutowe), więc `tip_correct` zostaje NULL na zawsze.
+    Bez tego warunku taki wiersz wracał tu każdego dnia — zmierzone 28.08:
+    218 wierszy (34% dziennika) w nieskończonej pętli, z zapytaniem do
+    scrapera i ostrzeżeniem w logach przy każdym przebiegu.
     """
     from datetime import datetime, timedelta
 
@@ -202,7 +209,9 @@ def pobierz_nierozliczone(dni_wstecz: int = 14) -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
             "SELECT id, team_home, team_away, match_date, model_tip FROM model_log"
-            " WHERE tip_correct IS NULL AND match_date >= ?"
+            " WHERE tip_correct IS NULL"
+            "   AND (actual_result IS NULL OR actual_result = '')"
+            "   AND match_date >= ?"
             " ORDER BY match_date",
             (granica,),
         ).fetchall()
@@ -263,6 +272,22 @@ def zapisz_wynik(wpis_id: int, wynik: str | None, model_tip: str) -> bool:
     """
     oceny = oceny_rynkow(model_tip, wynik)
     if oceny is None:
+        # Rozróżniamy DWA powody, bo znaczą co innego dla kolejki:
+        #   * wynik jest nierozliczalny z natury (dogrywka/karne) — to fakt
+        #     o meczu, który się nie zmieni. Zapisujemy sam `actual_result`,
+        #     żeby wpis przestał wracać do kolejki, ale trafności NIE liczymy;
+        #   * cokolwiek innego (brak wyniku, pusty `model_tip`) — to nasz stan
+        #     przejściowy albo nasz błąd. Wpis zostaje w kolejce nietknięty.
+        if powod_nierozliczalny(wynik) is None:
+            return False
+        with _connect() as conn:
+            conn.execute(
+                "UPDATE model_log SET actual_result = ? WHERE id = ?",
+                (wynik, wpis_id),
+            )
+        log.info("Wpis #%s ma wynik '%s' (%s) — nie do rozliczenia nigdy,"
+                 " zdejmuje z kolejki bez oceny trafnosci",
+                 wpis_id, wynik, powod_nierozliczalny(wynik))
         return False
 
     with _connect() as conn:
