@@ -68,6 +68,14 @@ api = [
 ai = [
     "groq>=0.4",
     "langfuse>=2.0",
+    # Licznik tokenow promptu (I2). Bez niego `szacuj_tokeny` dzieli dlugosc
+    # tekstu przez stala 1.4 zn/tok — dobrana pod opisy meczow z emoji (1.47),
+    # ale zawyzajaca zwykly polski tekst o 84% (realnie 2.56). Skutkiem nie jest
+    # 413, tylko ciche przycinanie promptu, ktore nikomu sie nie zglasza.
+    # `openai/gpt-oss-120b` uzywa rodziny o200k, ktora tiktoken zna.
+    # Import jest opcjonalny (fallback na heurystyke + WARNING), wiec brak paczki
+    # degraduje, a nie wywraca — patrz `tests/test_licznik_tokenow.py`.
+    "tiktoken>=0.7",
     # Isotonic Regression w core/probability_calibrator.fit_calibrator().
     # Nie byl zadeklarowany NIGDZIE (ani pyproject, ani requirements, ani Dockerfile),
     # a import siedzi pod try/except ImportError → na produkcji refit kalibracji

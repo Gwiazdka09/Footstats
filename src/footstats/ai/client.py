@@ -145,6 +145,64 @@ _MARGINES_TOKENOW = 200
 # nietknięty i job padł drugi raz na tym samym 413.
 _ZNAKOW_NA_TOKEN = float(os.getenv("AI_ZNAKOW_NA_TOKEN", "1.4"))
 
+# I2 (28.08.2026): stala 1.4 zostaje WYLACZNIE jako awaryjny fallback, bo zadna
+# stala nie obsluzy obu skrajnosci naraz. Zmierzone tokenizerem modelu:
+#     szkielet PL     2.56 zn/tok   -> przy 1.4 przeszacowanie o 84%
+#     diakrytyki      2.16 zn/tok
+#     emoji + liczby  1.47 zn/tok   <- to dla NIEGO dobrano 1.4 po awarii 413
+# Skutkiem przeszacowania nie jest 413, tylko przycinanie promptu bez potrzeby —
+# czyli cicha utrata opisow meczow, ktorej nikt nie zglasza.
+#
+# `openai/gpt-oss-120b` (domyslny GROQ_MODEL) uzywa rodziny o200k, ktora tiktoken
+# zna. Dla innych modeli licznik jest przyblizeniem — dlatego zostaje margines.
+ENCODING_TOKENIZERA = os.getenv("AI_TOKENIZER_ENCODING", "o200k_base")
+
+# Dostawca liczy tez narzut wiadomosci (role, separatory), ktorego w samym
+# tekscie nie ma. Pomylka w DOL to 413 i padniety przebieg, pomylka w GORE to
+# tylko wczesniejsze przyciecie — wiec zawyzamy swiadomie.
+_MARGINES_TOKENIZERA = 1.05
+
+# Enkoder laduje sie ~3.8 s przy pierwszym uzyciu (tiktoken ciagnie plik BPE
+# z sieci). Cache jest OBOWIAZKOWY: bez niego kazde zapytanie do LLM-a w przebiegu
+# placiloby te sekundy jeszcze raz. `False` znaczy "probowalismy i sie nie udalo" —
+# rozne od `None` ("jeszcze nie probowalismy"), zeby nie ponawiac w kolko.
+_enkoder: object | None | bool = None
+
+
+def zeruj_enkoder() -> None:
+    """Kasuje cache enkodera. Dla testow — stan modulowy przecieka miedzy nimi."""
+    global _enkoder
+    _enkoder = None
+
+
+def _pobierz_enkoder():
+    """Enkoder tiktokena albo None, gdy niedostepny. NIGDY nie rzuca.
+
+    Licznik tokenow jest funkcja pomocnicza — jego awaria nie ma prawa wywrocic
+    przebiegu ani go spowolnic. Brak paczki w obrazie i brak wyjscia na siec
+    to dwa realne stany produkcyjne, oba konczace sie tu samo: heurystyka.
+    """
+    global _enkoder
+    if _enkoder is not None:
+        return _enkoder or None
+
+    try:
+        import tiktoken
+        _enkoder = tiktoken.get_encoding(ENCODING_TOKENIZERA)
+        return _enkoder
+    except ImportError as e:
+        logger.warning("[AI] tiktoken niedostepny (%s) — licznik tokenow spada na"
+                       " heurystyke %.1f znaku/token, prompt moze byc przycinany"
+                       " wczesniej niz trzeba", e, _ZNAKOW_NA_TOKEN)
+    except Exception as e:                                   # noqa: BLE001
+        # get_encoding potrafi paść na sieci, dysku i nieznanej nazwie encodingu.
+        # Lista typow zalezy od wersji paczki, wiec lapiemy szeroko — ale GLOSNO.
+        logger.warning("[AI] Nie udalo sie zaladowac tokenizera '%s' (%s: %s) —"
+                       " licznik tokenow spada na heurystyke",
+                       ENCODING_TOKENIZERA, type(e).__name__, e)
+    _enkoder = False
+    return None
+
 
 def tpm_dla_modelu(model: str) -> int:
     """Limit tokenów na minutę dla modelu (wejście + wyjście łącznie)."""
@@ -152,8 +210,24 @@ def tpm_dla_modelu(model: str) -> int:
 
 
 def szacuj_tokeny(tekst: str) -> int:
-    """Zgrubna liczba tokenów. Celowo zawyża — pomyłka w drugą stronę to 413."""
-    return int(len(tekst) / _ZNAKOW_NA_TOKEN) + 1
+    """Liczba tokenów tekstu. Celowo zawyża — pomyłka w drugą stronę to 413.
+
+    Liczy prawdziwym tokenizerem modelu, gdy `tiktoken` jest dostępny; w razie
+    czego spada na starą heurystykę znak/token i mówi o tym w logu. Obie ścieżki
+    zawyżają: pierwsza o `_MARGINES_TOKENIZERA` (narzut wiadomości po stronie
+    dostawcy), druga z natury.
+    """
+    enkoder = _pobierz_enkoder()
+    if enkoder is None:
+        return int(len(tekst) / _ZNAKOW_NA_TOKEN) + 1
+    try:
+        return int(len(enkoder.encode(tekst)) * _MARGINES_TOKENIZERA) + 1
+    except Exception as e:                                   # noqa: BLE001
+        # Sam `encode` tez moze paść (np. na wejsciu, ktore nie jest tekstem).
+        # Cisza tutaj zamienilaby dokladny licznik w heurystyke bez sladu.
+        logger.warning("[AI] Tokenizer nie policzyl tekstu (%s: %s) —"
+                       " heurystyka na tym wywolaniu", type(e).__name__, e)
+        return int(len(tekst) / _ZNAKOW_NA_TOKEN) + 1
 
 
 def dopasuj_do_budzetu(prompt: str, budzet_tokenow: int) -> str:
@@ -171,11 +245,27 @@ def dopasuj_do_budzetu(prompt: str, budzet_tokenow: int) -> str:
     # `szacuj_tokeny` zaokrągla w górę (+1), więc budżet znakowy liczymy od
     # `budzet - 1`. Bez tego wynik wychodzi o jeden token ponad limit — a to
     # dokładnie ten jeden token, przez który dostaje się 413.
-    dostepne = max(0, int((budzet_tokenow - 1) * _ZNAKOW_NA_TOKEN) - len(znacznik))
-    glowa = dostepne * 2 // 3          # opisy meczów są na początku — zostaw więcej
-    ogon = dostepne - glowa
+    # Ile znaków mieści się w tokenie — liczone Z TEGO promptu, nie ze stałej.
+    # Stała 1.4 była tu drugim źródłem przeszacowania: dla zwykłego polskiego
+    # tekstu (2.5 zn/tok) przycinała do ~55% przyznanego budżetu, czyli wyrzucała
+    # połowę opisów meczów bez powodu. Skutkiem nie jest 413, tylko cicha strata.
+    znakow_na_token = len(prompt) / max(1, szacuj_tokeny(prompt))
+    dostepne = max(0, int((budzet_tokenow - 1) * znakow_na_token) - len(znacznik))
 
-    przyciety = prompt[:glowa] + znacznik + (prompt[-ogon:] if ogon else "")
+    def _zloz(ile_znakow: int) -> str:
+        glowa = ile_znakow * 2 // 3   # opisy meczów są na początku — zostaw więcej
+        ogon = ile_znakow - glowa
+        return prompt[:glowa] + znacznik + (prompt[-ogon:] if ogon else "")
+
+    przyciety = _zloz(dostepne)
+    # Weryfikacja zamiast wiary w przelicznik: gęstość tokenów nie jest równomierna
+    # (emoji siedzą w opisach meczów, nie w instrukcji), więc oszacowanie ze średniej
+    # potrafi chybić. Pomyłka w GÓRĘ to 413, więc dociskamy, aż się zmieści.
+    for _ in range(8):
+        if szacuj_tokeny(przyciety) <= budzet_tokenow or dostepne <= 0:
+            break
+        dostepne = int(dostepne * 0.85)
+        przyciety = _zloz(dostepne)
     logger.error(
         "[AI] Prompt przekraczal budzet (%d > %d tokenow) — przyciety do %d. "
         "Zmniejsz liczbe opisywanych meczow albo dlugosc lekcji.",

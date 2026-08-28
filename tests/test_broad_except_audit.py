@@ -17,7 +17,13 @@ SRC = Path(__file__).resolve().parents[1] / "src" / "footstats"
 # Current counts — regression gate, not perfection.
 # Reduce over time as exceptions are narrowed.
 BASELINE: dict[str, int] = {
-    "ai/client.py": 2,
+    # I2: licznik tokenow ma DWA szerokie handlery i oba sa zamierzone.
+    # `tiktoken.get_encoding` ciagnie plik BPE z sieci, wiec pada na wyjatkach
+    # z requests, IO i nieznanej nazwie encodingu — lista typow zalezy od wersji
+    # paczki. `encode` moze paść na nietekstowym wejsciu. Kontrakt brzmi: licznik
+    # tokenow NIGDY nie wywraca przebiegu, bo jest funkcja pomocnicza. Oba sa
+    # GLOSNE (log.warning z typem wyjatku) i oba schodza na heurystyke.
+    "ai/client.py": 4,
     "ai/post_match_analyzer.py": 2,
     "ai/rag.py": 2,
     "ai/rag_embeddings.py": 3,
