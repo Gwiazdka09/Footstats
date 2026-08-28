@@ -147,9 +147,23 @@ def test_zapisz_wynik_uzupelnia_oba_rynki_golowe(baza):
     assert wartosci["draw_correct"] == 0, wartosci      # nie remis
 
 
-def test_zapisz_wynik_nierozliczalny_nic_nie_zapisuje(baza):
+def test_zapisz_wynik_nierozliczalny_zapisuje_WYNIK_ale_nie_trafnosc(baza):
+    """ZMIANA KONTRAKTU 28.08 — wcześniej ta funkcja nie zapisywała NICZEGO,
+    przez co wiersz zostawał z `tip_correct IS NULL` i `pobierz_nierozliczone`
+    podawało go z powrotem każdego dnia, w nieskończoność (zmierzone: 218
+    wierszy, 34% dziennika, plus zapytanie do scrapera przy każdym przebiegu).
+
+    Co zostaje bez zmian i jest tu pilnowane: trafność NIE jest liczona.
+    Zero zamiast NULL zafałszowałoby kalibrację, bo „nie wiemy" to nie
+    „model się pomylił"."""
     assert kl.zapisz_wynik(7, "2-1 (AET)", "1") is False
-    assert not baza["conn"].zawierajace("UPDATE model_log")
+
+    zapisy = baza["conn"].zawierajace("UPDATE model_log")
+    assert zapisy, "wynik meczu musi zostac zapisany, inaczej wpis kreci sie w kolko"
+    sql = zapisy[0][0].upper()
+    assert "ACTUAL_RESULT" in sql
+    for kolumna in ("TIP_CORRECT", "OVER25_CORRECT", "BTTS_CORRECT", "DRAW_CORRECT"):
+        assert kolumna not in sql, f"{kolumna} nie moze byc zapisane dla dogrywki"
 
 
 def test_zapisz_wynik_bez_wyniku_nic_nie_zapisuje(baza):
