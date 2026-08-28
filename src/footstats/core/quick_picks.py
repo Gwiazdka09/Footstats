@@ -122,8 +122,11 @@ def szybkie_pewniaczki_2dni(
             from footstats.utils.logging import waliduj_df_wyniki
             if not waliduj_df_wyniki(df_mecze, "df_mecze (quick_picks)"):
                 df_mecze = None
-        except ImportError:
-            pass
+        except ImportError as e:
+            # Uwaga na kierunek skutku: bez walidacji `df_mecze` NIE jest pomijany,
+            # tylko idzie do Poissona NIESPRAWDZONY. Gorzej niz brak Poissona.
+            log.warning("Walidator df_mecze niedostepny (%s) — dataset idzie do"
+                        " Poissona BEZ sprawdzenia kolumn i typow", e)
 
     teraz    = datetime.now()
     granica  = teraz + timedelta(hours=godziny)
@@ -157,12 +160,15 @@ def szybkie_pewniaczki_2dni(
             for _liga_key in dict.fromkeys(UNDERSTAT_LIGI.values()):
                 try:
                     fetch_league_team_xg(_liga_key, _season)
-                except (OSError, ValueError, RuntimeError):
-                    pass
+                except (OSError, ValueError, RuntimeError) as e:
+                    log.warning("Prefetch xG dla ligi %s nieudany (%s: %s) —"
+                                " druzyny tej ligi jada bez xG",
+                                _liga_key, type(e).__name__, e)
                 if not [t for t in _missing if not _cache_get(_to_slug(t), _season)]:
                     break  # komplet uzupełniony — nie ruszaj kolejnych lig
-    except (ImportError, AttributeError):
-        pass
+    except (ImportError, AttributeError) as e:
+        log.warning("Podsystem xG (understat) niedostepny (%s: %s) — top-5 lig"
+                    " leci bez xG w CALYM przebiegu", type(e).__name__, e)
 
     # 11.9 + A1(06-17): Inicjalizacja systemów λ przed pętlą.
     # fortress/h2h/heurystyka/klasyfikator budowane z df_mecze (historia).
@@ -230,6 +236,9 @@ def szybkie_pewniaczki_2dni(
             try:
                 dm = datetime.strptime(d, "%Y-%m-%d")
             except ValueError:
+                # Kandydat WYPADA z puli. Cicho znaczylo: mecz nie istnieje.
+                log.warning("Mecz %s-%s (%s) ma date %r nie do sparsowania —"
+                            " wypada z puli kandydatow", g, a, liga, d)
                 continue
         if not (teraz <= dm <= granica):
             continue
@@ -477,6 +486,8 @@ def _scout_bot_ocen(
                         try:
                             kurs = float(str(k).replace(",", "."))
                         except (ValueError, TypeError):
+                            log.warning("Kurs %r (%s) nie do odczytania — EV dla"
+                                        " tego typu NIE zostanie policzone", k, odds_key)
                             kurs = None
                 break
 
@@ -581,6 +592,9 @@ def wyswietl_szybkie_pewniaczki(
         try:
             dzien_str = datetime.strptime(dzien, "%Y-%m-%d").strftime("%A, %d.%m.%Y")
         except ValueError:
+            # CISZA CELOWA: to formatowanie NAGLOWKA do konsoli. Fallback pokazuje
+            # surowa date, wiec uzytkownik i tak widzi, ze cos jest nietypowe —
+            # informacja nie ginie, a log dublowalby to, co juz jest na ekranie.
             dzien_str = dzien
         console.print(f"\n[bold cyan]── {dzien_str} ──[/bold cyan]")
 
