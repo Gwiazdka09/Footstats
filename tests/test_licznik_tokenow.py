@@ -188,3 +188,31 @@ def test_zachowany_poczatek_i_koniec_promptu():
     przyciety = client.dopasuj_do_budzetu(prompt, 100)
     assert przyciety.startswith("POCZATEK")
     assert przyciety.endswith("KONIEC-FORMATU")
+
+
+def test_nierownomierna_gestosc_tokenow_nie_przepuszcza_413():
+    """MUTACJA, KTÓRA PRZEŻYŁA PIERWSZE PODEJŚCIE — pętla dociskająca była
+    nietestowana, bo wszystkie próbki miały równomierną gęstość.
+
+    Realny prompt jej NIE MA: instrukcja i opisy meczów to zwykły tekst
+    (~2,5 znaku na token), a ikony ryzyka 🏅⚔️😫🔄 siedzą skupione w opisach
+    (~1,5). Przelicznik liczony ze ŚREDNIEJ całego promptu zawyża wtedy liczbę
+    znaków, które się zmieszczą, bo zatrzymany fragment jest gęstszy niż średnia.
+
+    Zmierzone po usunięciu pętli — przekroczenie budżetu o 20-37%:
+        budżet  200 -> 241 tokenów
+        budżet  400 -> 520
+        budżet  800 -> 1082
+        budżet 1500 -> 2057
+    Każda z tych liczb to 413 i padnięty przebieg."""
+    _tiktoken_albo_skip()
+    glowa = SZKIELET.replace("\n", " ") + " "
+    prompt = glowa * 120 + "🏅⚔️😫🔄" * 300
+
+    for budzet in (200, 400, 800, 1500):
+        przyciety = client.dopasuj_do_budzetu(prompt, budzet)
+        uzyte = client.szacuj_tokeny(przyciety)
+        assert uzyte <= budzet, (
+            f"budzet {budzet} przekroczony ({uzyte}) — nierownomierna gestosc"
+            " tokenow przepuszcza 413"
+        )
