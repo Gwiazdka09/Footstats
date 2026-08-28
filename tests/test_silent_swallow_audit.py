@@ -20,11 +20,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
-# Stan zamrożony 2026-08-28. Ostatnie obniżenie: `core/quick_picks.py` przestał
-# po cichu połykać awarię systemów λ (fortress/h2h/heurystyki) — te cztery są
-# JEDYNYM źródłem tagów `factors`, a puste `factors` wyglądają identycznie jak
-# stan normalny, więc cisza chowała się tam idealnie.
-PROG = 66
+# 66 -> 56 (2026-08-28, J1). Obniżone po odczernieniu handlerów w `cli.py`
+# (15 -> 9) i `ai/analyzer.py` (12 -> 1) — patrz `test_ciche_except_audit.py`.
+# Najgroźniejszy z naprawionych: `_zapytaj_typera` w analyzer.py, `except
+# Exception: pass`-owy fallback dokładnie tego typu awarii, który 22.08.2026
+# ukrył na 6 dni wycofanie modelu Groq (404 bez śladu, exit=0).
+PROG = 56
 
 # Ścieżki, gdzie ciche połknięcie jest wprost uzasadnione: teardown przeglądarki
 # musi przeżyć każdy błąd, bo inaczej zostawia wiszący proces chromium.

@@ -59,7 +59,12 @@ def _get_kalibracja_blok() -> str:
     try:
         from footstats.ai.trainer import get_kalibracja_inject
         return get_kalibracja_inject()
-    except (ImportError, AttributeError, KeyError):
+    except (ImportError, AttributeError, KeyError) as e:
+        logger.warning(
+            "Blok kalibracji z treningu niedostepny (%s: %s) - WSZYSTKIE zapytania "
+            "do Groqa w tej sesji ida bez kalibracji z historii",
+            type(e).__name__, e,
+        )
         return ""
 
 
@@ -93,7 +98,12 @@ def _get_liga_statystyki_blok() -> str:
             linie.append(linia)
         linie.append("Priorytet kuponu: mecze z lig oznaczonych MARCHEWKA > pozostale.")
         return "\n".join(linie)
-    except (ImportError, KeyError, AttributeError, TypeError):
+    except (ImportError, KeyError, AttributeError, TypeError) as e:
+        logger.warning(
+            "Blok LIGA_STATYSTYKI niedostepny (%s: %s) - WSZYSTKIE zapytania do "
+            "Groqa w tej sesji ida bez statystyk ligowych",
+            type(e).__name__, e,
+        )
         return ""
 
 
@@ -111,7 +121,13 @@ def _kontynuuj_uciety_json(client, messages: list, partial: str, max_tokens: int
             temperature=0.1,
         )
         return partial + resp2.choices[0].message.content
-    except (AttributeError, IndexError):
+    except (AttributeError, IndexError) as e:
+        logger.warning(
+            "Dokonczenie ucietego JSON od Groqa nie powiodlo sie (%s: %s) - "
+            "zwracam czesciowa (ucieta) odpowiedz, dalszy parsing JSON moze sie "
+            "wywalic",
+            type(e).__name__, e,
+        )
         return partial
 
 
@@ -149,7 +165,15 @@ def _zapytaj_typera(prompt: str, max_tokens: int = 900) -> str:
             result = _kontynuuj_uciety_json(client, messages, result)
 
         return result
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        # 22.08.2026: Groq wycofal model bez zapowiedzi (404), potok stal 6 dni
+        # przy exit=0, bo ten fallback pochlanial blad bez sladu. Log jest
+        # jedynym sygnalem, ze wyspecjalizowany typer przestal dzialac.
+        logger.warning(
+            "Wyspecjalizowany typer Groq zawiodl (%s: %s) - przechodze na "
+            "fallback zapytaj_ai",
+            type(e).__name__, e,
+        )
         return zapytaj_ai(prompt, max_tokens)
 
 
@@ -189,8 +213,13 @@ def _pobierz_podobne_mecze(home: str, away: str, n: int = 3) -> str:
             # Truncate lesson to 100 chars for readability
             header += f"{i}. {lesson[:100]}…\n"
         return header
-    except (ImportError, KeyError, AttributeError, TypeError):
-        # Silently fail: RAG is optional, don't break prediction if it fails
+    except (ImportError, KeyError, AttributeError, TypeError) as e:
+        # RAG jest opcjonalny, nie blokuje predykcji, ale zostawiamy slad na
+        # debug - to per-mecz wzbogacenie, nie caly przebieg.
+        logger.debug(
+            "Podobne mecze z historii niedostepne dla %s vs %s (%s: %s)",
+            home, away, type(e).__name__, e,
+        )
         return ""
 
 
@@ -554,6 +583,9 @@ def _buduj_opis_meczu(w: dict) -> str:
                     if ev > 0.0:
                         ev_parts.append(f"{label}={ev * 100:+.0f}%")
                 except (ValueError, TypeError):
+                    # Kurs dla tego rynku (czesto BTTS/O2.5) po prostu nie
+                    # przyszedl od bukmachera - norma przy 5 rynkach x N meczow,
+                    # log zalalby logi szumem bez zadnej nowej informacji.
                     pass
             if ev_parts:
                 linie.append(f"  EV(brutto): {' '.join(ev_parts)}")
@@ -589,8 +621,11 @@ def _buduj_opis_meczu(w: dict) -> str:
         rag = pobierz_rag_kontekst(w)
         if rag:
             linie.append(f"  HISTORIA: {rag}")
-    except (ImportError, KeyError, AttributeError):
-        pass
+    except (ImportError, KeyError, AttributeError) as e:
+        logger.debug(
+            "Sekcja HISTORIA (RAG) pominieta dla tego meczu (%s: %s)",
+            type(e).__name__, e,
+        )
 
     return "\n".join(linie)
 
@@ -691,8 +726,13 @@ def ai_analiza_pewniaczki(
         for w in wyniki[:5]:
             try:
                 w["match_context"] = get_match_context(w.get("gospodarz",""), w.get("goscie",""), w.get("liga",""))
-            except (OSError, RuntimeError):
-                pass
+            except (OSError, RuntimeError) as e:
+                logger.warning(
+                    "Kontekst meczu (xG/tabela) niedostepny dla %s vs %s (%s: %s) "
+                    "- ten mecz idzie do Groqa bez wzbogacenia",
+                    w.get("gospodarz", "?"), w.get("goscie", "?"),
+                    type(e).__name__, e,
+                )
 
     # Etap 3: Dynamiczne podsumowanie sygnałów
     sygnaly = _sygnaly_summary(wyniki)
@@ -704,8 +744,12 @@ def ai_analiza_pewniaczki(
         k = pobierz_kalibracje_backtest()
         if k:
             kalibracja_str = f"KALIBRACJA HISTORYCZNA (backtest ~90 dni):\n{k}\n"
-    except (ImportError, OSError, RuntimeError):
-        pass
+    except (ImportError, OSError, RuntimeError) as e:
+        logger.warning(
+            "Kalibracja historyczna z backtestu niedostepna (%s: %s) - ten "
+            "kupon idzie do Groqa bez kalibracji ~90 dni",
+            type(e).__name__, e,
+        )
 
     feedback_str = ""
     try:
@@ -740,8 +784,12 @@ def ai_analiza_pewniaczki(
                 + "\n".join(f"  • {w}" for w in wnioski)
                 + "\n"
             )
-    except (ImportError, OSError, RuntimeError):
-        pass
+    except (ImportError, OSError, RuntimeError) as e:
+        logger.warning(
+            "Petla Feedbacku (RAG wnioski z rozliczen) niedostepna (%s: %s) - "
+            "ten kupon idzie do Groqa bez nauki z poprzednich typow",
+            type(e).__name__, e,
+        )
 
     mecze_opisy = [_buduj_opis_meczu(w) for w in wyniki[:5]]
 
@@ -856,7 +904,12 @@ def oceń_kupon(legs: list[dict], kontekst: str = "") -> tuple[str, int]:
 
     try:
         reasoning = _zapytaj_typera(prompt, max_tokens=600)
-    except Exception:  # noqa: BLE001 — LLM fallback, nie blokuj pipeline
+    except Exception as e:  # noqa: BLE001 — LLM fallback, nie blokuj pipeline
+        logger.warning(
+            "Scout filter: LLM calkowicie niedostepny (%s: %s) - kupon idzie "
+            "dalej bez oceny, prog domyslny",
+            type(e).__name__, e,
+        )
         return ("LLM niedostępny — pominięto scout filter.", _SCOUT_VETO_THRESHOLD)
 
     score = _SCOUT_VETO_THRESHOLD
@@ -865,8 +918,12 @@ def oceń_kupon(legs: list[dict], kontekst: str = "") -> tuple[str, int]:
         if line.upper().startswith("SCORE:"):
             try:
                 score = max(0, min(100, int(line.split(":", 1)[1].strip())))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug(
+                    "Nie udalo sie sparsowac linii SCORE od Groqa (%s: %s) - "
+                    "zostaje prog domyslny",
+                    type(e).__name__, e,
+                )
             break
 
     return (reasoning, score)

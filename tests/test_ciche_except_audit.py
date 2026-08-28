@@ -96,7 +96,15 @@ def _pliki() -> list[Path]:
 
 # Zmierzone 2026-08-24. Obniżać przy naprawianiu, nigdy nie podnosić bez uzasadnienia.
 BASELINE: dict[str, int] = {
-    "ai/analyzer.py": 12,
+    # 12 -> 1 (2026-08-28, J1). Naprawione: `_get_kalibracja_blok` i
+    # `_get_liga_statystyki_blok` (kazdy blad importu/atrybutu cicho zdejmowal
+    # cala sekcje z KAZDEGO promptu do Groqa przez cala sesje), `_zapytaj_typera`
+    # (except Exception polykajacy DOKLADNIE ten typ awarii, ktory 22.08 zatrzymal
+    # potok na 6 dni: Groq wycofal model, 404 znikaly bez sladu), reszta w petlach
+    # na debug/warning wg konsekwencji. Zostaje 1: parsowanie kursu do EV w petli
+    # 5 rynkow x N meczow (`_buduj_opis_meczu`) - brak kursu na BTTS/O2.5 to norma,
+    # log zalalby logi szumem.
+    "ai/analyzer.py": 1,
     "ai/analyzer_helpers.py": 6,
     "ai/client.py": 1,
     "ai/rag.py": 2,
@@ -110,7 +118,15 @@ BASELINE: dict[str, int] = {
     "api/main.py": 4,
     "api/routes/coupons.py": 1,
     "api/routes/status.py": 1,
-    "cli.py": 15,
+    # 15 -> 9 (2026-08-28, J1). Naprawione: import modulow AI (`except ImportError`
+    # wylaczajacy opcje I/J na cala sesje bez sladu) i 5 handlerow w petli po
+    # kolejce meczow (nazwa druzyny nieodczytywalna, kursy niedostepne, forma
+    # nieobliczalna) - wszystkie na debug, bo pojedynczy element w petli po
+    # kolejce to norma. Zostaje 9: pojedyncze interaktywne prompty (float/int)
+    # z natychmiastowym fallbackiem na wartosc domyslna i 2 petle retry, ktore
+    # od razu drukuja "Zly numer." - blad widoczny w tej samej sekundzie,
+    # nie kumuluje sie i nie ucieka dalej niz jeden wybor w menu.
+    "cli.py": 9,
     "cli_commands.py": 3,
     "core/async_utils.py": 2,
     "core/backtest.py": 5,

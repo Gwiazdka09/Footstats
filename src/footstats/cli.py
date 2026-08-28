@@ -1,4 +1,5 @@
 """FootStats CLI – Main entry point (MODUL 18)."""
+import logging
 import os
 import time
 from datetime import datetime
@@ -47,6 +48,8 @@ from footstats.cli_commands import (
     _wyswietl_menu_startowe, _analiza_kuponu,
 )
 
+log = logging.getLogger(__name__)
+
 
 def main():
     api_key = _wczytaj_lub_stworz_env()
@@ -73,6 +76,10 @@ def main():
 
     if wybor_start == "p":
         console.print()
+        # Milczace ValueError ponizej: pojedynczy interaktywny prompt uzytkownika
+        # z natychmiastowym uzyciem wartosci domyslnej - zla wpisana liczba nie
+        # kumuluje sie ani nie propaguje dalej niz ten jeden wybor w menu, log
+        # byłby szumem bez wartosci diagnostycznej (J1, 2026-08-28).
         try:
             prog_start = float(Prompt.ask(
                 "[bold yellow]Min. szansa %[/bold yellow]",
@@ -180,8 +187,12 @@ def main():
         from footstats.ai.output import wyswietl_analiza_ai as _pokaz_ai     # noqa: F401
         from footstats.scrapers.kursy import szukaj_kursy_meczu as _kursy_ai  # noqa: F401
         _ai_dostepne = True
-    except ImportError:
-        pass
+    except ImportError as e:
+        log.warning(
+            "Moduly AI niedostepne (%s: %s) - opcje I/J znikaja z menu na cala "
+            "sesje CLI",
+            type(e).__name__, e,
+        )
 
     while True:
         imp    = sys_anal["importance"]
@@ -259,7 +270,7 @@ def main():
         elif wybor == "2":
             console.print()
             try:   ile = int(Prompt.ask("Ile meczow?", default="10"))
-            except ValueError: ile = 10
+            except ValueError: ile = 10  # milczaco: prompt jednorazowy, patrz uzasadnienie przy opcji "p"
             wyswietl_wyniki(df_wyniki, ile)
 
         elif wybor == "3":
@@ -307,7 +318,7 @@ def main():
             console.print()
             g, a = wybierz_druzyny(df_wyniki)
             try:   n_f = int(Prompt.ask("Ile meczow formy?", default="8"))
-            except ValueError: n_f = 8
+            except ValueError: n_f = 8  # milczaco: prompt jednorazowy, patrz uzasadnienie przy opcji "p"
             console.print()
             porownaj_forme(g, a, df_wyniki, n_f)
 
@@ -388,6 +399,7 @@ def main():
                 console.print("[yellow]Opcja P wymaga klucza Bzzoiro.[/yellow]")
                 console.print("[dim]Dodaj BZZOIRO_KEY w opcji K.[/dim]")
             else:
+                # milczaco: prompt jednorazowy, patrz uzasadnienie przy opcji "p" wyzej
                 try:
                     prog_p = float(Prompt.ask(
                         "[bold green]Min. szansa %[/bold green]",
@@ -404,6 +416,7 @@ def main():
 
                 cache_pewniaczki = []
                 if tryb == "1":
+                    # milczaco: prompt jednorazowy, patrz uzasadnienie przy opcji "p" wyzej
                     try:
                         godz_p = int(Prompt.ask("[yellow]Horyzont godzin[/yellow]", default="48"))
                     except ValueError:
@@ -464,6 +477,8 @@ def main():
                 t_d.add_row(*wrs)
             console.print(t_d)
 
+            # milczaco: petla ponawia prompt i od razu pokazuje "Zly numer." -
+            # blad nie ucieka niezauwazony, uzytkownik widzi go w tej samej sekundzie
             while True:
                 try:
                     nr = int(Prompt.ask("\n[bold cyan]Nr druzyny do analizy Dom/Wyjazd[/bold cyan]"))
@@ -473,12 +488,13 @@ def main():
             druzyna_sel = druzyny[nr - 1]
 
             try:   n_dw = int(Prompt.ask("Ostatnie N meczow dom/wyjazd?", default="10"))
-            except ValueError: n_dw = 10
+            except ValueError: n_dw = 10  # milczaco: prompt jednorazowy, patrz uzasadnienie przy opcji "p"
 
             dw.wyswietl(druzyna_sel, n_dw)
 
             # Opcjonalnie porownaj z druga druzyna
             if Confirm.ask("Porownac z inna druzyna?", default=False):
+                # milczaco: patrz uzasadnienie przy pierwszej petli nr wyzej
                 while True:
                     try:
                         nr2 = int(Prompt.ask("[bold cyan]Nr drugiej druzyny[/bold cyan]"))
@@ -617,7 +633,11 @@ def main():
                                 else:
                                     wyniki.append("W" if r["gole_a"]>r["gole_g"] else ("R" if r["gole_g"]==r["gole_a"] else "P"))
                             return "".join(wyniki)
-                        except (KeyError, AttributeError, TypeError):
+                        except (KeyError, AttributeError, TypeError) as _e:
+                            log.debug(
+                                "Forma %s nieobliczalna (%s: %s) - pokazuje '-'",
+                                druz, type(_e).__name__, _e,
+                            )
                             return "-"
 
                     _h2h_opis = wynik_fs["h2h_g"].get("opis", "-") or "-"
@@ -682,13 +702,21 @@ def main():
                         if not _g and _mecz_raw is not None:
                             try:
                                 _g = str(_mecz_raw["gospodarz"]) if "gospodarz" in _mecz_raw.index else ""
-                            except (KeyError, TypeError):
-                                pass
+                            except (KeyError, TypeError) as _e:
+                                log.debug(
+                                    "Nazwa gospodarza nieodczytywalna z surowego "
+                                    "meczu (%s: %s) - mecz zostanie pominiety",
+                                    type(_e).__name__, _e,
+                                )
                         if not _a and _mecz_raw is not None:
                             try:
                                 _a = str(_mecz_raw["goscie"]) if "goscie" in _mecz_raw.index else ""
-                            except (KeyError, TypeError):
-                                pass
+                            except (KeyError, TypeError) as _e:
+                                log.debug(
+                                    "Nazwa goscia nieodczytywalna z surowego "
+                                    "meczu (%s: %s) - mecz zostanie pominiety",
+                                    type(_e).__name__, _e,
+                                )
                         if not _g or not _a:
                             continue  # pomijaj mecze bez nazw drużyn
                         console.print(f"  [{_i}/{len(cache_kolejki)}] {_g} vs {_a}")
@@ -696,8 +724,12 @@ def main():
                         if _liga_slug_j:
                             try:
                                 _k = _kursy_ai(_g, _a, _liga_slug_j)
-                            except (ValueError, KeyError, RuntimeError, OSError):
-                                pass
+                            except (ValueError, KeyError, RuntimeError, OSError) as _e:
+                                log.debug(
+                                    "Kursy niedostepne dla %s vs %s (%s: %s) - "
+                                    "analiza AI bez kursow dla tego meczu",
+                                    _g, _a, type(_e).__name__, _e,
+                                )
                         # Pobierz formę jako string
                         def _fstr(druz, n=5):
                             try:
@@ -711,7 +743,12 @@ def main():
                                     else:
                                         r2.append("W" if rw["gole_a"]>rw["gole_g"] else("R" if rw["gole_g"]==rw["gole_a"] else "P"))
                                 return "".join(r2)
-                            except (KeyError, AttributeError, TypeError):
+                            except (KeyError, AttributeError, TypeError) as _e:
+                                log.debug(
+                                    "Forma %s nieobliczalna (%s: %s) - pokazuje "
+                                    "'-'",
+                                    druz, type(_e).__name__, _e,
+                                )
                                 return "-"
                         try:
                             _wyn = _analizuj_ai(
