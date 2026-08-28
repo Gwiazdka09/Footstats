@@ -153,3 +153,129 @@ def test_zdrowa_baza_nie_generuje_szumu(monkeypatch, caplog, bez_wysylki):
         assert tg.check_and_alert_agent_down() is False
 
     assert not caplog.records, [r.getMessage() for r in caplog.records]
+
+
+# ── Druga strona tego samego problemu: DORĘCZENIE alarmu ────────────────────
+#
+# Powyżej: czujnik, który milczy przy własnej awarii. Poniżej: wołający, który
+# milczy, gdy alarm nie wyszedł. Znalezione 28.08 w `daily_agent.main()` —
+# cztery miejsca o identycznym kształcie:
+#
+#     try:
+#         from footstats.utils.telegram_notify import send_stop_loss_alert
+#         send_stop_loss_alert(dd, bankroll)
+#     except (ImportError, OSError, RuntimeError):
+#         pass
+#
+# Najgorsze z nich siedziało pod `log.warning("ALERT cicha awaria: ...")`:
+# wykrycie przebiegu BEZ EFEKTU logowało się poprawnie, a nieudane powiadomienie
+# o tym wykryciu — już nie.
+
+def test_nieudana_wysylka_alarmu_zostawia_slad(monkeypatch, caplog):
+    from footstats import daily_agent
+    import footstats.utils.telegram_notify as _tg
+
+    def _padnij(*_a, **_k):
+        raise OSError("timeout do API Telegrama")
+
+    monkeypatch.setattr(_tg, "send_alert", _padnij, raising=False)
+    with caplog.at_level(logging.WARNING):
+        daily_agent._wyslij_alarm("send_alert", "stop-loss przeszedl niezauwazony", "t", "b")
+
+    assert "ALARM NIEWYSLANY" in caplog.text
+    assert "stop-loss przeszedl niezauwazony" in caplog.text
+
+
+def test_brak_modulu_powiadomien_tez_zostawia_slad(monkeypatch, caplog):
+    """Obraz bez `telegram_notify` wyglądał dotąd identycznie jak obraz,
+    w którym po prostu nie było o czym alarmować."""
+    import builtins
+    from footstats import daily_agent
+
+    prawdziwy = builtins.__import__
+
+    def _bez(nazwa, *a, **k):
+        if nazwa == "footstats.utils" or nazwa.startswith("footstats.utils.telegram"):
+            raise ImportError("brak modulu w obrazie")
+        return prawdziwy(nazwa, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", _bez)
+    with caplog.at_level(logging.WARNING):
+        daily_agent._wyslij_alarm("send_alert", "skutek do zaraportowania", "t", "b")
+
+    assert "ALARM NIEWYSLANY" in caplog.text
+
+
+def test_literowka_w_nazwie_alarmu_to_blad_nie_cisza(caplog):
+    """`getattr` po nazwie nie jest sprawdzany przez linter — gdyby ktoś zmienił
+    nazwę funkcji w `telegram_notify`, wołanie zamieniłoby się w ciche nic.
+    Ma być ERROR, bo to błąd w kodzie, nie awaria środowiska."""
+    from footstats import daily_agent
+
+    with caplog.at_level(logging.ERROR):
+        daily_agent._wyslij_alarm("funkcja_ktorej_nie_ma", "skutek", "t", "b")
+
+    assert "nie istnieje" in caplog.text
+
+
+def test_udana_wysylka_nie_generuje_szumu(monkeypatch, caplog):
+    """Kontrola: alarm, który doszedł, nie ma prawa nic logować — inaczej
+    ostrzeżenie „ALARM NIEWYSLANY" przestaje cokolwiek znaczyć."""
+    from footstats import daily_agent
+    import footstats.utils.telegram_notify as _tg
+
+    wolania = []
+    monkeypatch.setattr(_tg, "send_alert", lambda *a, **k: wolania.append(a), raising=False)
+
+    with caplog.at_level(logging.WARNING):
+        daily_agent._wyslij_alarm("send_alert", "skutek", "tytul", "tresc")
+
+    assert wolania == [("tytul", "tresc")]
+    assert "ALARM NIEWYSLANY" not in caplog.text
+
+
+def test_awaria_wysylki_nie_przerywa_przebiegu(monkeypatch):
+    """Głośno ≠ fatalnie. Alarm jest powiadomieniem, nie warunkiem poprawności —
+    padnięcie Telegrama nie może wywrócić przebiegu, który właśnie się pauzuje."""
+    from footstats import daily_agent
+    import footstats.utils.telegram_notify as _tg
+
+    monkeypatch.setattr(
+        _tg, "send_stop_loss_alert",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("padlo")), raising=False)
+
+    daily_agent._wyslij_alarm("send_stop_loss_alert", "skutek", 0.2, 100.0)
+
+
+def test_wszystkie_sciezki_alarmowe_ida_przez_helper():
+    """Regres na przyszłość: nowy `try/except ImportError: pass` wokół wysyłki
+    alarmu w `daily_agent` obchodzi wszystko powyżej.
+
+    Sprawdzane po AST, nie po tekście — inaczej przykład starego kształtu
+    w docstringu `_wyslij_alarm` wywracałby ten test.
+
+    Zakres to WYŁĄCZNIE trzy funkcje alarmowe. `send_kupon`/`send_draft_kupon`
+    to doręczenie kuponu, nie alarm, i mają własną obsługę; `check_and_alert_source_down`
+    zostaje na miejscu, bo już loguje własną awarię.
+    """
+    import ast
+    from pathlib import Path
+
+    ALARMY = {"send_alert", "send_stop_loss_alert", "check_and_alert_accuracy"}
+    zrodlo = (Path(__file__).resolve().parents[1] / "src" / "footstats"
+              / "daily_agent.py").read_text(encoding="utf-8")
+
+    winowajcy = []
+    for wezel in ast.walk(ast.parse(zrodlo)):
+        if not isinstance(wezel, ast.ImportFrom):
+            continue
+        if wezel.module != "footstats.utils.telegram_notify":
+            continue
+        for alias in wezel.names:
+            if alias.name in ALARMY:
+                winowajcy.append(f"{alias.name} (linia {wezel.lineno})")
+
+    assert not winowajcy, (
+        "funkcja alarmowa importowana z pominieciem `_wyslij_alarm` —"
+        f" nieudana wysylka znowu bedzie cicha: {winowajcy}"
+    )

@@ -37,6 +37,46 @@ from footstats.daily_agent_output import (  # noqa: F401  re-export (ścieżki +
 
 log = logging.getLogger(__name__)
 
+
+def _wyslij_alarm(nazwa: str, opis_skutku: str, *args, **kwargs) -> None:
+    """Wysyla alarm przez `utils.telegram_notify`; NIEUDANA wysylka jest GLOSNA.
+
+    Cztery miejsca w `main()` mialy ten sam ksztalt:
+
+        try:
+            from footstats.utils.telegram_notify import send_stop_loss_alert
+            send_stop_loss_alert(dd, bankroll)
+        except (ImportError, OSError, RuntimeError):
+            pass
+
+    To jest dokladnie przypadek, ktory `tests/test_ciche_except_audit.py` wymienia
+    jako powod swojego istnienia: czujnik dymu meldujacy "wszystko gra", gdy sam
+    sie pali. Stop-loss mogl zadzialac, a nikt sie nie dowiedzial — jedynym sladem
+    bylby `console.print` w logu przebiegu, ktorego nikt nie czyta na biezaco.
+
+    Sama awaria wysylki NIE przerywa przebiegu: alarm jest powiadomieniem, nie
+    warunkiem poprawnosci.
+    """
+    try:
+        from footstats.utils import telegram_notify
+    except ImportError as e:
+        log.warning("ALARM NIEWYSLANY (%s): brak telegram_notify (%s) — %s",
+                    nazwa, e, opis_skutku)
+        return
+
+    wyslij = getattr(telegram_notify, nazwa, None)
+    if wyslij is None:
+        # Blad w KODZIE (literowka w nazwie), nie awaria srodowiska.
+        log.error("ALARM NIEWYSLANY: `telegram_notify.%s` nie istnieje — %s",
+                  nazwa, opis_skutku)
+        return
+
+    try:
+        wyslij(*args, **kwargs)
+    except (OSError, RuntimeError, ValueError) as e:
+        log.warning("ALARM NIEWYSLANY (%s): %s: %s — %s",
+                    nazwa, type(e).__name__, e, opis_skutku)
+
 _norm = normalize_team_name
 
 
@@ -382,8 +422,10 @@ def _weryfikuj_noge(z: dict, indeks: dict, usuniete: list[str]) -> dict | None:
             if be_kurs and be_kurs > z["kurs"]:
                 z["kurs"]   = float(be_kurs)
                 z["_zrodlo"] = "betexplorer"
-    except (ImportError, AttributeError, TypeError):
-        pass
+    except (ImportError, AttributeError, TypeError) as e:
+        log.warning("Arbitraz BetExplorer niedostepny dla %s-%s (%s: %s) —"
+                    " noga zostaje przy kursie z pierwszego zrodla, nie z najlepszego",
+                    wpis.get("gospodarz"), wpis.get("goscie"), type(e).__name__, e)
 
     # FAZA 17.2: twardy filtr longshotów (na finalnym kursie + pred Poissona)
     powod = _powod_odrzucenia_longshot(typ_raw, z.get("kurs"), wpis.get("pred") or {})
@@ -674,11 +716,12 @@ def main():
     # 15.1: Pause check (weekly stop-loss)
     if not args.dry_run and is_agent_paused():
         console.print("[bold red]⛔ AGENT ZAPAUZOWANY (stop-loss 20% tygodniowy). Wznów przez dashboard.[/bold red]")
-        try:
-            from footstats.utils.telegram_notify import send_alert
-            send_alert("FootStats PAUSED", "Agent zapauzowany (stop-loss). Wznów przez dashboard → Bankroll.")
-        except (ImportError, OSError, RuntimeError):
-            pass
+        _wyslij_alarm(
+            "send_alert",
+            "agent jest ZAPAUZOWANY przez stop-loss, a powiadomienie nie doszlo",
+            "FootStats PAUSED",
+            "Agent zapauzowany (stop-loss). Wznów przez dashboard → Bankroll.",
+        )
         return
 
     # Daily stop-loss check
@@ -698,21 +741,23 @@ def main():
     if not args.dry_run and check_and_auto_pause(user_id=admin_uid):
         dd = get_weekly_drawdown(user_id=admin_uid)
         console.print(f"[bold red]⛔ STOP-LOSS: tygodniowy drawdown {dd:.1%} >= 20% — PAUZUJĘ agenta![/bold red]")
-        try:
-            from footstats.utils.telegram_notify import send_stop_loss_alert
-            send_stop_loss_alert(dd, current_bankroll)
-        except (ImportError, OSError, RuntimeError):
-            pass
+        _wyslij_alarm(
+            "send_stop_loss_alert",
+            "agent WLASNIE sie zapauzowal, a powiadomienie nie doszlo",
+            dd,
+            current_bankroll,
+        )
         return
     elif check_weekly_alert(user_id=admin_uid):
         console.print("[bold yellow]ALERT: tygodniowy drawdown przekroczył 20% bankrolla![/bold yellow]")
 
     # Rolling accuracy alert (ciche — nie blokuje agenta)
-    try:
-        from footstats.utils.telegram_notify import check_and_alert_accuracy
-        check_and_alert_accuracy(threshold_pct=35.0, window=20)
-    except (ImportError, OSError, RuntimeError):
-        pass
+    _wyslij_alarm(
+        "check_and_alert_accuracy",
+        "spadek skutecznosci ponizej 35% moze przejsc niezauwazony",
+        threshold_pct=35.0,
+        window=20,
+    )
 
     console.print()
     console.print(Panel(
@@ -840,12 +885,15 @@ def main():
             for _liga_key in dict.fromkeys(UNDERSTAT_LIGI.values()):
                 try:
                     fetch_league_team_xg(_liga_key, _season)
-                except (OSError, ValueError, RuntimeError):
-                    pass
+                except (OSError, ValueError, RuntimeError) as e:
+                    log.warning("Prefetch xG dla ligi %s nieudany (%s: %s) —"
+                                " druzyny tej ligi jada bez xG",
+                                _liga_key, type(e).__name__, e)
                 if not [t for t in _missing if not _cache_get(_to_slug(t), _season)]:
                     break
-    except (ImportError, AttributeError):
-        pass
+    except (ImportError, AttributeError) as e:
+        log.warning("Podsystem xG (understat) niedostepny (%s: %s) —"
+                    " CALY przebieg leci bez xG", type(e).__name__, e)
 
     # -- Dziennik kalibracyjny: zapisz KAŻDĄ ocenę modelu PRZED filtrami ──────
     #
@@ -921,8 +969,9 @@ def main():
                     if d_over or d_btts:
                         k["o25"] = max(0.0, min(100.0, (k.get("o25") or 0.0) + d_over))
                         k["bt"]  = max(0.0, min(100.0, (k.get("bt")  or 0.0) + d_btts))
-        except ImportError:
-            pass
+        except ImportError as e:
+            log.warning("Baza sedziow niedostepna (%s) — korekta o25/btts"
+                        " po sedzim NIE zostala zastosowana w tym przebiegu", e)
 
         if args.faza == "draft":
             _zapisz_next_final_txt(wyniki)
@@ -1108,11 +1157,12 @@ def main():
         )
         if anomalia:
             log.warning("ALERT cicha awaria: %s | %s", anomalia, podsumowanie)
-            try:
-                from footstats.utils.telegram_notify import send_alert
-                send_alert("FootStats — run bez efektu", f"{faza_label}: {anomalia}\n{podsumowanie}")
-            except (ImportError, OSError, RuntimeError):
-                pass
+            _wyslij_alarm(
+                "send_alert",
+                "wykryto przebieg BEZ EFEKTU, a powiadomienie nie doszlo",
+                "FootStats — run bez efektu",
+                f"{faza_label}: {anomalia}\n{podsumowanie}",
+            )
 
     console.print()
     console.print("[bold green]Gotowe.[/bold green] Powodzenia!\n")
