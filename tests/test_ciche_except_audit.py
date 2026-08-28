@@ -165,7 +165,12 @@ BASELINE: dict[str, int] = {
     # 10 -> 8 (2026-08-25). Naprawione: brak danych historycznych (Poisson padal
     # dla CALEGO przebiegu w ciszy) i handler blendu, ktory ukrywal, ze 90% stawki
     # liczy fallback Bzzoiro-ML. Plik nie mial wczesniej nawet loggera.
-    "core/quick_picks.py": 7,
+    # 28.08: 7 -> 1. Utrata kandydata przez zla date, nieczytelny kurs (brak EV),
+    # caly podsystem xG i — najbardziej mylacy — brak walidatora `df_mecze`, po
+    # ktorym dataset NIE jest pomijany, tylko idzie do Poissona NIESPRAWDZONY.
+    # Zostaje 1: fallback formatowania naglowka dnia do konsoli, gdzie surowa data
+    # i tak jest widoczna na ekranie. Testy: `tests/test_quick_picks_nie_milczy.py`.
+    "core/quick_picks.py": 1,
     "core/response_cache.py": 2,
     "core/system_paper.py": 2,
     "core/weekly_picks.py": 5,
