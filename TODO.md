@@ -502,6 +502,20 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   a nie w `cache/` repo jak reszta. Nie ruszam przy okazji — przeniesienie przesuwa
   produkcyjny cache i jest osobną decyzją.
 
+- [ ] **J1c — oba audyty ciszy mają wspólną ślepą plamkę: `return` po nieudanej
+  walidacji.** Znalezione 28.08 przy `oblicz_tip_correct`: cichy był NIE `except`,
+  tylko `if not val_match: return None` linijkę wyżej. Zwykły `return` nie jest
+  handlerem, więc ani `test_ciche_except_audit`, ani `test_silent_swallow_audit`
+  go nie widzą — a to on realnie przechwytywał ten przypadek (handler pod nim
+  okazał się nieosiągalny). Ten sam kształt co `return []`/`return False`
+  z incydentów 24.08.
+  **Nie rozszerzam audytu teraz i to jest świadome:** trafień byłyby setki,
+  a większość uzasadnionych (`if not x: return None` na pustym wejściu to
+  normalna walidacja, nie awaria). Rozsądny zakres do przemyślenia: tylko
+  `return` po nieudanym PARSOWANIU (regex/int/float/fromisoformat), nie po
+  sprawdzeniu pustki. Wymaga pomiaru, ile to realnie miejsc, zanim powstanie
+  jakikolwiek baseline.
+
 - [ ] **D7 — 21 kuponów z 14-15.08 jest nie do odzyskania** z darmowych źródeł
   (duńska, japońska, chińska liga + angielskie niższe — poza pokryciem football-data,
   poza oknem AF, poza 7 dniami FlashScore). Zejdą przez VOID 24-25.08. Do decyzji:

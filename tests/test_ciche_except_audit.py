@@ -136,7 +136,11 @@ BASELINE: dict[str, int] = {
     "core/classifier.py": 2,
     "core/cloud_draft.py": 1,
     "core/clv_tracker.py": 1,
-    "core/coupon_settlement.py": 4,
+    # 28.08: 4 -> 0. Trzy to bylo parsowanie daty kuponu. Najgrozniejszy:
+    # `too_old = False` przy niesparsowanej dacie znaczy "jeszcze nie czas na VOID",
+    # wiec kupon NIGDY nie wygasa i siedzi w ACTIVE — ten sam ksztalt co petla
+    # dziennika z tego samego dnia. Testy: `tests/test_rozliczenia_nie_milcza.py`.
+    "core/coupon_settlement.py": 0,
     # 9 -> 5 (2026-08-25). Naprawione w `_dodaj_kelly`: ciche wyjscie przy braku
     # modulow (kupon bez stawek), podmiana kalibracji na tozsamosc i dwie awaryjne
     # stawki 1.0 PLN udajace decyzje modelu.
@@ -212,7 +216,9 @@ BASELINE: dict[str, int] = {
     "scrapers/understat_xg.py": 5,
     "scrapers/zawodtyper_referees.py": 2,
     "telegram_bot.py": 2,
-    "utils/betting.py": 4,
+    # 28.08: 4 -> 0. Formaty wyniku, ktorych nie umiemy odczytac, znikaly bez
+    # sladu — dokladnie to zatrzymalo 218 wierszy w kolejce dziennika.
+    "utils/betting.py": 0,
     "utils/cache.py": 4,
     "utils/console.py": 1,
     "utils/db.py": 3,

@@ -43,6 +43,8 @@ def data_jeszcze_osiagalna(mdate: str, dzis: date | None = None) -> bool:
     try:
         dzien = datetime.fromisoformat(str(mdate)[:10]).date()
     except (TypeError, ValueError):
+        log.warning("Data meczu %r nie do sparsowania — traktuje jak poza zasiegiem"
+                    " zrodel, wiec wynik NIGDY nie zostanie pobrany", mdate)
         return False
     return 0 <= ((dzis or date.today()) - dzien).days <= HORYZONT_ZRODEL_DNI
 
@@ -68,6 +70,8 @@ def czeka_zbyt_dlugo(mdate: str, dzis: date | None = None) -> bool:
     try:
         dzien = datetime.fromisoformat(str(mdate)[:10]).date()
     except (TypeError, ValueError):
+        log.warning("Data meczu %r nie do sparsowania — nie umiem ocenic, czy kupon"
+                    " czeka za dlugo, wiec alarm o zastoju go NIE zobaczy", mdate)
         return False
     return 1 <= ((dzis or date.today()) - dzien).days <= HORYZONT_ZRODEL_DNI
 
@@ -285,7 +289,9 @@ def _find_leg_result(
         next_day = (datetime.fromisoformat(mdate) + timedelta(days=1)).date().isoformat()
         candidate_dates.append(next_day)
     except ValueError:
-        pass
+        log.warning("Data %r nie do sparsowania — szukam wyniku TYLKO dla niej,"
+                    " bez fallbacku na dzien pozniej; przesuniety terminarz"
+                    " skonczy sie wieczna PARTIAL", mdate)
 
     for d in candidate_dates:
         if d not in fixtures_cache:
@@ -453,6 +459,12 @@ def settle_active_coupons(
             leg_date = datetime.fromisoformat(match_date).date()
             too_old = (today - leg_date).days >= VOID_AFTER_DAYS
         except (ValueError, TypeError):
+            # NAJGROZNIEJSZY z trzech: `too_old = False` znaczy "jeszcze nie czas
+            # na VOID", wiec kupon z niesparsowana data NIGDY nie wygasa i siedzi
+            # w ACTIVE bez konca. Ten sam ksztalt co petla dziennika z 28.08.
+            log.warning("Kupon #%s ma date %r nie do sparsowania — nie wygasnie"
+                        " przez VOID i zostanie w ACTIVE, dopoki ktos go nie ruszy"
+                        " recznie", coupon_id, match_date)
             too_old = False
 
         leg_results: list[int | None] = []
