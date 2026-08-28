@@ -132,3 +132,29 @@ def test_rag_kontekst_widzi_mecz_z_quick_picks():
     with patch("footstats.ai.rag.pobierz_rag_wzorce", return_value="HISTORIA: 7/10"):
         kontekst = pobierz_rag_kontekst(r)
     assert kontekst != "", "wpis z quick_picks nadal odrzucany przez bramkę metoda/faktory"
+
+
+# ── 3. awaria systemów λ nie może być cicha ─────────────────────────────────
+
+
+def test_padniete_systemy_lambda_zglaszaja_sie_glosno(caplog):
+    """Te cztery systemy to JEDYNE źródło tagów PATENT/ZEMSTA/TWIERDZA. Gdy nie
+    wstaną, `factors` są puste w CAŁYM przebiegu — a puste `factors` wyglądają
+    dokładnie tak samo jak stan normalny (zmierzone 28.08: 246 z 255 predykcji
+    na produkcji ma `factors='[]'`, bo typujemy ligi spoza naszej historii).
+    Cichy `except ... : pass` chował więc awarię w miejscu, w którym nikt by jej
+    nie zauważył.
+
+    `KeyError` nie jest hipotetyczny: systemy czytają kolumny po nazwie
+    (`gospodarz`/`goscie`), więc nieprzeadaptowany schemat parquetu (`home`/`away`)
+    wysypuje je właśnie nim.
+    """
+    with patch(
+        "footstats.core.fortress.HomeFortress",
+        side_effect=KeyError("gospodarz"),
+    ), caplog.at_level("WARNING"):
+        wyniki = szybkie_pewniaczki_2dni(_zrodlo([_EVENT]), prog=0.0, df_mecze=_DF)
+
+    assert "factors" in caplog.text.lower(), "awaria systemów λ musi być GŁOŚNA"
+    assert wyniki, "awaria systemów λ nie może zatrzymać całego przebiegu"
+    assert wyciagnij_faktory(wyniki[0]["pred"]) == []

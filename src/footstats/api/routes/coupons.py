@@ -794,10 +794,12 @@ def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
 def cron_settle_manual(x_cron_secret: str = Header(default=""), dry_run: bool = False):
     """Endpoint dla Google Cloud Scheduler — auto-rozlicza kupony manual (dziennik, J4c).
 
-    Rozlicza TYLKO nogi, dla których już mamy wynik w predictions (link_leg
-    matched="exact" + niepusty actual_result) — zero zewnętrznych API, zero
-    bankrollu. Osobny trigger, NIE wpięty domyślnie w scheduler (enablement
-    to świadoma decyzja usera, patrz `settle_manual_coupons`).
+    Rozlicza TYLKO nogi, dla których wynik mamy już w NASZEJ bazie: `predictions`
+    (link_leg matched="exact" + niepusty actual_result), a gdy tam go nie ma —
+    `model_log`, czyli szerszy dziennik kalibracyjny. Zero zewnętrznych API
+    (chyba że `MANUAL_SETTLE_EXTERNAL=1`), zero bankrollu. Osobny trigger,
+    NIE wpięty domyślnie w scheduler (enablement to świadoma decyzja usera,
+    patrz `settle_manual_coupons`).
     """
     expected = os.getenv("CRON_SECRET", "")
     if not expected or not hmac.compare_digest(x_cron_secret, expected):
@@ -832,6 +834,12 @@ def cron_settle_manual(x_cron_secret: str = Header(default=""), dry_run: bool = 
             # znaczy, że wydatek na API nic nie dał — to trzeba widzieć w odpowiedzi,
             # nie tylko w logach.
             "z_zewnatrz": stats.get("z_zewnatrz", 0),
+            # Nogi ROZLICZONYCH kuponów, które rozwiązał `model_log` — tabela
+            # szersza niż `predictions` (161 vs 424 wiersze na prod 28.08). Nogi
+            # kuponów, które i tak zostały ACTIVE, celowo się tu nie liczą:
+            # inaczej ta liczba rosłaby codziennie dla tego samego zawieszonego
+            # kuponu i pokazywałaby sukces tam, gdzie nic nie zeszło z kolejki.
+            "z_model_log": stats.get("z_model_log", 0),
             # Podzbiór `skipped`, którego nikt już nie rozliczy automatycznie.
             "przeterminowane": stats.get("przeterminowane", 0),
         }

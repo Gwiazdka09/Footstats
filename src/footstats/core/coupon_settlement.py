@@ -734,6 +734,19 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
     żeby nie generować dodatkowego ruchu do zewnętrznych źródeł dla wpisów
     ręcznych.
 
+    `link_leg` zwracające `match_confidence == "ambiguous"` NIE schodzi do
+    kolejnych źródeł: „dwa różne mecze w oknie dat" to wynik, nie brak danych,
+    a inne źródło mające u siebie tylko jeden z nich odpowiedziałoby pewnie
+    i rozliczyło kupon z niewłaściwego meczu.
+
+    Kolejność źródeł (każde kolejne to fallback):
+      1. `predictions` przez `link_leg` — nasza predykcja z wynikiem;
+      2. `model_log` przez `wynik_z_model_log` — TA SAMA nasza baza, tylko
+         szersza (161 vs 424 wiersze na prod 28.08), bo `predictions` zapisuje
+         wyłącznie ścieżkę `top3`/`kupon_d`, a dziennik kalibracyjny każdy
+         oceniony mecz. Darmowe, więc PRZED zewnętrznymi API;
+      3. źródła zewnętrzne — tylko pod flagą (niżej).
+
     D5: `MANUAL_SETTLE_EXTERNAL=1` otwiera ten fallback dla nóg, dla których NIE
     mamy własnej predykcji z wynikiem — bez niego kupon na mecz spoza naszych
     typów zostaje ACTIVE na zawsze (zmierzone 24.08: 11 z 12 nóg dziennika).
@@ -747,7 +760,14 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
         verbose: drukuj PL logi na stdout.
 
     Returns:
-        {"settled": N, "skipped": M, "errors": K}
+        {"settled": N, "skipped": M, "errors": K, "z_model_log": L,
+         "z_zewnatrz": Z, "przeterminowane": P}
+
+        `z_model_log` i `z_zewnatrz` liczą NOGI ROZLICZONYCH kuponów. Noga
+        rozwiązana w kuponie, który mimo to zostaje ACTIVE, nie jest liczona —
+        inaczej metryka rosłaby przy każdym przebiegu crona dla tego samego
+        zawieszonego kuponu i pokazywałaby sukces tam, gdzie nic nie zeszło
+        z kolejki. `przeterminowane` to podzbiór `skipped`.
     """
     from footstats.core.backtest import _connect, init_db
 
@@ -761,7 +781,7 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
         ).fetchall()
 
     stats = {"settled": 0, "skipped": 0, "errors": 0, "z_zewnatrz": 0,
-             "przeterminowane": 0}
+             "z_model_log": 0, "przeterminowane": 0}
     if not rows:
         if verbose:
             print("[SettleManual] Brak ACTIVE kuponów manual do rozliczenia.")
@@ -793,6 +813,13 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
 
             leg_results: list[int] = []
             unresolved = False
+            # Liczniki źródeł zbierane PER KUPON i doliczane dopiero, gdy kupon
+            # faktycznie się rozliczy. Zliczanie per noga odpowiadałoby na inne
+            # pytanie niż zadane: noga rozwiązana w kuponie, który i tak zostaje
+            # ACTIVE (bo brakuje drugiej), niczego nie zdjęła z kolejki, a rosłaby
+            # przy KAŻDYM przebiegu crona — codziennie, dla tego samego kuponu.
+            z_dziennika_kupon = 0
+            z_zewnatrz_kupon = 0
             for leg in legs:
                 home = leg.get("home", "")
                 away = leg.get("away", "")
@@ -802,11 +829,26 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                 # przebiegu co typ. Zewnętrzne źródła to fallback, nie zamiennik.
                 if lr.matched and lr.prediction and lr.prediction.get("actual_result"):
                     wynik = lr.prediction["actual_result"]
+                elif lr.match_confidence == "ambiguous":
+                    # „Dwa różne mecze w oknie dat" to NIE to samo co „brak
+                    # danych", choć `link_leg` w obu przypadkach daje matched=False.
+                    # `model_log` mając u siebie tylko jeden z tych meczów
+                    # odpowiedziałby pewnie — i rozliczyłby kupon z NIEWŁAŚCIWEGO
+                    # meczu. Dwuznaczność jest wynikiem: odmawiamy, nie schodzimy
+                    # do kolejnego źródła.
+                    wynik = None
+                elif (z_dziennika := match_linker.wynik_z_model_log(home, away, mdate)):
+                    # `model_log` to TA SAMA nasza baza, tylko szersza:
+                    # `predictions` zapisuje jedynie ścieżkę top3/kupon_d
+                    # (161 wierszy na prod 28.08), `model_log` każdy oceniony
+                    # mecz (424). Darmowe, więc pytane PRZED zewnętrznymi API.
+                    wynik = z_dziennika
+                    z_dziennika_kupon += 1
                 elif zewnetrzne:
                     wynik = _find_leg_result(home, away, mdate, fixtures_cache,
                                              fdb_cache, api_key, fdb_key)
                     if wynik:
-                        stats["z_zewnatrz"] += 1
+                        z_zewnatrz_kupon += 1
                 else:
                     wynik = None
 
@@ -835,6 +877,11 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                 if verbose:
                     print(f"  [ACTIVE] Kupon manual #{coupon_id} — noga bez pewnego wyniku, zostaje ACTIVE")
                 continue
+
+            # Kupon jest rozwiązany — dopiero teraz źródła, które go rozwiązały,
+            # mają prawo trafić do statystyk przebiegu.
+            stats["z_model_log"] += z_dziennika_kupon
+            stats["z_zewnatrz"] += z_zewnatrz_kupon
 
             all_won = all(c == 1 for c in leg_results)
             new_status = "WON" if all_won else "LOST"
