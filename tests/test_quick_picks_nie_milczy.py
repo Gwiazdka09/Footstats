@@ -79,9 +79,17 @@ def test_poprawny_mecz_nie_generuje_szumu(caplog):
 
 def test_sama_data_bez_godziny_dalej_dziala(caplog):
     """Fallback na format bez godziny jest POPRAWNY i ma zostać cichy —
-    ostrzeżenie należy się dopiero, gdy oba formaty zawiodą."""
+    ostrzeżenie należy się dopiero, gdy oba formaty zawiodą.
+
+    UWAGA NA PORE DOBY (naprawione 29.08 po czerwonym przebiegu o 00:33):
+    bez godziny data parsuje się na PÓŁNOC. Zdarzenie z datą „dziś" jest wtedy
+    w przeszłości i wypada z okna — test przechodził tylko wieczorem, gdy
+    `now + 6h` przeskakiwało na jutro. `+30h` ląduje na dacie, której północ
+    jest przed nami o 23-25 h przy KAŻDEJ godzinie startu, więc mieści się
+    w oknie 48 h niezależnie od tego, kiedy odpalimy suitę."""
+    jutro = (datetime.now() + timedelta(hours=30)).strftime("%Y-%m-%d")
     with caplog.at_level(logging.WARNING):
-        wyniki = _uruchom([_event(godzina="–")])
+        wyniki = _uruchom([_event(data=jutro, godzina="–")])
 
     assert len(wyniki) == 1
     assert "nie do sparsowania" not in caplog.text

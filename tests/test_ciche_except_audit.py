@@ -192,7 +192,12 @@ BASELINE: dict[str, int] = {
     "operator/workflow.py": 1,
     "operator_agent.py": 1,
     "scrapers/__init__.py": 1,
-    "scrapers/api_football.py": 5,
+    # 28.08: 5 -> 0. To zrodlo ma UDOKUMENTOWANA cicha awarie: 01.08 konto bylo
+    # zawieszone (HTTP 200 + pusta `response`) i potok stracil tabele, sklady
+    # i sedziego, nie zglaszajac nic. Przy okazji naprawiony blad POPRAWNOSCI:
+    # czesciowe predykcje mieszaly zmierzone wartosci z domyslnymi.
+    # Testy: `tests/test_api_football_nie_milczy.py`.
+    "scrapers/api_football.py": 0,
     "scrapers/base_playwright.py": 7,
     "scrapers/browser_fetch.py": 1,
     "scrapers/bzzoiro.py": 3,
