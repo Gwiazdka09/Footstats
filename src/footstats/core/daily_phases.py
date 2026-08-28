@@ -123,7 +123,9 @@ def _apply_national_lambda(wyniki: list) -> None:
     try:
         from footstats.core.player_db import team_attack_defense
         from footstats.core.national_lambda import national_team_probs
-    except ImportError:
+    except ImportError as e:
+        log.warning("Lambda reprezentacji niedostepna (%s) — mecze kadr jada"
+                    " na modelu bazowym, ktory NIE MA ich historii", e)
         return
 
     season = _current_season()
@@ -186,8 +188,10 @@ def _wzbogac_forme_top(wyniki: list, top_n: int = 6) -> None:
                 w["sofa_kontuzje_g"] = ", ".join(inj_g)
             if inj_a:
                 w["sofa_kontuzje_a"] = ", ".join(inj_a)
-        except (AttributeError, TypeError, KeyError):
-            pass
+        except (AttributeError, TypeError, KeyError) as e:
+            log.warning("Dane SofaScore dla %s-%s w nieoczekiwanym ksztalcie"
+                        " (%s: %s) — mecz idzie bez formy i kontuzji",
+                        w.get("gosp"), w.get("gosc"), type(e).__name__, e)
 
 
 def _wzbogac_o_betbuilder(wyniki: list, pobierz_superbet: bool = False) -> None:
@@ -203,8 +207,9 @@ def _wzbogac_o_betbuilder(wyniki: list, pobierz_superbet: bool = False) -> None:
     try:
         from footstats.core.bet_builder import estimate_lambdas_from_probs, get_all_market_suggestions
         from footstats.betbuilder import fmt_bb_sugestie
-    except ImportError:
-        pass
+    except ImportError as e:
+        log.warning("BetBuilder niedostepny (%s) — brak sugestii rynkowych"
+                    " w kontekscie dla Groqa w CALYM przebiegu", e)
     else:
         console.print("[dim]BetBuilder: Estymacja macierzy Poissona...[/dim]")
         for w in wyniki:
@@ -587,7 +592,9 @@ def _oblicz_roznica_modeli(wyniki: list) -> None:
     try:
         from scipy.stats import poisson as _sps
         from footstats.core.ensemble import ensemble_probs, get_roznica
-    except ImportError:
+    except ImportError as e:
+        log.warning("Ensemble niedostepny (%s) — `roznica_modeli` zostaje PUSTE"
+                    " na wszystkich kandydatach, selekcja traci ten sygnal", e)
         return
 
     for k in wyniki:
@@ -808,6 +815,10 @@ def _zapisz_next_final_txt(wyniki: list, katalog: Path | None = None) -> None:
                             czasy.append(t)
                         break
                     except ValueError:
+                        # CISZA CELOWA: to petla PROBUJACA formaty po kolei.
+                        # Nietrafiony format to stan normalny, nie awaria — log
+                        # lecialby przy kazdym meczu i zabil sygnal w reszcie pliku.
+                        # Brak DOWOLNEGO dopasowania konczy sie fallbackiem 13:30 nizej.
                         continue
 
     if czasy:
