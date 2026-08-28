@@ -466,7 +466,28 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - **Skutek uboczny gorszy od samego błędu:** czerwień bez przerwy = brak sygnału. 24.08 dwa moje deploye padły i wyszło to dopiero przy ręcznym sprawdzeniu produkcji.
   - Strażnik `test_ci_wersja_pythona.py`: CI == obraz, CI == lock, oba obrazy równe.
   - ⚠️ **Zostaje do obserwacji:** job `secrets` (gitleaks) pada NIEregularnie — 2 z 12 ostatnich przebiegów, bez związku z treścią commita. Wygląda na flaki/limit po stronie akcji, nie na wyciek. Jeśli się powtórzy, dopiąć `GITHUB_TOKEN` do kroku i sprawdzić log.
-- [ ] **26.08 (kronikarz) — pełna suita niestabilna między przebiegami lokalnie.** Trzy pełne przebiegi (`DATABASE_URL="" pytest tests/`): **5130 zebranych, 11 skipped stabilnie**, ale `passed` waha się **5111–5119** z pojedynczym losowym `FAILED` w różnych testach niepowiązanych z sesją (`test_odpornosc_ataki.py::test_blokada_konta_po_serii_bledow_DZIALA`, `test_checkpoint.py::TestCheckpointRecovery::test_recovery_list_most_recent`) — oba zielone w izolacji. Wygląda na zanieczyszczenie stanu między testami (timing/limiter albo mtime plików), nie na regresję z tej sesji — testy R/D/S (`test_remisy_mierzone`, `test_ranking_rynkow`, `test_testy_przewagi`) nie zawiodły w żadnym przebiegu. Nie diagnozowane dalej (poza zakresem kronikarza).
+- [ ] **26.08 — niestabilna suita: NIE ODTWORZONA 28.08, a jedna z hipotez ODPADŁA.**
+  Cztery pełne przebiegi 28.08 (`DATABASE_URL="" pytest tests/`): **5306-5308 passed,
+  11 skipped, zero czerwonych**. Żaden z dwóch podejrzanych z 26.08
+  (`test_blokada_konta_po_serii_bledow_DZIALA`, `test_recovery_list_most_recent`)
+  nie zawiódł ani razu.
+  **Hipoteza „zanieczyszczenie kolejnością" ODPADA: `pytest-randomly` NIE JEST
+  ZAINSTALOWANY** — ani lokalnie, ani w `[dev]` w `pyproject.toml`, więc kolejność
+  testów jest deterministyczna (plik + kolejność definicji) i zawsze taka sama.
+  ⚠️ Przy okazji: `-p no:randomly`, którego używaliśmy „dla determinizmu", był przez
+  cały czas **no-opem**.
+  **Zostaje hipoteza RÓWNOLEGŁYCH PRZEBIEGÓW**, i ma poszlakę w kodzie: fikstura
+  `clean_checkpoint_dir` w `tests/test_checkpoint.py` została dodana dokładnie po to
+  („dwa równoległe przebiegi pytest, np. dwa agenty naraz, kasowały sobie tam
+  nawzajem pliki"). 26.08 kronikarz robił trzy przebiegi pod rząd — jeśli równolegle
+  chodził inny agent, to tłumaczy losowość bez żadnego błędu w logice.
+  **Residual, gdyby wróciło:** kilkanaście modułów trzyma katalogi cache jako stałe
+  *modułowe* względem CWD (`Path("cache/api_football")`, `cache/kursy`, `cache/sts`,
+  `cache/understat_xg`, `cache/superbet`, `cache/enriched`…). W przeciwieństwie do
+  `CHECKPOINT_DIR` **nie da się ich przekierować zmienną środowiskową**, bo są
+  wyliczane przy imporcie — dwa równoległe przebiegi dzielą te same pliki. To jest
+  właściwe miejsce na fix, gdyby flake wrócił. Nie ruszam tego bez powtórzenia
+  objawu: przepisywanie kilkunastu modułów pod niereprodukowalny błąd to zgadywanie.
 - [ ] **D7 — 21 kuponów z 14-15.08 jest nie do odzyskania** z darmowych źródeł
   (duńska, japońska, chińska liga + angielskie niższe — poza pokryciem football-data,
   poza oknem AF, poza 7 dniami FlashScore). Zejdą przez VOID 24-25.08. Do decyzji:
