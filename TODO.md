@@ -595,11 +595,19 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   Hipoteza: pora doby — o 21:40 okno 48h obejmuje mecze rozpoczęte, a ta sama funkcja
   o 09:05 dała 13 predykcji. **Do sprawdzenia przy przebiegu 05:30** — jeśli dalej 0,
   to osobny bug w progu `AGENT_KANDYDAT_PROG=0.55` albo w oknie czasowym.
-- [ ] **I6 — każdy push na `main` przebudowuje obraz jobów (~570 MB), też przy zmianie
-  wyłącznie dokumentacji.** Skutek uboczny I1: dziś commit czysto CI-owy (B9) odpalił
-  pełny build z chromium. Do rozważenia `paths-ignore` na `*.md` — ale ostrożnie:
-  filtr, który pominie zmianę w `src/`, przywraca dokładnie ten dryf między `main`
-  a obrazem, który I1 likwidował.
+- [x] **I6 — ZROBIONE 28.08.** `paths-ignore` w `cd-jobs.yml`: `**.md`, `docs/**`,
+  `tests/**`. Obawa z tego wpisu była słuszna, więc filtr NIE jest pilnowany czyimś
+  oglądem, tylko testem: `test_filtr_sciezek_nie_odcina_niczego_z_obrazu` bierze
+  pliki **śledzone przez git** spod ścieżek, które `Dockerfile.jobs` realnie kopiuje
+  (`src`, `scripts/run_job.sh`, `data/*.json`, parquet, `pyproject.toml`,
+  `requirements-jobs.lock`) i wymaga zera kolizji z listą ignorowanych. Dopisanie
+  `src/README.md` albo rozszerzenie filtra do `src/**` zapala się w CI, a nie na
+  produkcji za trzy dni. Dwie kontrole domykają: dokumentacja MUSI być ignorowana
+  (inaczej zmiana bez efektu), `src/`, `scripts/run_job.sh`, `Dockerfile.jobs`
+  i lockfile MUSZĄ nie być (inaczej filtr da się rozszerzyć do `**`).
+  ⚠️ Test od razu wyłapał realną kolizję — pierwsza wersja chodziła po dysku
+  i łapała tysiące `README.md` z `node_modules`. Zbiorem właściwym jest `git ls-files`:
+  tylko to, co może wejść w pusha.
 - [x] **J4 — ZROBIONE 24.08.** Bramka `--cov-fail-under` podniesiona 72 → **78**. Pomiar z logu CI (run 2a86f2309): **80,31%**, lokalnie 81%. Przy progu 72 dało się skasować 8 pp pokrycia bez czerwonego builda — bramka chroniła przed katastrofą, nie przed regresją. 78 zostawia ~2,3 pp na wahania między przebiegami. Najsłabsze moduły bez zmian, do osobnej roboty: `football_data.py` 21%, `flashscore_results.py` 42%, `utils/cache.py` 56%, `utils/db.py` 69%.
 - [ ] **J5 — 4 pliki > 800 linii:** `daily_agent.py` 1022, `superbet.py` 867, `coupons.py` 832, `analyzer.py` 814.
 

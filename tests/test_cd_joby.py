@@ -179,3 +179,133 @@ def test_cloudbuild_jobow_nie_twierdzi_ze_podmiana_jest_reczna():
         "cloudbuild_jobs.yaml nie wspomina o CD — czytelnik dalej myśli, ze podmiana "
         "obrazu jest wylacznie reczna"
     )
+
+
+# ── I6: filtr ścieżek nie może odciąć niczego, co ląduje w obrazie ──────────
+
+def _zrodla_z_dockerfile() -> list[str]:
+    """Ścieżki repo, które `Dockerfile.jobs` wnosi DO OBRAZU.
+
+    Pomija `COPY --from=...` — tamto ciągnie z innego obrazu, nie z repo.
+    """
+    plik = KORZEN / "Dockerfile.jobs"
+    if not plik.is_file():
+        pytest.skip("brak Dockerfile.jobs")
+    zrodla: list[str] = []
+    for linia in plik.read_text(encoding="utf-8").splitlines():
+        linia = linia.strip()
+        if not linia.upper().startswith(("COPY ", "ADD ")):
+            continue
+        czesci = [c for c in linia.split()[1:] if not c.startswith("--")]
+        # Ostatni argument to CEL w obrazie, reszta to źródła w repo.
+        zrodla.extend(czesci[:-1])
+    return zrodla
+
+
+def _wzorce_paths_ignore(tresc: str) -> list[str]:
+    """Wyciąga wpisy `paths-ignore` z sekcji `on:` workflowa."""
+    dopasowanie = re.search(r"paths-ignore:\s*\n((?:\s*-\s*.+\n)+)", tresc)
+    if not dopasowanie:
+        return []
+    return [
+        linia.strip().lstrip("-").strip().strip("'\"")
+        for linia in dopasowanie.group(1).splitlines()
+        if linia.strip()
+    ]
+
+
+def _pasuje(sciezka: str, wzorzec: str) -> bool:
+    """Uproszczona semantyka globów GitHuba, wystarczająca dla `paths-ignore`."""
+    sciezka = sciezka.replace("\\", "/")
+    if wzorzec.endswith("/**"):
+        return sciezka.startswith(wzorzec[:-3] + "/")
+    if wzorzec.startswith("**"):
+        return sciezka.endswith(wzorzec[2:])
+    return sciezka == wzorzec
+
+
+def _pliki_sledzone() -> list[str]:
+    """Pliki ŚLEDZONE PRZEZ GIT — dokładnie ten zbiór, który może się znaleźć
+    w pushu, a więc jedyny, na którym `paths-ignore` cokolwiek robi.
+
+    Chodzenie po dysku byłoby BŁĘDEM: `src/footstats/gui/node_modules` ma
+    tysiące plików `README.md`, których żaden push nie zmieni i których
+    `.dockerignore` i tak nie wpuszcza do obrazu.
+    """
+    import subprocess  # noqa: S404 — tylko `git ls-files`, bez danych z zewnatrz
+
+    try:
+        wynik = subprocess.run(  # noqa: S603
+            ["git", "ls-files"], cwd=KORZEN, capture_output=True,
+            text=True, timeout=30, check=True,
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        pytest.skip(f"git ls-files niedostepne: {e}")
+    return [w.strip().replace("\\", "/") for w in wynik.stdout.splitlines() if w.strip()]
+
+
+def _pliki_w_obrazie() -> list[str]:
+    """Śledzone pliki, które `Dockerfile.jobs` wnosi do obrazu."""
+    korzenie = [z.replace("\\", "/").rstrip("/") for z in _zrodla_z_dockerfile()]
+    return [
+        plik for plik in _pliki_sledzone()
+        if any(plik == k or plik.startswith(k + "/") for k in korzenie)
+    ]
+
+
+def test_filtr_sciezek_nie_odcina_niczego_z_obrazu():
+    """SEDNO I6 i jedyny powód, dla którego filtr wolno tu mieć.
+
+    `paths-ignore` oszczędza kilkanaście minut builda z chromium przy commicie
+    czysto dokumentacyjnym. Ale filtr, który pominie zmianę lądującą w obrazie,
+    przywraca DOKŁADNIE ten dryf między `main` a produkcyjnym obrazem, który
+    likwidowało I1 — a tamten dryf trzymał pipeline trzy dni na uszkodzonym
+    obrazie i nikt tego nie zauważył, bo joby kończyły się `exit=0`.
+
+    Test nie ufa czytaniu wzorców ze zrozumieniem: bierze REALNE pliki, które
+    `Dockerfile.jobs` kopiuje, i sprawdza, że żaden nie pasuje do żadnego
+    wzorca ignorowanego. Dopisanie `src/README.md` zapali się tutaj, a nie na
+    produkcji za trzy dni.
+    """
+    _, tresc = _workflow_jobow()
+    wzorce = _wzorce_paths_ignore(tresc)
+    if not wzorce:
+        pytest.skip("workflow jobow nie ma paths-ignore — nie ma czego pilnowac")
+
+    kolizje = [
+        (plik, wzorzec)
+        for plik in _pliki_w_obrazie()
+        for wzorzec in wzorce
+        if _pasuje(plik, wzorzec)
+    ]
+    assert not kolizje, (
+        "paths-ignore odcina pliki, ktore Dockerfile.jobs wnosi do obrazu — "
+        f"push z taka zmiana NIE przebuduje obrazu, a `main` juz sie rozjedzie: {kolizje[:5]}"
+    )
+
+
+def test_zmiana_samej_dokumentacji_nie_buduje_obrazu():
+    """Kontrola pozytywna: gdyby filtr nie obejmował dokumentacji, cały I6
+    byłby bez efektu — a to jest jedyny powód tej zmiany."""
+    _, tresc = _workflow_jobow()
+    wzorce = _wzorce_paths_ignore(tresc)
+
+    assert any(_pasuje("TODO.md", w) for w in wzorce), (
+        "zmiana w TODO.md dalej przebudowuje obraz z chromium (~570 MB)"
+    )
+    assert any(_pasuje("docs/cloud_migration.md", w) for w in wzorce), (
+        "zmiana w docs/ dalej przebudowuje obraz jobow"
+    )
+
+
+def test_zmiana_w_src_dalej_buduje_obraz():
+    """Kontrola NEGATYWNA — bez niej „filtr" da się rozszerzyć do `**` i test
+    wyżej dalej będzie zielony, bo kolizji nie ma tam, gdzie nie ma builda."""
+    _, tresc = _workflow_jobow()
+    wzorce = _wzorce_paths_ignore(tresc)
+
+    for krytyczny in ("src/footstats/daily_agent.py", "scripts/run_job.sh",
+                      "Dockerfile.jobs", "requirements-jobs.lock"):
+        assert not any(_pasuje(krytyczny, w) for w in wzorce), (
+            f"{krytyczny} jest ignorowany — obraz przestanie nadazac za `main`"
+        )
