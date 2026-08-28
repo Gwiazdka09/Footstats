@@ -165,7 +165,13 @@ BASELINE: dict[str, int] = {
     "core/response_cache.py": 2,
     "core/system_paper.py": 2,
     "core/weekly_picks.py": 5,
-    "daily_agent.py": 8,
+    # 28.08: 8 -> 0. Cztery to byly SCIEZKI ALARMOWE (`send_alert`,
+    # `send_stop_loss_alert`, `check_and_alert_accuracy`) — nieudana wysylka
+    # alarmu byla cicha, czyli stop-loss mogl zadzialac bez powiadomienia.
+    # Wyciagniete do `daily_agent._wyslij_alarm`. Pozostale cztery gubily
+    # arbitraz kursow, prefetch xG (per liga i caly podsystem) oraz korekte
+    # sedziowska. Testy: `tests/test_alarmy_nie_milcza.py`.
+    "daily_agent.py": 0,
     "dashboard.py": 4,
     "data/context_scraper.py": 1,
     "data/historical_loader.py": 3,
