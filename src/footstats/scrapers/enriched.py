@@ -22,6 +22,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 
 import requests
 
@@ -38,7 +39,7 @@ BZZOIRO_KEY      = os.getenv("BZZOIRO_KEY", "").strip()
 
 TIMEOUT_S   = 8
 CACHE_TTL_H = 2
-CACHE_DIR   = Path("cache/enriched")
+CACHE_DIR   = katalog_cache("enriched")
 PRESS_CHARS = 600
 
 # Drużyny grające na sztucznej murawie

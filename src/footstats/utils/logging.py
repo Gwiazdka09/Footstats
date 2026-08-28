@@ -29,6 +29,7 @@ import logging
 import logging.handlers
 import sys
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 from datetime import datetime
 
 # Re-export: symbole wydzielone do osobnych modułów (dekompozycja grab-bag).
@@ -279,9 +280,7 @@ def bezpieczny_budget_use(endpoint: str,
     Wersja af_budget_use z pelnym logowaniem stanow budzetu.
     Rzuca BladBudzetu zamiast RuntimeError (latwiej lapac).
     """
-    from pathlib import Path
-
-    cache_dir  = Path("cache/api_football")
+    cache_dir  = katalog_cache("api_football")
     budget_file = cache_dir / "af_budget.json"
 
     # Zaladuj budzet z dysku
@@ -412,7 +411,7 @@ def raport_diagnostyczny() -> dict:
         }
 
     # ── Cache ──────────────────────────────────────────────────────
-    cache_dir = Path("cache/api_football")
+    cache_dir = katalog_cache("api_football")
     raport["cache"]["katalog_istnieje"] = cache_dir.exists()
     if cache_dir.exists():
         pliki = list(cache_dir.glob("*.json"))

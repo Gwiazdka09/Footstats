@@ -16,6 +16,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 
 import requests
 
@@ -46,7 +47,11 @@ KODY_LIG: dict[str, str] = {
 }
 
 BASE_URL = "https://www.football-data.co.uk/mmz4281"
-CACHE_DIR = Path(__file__).parent.parent.parent.parent.parent / "cache" / "footballdata"
+CACHE_DIR = katalog_cache(
+    "footballdata",
+    domyslny=Path(__file__).parent.parent.parent.parent.parent
+    / "cache" / "footballdata",
+)
 CACHE_TTL_SEKUNDY = 6 * 3600  # 6h — sezon w toku dochodzi, nie cache'ować na długo
 
 

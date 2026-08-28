@@ -1,7 +1,7 @@
 import json
 import time
 from datetime import datetime
-from pathlib import Path
+from footstats.utils.paths import katalog_cache
 from footstats.config import CACHE_TTL_MIN
 from footstats.utils.console import console
 
@@ -27,7 +27,7 @@ from footstats.utils.console import console
 _RAM_CACHE: dict = {}   # football-data.org + bzzoiro (in-memory)
 MAX_RAM_ENTRIES = 200
 
-CACHE_DIR     = Path("cache/api_football")
+CACHE_DIR     = katalog_cache("api_football")
 AF_CACHE_FILE = CACHE_DIR / "af_cache.json"      # dane API-Football
 AF_BUDGET_FILE= CACHE_DIR / "af_budget.json"      # licznik dzienny
 

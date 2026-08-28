@@ -1,8 +1,30 @@
 """Fixtures wspólne dla wszystkich testów FootStats."""
+import atexit
 import os
+import shutil
+import tempfile
 import pandas as pd
 import pytest
 from datetime import datetime, timedelta
+from pathlib import Path
+
+# ── Katalog cache WŁASNY DLA TEGO PROCESU ────────────────────────────────────
+#
+# Do 28.08 każdy moduł liczył swój katalog cache sam, przy imporcie, jako stałą
+# modułową (`Path("cache/kursy")` i 17 podobnych). Wartość powstawała, zanim
+# cokolwiek zdążyło ją nadpisać, więc DWA RÓWNOLEGŁE PRZEBIEGI pytest — np. dwa
+# agenty naraz — pisały i kasowały te same pliki. Nie jest to teoria: dokładnie
+# ten objaw złapała 26.08 fikstura `clean_checkpoint_dir` w test_checkpoint.py,
+# tyle że `CHECKPOINT_DIR` dało się przekierować, bo czyta env przy wywołaniu.
+# Tutaj domykamy pozostałe 17 katalogów tym samym sposobem.
+#
+# MUSI stać PRZED pierwszym importem `footstats.*` — stałe modułowe czytają tę
+# zmienną w momencie importu. Pilnuje tego `tests/test_izolacja_cache.py`.
+_KORZEN_CACHE = os.environ.setdefault(
+    "FOOTSTATS_CACHE_ROOT",
+    str(Path(tempfile.gettempdir()) / f"footstats-cache-pid{os.getpid()}"),
+)
+atexit.register(shutil.rmtree, _KORZEN_CACHE, ignore_errors=True)
 
 # ── Testowe dane logowania — USTAWIANE TU, NIE W POSZCZEGÓLNYCH PLIKACH ───────
 #

@@ -26,6 +26,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 
 try:
     from playwright.sync_api import sync_playwright, Error as PWError, TimeoutError as PWTimeout
@@ -47,7 +48,7 @@ from footstats.scrapers.superbet_parsing import _parsuj_json_api, _parsuj_zdarze
 
 SUPERBET_URL = "https://www.superbet.pl"
 SOCIAL_URL   = f"{SUPERBET_URL}/social"
-CACHE_DIR    = Path("cache/superbet")
+CACHE_DIR    = katalog_cache("superbet")
 
 
 # ── Helpers (popup/cache delegated to base_playwright) ────────────────

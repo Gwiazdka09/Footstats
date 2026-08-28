@@ -16,9 +16,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
+from footstats.utils.paths import katalog_cache
+
 logger = logging.getLogger(__name__)
 
-_DEFAULT_CHECKPOINT_DIR = "cache/checkpoints"
+# Domyslnie pod wspolnym korzeniem cache (`utils.paths`), zeby jedna zmienna
+# izolowala CALY cache procesu. `CHECKPOINT_DIR` dalej wygrywa — na nim opiera sie
+# fikstura `clean_checkpoint_dir` w tests/test_checkpoint.py.
+_NAZWA_KATALOGU = "checkpoints"
 
 
 def _checkpoint_dir() -> Path:
@@ -28,7 +33,7 @@ def _checkpoint_dir() -> Path:
     podmienić katalog na `tmp_path` (izolacja równoległych przebiegów pytest) bez
     zmiany domyślnej ścieżki produkcyjnej.
     """
-    return Path(os.getenv("CHECKPOINT_DIR", _DEFAULT_CHECKPOINT_DIR))
+    return Path(os.getenv("CHECKPOINT_DIR") or katalog_cache(_NAZWA_KATALOGU))
 
 
 def _ensure_checkpoint_dir() -> Path:

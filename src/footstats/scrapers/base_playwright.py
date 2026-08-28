@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 from typing import Any, Callable, Generator, TypeVar
 
 from footstats.core.circuit_breaker import CircuitBreaker
@@ -169,7 +170,7 @@ class SiteConfig:
 STS_CONFIG = SiteConfig(
     name="STS",
     url="https://www.sts.pl",
-    cache_dir=Path("cache/sts"),
+    cache_dir=katalog_cache("sts"),
     login_env="STS_LOGIN",
     password_env="STS_HASLO",
 )
@@ -177,7 +178,7 @@ STS_CONFIG = SiteConfig(
 SUPERBET_CONFIG = SiteConfig(
     name="Superbet",
     url="https://www.superbet.pl",
-    cache_dir=Path("cache/superbet"),
+    cache_dir=katalog_cache("superbet"),
     login_env="SUPERBET_LOGIN",
     password_env="SUPERBET_PASSWORD",
     popup_selectors=(

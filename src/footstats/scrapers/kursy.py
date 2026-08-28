@@ -16,6 +16,7 @@ import sys
 import time
 import re
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 from datetime import datetime
 
 # Playwright musi być zainstalowany: pip install playwright && playwright install chromium
@@ -47,7 +48,7 @@ LIGI_BETEXPLORER = {
     "champions-league":"https://www.betexplorer.com/football/europe/champions-league/results/",
 }
 
-CACHE_DIR = Path("cache/kursy")
+CACHE_DIR = katalog_cache("kursy")
 
 
 def _zapisz_cache(liga: str, dane: list) -> Path:

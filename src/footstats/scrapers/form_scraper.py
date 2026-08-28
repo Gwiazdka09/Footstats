@@ -22,6 +22,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 from datetime import datetime
 from typing import Optional
 from urllib.parse import quote
@@ -34,7 +35,7 @@ except ImportError:
     logger.info("[FormScraper] UWAGA: playwright niedostępny, zainstaluj: pip install playwright && playwright install chromium")
 
 SOFA_BASE = "https://api.sofascore.com/api/v1"
-CACHE_DIR = Path("cache/form")
+CACHE_DIR = katalog_cache("form")
 CACHE_TTL_HOURS = 6
 
 _UA = (

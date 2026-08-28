@@ -8,6 +8,7 @@ import logging
 import requests
 from datetime import datetime, timedelta
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 try:
     from bs4 import BeautifulSoup
     _BS4_OK = True
@@ -24,7 +25,14 @@ log = logging.getLogger(__name__)
 
 # Konfiguracja
 FLASHSCORE_MOBI_URL = "https://www.flashscore.mobi"
-CACHE_DIR = Path(__file__).parent.parent.parent / "cache" / "flashscore"
+# UWAGA: `parent.parent.parent` z `scrapers/` to `src/`, wiec domyslnie ten
+# cache siedzi w `src/cache/flashscore`, a nie w `cache/` repo jak reszta.
+# Nie przenosze tego przy okazji izolacji testow — zmiana kotwicy przesuwa
+# produkcyjny cache i jest osobna decyzja.
+CACHE_DIR = katalog_cache(
+    "flashscore",
+    domyslny=Path(__file__).parent.parent.parent / "cache" / "flashscore",
+)
 
 _similar = team_similarity
 
