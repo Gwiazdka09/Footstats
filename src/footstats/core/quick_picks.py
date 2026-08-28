@@ -182,8 +182,18 @@ def szybkie_pewniaczki_2dni(
             h2h_sys      = AnalizaH2H(df_mecze)
             heur_sys     = HeurystaZmeczeniaRotacji(df_mecze)
             klas_sys     = KlasyfikatorMeczu(df_mecze)
-        except (ImportError, AttributeError):
-            pass
+        except (ImportError, AttributeError, KeyError, ValueError) as e:
+            # Awaria TUTAJ zeruje `factors` na KAZDEJ predykcji calego przebiegu
+            # (te cztery systemy sa jedynym zrodlem tagow PATENT/ZEMSTA/TWIERDZA),
+            # a puste `factors` sa nie do odroznienia od stanu normalnego — mecz
+            # spoza naszej historii daje dokladnie to samo. Zmierzone 28.08:
+            # 246 z 255 predykcji ma `factors='[]'`, wiec cichy blad schowalby sie
+            # tu idealnie. `KeyError` w tuplu, bo systemy czytaja kolumny po
+            # nazwie (`gospodarz`/`goscie`) i przy nieprzeadaptowanym schemacie
+            # wysypuja sie wlasnie nim.
+            log.warning("Systemy lambda (fortress/h2h/heurystyki) nie wstaly"
+                        " (%s: %s) — `factors` beda puste w CALYM przebiegu",
+                        type(e).__name__, e)
 
     console.print(f"[dim]   Pobrano {len(lista_ml)} wydarzen.[/dim]")
 

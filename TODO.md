@@ -330,6 +330,20 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
 
   **Decyzja do podjęcia, nie do zaimplementowania od ręki:** albo zawęzić selekcję do lig, które model zna (mniej kuponów, ale liczonych naszym modelem), albo rozszerzyć dataset o ligi spoza Europy, albo świadomie przyjąć, że większość kuponów liczy Bzzoiro-ML i przestać nazywać to „naszym modelem". Wiąże się z Celem B.
 
+  **POMIAR 28.08 — ta sama luka widziana od strony `factors`, i ostrzejszy.** Pytanie brzmiało „dlaczego `predictions.factors` są puste". Odpowiedź: **nie są** — 9 z 255 wierszy ma wartość (5× `TWIERDZA`, 4× `ZEMSTA`), więc łańcuch RAG z P3/C działa. Puste są dlatego, że **nie mamy historii drużyn, na które typujemy**:
+
+  | pokrycie pary w parquecie (244 pliki, 1062 drużyny) | n | puste `factors` |
+  |---|---|---|
+  | obie drużyny znane | 35 | 26 (74%) |
+  | jedna znana | 57 | 57 (**100%**) |
+  | **obie nieznane** | **163** | 163 (**100%**) |
+
+  **64% predykcji dotyczy par, których obu drużyn nie ma w historii ani razu.** Największe ligi w `predictions`: World Cup 2026 (46), Brasileirão Serie B (44), Botola Pro (38), International Friendly (29), USL Championship (15). Żadnej z top-5 europejskich. Kontrola na realnej historii Premier League (n=400, ten sam kod `wyciagnij_faktory`): **31% meczów dostaje niepusty `factors`** (TWIERDZA 20%, ZEMSTA 6,8%, PATENT 5,2%) — czyli dokładnie tyle, ile widzimy w kubełku „obie znane" (26%). Kod robi swoje wszędzie tam, gdzie ma z czego.
+
+  **Dwa tagi są martwe STRUKTURALNIE, nie przez przypadek:** `ROTACJA` i `ZMĘCZENIE` zapaliły się 0 razy na 400 meczach. `ROTACJA` wymaga kolumny `competition` (`fatigue.py:79`), której dataset football-data nie ma; `ZMĘCZENIE` wymaga poprzedniego meczu w oknie godzinowym, a terminarze ligowe go nie dają. Statusy `ImportanceIndex` są puste świadomie (`quick_picks.py:377`, TODO A1). Realnie mamy **3 tagi z 5**, i tylko na meczach z historii.
+
+  **Konsekwencja dla decyzji wyżej:** „rozszerzyć dataset" i „zawęzić selekcję" to nie są równoważne opcje kosmetycznie — bez jednego z nich RAG uczy się z 3,5% predykcji, a nie z 31%.
+
 - [ ] **A4 — 1 martwy wiersz z 23.08 został w bazie** (`2 (wygrana gościa)`, nie rozliczy
   się nigdy) plus 3 wiersze z `odds_verified=0`. Nowe już nie powstaną, ale te
   istnieją. Do decyzji: zostawić jako ślad, czy posprzątać (operacja na prod DB).

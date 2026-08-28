@@ -141,7 +141,7 @@ BASELINE: dict[str, int] = {
     # 10 -> 8 (2026-08-25). Naprawione: brak danych historycznych (Poisson padal
     # dla CALEGO przebiegu w ciszy) i handler blendu, ktory ukrywal, ze 90% stawki
     # liczy fallback Bzzoiro-ML. Plik nie mial wczesniej nawet loggera.
-    "core/quick_picks.py": 8,
+    "core/quick_picks.py": 7,
     "core/response_cache.py": 2,
     "core/system_paper.py": 2,
     "core/weekly_picks.py": 5,
