@@ -1,3 +1,5 @@
+import logging
+
 import requests
 import pandas as pd
 from datetime import datetime
@@ -15,6 +17,8 @@ from footstats.utils.normalize import (
     normalize_team_name,
     team_similarity,
 )
+
+log = logging.getLogger(__name__)
 
 # ================================================================
 #  MODUL 4b – API-FOOTBALL (api-sports.io) v2.7
@@ -165,8 +169,13 @@ class APIFootball:
         try:
             pozostalo = bezpieczny_budget_use(endpoint)
         except BladBudzetu:
-            # Budzet zablokowany – sprobuj wygasle dane
+            # Budzet zablokowany – sprobuj wygasle dane.
+            # Wolajacy NIE MA jak odroznic swiezej odpowiedzi od wygaslej kopii,
+            # wiec bez tego logu potok jedzie na starych danych i wyglada zdrowo.
             stare = _af_load_disk_cache().get(cache_key, {}).get("data")
+            log.warning("Budzet API-Football wyczerpany dla %s — oddaje %s",
+                        endpoint,
+                        "WYGASLE dane z cache" if stare else "None (brak cache)")
             return stare
 
         try:
@@ -310,7 +319,13 @@ class APIFootball:
             return None
         try:
             tabela = dane["response"][0]["league"]["standings"][0]
-        except (IndexError, KeyError):
+        except (IndexError, KeyError) as e:
+            # Tak wyglada m.in. ZAWIESZONE konto: HTTP 200, pusta `response`.
+            # 01.08 konto bylo suspended i potok cicho stracil tabele, sklady
+            # i sedziego (patrz `project_apifootball_zawieszone`).
+            log.warning("Odpowiedz /standings dla ligi %s sezon %s nie ma tabeli"
+                        " (%s: %s) — liga zostaje BEZ tabeli",
+                        api_id, sezon, type(e).__name__, e)
             return None
         wiersze = []
         for w in tabela:
@@ -368,6 +383,8 @@ class APIFootball:
                 if diff_h < 0 or diff_h > godziny:
                     continue
             except ValueError:
+                log.warning("Mecz %s ma date %r nie do sparsowania — wypada z puli"
+                            " kandydatow", m.get("fixture", {}).get("id"), date_str)
                 continue
 
             fix_id   = m.get("fixture", {}).get("id")
@@ -387,11 +404,30 @@ class APIFootball:
                     p = pred_list[0]
                     pct = p.get("predictions", {}).get("percent", {})
                     try:
-                        pw  = float((pct.get("home", "50%") or "50%").replace("%", ""))
-                        pr  = float((pct.get("draw", "25%") or "25%").replace("%", ""))
-                        pp  = float((pct.get("away", "25%") or "25%").replace("%", ""))
-                    except (ValueError, TypeError):
-                        pass
+                        # WSZYSTKIE TRZY albo zadna. `pct.get(k, "50%") or "50%"`
+                        # podstawialo domyslna wartosc PER POLE, wiec brak samego
+                        # `away` dawal realne 60/20 obok domyslnego 25 — suma 105%.
+                        brakujace = [k for k in ("home", "draw", "away")
+                                     if not str(pct.get(k) or "").strip()]
+                        if brakujace:
+                            raise ValueError(f"brak pol: {brakujace}")
+                        _pw = float(str(pct["home"]).replace("%", ""))
+                        _pr = float(str(pct["draw"]).replace("%", ""))
+                        _pp = float(str(pct["away"]).replace("%", ""))
+                    except (ValueError, TypeError, KeyError) as e:
+                        # WSZYSTKO ALBO NIC. Wczesniej przypisanie szlo wprost do
+                        # pw/pr/pp, wiec blad na `draw` zostawial REALNE `pw` obok
+                        # DOMYSLNYCH pr/pp (50/50) — mieszanka szla prosto do progu
+                        # selekcji `max_p` i sumowala sie nawet do 150%.
+                        # 50/50/50 to wartosci z resetu na poczatku iteracji,
+                        # NIE "25%" z dawnych `pct.get(k, "25%")` — tamte nigdy
+                        # nie byly osiagalne jako komplet.
+                        log.warning("Predykcje API-Football dla meczu %s nie do"
+                                    " odczytania (%s: %s) — zostaja wartosci"
+                                    " domyslne 50/50/50, czyli BRAK sygnalu",
+                                    fix_id, type(e).__name__, e)
+                    else:
+                        pw, pr, pp = _pw, _pr, _pp
 
                     # Kursy z predykcji API: brak w /predictions – zostawiamy puste
 
@@ -526,10 +562,12 @@ class APIFootball:
 def _parse_odd(raw: str | float | None) -> float | None:
     """Konwertuje surowy kurs decimal z API-Football (string) na float. None gdy niepoprawny."""
     if raw is None:
-        return None
+        return None            # brak kursu to stan normalny, nie awaria
     try:
         return float(raw)
     except (ValueError, TypeError):
+        # Wartosc JEST, tylko nie jest liczba — to juz nie jest brak danych.
+        log.warning("Kurs %r z API-Football nie jest liczba — traktuje jak brak", raw)
         return None
 
 
