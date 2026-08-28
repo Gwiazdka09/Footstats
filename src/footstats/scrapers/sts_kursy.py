@@ -26,6 +26,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 
 from dotenv import load_dotenv
 
@@ -52,7 +53,7 @@ from footstats.utils.normalize import _strip_diacritics
 
 STS_URL   = "https://www.sts.pl"
 ODDS_URL  = f"{STS_URL}/zaklady-bukmacherskie/pilka-nozna/1"
-CACHE_DIR = Path("cache/sts_kursy")
+CACHE_DIR = katalog_cache("sts_kursy")
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

@@ -4,10 +4,13 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
+from footstats.utils.paths import korzen_cache
 
 _log = logging.getLogger(__name__)
 
-_CACHE_DIR = Path(__file__).parent.parent.parent.parent / "cache"
+_CACHE_DIR = korzen_cache(
+    domyslny=Path(__file__).parent.parent.parent.parent / "cache",
+)
 
 
 def evict_old_cache(max_days: int = 30, dry_run: bool = False) -> int:

@@ -466,28 +466,42 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   - **Skutek uboczny gorszy od samego błędu:** czerwień bez przerwy = brak sygnału. 24.08 dwa moje deploye padły i wyszło to dopiero przy ręcznym sprawdzeniu produkcji.
   - Strażnik `test_ci_wersja_pythona.py`: CI == obraz, CI == lock, oba obrazy równe.
   - ⚠️ **Zostaje do obserwacji:** job `secrets` (gitleaks) pada NIEregularnie — 2 z 12 ostatnich przebiegów, bez związku z treścią commita. Wygląda na flaki/limit po stronie akcji, nie na wyciek. Jeśli się powtórzy, dopiąć `GITHUB_TOKEN` do kroku i sprawdzić log.
-- [ ] **26.08 — niestabilna suita: NIE ODTWORZONA 28.08, a jedna z hipotez ODPADŁA.**
-  Cztery pełne przebiegi 28.08 (`DATABASE_URL="" pytest tests/`): **5306-5308 passed,
-  11 skipped, zero czerwonych**. Żaden z dwóch podejrzanych z 26.08
-  (`test_blokada_konta_po_serii_bledow_DZIALA`, `test_recovery_list_most_recent`)
-  nie zawiódł ani razu.
-  **Hipoteza „zanieczyszczenie kolejnością" ODPADA: `pytest-randomly` NIE JEST
-  ZAINSTALOWANY** — ani lokalnie, ani w `[dev]` w `pyproject.toml`, więc kolejność
-  testów jest deterministyczna (plik + kolejność definicji) i zawsze taka sama.
-  ⚠️ Przy okazji: `-p no:randomly`, którego używaliśmy „dla determinizmu", był przez
-  cały czas **no-opem**.
-  **Zostaje hipoteza RÓWNOLEGŁYCH PRZEBIEGÓW**, i ma poszlakę w kodzie: fikstura
-  `clean_checkpoint_dir` w `tests/test_checkpoint.py` została dodana dokładnie po to
-  („dwa równoległe przebiegi pytest, np. dwa agenty naraz, kasowały sobie tam
-  nawzajem pliki"). 26.08 kronikarz robił trzy przebiegi pod rząd — jeśli równolegle
-  chodził inny agent, to tłumaczy losowość bez żadnego błędu w logice.
-  **Residual, gdyby wróciło:** kilkanaście modułów trzyma katalogi cache jako stałe
-  *modułowe* względem CWD (`Path("cache/api_football")`, `cache/kursy`, `cache/sts`,
-  `cache/understat_xg`, `cache/superbet`, `cache/enriched`…). W przeciwieństwie do
-  `CHECKPOINT_DIR` **nie da się ich przekierować zmienną środowiskową**, bo są
-  wyliczane przy imporcie — dwa równoległe przebiegi dzielą te same pliki. To jest
-  właściwe miejsce na fix, gdyby flake wrócił. Nie ruszam tego bez powtórzenia
-  objawu: przepisywanie kilkunastu modułów pod niereprodukowalny błąd to zgadywanie.
+- [x] **26.08 — niestabilna suita: ODTWORZONA, ZDIAGNOZOWANA I NAPRAWIONA 28.08.**
+  Dwa pełne przebiegi pytest naraz na wspólnym stanie: **4 czerwone i 2 czerwone,
+  za każdym razem INNE testy**. Te same przebiegi izolowane: 0 i 0. Po fiksie ta
+  sama konfiguracja daje **5342/5342 dwa razy**. Żaden z winowajców nie był
+  „flaky testem" — oba to realne współdzielenie stanu:
+  1. `tests/test_next_final_parse.py` pisał do **prawdziwego** `data/next_final.txt`
+     w repo i przywracał backup w `finally`. Jeden proces przywracał, gdy drugi
+     czytał. `_zapisz_next_final_txt` przyjmuje teraz opcjonalny `katalog` (tylko
+     dla testów), testy piszą do `tmp_path`, a osobny test broni domyślnej ścieżki
+     produkcyjnej — żeby udogodnienie testowe jej nie przesunęło.
+  2. `test_python_syntax_valid` wołał `subprocess python -m py_compile` na każdym
+     pliku, a `py_compile` **zapisuje bajtkod** do wspólnego `__pycache__`. Objawem
+     był `UnicodeDecodeError` (komunikat Pythona przychodzi w cp1250, nie UTF-8),
+     więc wyglądało to na uszkodzone źródło przy zdrowym źródle. `compile()`
+     w procesie sprawdza to samo, nic nie zapisuje i zdejmuje **ponad 170 procesów**
+     z jednego testu.
+  **Prewencja na trzecią klasę tego samego błędu:** 18 katalogów cache było stałymi
+  MODULOWYMI (`Path("cache/kursy")` itd.), więc żadna zmienna środowiskowa nie mogła
+  ich przekierować. `utils/paths.py` + `FOOTSTATS_CACHE_ROOT`, conftest daje każdemu
+  procesowi własny korzeń. Domyślne ścieżki bez zmian (produkcja tej zmiennej nie
+  ustawia), `CHECKPOINT_DIR` dalej wygrywa. Pilnuje `tests/test_izolacja_cache.py`
+  (25 testów) + ratchet na nowe `Path("cache/...")` z palca.
+  **Dwaj podejrzani z 26.08 — oba przypadki wyjaśnione, żaden nie był losowy:**
+  `test_recovery_list_most_recent` padał, ZANIM powstała fikstura `clean_checkpoint_dir`
+  (`845fac1b9`, 26.08 21:39) — naprawione tego samego dnia.
+  `test_blokada_konta_po_serii_bledow_DZIALA` czyta źródło `auth.py` przez
+  `inspect.getsource`, a `auth.py` był edytowany 26.08 **20:49** (`911069486`, +33
+  linie) — suita czytała drzewo w trakcie edycji. Stąd reguła: **nie edytować drzewa,
+  gdy leci suita** (ta sama, co przy pętlach mutacyjnych).
+  ⚠️ `-p no:randomly`, którego używaliśmy „dla determinizmu", jest **no-opem** —
+  `pytest-randomly` nie jest zainstalowany, kolejność testów i tak jest deterministyczna.
+  ⚠️ Zostaje drobiazg poza zakresem: `flashscore_results.CACHE_DIR` domyślnie celuje
+  w `src/cache/flashscore` (kotwica `parent.parent.parent` z `scrapers/` to `src/`),
+  a nie w `cache/` repo jak reszta. Nie ruszam przy okazji — przeniesienie przesuwa
+  produkcyjny cache i jest osobną decyzją.
+
 - [ ] **D7 — 21 kuponów z 14-15.08 jest nie do odzyskania** z darmowych źródeł
   (duńska, japońska, chińska liga + angielskie niższe — poza pokryciem football-data,
   poza oknem AF, poza 7 dniami FlashScore). Zejdą przez VOID 24-25.08. Do decyzji:

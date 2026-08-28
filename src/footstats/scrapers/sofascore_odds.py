@@ -18,6 +18,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 from typing import Optional
 
 from footstats.scrapers.form_scraper import (
@@ -34,7 +35,7 @@ from footstats.utils.normalize import (
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = Path("cache/sofa_odds")
+CACHE_DIR = katalog_cache("sofa_odds")
 CACHE_TTL_HOURS = 2
 
 # Mapowanie nazw rynków SofaScore -> nazw wewnetrznych (jak w system_paper._ODDS_KEY)

@@ -17,12 +17,13 @@ import re
 import time
 from datetime import datetime
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 
 import requests
 
 _log = logging.getLogger(__name__)
 
-_CACHE_DIR = Path("cache/understat_xg")
+_CACHE_DIR = katalog_cache("understat_xg")
 _CACHE_TTL_H = 6
 _SESSION = requests.Session()
 _SESSION.headers.update({

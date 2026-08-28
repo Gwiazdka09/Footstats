@@ -20,6 +20,7 @@ import re
 import time
 from datetime import datetime
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 
 import requests
 
@@ -28,7 +29,11 @@ from footstats.scrapers.sources.base import MatchData
 log = logging.getLogger(__name__)
 
 FLASHSCORE_MOBI_URL = "https://www.flashscore.mobi"
-CACHE_DIR = Path(__file__).parent.parent.parent.parent.parent / "cache" / "flashscore_source"
+CACHE_DIR = katalog_cache(
+    "flashscore_source",
+    domyslny=Path(__file__).parent.parent.parent.parent.parent
+    / "cache" / "flashscore_source",
+)
 CACHE_TTL_SEKUNDY = 6 * 3600  # 6h — wyniki dnia mogą jeszcze dochodzić (mecze trwające)
 ZASIEG_DNI_MOBI = 7  # flashscore.mobi obsługuje ~7 dni wstecz/przód
 

@@ -8,6 +8,7 @@ redukcji god-module daily_agent.py (dług techniczny #3), behavior-preserving.
 
 import logging
 import os
+from pathlib import Path
 
 from rich.console import Console
 
@@ -769,16 +770,22 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
     console.print(f"[cyan]Final enrichment: {enriched}/{len(wyniki)} kandydatów wzbogacono[/cyan]")
 
 
-def _zapisz_next_final_txt(wyniki: list) -> None:
+def _zapisz_next_final_txt(wyniki: list, katalog: Path | None = None) -> None:
     """
     Zapisuje czas uruchomienia fazy final (pierwszy mecz − 70 min) do data/next_final.txt.
     Fallback: 13:30 gdy brak danych o godzinie meczu.
+
+    `katalog` istnieje wyłącznie dla testów. Bez niego funkcja pisała do PRAWDZIWEGO
+    `data/next_final.txt` w repo, a `tests/test_next_final_parse.py` robił backup
+    i przywracał plik w `finally`. Przy dwóch równoległych przebiegach pytest jeden
+    proces przywracał backup, gdy drugi już czytał — asercja padała bez żadnego
+    błędu w logice. Zmierzone 28.08: dwa przebiegi naraz, 2 z 3 testów tego pliku
+    na czerwono; te same testy w izolacji przechodzą zawsze.
     """
     from datetime import datetime as _dt, timedelta
-    from pathlib import Path
 
-    DATA_DIR = Path(__file__).parents[3] / "data"
-    DATA_DIR.mkdir(exist_ok=True)
+    DATA_DIR = Path(katalog) if katalog is not None else Path(__file__).parents[3] / "data"
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     czasy = []
     # (format, ile znaków wartości). Wcześniej fmt[:len(val[:16])] ucinał format

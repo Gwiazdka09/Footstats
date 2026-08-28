@@ -20,6 +20,7 @@ import logging
 import os
 import time
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 
 import requests
 
@@ -29,7 +30,11 @@ from footstats.utils.helpers import _s
 log = logging.getLogger(__name__)
 
 _BASE_URL = "https://www.thesportsdb.com/api/v1/json"
-CACHE_DIR = Path(__file__).parent.parent.parent.parent.parent / "cache" / "thesportsdb_source"
+CACHE_DIR = katalog_cache(
+    "thesportsdb_source",
+    domyslny=Path(__file__).parent.parent.parent.parent.parent
+    / "cache" / "thesportsdb_source",
+)
 CACHE_TTL_SEKUNDY = 6 * 3600  # 6h — wyniki dnia mogą jeszcze dochodzić (mecze trwające)
 
 # strStatus oznaczające zakończony mecz (TheSportsDB bywa niespójny w nazewnictwie).

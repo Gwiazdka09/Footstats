@@ -29,6 +29,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 
 from dotenv import load_dotenv
 
@@ -58,7 +59,7 @@ from footstats.utils.betting import oblicz_tip_correct
 logger = logging.getLogger(__name__)
 
 STS_URL   = "https://www.sts.pl"
-CACHE_DIR = Path("cache/sts_inspiracje")
+CACHE_DIR = katalog_cache("sts_inspiracje")
 
 _TEAM_LINE_RE = re.compile(r"^(.+) - (.+)$")
 _DATE_RE      = re.compile(r"^\d{1,2}\.\d{1,2}\.\d{4}, \d{1,2}:\d{2}$")

@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from footstats.utils.paths import katalog_cache
 from datetime import datetime, timedelta
 
 from footstats.utils.normalize import _norm_ascii
@@ -8,7 +9,7 @@ from footstats.utils.normalize import _norm_ascii
 log = logging.getLogger(__name__)
 
 # Cache configuration
-CACHE_DIR = Path("cache/context")
+CACHE_DIR = katalog_cache("context")
 CACHE_TTL_HOURS = 12
 
 _norm = _norm_ascii
