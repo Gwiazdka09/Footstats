@@ -467,7 +467,28 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
 
   **Znalezione przy okazji, najostrzejsze w całym audycie:** `check_and_alert_agent_down` i `check_and_alert_accuracy` kończyły się `except (...): pass` + `return False`, a `False` znaczy „nie wysłano alertu", czyli w praktyce „jest dobrze". Padnięte zapytanie do bazy dawało odpowiedź „zdrowo" **bez jednej linijki w logach** — czujnik dymu meldował spokój, paląc się. Naprawione, `utils/telegram_notify.py` zszedł z 5 do 1.
 
-  **Zostaje:** baseline'y na ścieżkach, którymi jedzie potok — `core/quick_picks.py` 10, `core/daily_phases.py` 9, `daily_agent.py` 8, `api/auth.py` 4, `api/main.py` 4, `core/coupon_settlement.py` 4. Świadomie zostaje 1 w `telegram_notify` (`except FileNotFoundError` przy pierwszym odczycie dedup — brak pliku to stan normalny, log przy każdym przebiegu byłby szumem).
+  **POSTĘP 28.08 — dwa najgrubsze pliki zeszły z 27 do 10.** `ai/analyzer.py` **12 → 1**,
+  `cli.py` **15 → 9**. Globalny `PROG` w `test_silent_swallow_audit.py`: **72 → 56**.
+  Przepływ sterowania bez zmian nigdzie — każdy handler dalej połyka ten sam wyjątek
+  w tym samym miejscu, doszedł wyłącznie log (leniwe `%s`, poziom dobrany do skutku).
+
+  **Najgroźniejszy z udźwięcznionych:** `_zapytaj_typera` w `analyzer.py` — `except
+  Exception:` przełączające całe zapytanie na inny klient AI bez śladu. To dokładnie
+  ten kształt awarii, który 22.08 zatrzymał potok na **sześć dni**: Groq wycofał
+  `llama-3.1-8b-instant`, 404 znikały w fallbacku, joby kończyły się `exit=0`.
+  Blisko za nim `_get_kalibracja_blok` i `_get_liga_statystyki_blok` — każdy błąd
+  cicho zdejmował całą sekcję z KAŻDEGO promptu do Groqa przez całą sesję.
+
+  **Świadomie zostają ciche:** 9 w `cli.py` (jednorazowe `int()/float()` z prompta
+  interaktywnego, spadające na wartość domyślną albo natychmiast drukujące „Zły
+  numer" — awaria widoczna dla użytkownika w tej samej sekundzie, log byłby szumem)
+  i 1 w `analyzer.py` (parsowanie kursu do EV w pętli 5 rynków × N meczów — brak
+  kursu na BTTS/O2.5 to stan normalny, nie awaria).
+
+  **Zostaje do zejścia:** `core/quick_picks.py` **7** (było 10, −1 dziś przy okazji
+  `factors`), `core/daily_phases.py` 9, `daily_agent.py` 8, `api/auth.py` 4,
+  `api/main.py` 4, `core/coupon_settlement.py` 4. Plus 1 świadomy w `telegram_notify`
+  (`except FileNotFoundError` przy pierwszym odczycie dedup — brak pliku to norma).
 - [ ] **J2 — mypy sprawdza 1 katalog** (`scrapers/sources/`) ze 172 plików.
 - [ ] **J3 — schematy testowe dublują produkcyjny** (`test_backtest_db`, `test_evening_agent`) — bolało przy migracji 12 i 13. Fix: jedna fikstura z `init_db()`.
 - [ ] **M2 — trzy flagi czekały na walidację:** `SELECTION_MIN_CONF=65`, `LEAGUE_GATING=1`, `BTTS_TWO_WAY`. **Dla BTTS dane są od 24.08 (D4) i mówią: NIE FLIPOWAĆ.** Live n=385 nie pokazuje uporządkowania — koszyk <45% daje realnie 52,8%, a 50–55% tylko 45,5%. Offline (n=15 460) krzywa była monotoniczna, więc to kolejny rozjazd live vs offline, nie nowy wynik na korzyść flagi. Dwie pozostałe flagi dalej bez danych.
