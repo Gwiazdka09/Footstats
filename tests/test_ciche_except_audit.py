@@ -140,7 +140,11 @@ BASELINE: dict[str, int] = {
     # 9 -> 5 (2026-08-25). Naprawione w `_dodaj_kelly`: ciche wyjscie przy braku
     # modulow (kupon bez stawek), podmiana kalibracji na tozsamosc i dwie awaryjne
     # stawki 1.0 PLN udajace decyzje modelu.
-    "core/daily_phases.py": 5,
+    # 28.08: 5 -> 1. Cztery to byly `except ImportError` wokol CALYCH podsystemow
+    # (lambda reprezentacji, BetBuilder, ensemble) plus polkniete dane SofaScore —
+    # ten sam ksztalt co bug `quick_picks.py` z tego samego dnia. Zostaje JEDEN:
+    # petla probujaca formaty dat, gdzie cisza jest poprawna i jest udokumentowana.
+    "core/daily_phases.py": 1,
     "core/draft_health.py": 1,
     "core/ensemble.py": 1,
     "core/ensemble_optimizer.py": 1,
