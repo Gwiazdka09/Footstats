@@ -7,7 +7,19 @@ polkniecie wyjatku jest zamierzone.
 """
 from __future__ import annotations
 
+import pytest
+
 from footstats.daily_agent import _zbierz_migawke_kursow
+
+
+@pytest.fixture(autouse=True)
+def _bez_migracji(monkeypatch):
+    """Kolektor wola `run_migrations()` (patrz `odds_store.zbierz_i_zapisz`).
+    Bez zaslepienia bilby po realnej bazie — regula `.claude/rules/tests-no-prod.md`.
+    Test `test_kolektor_upewnia_sie_ze_migracje_poszly` nadpisuje to wlasnym
+    szpiegiem, zeby sprawdzic, ze wywolanie faktycznie nastepuje."""
+    import footstats.db.migrations as mig
+    monkeypatch.setattr(mig, "run_migrations", lambda: None)
 
 
 def _zamiecione(wiersze, zatrzymany=False, ligi=3):
@@ -81,3 +93,20 @@ def test_przerwanie_przez_prog_kredytowy_jest_zglaszane(monkeypatch, caplog):
     with caplog.at_level("WARNING"):
         _zbierz_migawke_kursow()
     assert "prog kredytowy" in caplog.text.lower()
+
+
+def test_kolektor_upewnia_sie_ze_migracje_poszly(monkeypatch):
+    """Kolektor jest wolany w main() WCZESNIEJ niz tamtejsze run_migrations(),
+    wiec pierwszego dnia tabeli by nie bylo i cala doba przepadlaby na blad
+    zapisu. Migracje sa idempotentne, wiec taniej upewnic sie tutaj."""
+    import footstats.core.odds_store as store
+    import footstats.db.migrations as mig
+    import footstats.scrapers.odds_snapshot as snap
+
+    wolania = []
+    monkeypatch.setattr(mig, "run_migrations", lambda: wolania.append("mig"))
+    monkeypatch.setattr(snap, "zamiataj_pilota", lambda **kw: _zamiecione([{"a": 1}]))
+    monkeypatch.setattr(store, "zapisz_migawke", lambda w, **kw: {"zapisane": 1})
+    _zbierz_migawke_kursow()
+    assert wolania == ["mig"], "migracje musza pojsc przed zapisem migawki"
+

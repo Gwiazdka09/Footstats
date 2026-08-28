@@ -133,7 +133,15 @@ def zbierz_i_zapisz(dry_run: bool = False) -> dict | None:
     Spec: docs/superpowers/specs/2026-08-27-rozrzut-kursow-pilot-design.md
     """
     try:
+        from footstats.db.migrations import run_migrations
         from footstats.scrapers.odds_snapshot import LIGI_PILOTA, zamiataj_pilota
+
+        # Kolektor wolany jest w `daily_agent.main()` WCZESNIEJ niz tamtejsze
+        # `run_migrations()` (linia ~729), wiec pierwszego dnia tabeli jeszcze by
+        # nie bylo i cala doba przepadlaby na blad zapisu. Migracje sa
+        # idempotentne i z zalozenia bezpieczne przy kazdym starcie, wiec taniej
+        # upewnic sie tutaj niz przestawiac kolejnosc w cudzej sciezce.
+        run_migrations()
 
         zamiecione = zamiataj_pilota()
         if zamiecione["zatrzymany_przez_kredyty"]:
