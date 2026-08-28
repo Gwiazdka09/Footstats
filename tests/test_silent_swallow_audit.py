@@ -20,9 +20,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
-# Stan zamrożony 2026-07-30, po dołożeniu logów w ścieżce rozliczeń
-# (core/coupon_settlement.py — awaria DB nie może wyglądać jak „brak wyniku").
-PROG = 72
+# Stan zamrożony 2026-08-28. Ostatnie obniżenie: `core/quick_picks.py` przestał
+# po cichu połykać awarię systemów λ (fortress/h2h/heurystyki) — te cztery są
+# JEDYNYM źródłem tagów `factors`, a puste `factors` wyglądają identycznie jak
+# stan normalny, więc cisza chowała się tam idealnie.
+PROG = 66
 
 # Ścieżki, gdzie ciche połknięcie jest wprost uzasadnione: teardown przeglądarki
 # musi przeżyć każdy błąd, bo inaczej zostawia wiszący proces chromium.

@@ -184,3 +184,77 @@ def test_dwa_rozne_mecze_w_oknie_nie_rozliczaja_kuponu(db):
 
     assert stats["settled"] == 0
     assert _status(db, kupon_id) == "ACTIVE"
+
+
+# ── must-fixy z przeglądu 28.08 ─────────────────────────────────────────────
+
+
+def test_dwuznacznosc_w_predictions_nie_jest_obchodzona_przez_model_log(db, monkeypatch):
+    """NAJWAŻNIEJSZY REGRES TEJ ZMIANY (znalezione w przeglądzie).
+
+    `link_leg` zwraca `matched=False` w DWÓCH różnych sytuacjach: „nie ma takiego
+    meczu" i „są DWA różne mecze w oknie dat, nie wiem który". Warunek pytający
+    wyłącznie o `matched` zlewał je w jedno i schodził do `model_log`, który —
+    mając u siebie tylko jeden z tych dwóch meczów — odpowiadał pewnie.
+
+    Skutek nie byłby awarią, tylko ZŁYM ROZLICZENIEM: kupon na mecz z 19.07
+    (0-3, tip „1" przegrany) dostawał WON z wyniku meczu z 21.07 (2-1). Bez
+    śladu w logach i bez możliwości cofnięcia.
+
+    Dwuznaczność `predictions` musi zachować się jak dwuznaczność `model_log`:
+    odmowa, nie zgadywanie z innego źródła.
+    """
+    monkeypatch.setattr(
+        match_linker, "link_leg",
+        lambda *a, **k: LinkResult(False, "ambiguous", None,
+                                   "Więcej niż jeden mecz pasuje w oknie dat"),
+    )
+    kupon_id = _kupon(db, [{"home": "Arsenal", "away": "Chelsea", "tip": "1"}])
+    _wpis_model_log(db, "Arsenal", "Chelsea", "2-1")
+
+    stats = settlement.settle_manual_coupons(verbose=False)
+
+    assert stats["settled"] == 0
+    assert stats["z_model_log"] == 0
+    assert _status(db, kupon_id) == "ACTIVE"
+
+
+def test_predictions_ma_pierwszenstwo_nad_model_log(db, monkeypatch):
+    """Roszczenie „nasze `predictions` pierwsze" nie było testowane — fikstura
+    zwracała `matched=False` we wszystkich przypadkach, więc zamiana kolejności
+    źródeł przechodziła na zielono.
+
+    Wyniki są tu CELOWO sprzeczne: `predictions` mówi 0-3 (tip „1" przegrany),
+    `model_log` 2-1 (wygrany). Wygrać musi `predictions`."""
+    monkeypatch.setattr(
+        match_linker, "link_leg",
+        lambda *a, **k: LinkResult(True, "exact", {"actual_result": "0-3"}, "ok"),
+    )
+    kupon_id = _kupon(db, [{"home": "Arsenal", "away": "Chelsea", "tip": "1"}])
+    _wpis_model_log(db, "Arsenal", "Chelsea", "2-1")
+
+    stats = settlement.settle_manual_coupons(verbose=False)
+
+    assert stats["z_model_log"] == 0, "predictions miało wystarczyć"
+    assert _status(db, kupon_id) == "LOST"
+
+
+def test_licznik_liczy_nogi_ROZLICZONYCH_kuponow(db):
+    """Licznik ma odpowiadać na pytanie „czy to źródło zdejmuje kupony z kolejki".
+
+    Noga rozwiązana w kuponie, który i tak zostaje ACTIVE (bo druga noga nie ma
+    wyniku), niczego nie zdjęła — a przy zliczaniu per noga rosłaby przy KAŻDYM
+    przebiegu crona, codziennie, dla tego samego zawieszonego kuponu. Metryka
+    pokazywałaby sukces tam, gdzie nic się nie rozliczyło."""
+    kupon_id = _kupon(db, [
+        {"home": "Arsenal", "away": "Chelsea", "tip": "1"},
+        {"home": "Roma", "away": "Lazio", "tip": "1"},
+    ])
+    _wpis_model_log(db, "Arsenal", "Chelsea", "2-1")
+
+    stats = settlement.settle_manual_coupons(verbose=False)
+    stats2 = settlement.settle_manual_coupons(verbose=False)
+
+    assert _status(db, kupon_id) == "ACTIVE"
+    assert stats["z_model_log"] == 0
+    assert stats2["z_model_log"] == 0, "ten sam zawieszony kupon liczony w kółko"

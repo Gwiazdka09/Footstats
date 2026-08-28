@@ -145,7 +145,7 @@ def link_leg(
     return LinkResult(True, "exact", _row_to_prediction(best_row), "Dopasowano jednoznacznie")
 
 
-def _unikalny_mecz(rows, norm_home: str, norm_away: str) -> tuple[list, str]:
+def _unikalny_mecz(rows: list, norm_home: str, norm_away: str) -> tuple[list, str]:
     """Redukuje wiersze z okna dat do JEDNEGO meczu.
 
     Ta sama orientacja (home==home, away==away) i ta sama redukcja po dacie, co

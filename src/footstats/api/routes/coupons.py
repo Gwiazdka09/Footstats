@@ -834,9 +834,11 @@ def cron_settle_manual(x_cron_secret: str = Header(default=""), dry_run: bool = 
             # znaczy, że wydatek na API nic nie dał — to trzeba widzieć w odpowiedzi,
             # nie tylko w logach.
             "z_zewnatrz": stats.get("z_zewnatrz", 0),
-            # Ile nóg rozliczył `model_log` — tabela szersza niż `predictions`
-            # (161 vs 424 wiersze na prod 28.08). Widoczne osobno, żeby dało się
-            # zobaczyć, czy to źródło faktycznie zdejmuje kupony z kolejki.
+            # Nogi ROZLICZONYCH kuponów, które rozwiązał `model_log` — tabela
+            # szersza niż `predictions` (161 vs 424 wiersze na prod 28.08). Nogi
+            # kuponów, które i tak zostały ACTIVE, celowo się tu nie liczą:
+            # inaczej ta liczba rosłaby codziennie dla tego samego zawieszonego
+            # kuponu i pokazywałaby sukces tam, gdzie nic nie zeszło z kolejki.
             "z_model_log": stats.get("z_model_log", 0),
             # Podzbiór `skipped`, którego nikt już nie rozliczy automatycznie.
             "przeterminowane": stats.get("przeterminowane", 0),

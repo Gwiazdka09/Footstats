@@ -80,9 +80,15 @@ NOGA = ('[{"home": "Yunnan Yukun", "away": "Dalian Yingbo FC", "tip": "Over 2.5"
 
 
 class _BrakDopasowania:
-    """`link_leg` dla ligi, ktorej nie pokrywamy — nic nie znajduje."""
+    """`link_leg` dla ligi, ktorej nie pokrywamy — nic nie znajduje.
+
+    `match_confidence` MUSI tu byc: rozliczanie odroznia "brak meczu" od
+    "dwa rozne mecze w oknie dat" i tylko to pierwsze schodzi do `model_log`.
+    Atrapa bez tego pola udawalaby kontrakt `LinkResult`, ktorego nie spelnia.
+    """
 
     matched = ""
+    match_confidence = "none"
     prediction = None
 
 
