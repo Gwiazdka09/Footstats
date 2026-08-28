@@ -360,9 +360,21 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
 
   **Konsekwencja dla decyzji wyżej:** „rozszerzyć dataset" i „zawęzić selekcję" to nie są równoważne opcje kosmetycznie — bez jednego z nich RAG uczy się z 3,5% predykcji, a nie z 31%.
 
-- [ ] **A4 — 1 martwy wiersz z 23.08 został w bazie** (`2 (wygrana gościa)`, nie rozliczy
-  się nigdy) plus 3 wiersze z `odds_verified=0`. Nowe już nie powstaną, ale te
-  istnieją. Do decyzji: zostawić jako ślad, czy posprzątać (operacja na prod DB).
+- [x] **A4 — ZAMKNIĘTE 28.08 bez ruszania proda. Wpis był nieaktualny, a liczba obok BŁĘDNA.**
+  Sprawdzone na produkcji (read-only): **zero** wierszy z nietypowym `actual_result`
+  (wzorzec `^[0-9]+-[0-9]+`) i **zero** z `tip_correct IS NULL` mimo zapisanego wyniku.
+  Martwy wiersz `2 (wygrana gościa)` zniknął przy backfillu `uzupelnij_tip_correct`
+  z 27.08 — nie ma czego sprzątać.
+  ⚠️ **„3 wiersze z `odds_verified=0`" to była pomyłka rzędu wielkości.** Realnie:
+  **236 z 257** predykcji (92%) ma kurs niezweryfikowany, z czego **146 jest już
+  rozliczonych**. To nie jest resztka do zamiecenia, tylko cały wpis D3 — i tam
+  zostaje jako decyzja (backfill kursów vs trwałe wykluczenie z raportów).
+  **Sprawdzone przy okazji, że to NIE cieknie do liczb:** `clv_tracker` filtruje
+  `odds_verified = 1` (linia 121) i osobno zlicza zera (134), a ROI z rankingu rynków
+  liczy się z `coupons.total_odds`, nie z `predictions.odds` — inna ścieżka danych.
+  Jedyne, co robi `stan_uczenia`, to **wypisuje ostrzeżenie** („ROI i CLV licz wyłącznie
+  na zweryfikowanych") — rada dla czytającego, nie filtr. Wystarczy, dopóki żaden raport
+  nie liczy ROI z `predictions`.
 
 ### Sprawdzone i odrzucone
 - **Podział promptu na warstwy** (reguły w wiadomości systemowej, potem kontekst →
@@ -462,7 +474,30 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
 
 - [x] **D5 — ZROBIONE 24.08.** `MANUAL_SETTLE_EXTERNAL=1` otwiera `_find_leg_result` dla nóg dziennika bez własnej predykcji. Nasze dane zachowują pierwszeństwo (darmowe, z tego samego przebiegu co typ), all-legs-or-nothing bez zmian, cache źródeł dzielony ponad pętlą kuponów, licznik `z_zewnatrz` w odpowiedzi endpointu. Domyślnie OFF — kosztuje limit planu. Regresji trybu domyślnego pilnuje `test_settle_manual_coupons.py` (fikstura wysadza test przy wywołaniu `_find_leg_result`). 15 testów.
 - [ ] **D3 — 231 predykcji z `odds_verified=0`** (kurs od Groqa) → ROI/CLV z historii nic nie znaczą. Decyzja: backfill kursów czy trwałe wykluczenie z raportów.
-- [ ] **I2 — licznik tokenów myli się 2×.** Heurystyka 1,4 znaku/token vs realne 2,86 (1338 vs **655** tokenów na szkielecie) → prompt bywa przycinany bez potrzeby. Fix: `tiktoken` — **wymaga `pip install`, czyli zgody**.
+- [x] **I2 — ZROBIONE 28.08.** `tiktoken` (encoding `o200k_base`, rodzina używana przez
+  `openai/gpt-oss-120b`) zamiast stałej znak/token. Zmierzone tokenizerem modelu:
+
+  | próbka | znaków | tiktoken | heurystyka 1,4 |
+  |---|---|---|---|
+  | szkielet PL | 64 | **25** (2,56 zn/tok) | 46 — **+84%** |
+  | diakrytyki | 67 | **31** (2,16) | 48 |
+  | emoji + liczby | 53 | **36** (1,47) | 38 |
+
+  **Oba wcześniejsze pomiary były prawdziwe, dla różnej treści** — stała 1,4 powstała
+  po awarii 413 na opisach meczów z emoji i dla nich jest trafna; dla zwykłego tekstu
+  przeszacowuje o 84%. Żadna stała nie obsłuży obu naraz.
+  **Naprawione DWA miejsca, nie jedno:** `szacuj_tokeny` (licznik) oraz
+  `dopasuj_do_budzetu`, który przeliczał budżet tokenów na znaki po tej samej stałej —
+  czyli tnie do ~55% przyznanego budżetu. Teraz przelicznik bierze się Z TEGO promptu,
+  a wynik jest **weryfikowany i dociskany**, bo gęstość tokenów nie jest równomierna
+  (emoji siedzą w opisach meczów, nie w instrukcji).
+  **Degradacja zamiast awarii:** `tiktoken` ciągnie plik BPE z sieci (zmierzone 3,8 s
+  przy pierwszym użyciu) — w jobie to zapytanie do internetu w środku przebiegu.
+  Enkoder ładuje się **raz**, nieudana próba **nie jest ponawiana**, a brak paczki albo
+  brak sieci schodzi na starą heurystykę **z WARNING-iem**. Dwa szerokie handlery
+  w `ai/client.py` są zamierzone i opisane w baselinie audytu (2 → 4).
+  Paczka w extra `[ai]`, więc wchodzi do obrazu jobów; obraz API zostaje bez niej
+  (ten sam wybór co przy `scikit-learn`).
 - [ ] **J1 — połowa `except` milczy. STRAŻNIK ZROBIONY 24.08, zostało schodzenie w dół.** Zmierzone analizą AST: **255 z 555** handlerów bez logu, bez `raise` i bez odwołania do złapanego wyjątku. `tests/test_ciche_except_audit.py` zamraża ten dług baselinem per plik, wymaga **zera w nowych plikach** i twardego zera w funkcjach alarmowych.
 
   **Znalezione przy okazji, najostrzejsze w całym audycie:** `check_and_alert_agent_down` i `check_and_alert_accuracy` kończyły się `except (...): pass` + `return False`, a `False` znaczy „nie wysłano alertu", czyli w praktyce „jest dobrze". Padnięte zapytanie do bazy dawało odpowiedź „zdrowo" **bez jednej linijki w logach** — czujnik dymu meldował spokój, paląc się. Naprawione, `utils/telegram_notify.py` zszedł z 5 do 1.
@@ -541,7 +576,12 @@ Przebieg planowy 11:00: 32 kandydatów → 14 po filtrach → Groq odpowiedział
   „korekty" sprawdź, czy korekta już nie istnieje.
 - [ ] **F5 — `CouponWizard.jsx` 437 linii**, `SettingsView.jsx` 377 (limit 400).
 - [ ] **I3 — brak Sentry na froncie** (backend ma).
-- [ ] **I4 — `DATABASE_URL_NEON` wciąż w lokalnym `.env`** mimo porzucenia Neona.
+- [x] **I4 — ZROBIONE 28.08.** `DATABASE_URL_NEON` usunięty z lokalnego `.env` (45 → 44
+  linie). Bezpieczne: backfill Neon → Supabase zamknięty 14.08, a wersja sekretu
+  z Neonem wyłączona — martwy kredencjal w pliku to była już tylko powierzchnia ataku.
+  Placeholder w `.env.example` **zostaje**: dwa jednorazowe skrypty migracyjne
+  (`backfill_users_from_neon.py`, `import_neon_do_supabase.py`) dalej go dokumentują,
+  a bez zmiennej zgłoszą jasny błąd zamiast trafić w niewłaściwą bazę.
 - [x] ✅ **I5 — ZROBIONE 23.08. Rejestr obrazów: 94,7 GB → 6,3 GB.** `footstats-api`
   424 obrazy / 68,8 GB, `footstats-jobs` 45 / 25,9 GB. Darmowy limit Artifact Registry
   to 0,5 GB → ~0,10 USD/GB/mies. **Zrobione 23.08** (zmierzone przed/po):
