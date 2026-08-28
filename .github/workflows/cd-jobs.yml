@@ -30,6 +30,17 @@ name: CD — Deploy Cloud Run Jobs
 on:
   push:
     branches: [main]
+    # I6 — commit czysto dokumentacyjny odpalal pelny build z chromium (~570 MB,
+    # kilkanascie minut). Filtr jest tu WASKI CELOWO: pominiecie zmiany, ktora
+    # laduje w obrazie, przywraca dokladnie ten dryf miedzy `main` a obrazem
+    # produkcyjnym, ktory likwidowalo I1 (trzy dni na uszkodzonym obrazie przy
+    # `exit=0`). Czego wolno tu dopisac, nie decyduje czyjs oglad, tylko
+    # `test_filtr_sciezek_nie_odcina_niczego_z_obrazu` — porownuje te liste
+    # z realnymi plikami kopiowanymi przez `Dockerfile.jobs`.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'tests/**'
   workflow_dispatch:
 
 # Dwa pushe pod rząd nie mogą się wyprzedzić — inaczej joby dostałyby starszy
