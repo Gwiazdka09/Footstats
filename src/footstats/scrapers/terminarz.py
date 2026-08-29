@@ -94,7 +94,12 @@ def _pobierz_json(url: str):
         return None
     try:
         return r.json()
-    except ValueError:
+    except ValueError as e:
+        # Dwie galezie wyzej (siec, HTTP != 200) juz loguja — ta jedna milczala,
+        # a to wlasnie ksztalt "zrodlo odpowiada, ale oddaje cos innego niz dane":
+        # strona blokady, HTML z captcha, zmieniony endpoint.
+        log.warning("terminarz: %s → HTTP 200, ale tresc NIE jest JSON-em (%s);"
+                    " pierwsze 120 znakow: %r", url, e, r.text[:120])
         return None
 
 
@@ -120,10 +125,16 @@ def _wynik_ft(mecz: dict) -> list:
     try:
         return [int(kandydat[0]), int(kandydat[1])]
     except (TypeError, ValueError):
+        log.warning("terminarz: wynik %r nie da sie odczytac jako dwie liczby —"
+                    " mecz %s idzie jako NIEROZEGRANY", kandydat,
+                    mecz.get("team1") or mecz.get("home") or "?")
         return []
 
 
 def _poprawna_data(tekst: str) -> bool:
+    """Czy `tekst` jest data ISO. CISZA CELOWA: to PREDYKAT — `False` jest
+    odpowiedzia na zadane pytanie, nie polknieta awaria. Wolajacy sam decyduje,
+    czy brak daty jest dla niego problemem."""
     try:
         date.fromisoformat(tekst)
         return True
@@ -254,6 +265,8 @@ def dni_do(data_docelowa: str, dzis: str | None = None) -> int | None:
     try:
         cel = date.fromisoformat(data_docelowa)
     except (ValueError, TypeError):
+        log.warning("terminarz: data %r nie do sparsowania — GUI nie pokaze,"
+                    " za ile startuje ta liga", data_docelowa)
         return None
     baza = date.fromisoformat(dzis) if dzis else date.today()
     return (cel - baza).days

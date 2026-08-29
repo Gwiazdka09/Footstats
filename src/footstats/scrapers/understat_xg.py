@@ -156,6 +156,12 @@ def _mapuj_graczy(data: list[dict]) -> list[dict]:
         if not name or not team:
             continue
 
+        # CISZA CELOWA w obu: wolane dla KAZDEGO pola KAZDEGO zawodnika (setki
+        # razy na przebieg), a puste pole w Understat to stan normalny.
+        # UWAGA NA ROZNICE: `_i` zwraca 0, czyli REALNA wartosc udajaca pomiar
+        # ("zero goli"), a `_f` zwraca None, czyli uczciwe "nie wiadomo".
+        # Zmiana `_i` na None wymagalaby przejscia po wszystkich konsumentach,
+        # wiec zostaje jak jest — ale niech bedzie zapisane, ze to NIE jest to samo.
         def _i(v: object) -> int:
             try:
                 return int(float(v)) if v not in (None, "") else 0
@@ -192,6 +198,8 @@ def _parsuj_liczbe(txt: str) -> float | None:
     try:
         return float(m.group(1))
     except ValueError:
+        # NIEOSIAGALNE przy obecnym wzorcu: `-?\d+(\.\d+)?` zawsze przechodzi
+        # przez `float()`. Zostaje jako siatka na wypadek zmiany regexa.
         return None
 
 
@@ -236,7 +244,12 @@ def fetch_league_team_xg(league_key: str, season: int) -> dict[str, dict]:
         try:
             i_team, i_m = naglowki.index("Team"), naglowki.index("M")
             i_xg, i_xga = naglowki.index("xG"), naglowki.index("xGA")
-        except ValueError:
+        except ValueError as e:
+            # Filtr wyzej juz przepuscil tabele z Team/xG/xGA, wiec tu jestesmy
+            # tylko wtedy, gdy Understat ZMIENIL uklad kolumn. Cicho znaczylo:
+            # "brak tabeli xG", a naprawde znaczy "tabela jest, nie umiemy jej odczytac".
+            _log.warning("Understat: tabela ma xG/xGA, ale brakuje kolumny (%s);"
+                        " naglowki: %s — liga zostaje BEZ xG", e, naglowki)
             continue
 
         for wiersz in tabela.find_all("tr")[1:]:
@@ -417,6 +430,8 @@ def fetch_team_xg(
             xgf_f = float(xgf) if xgf is not None else None
             xga_f = float(xga) if xga is not None else None
         except (ValueError, TypeError):
+            _log.warning("Understat: xG %r / xGA %r nie sa liczbami — mecz z %s"
+                        " idzie BEZ xG", xgf, xga, opp)
             xgf_f = xga_f = None
 
         wpis = {
