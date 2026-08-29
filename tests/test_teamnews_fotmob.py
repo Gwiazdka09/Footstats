@@ -188,3 +188,83 @@ def test_pusta_lista_dnia_nie_jest_bledem(monkeypatch, caplog):
         assert fm.FotMobTeamNews().fetch("2026-08-30") == []
 
     assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+# ── koszt: filtr dziala PRZED pobraniem szczegolow ──────────────────────────
+
+def test_filtr_ogranicza_liczbe_requestow(monkeypatch):
+    """FotMob mial 30.08 czterysta osiemdziesiat dwa mecze w 147 ligach.
+    Sciaganie szczegolow wszystkich to 483 requesty na przebieg, zeby uzyc
+    kilkudziesieciu. Filtr MUSI dzialac na liscie dnia, nie po pobraniu."""
+    dzien = _wczytaj("matches_day.json")
+    szczegoly = _wczytaj("match_predicted.json")
+    detale = []
+
+    def _stub(sciezka, **params):
+        if sciezka == "matches":
+            return dzien
+        detale.append(params.get("matchId"))
+        return szczegoly
+
+    monkeypatch.setattr(fm, "_pobierz", _stub)
+    monkeypatch.setattr(fm, "_PRZERWA_S", 0.0)
+
+    pierwszy = fm.parsuj_liste_dnia(dzien)[0]
+    wynik = fm.FotMobTeamNews().fetch_dla("2026-08-30", [(pierwszy.home, pierwszy.away)])
+
+    assert len(detale) == 1, f"pobrano szczegoly {len(detale)} meczow zamiast 1"
+    assert len(wynik) == 1
+
+
+def test_brak_dopasowania_to_zero_requestow_o_szczegoly(monkeypatch):
+    dzien = _wczytaj("matches_day.json")
+    detale = []
+
+    def _stub(sciezka, **params):
+        if sciezka == "matches":
+            return dzien
+        detale.append(params.get("matchId"))
+        return {}
+
+    monkeypatch.setattr(fm, "_pobierz", _stub)
+    monkeypatch.setattr(fm, "_PRZERWA_S", 0.0)
+
+    assert fm.FotMobTeamNews().fetch_dla("2026-08-30", [("Nieistniejacy", "Klub")]) == []
+    assert detale == []
+
+
+def test_filtr_znosi_rozna_pisownie_nazw(monkeypatch):
+    """Nasze zrodla pisza "Brighton", FotMob "Brighton & Hove Albion"."""
+    dzien = _wczytaj("matches_day.json")
+    monkeypatch.setattr(fm, "_pobierz", lambda s, **p:
+                        dzien if s == "matches" else _wczytaj("match_predicted.json"))
+    monkeypatch.setattr(fm, "_PRZERWA_S", 0.0)
+
+    pierwszy = fm.parsuj_liste_dnia(dzien)[0]
+    skrocona = pierwszy.away.split(" &")[0].split(" FC")[0]
+    wynik = fm.FotMobTeamNews().fetch_dla("2026-08-30", [(pierwszy.home, skrocona)])
+
+    assert len(wynik) == 1, f"'{skrocona}' nie dopasowalo sie do '{pierwszy.away}'"
+
+
+def test_lista_dnia_parsuje_id_i_nazwy():
+    mecze = fm.parsuj_liste_dnia(_wczytaj("matches_day.json"))
+    assert mecze and all(m.id and m.home and m.away for m in mecze)
+    assert all("/" in m.liga for m in mecze)
+
+
+def test_pozycje_bez_id_lub_nazw_odpadaja():
+    dane = {"leagues": [{"ccode": "X", "name": "Y", "matches": [
+        {"id": None, "home": {"name": "A"}, "away": {"name": "B"}},
+        {"id": 1, "home": {"name": ""}, "away": {"name": "B"}},
+        {"id": 2, "home": {"name": "A"}, "away": {"name": "B"}},
+    ]}]}
+    assert [m.id for m in fm.parsuj_liste_dnia(dane)] == [2]
+
+
+def test_mecz_bez_skladu_zachowuje_tozsamosc_z_listy_dnia():
+    """Mecz bez lineupu moze wciaz niesc sedziego — bez nazw z listy dnia
+    wypadalby z wyniku po cichu."""
+    tn = fm.parsuj_mecz({"content": {}}, "2026-08-30", home="Wisla", away="Legia")
+    assert tn.home == "Wisla" and tn.away == "Legia"
+    assert tn.xi_home == ()

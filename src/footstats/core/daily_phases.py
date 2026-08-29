@@ -648,11 +648,129 @@ def _dopasuj_luzno(idx: dict, gospodarz: str, goscie: str) -> dict | None:
     return najlepszy
 
 
+FLAGA_TEAM_NEWS = "FOOTSTATS_TEAM_NEWS"
+
+
+def _pobierz_team_news(data: str, pary: list[tuple[str, str]]) -> list:
+    """
+    Wydzielone, żeby test mógł podmienić źródło bez dotykania sieci.
+
+    `pary` filtruje JUŻ NA LIŚCIE DNIA. Bez tego przebieg kosztowałby 483
+    requesty (30.08: 147 lig, 482 mecze), żeby użyć kilkudziesięciu.
+    """
+    from footstats.scrapers.teamnews.fotmob import FotMobTeamNews
+    return FotMobTeamNews().fetch_dla(data, pary)
+
+
+def _dopasuj_team_news(idx: dict, gospodarz: str, goscie: str):
+    """
+    Najlepsze dopasowanie meczu po podobieństwie nazw, gdy klucz dokładny zawiódł.
+
+    Bliźniak `_dopasuj_luzno` z toru API-Football, celowo z tym samym progiem
+    `PROG_DOPASOWANIA_MECZU`: dwa różne progi rozjechałyby się po cichu, a taki
+    rozjazd objawia się dopiero utratą meczów.
+
+    NAJLEPSZE dopasowanie, nie pierwsze napotkane — kolejność `idx` to kolejność
+    odpowiedzi źródła, więc "pierwsze" byłoby loterią.
+    """
+    najlepszy, najlepszy_wynik = None, 0.0
+    for (fh, fa), tn in idx.items():
+        wynik = min(team_similarity(gospodarz, fh), team_similarity(goscie, fa))
+        if wynik >= PROG_DOPASOWANIA_MECZU and wynik > najlepszy_wynik:
+            najlepszy, najlepszy_wynik = tn, wynik
+    return najlepszy
+
+
+def _wzbogac_team_news(kandydaci: list) -> None:
+    """
+    Dokłada kandydatom przewidywany skład, absencje i sędziego z FotMoba.
+    Modyfikuje `kandydaci` in-place, spójnie z resztą tej fazy.
+
+    Za flagą `FOOTSTATS_TEAM_NEWS=1` — domyślnie OFF do czasu smoke'a na żywym
+    potoku. Włączając: ustawić w TRZECH miejscach (API + `footstats-final`
+    + `footstats-evening`). `ENSEMBLE_MARKET_WEIGHT` rozjechało się dokładnie
+    tak: API miało 0.70, joby nie miały nic.
+
+    Do korekty λ trafiają WYŁĄCZNIE absencje potwierdzone. "Doubtful" i brak
+    danych zostają w liczniku informacyjnym — model nie ma liczyć straty
+    zawodnika, który zagra.
+    """
+    if os.getenv(FLAGA_TEAM_NEWS) != "1":
+        return
+    if not kandydaci:
+        return
+
+    from datetime import date as _date
+
+    from footstats.utils.normalize import normalize_team_name
+
+    pary = [(k.get("gospodarz") or "", k.get("goscie") or "") for k in kandydaci]
+    dane = _pobierz_team_news(_date.today().isoformat(), pary)
+    if not dane:
+        # Powód zgłosił już adapter, na ERROR. Drugi alarm byłby duplikatem,
+        # a szum zabija alarmy tak samo skutecznie jak cisza.
+        log.debug("team-news: zrodlo oddalo pusta liste")
+        return
+
+    idx = {(normalize_team_name(t.home), normalize_team_name(t.away)): t
+           for t in dane if t.home and t.away}
+
+    wzbogaconych = prognoz = 0
+    for k in kandydaci:
+        klucz = (normalize_team_name(k.get("gospodarz") or ""),
+                 normalize_team_name(k.get("goscie") or ""))
+        tn = idx.get(klucz)
+        if tn is None:
+            # Nazwy źródeł się rozjeżdżają: FotMob pisze "Brighton & Hove Albion",
+            # Bzzoiro "Brighton". Ten sam próg i ta sama funkcja co w torze
+            # API-Football — drugi mechanizm dopasowania rozjechałby się z pierwszym.
+            tn = _dopasuj_team_news(idx, k.get("gospodarz") or "", k.get("goscie") or "")
+        if tn is None:
+            continue
+
+        k["team_news_source"] = tn.source
+        k["team_news_prognoza"] = tn.sklad_jest_prognoza
+        if tn.xi_home and tn.xi_away:
+            k["lineup_ok"] = True
+            k["startXI_home"] = list(tn.xi_home)
+            k["startXI_away"] = list(tn.xi_away)
+        k["absencje_pewne_home"] = sum(1 for a in tn.absencje_home if a.pewna)
+        k["absencje_pewne_away"] = sum(1 for a in tn.absencje_away if a.pewna)
+        if tn.sedzia:
+            k["referee_name"] = tn.sedzia
+            k["referee_stats"] = dict(tn.sedzia_stats)
+
+        wzbogaconych += 1
+        prognoz += int(tn.sklad_jest_prognoza)
+
+    komunikat = (f"team-news: {wzbogaconych}/{len(kandydaci)} kandydatow wzbogaconych "
+                 f"({prognoz} predicted, {wzbogaconych - prognoz} lastStarting11)")
+    if wzbogaconych == 0:
+        log.warning(
+            "%s — zrodlo oddalo %d meczow, ale ZADEN sie nie dopasowal. To albo "
+            "rozjazd nazw druzyn, albo zmiana schematu FotMoba: bez wyjatku, bez "
+            "danych, a przebieg konczy sie sukcesem.", komunikat, len(dane))
+    else:
+        log.info("%s", komunikat)
+
+
 def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
     """
-    Faza final: dla każdego kandydata pobiera składy i sędziego z API-Football.
+    Faza final: dla każdego kandydata pobiera składy i sędziego.
+
+    Kolejność ma znaczenie. FotMob (`_wzbogac_team_news`) idzie PIERWSZY i ma
+    pierwszeństwo — pole wypełnione przez niego nie jest nadpisywane przez tor
+    API-Football niżej. Musi też być PRZED guardem `if not api_key`, bo konto
+    API-Football jest zawieszone od 01.08, a brak jego klucza nie może odcinać
+    źródła, które działa.
+
+    To nie jest agregacja w sensie `sources/aggregator.py`: nie ma głosowania
+    ani uzgadniania rozjazdów, jest zwykłe pierwszeństwo.
+
     Aktualizuje pola lineup_ok, referee_neutral, referee_signal in-place.
     """
+    _wzbogac_team_news(wyniki)
+
     if not api_key:
         console.print("[dim]APISPORTS_KEY niedostępny — pomijam enrichment składów/sędziego[/dim]")
         return
