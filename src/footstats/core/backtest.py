@@ -26,6 +26,9 @@ try:
     from tabulate import tabulate
     HAS_TABULATE = True
 except ImportError:
+    # CISZA CELOWA: `tabulate` to zaleznosc OPCJONALNA (ladny wydruk tabel w CLI).
+    # Ponizej stoi pelnoprawny fallback, wiec brak paczki nie degraduje niczego
+    # poza wygladem — log przy kazdym imporcie modulu bylby czystym szumem.
     HAS_TABULATE = False
     def tabulate(rows, headers=(), tablefmt="simple", **kw):
         lines = []
@@ -194,10 +197,17 @@ def _sprawdz_auto_trening() -> None:
                         f"FootStats Auto-trening\n"
                         f"Zapisano {n} wynikow — Groq aktualizuje kalibracje w tle."
                     )
-            except Exception:  # noqa: BLE001 — import+network errors vary
-                pass
-    except Exception:  # noqa: BLE001 — top-level guard for auto-training block
-        pass
+            except Exception as e:  # noqa: BLE001 — import+network errors vary
+                logger.warning("Powiadomienie o auto-treningu nie doszlo (%s: %s)"
+                               " — trening ruszyl, ale nikt sie o tym nie dowie",
+                               type(e).__name__, e)
+    except Exception as e:  # noqa: BLE001 — top-level guard for auto-training block
+        # NAJGORSZY z trzech: ten straznik obejmuje CALY blok auto-treningu.
+        # Cicho znaczylo, ze kalibracja moze nigdy sie nie przeliczyc, a `save_result`
+        # konczy sie sukcesem — czyli dokladnie ksztalt "zielono, a martwo".
+        logger.warning("Blok auto-treningu przerwany (%s: %s) — kalibracja NIE"
+                       " zostala przeliczona; zapis wyniku sie powiodl",
+                       type(e).__name__, e)
 
 
 # ── 3. get_stats ─────────────────────────────────────────────────────────
@@ -420,6 +430,9 @@ def oznacz_zweryfikowane(nogi: list[dict]) -> int:
         try:
             kurs = float(noga.get("odds"))
         except (TypeError, ValueError):
+            # CISZA Z ZALOZENIA: sygnalem jest ROZNICA miedzy `len(nogi)` a liczba
+            # zwrocona, co opisuje docstring wyzej ("Wolajacy ma to zglosic, nie
+            # polknac"). Log per noga dublowalby to i halasowal przy kazdym kuponie.
             continue                      # brak kursu / smiec — nie nadpisuj tego, co jest
         if kurs <= 1.0:
             continue
@@ -516,7 +529,12 @@ def pobierz_kalibracje_backtest(dni: int = 90, min_n: int = 5) -> str:
     """
     try:
         stats = get_stats(days=dni)
-    except Exception:  # noqa: BLE001 — DB/query errors, return empty string as fallback
+    except Exception as e:  # noqa: BLE001 — DB/query errors, return empty string as fallback
+        # Pusty string wstrzykuje sie do promptu bez sladu: Groq dostaje prompt
+        # BEZ danych o kalibracji i typuje tak, jakby ich nie bylo. Wyglada to
+        # identycznie jak "za malo probek", ktore jest stanem normalnym.
+        logger.warning("Kalibracja do promptu niedostepna (%s: %s) — Groq typuje"
+                       " BEZ danych o skutecznosci rynkow", type(e).__name__, e)
         return ""
 
     by_market = stats.get("by_market", {})

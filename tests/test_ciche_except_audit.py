@@ -129,7 +129,12 @@ BASELINE: dict[str, int] = {
     "cli.py": 9,
     "cli_commands.py": 3,
     "core/async_utils.py": 2,
-    "core/backtest.py": 5,
+    # 29.08: 5 -> 2. Najgrozniejszy byl `except Exception: pass` wokol CALEGO
+    # bloku auto-treningu — kalibracja mogla nigdy sie nie przeliczyc, a
+    # `save_result` i tak melduje sukces. Zostaja: shim opcjonalnego `tabulate`
+    # oraz noga bez kursu w `oznacz_zweryfikowane`, gdzie sygnalem jest ROZNICA
+    # licznikow (opisana w docstringu), nie log per noga.
+    "core/backtest.py": 2,
     "core/bankroll.py": 2,
     "core/calibration.py": 3,
     "core/checkpoint.py": 1,
@@ -158,7 +163,11 @@ BASELINE: dict[str, int] = {
     "core/match_analysis.py": 2,
     "core/match_linker.py": 1,
     "core/ml_features.py": 1,
-    "core/player_db.py": 5,
+    # 29.08: 5 -> 2. `except sqlite3.Error -> {}/[]/None` sprawialo, ze AWARIA
+    # BAZY wygladala jak nieznana druzyna — a cicho zerowala `goal_share`, wiec
+    # korekta lambda za kontuzje przestawala dzialac. Zostaja konwertery pol
+    # opcjonalnych (kazde pole kazdego zawodnika).
+    "core/player_db.py": 2,
     "core/poisson.py": 2,
     "core/probability_calibrator.py": 2,
     "core/processing.py": 1,
@@ -241,7 +250,11 @@ BASELINE: dict[str, int] = {
     # 28.08: 4 -> 0. Formaty wyniku, ktorych nie umiemy odczytac, znikaly bez
     # sladu — dokladnie to zatrzymalo 218 wierszy w kolejce dziennika.
     "utils/betting.py": 0,
-    "utils/cache.py": 4,
+    # 29.08: 4 -> 1. Cisza tu KOSZTOWALA BUDZET: brak katalogu = kazdy zapis
+    # cache pada, uszkodzony plik = kazde zapytanie leci do sieci. Ostrzezenia
+    # sa jednorazowe na proces (stan trwaly, do 100 req/dzien). Zostaje
+    # `af_cache_info` — funkcja STATYSTYCZNA, nie wplywa na zadna decyzje.
+    "utils/cache.py": 1,
     "utils/console.py": 1,
     "utils/db.py": 3,
     "utils/helpers.py": 2,
