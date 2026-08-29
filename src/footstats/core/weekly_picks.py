@@ -104,7 +104,9 @@ def _ml_do_predykcji(pred_ml: dict | None, odds: dict | None = None) -> dict | N
             "pewnosc":   55,
             "odds":      odds,
         }
-    except (TypeError, ValueError, KeyError):
+    except (TypeError, ValueError, KeyError) as e:
+        logger.warning("Predykcja ML w nieoczekiwanym ksztalcie (%s: %s) —"
+                       " mecz wypada z puli tygodnia", type(e).__name__, e)
         return None
 
 
@@ -179,6 +181,8 @@ def pewniaczki_tygodnia(
                     if not (dzisiaj <= datetime.strptime(d_b, "%Y-%m-%d").date() <= granica):
                         continue
                 except ValueError:
+                    logger.warning("Mecz %s-%s ma date %r nie do sparsowania —"
+                                   " wypada z puli tygodnia", g_b, a_b, d_b)
                     continue
                 n_w_oknie += 1
                 klucz = f"{g_b}|{a_b}|{d_b}"
@@ -221,6 +225,8 @@ def pewniaczki_tygodnia(
                 if not (dzisiaj <= datetime.strptime(d, "%Y-%m-%d").date() <= granica):
                     continue
             except ValueError:
+                logger.warning("Mecz %s-%s ma date %r nie do sparsowania —"
+                               " wypada z puli tygodnia", g, a, d)
                 continue
 
             stage = _s(mecz.get("stage"), "REGULAR_SEASON")
@@ -300,7 +306,11 @@ def pewniaczki_tygodnia(
                 try:
                     df_nad_l = api_fdb.nadchodzace(liga["kod"], 30)
                     time.sleep(SLEEP_LOOP)  # rate limit FDB: 10 req/min
-                except (OSError, ValueError, RuntimeError):
+                except (OSError, ValueError, RuntimeError) as e:
+                    logger.warning("Liga %s (%s) nieosiagalna w FDB (%s: %s) —"
+                                   " CALA liga wypada ze skanu tygodnia",
+                                   liga.get("nazwa") or "?", liga.get("kod"),
+                                   type(e).__name__, e)
                     continue
                 if df_nad_l is None or df_nad_l.empty:
                     continue
@@ -313,6 +323,8 @@ def pewniaczki_tygodnia(
                         if not (dzisiaj <= datetime.strptime(d, "%Y-%m-%d").date() <= granica):
                             continue
                     except ValueError:
+                        logger.warning("Mecz %s-%s ma date %r nie do sparsowania —"
+                                       " wypada z puli tygodnia", g, a, d)
                         continue
                     klucz = f"{g}|{a}|{d}"
                     if klucz in wyniki:

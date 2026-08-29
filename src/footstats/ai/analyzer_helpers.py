@@ -66,8 +66,12 @@ def _wzbogac_forme(wyniki: list, top_n: int = 12) -> None:
     try:
         from footstats.scrapers.form_scraper import pobierz_forme_meczu, PLAYWRIGHT_OK
         if not PLAYWRIGHT_OK:
+            logger.warning("[AI] Playwright niedostepny — CALY etap formy"
+                           " SofaScore pominiety, mecze ida bez formy i kontuzji")
             return
-    except ImportError:
+    except ImportError as e:
+        logger.warning("[AI] Brak form_scraper (%s) — CALY etap formy SofaScore"
+                       " pominiety w tym przebiegu", e)
         return
 
     posortowane = sorted(
@@ -105,8 +109,10 @@ def _wzbogac_forme(wyniki: list, top_n: int = 12) -> None:
                 wyniki[idx]["sofa_kontuzje_g"] = ", ".join(inj_g)
             if inj_a:
                 wyniki[idx]["sofa_kontuzje_a"] = ", ".join(inj_a)
-        except (KeyError, TypeError, ValueError, OSError):
-            pass
+        except (KeyError, TypeError, ValueError, OSError) as e:
+            logger.warning("[AI] Forma SofaScore dla meczu #%s nie do odczytania"
+                           " (%s: %s) — mecz idzie bez formy i kontuzji",
+                           idx, type(e).__name__, e)
 
 
 def _sygnaly_summary(wyniki: list) -> str:
@@ -275,7 +281,11 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
     """
     try:
         from footstats.core.backtest import save_prediction
-    except ImportError:
+    except ImportError as e:
+        # Analiza konczy sie sukcesem, a do bazy NIE trafia ani jeden typ.
+        # Bez tego logu przebieg wyglada normalnie, a `predictions` zostaje puste.
+        logger.error("[AI] Brak `save_prediction` (%s) — typy z TEJ analizy NIE"
+                     " zostana zapisane do backtestu", e)
         return
 
     today = datetime.now().strftime("%Y-%m-%d")
@@ -317,7 +327,12 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
             try:
                 from footstats.ai.rag import wyciagnij_faktory
                 faktory = wyciagnij_faktory(w.get("pred") or {})
-            except (ImportError, KeyError, AttributeError):
+            except (ImportError, KeyError, AttributeError) as e:
+                # `factors` puste = RAG nie ma z czego sie uczyc, a w bazie
+                # wyglada to identycznie jak "mecz bez czynnikow ryzyka".
+                logger.warning("[AI] Nie moge wyciagnac faktorow (%s: %s) —"
+                               " `factors` zostaje PUSTE dla tego typu",
+                               type(e).__name__, e)
                 faktory = []
             # D3: prob modelu 1X2 do zapisu. quick_picks daje pw/pr/pp top-level.
             # C2: override tipu NIE tutaj — robi go _nadpisz_tip_modelem na realnym
@@ -511,6 +526,9 @@ def _wyciagnij_json(tekst: str) -> dict:
         try:
             return json.loads(match.group())
         except json.JSONDecodeError:
+            # CISZA CELOWA: to PIERWSZY krok lancucha naprawczego opisanego
+            # w docstringu. Nieudana proba jest normalna — glosny jest WYNIK:
+            # udana naprawa loguje WARNING nizej, nieodwracalna porazka ERROR.
             pass
 
     # Naprawa: utnij w miejscu, gdzie nawiasy sie domykaja (nadmiarowy nawias,
@@ -520,6 +538,7 @@ def _wyciagnij_json(tekst: str) -> dict:
         try:
             dane = json.loads(kandydat)
         except json.JSONDecodeError:
+            # CISZA CELOWA, jak wyzej: drugi krok tego samego lancucha.
             dane = None
         if isinstance(dane, dict):
             logger.warning("[AI] JSON od modelu byl uszkodzony — naprawiony przez"

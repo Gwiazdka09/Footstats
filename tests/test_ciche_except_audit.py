@@ -105,7 +105,11 @@ BASELINE: dict[str, int] = {
     # 5 rynkow x N meczow (`_buduj_opis_meczu`) - brak kursu na BTTS/O2.5 to norma,
     # log zalalby logi szumem.
     "ai/analyzer.py": 1,
-    "ai/analyzer_helpers.py": 6,
+    # 29.08: 6 -> 2. Najgrozniejszy: brak `save_prediction` znaczyl, ze analiza
+    # konczy sie sukcesem, a do bazy NIE trafia ani jeden typ (teraz ERROR).
+    # Do tego caly etap formy SofaScore i puste `factors`. Zostaja DWA kroki
+    # lancucha naprawczego JSON-a — tam glosny jest WYNIK, nie kroki posrednie.
+    "ai/analyzer_helpers.py": 2,
     "ai/client.py": 1,
     "ai/rag.py": 2,
     "ai/trainer.py": 2,
@@ -115,7 +119,12 @@ BASELINE: dict[str, int] = {
     # Kontekst: 27.07 zgubiony JWT_SECRET udawal "zle haslo" — cisza tu ma inna
     # wage niz gdzie indziej.
     "api/auth.py": 0,
-    "api/main.py": 4,
+    # 29.08: 4 -> 1. DWA `except Exception: pass` siedzialy w endpoincie
+    # HEALTH — czyli czujnik zdrowia milczal o wlasnej awarii i meldowal
+    # `auth.ok=false`, co znaczylo naraz "brak userow" (norma) i "nie udalo sie
+    # sprawdzic" (awaria). Kontrakt JSON bez zmian (czyta go monitoring), log
+    # rozroznia. Zostaje `/metrics`, ktory ODPOWIEDZ niesie powod wprost.
+    "api/main.py": 1,
     "api/routes/coupons.py": 1,
     "api/routes/status.py": 1,
     # 15 -> 9 (2026-08-28, J1). Naprawione: import modulow AI (`except ImportError`
@@ -182,7 +191,9 @@ BASELINE: dict[str, int] = {
     "core/quick_picks.py": 1,
     "core/response_cache.py": 2,
     "core/system_paper.py": 2,
-    "core/weekly_picks.py": 5,
+    # 29.08: 5 -> 0. Cztery gubily mecz z puli tygodnia (zepsuty payload ML,
+    # trzy identyczne filtry daty), piaty gubil CALA lige ze skanu FDB.
+    "core/weekly_picks.py": 0,
     # 28.08: 8 -> 0. Cztery to byly SCIEZKI ALARMOWE (`send_alert`,
     # `send_stop_loss_alert`, `check_and_alert_accuracy`) — nieudana wysylka
     # alarmu byla cicha, czyli stop-loss mogl zadzialac bez powiadomienia.
