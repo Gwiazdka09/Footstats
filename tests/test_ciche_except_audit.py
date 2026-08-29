@@ -229,8 +229,13 @@ BASELINE: dict[str, int] = {
     "scrapers/superbet.py": 8,
     "scrapers/superbet_bb.py": 1,
     "scrapers/superbet_parsing.py": 8,
-    "scrapers/terminarz.py": 4,
-    "scrapers/understat_xg.py": 5,
+    # 29.08: 4 -> 1. Zostaje `_poprawna_data` — PREDYKAT, gdzie `False` jest
+    # odpowiedzia na zadane pytanie, nie polknieta awaria.
+    "scrapers/terminarz.py": 1,
+    # 29.08: 5 -> 3. Zostaja: `_i`/`_f` (wolane dla KAZDEGO pola KAZDEGO
+    # zawodnika, puste pole to stan normalny) i nieosiagalny handler
+    # w `_parsuj_liczbe`. Wszystkie trzy maja komentarz w kodzie.
+    "scrapers/understat_xg.py": 3,
     "scrapers/zawodtyper_referees.py": 2,
     "telegram_bot.py": 2,
     # 28.08: 4 -> 0. Formaty wyniku, ktorych nie umiemy odczytac, znikaly bez
