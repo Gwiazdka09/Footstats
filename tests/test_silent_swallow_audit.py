@@ -25,7 +25,7 @@ SRC = ROOT / "src"
 # Najgroźniejszy z naprawionych: `_zapytaj_typera` w analyzer.py, `except
 # Exception: pass`-owy fallback dokładnie tego typu awarii, który 22.08.2026
 # ukrył na 6 dni wycofanie modelu Groq (404 bez śladu, exit=0).
-PROG = 38   # 28-29.08: 56 -> 38 (J1: daily_phases, daily_agent, coupon_settlement, betting, quick_picks, api_football, superbet)
+PROG = 35   # 28-29.08: 56 -> 35 (J1: 12 modulow — patrz BASELINE w test_ciche_except_audit)
 
 # Ścieżki, gdzie ciche połknięcie jest wprost uzasadnione: teardown przeglądarki
 # musi przeżyć każdy błąd, bo inaczej zostawia wiszący proces chromium.

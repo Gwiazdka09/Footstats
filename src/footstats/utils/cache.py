@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from datetime import datetime
 from footstats.utils.paths import katalog_cache
@@ -23,6 +24,14 @@ from footstats.utils.console import console
 #    - Ostrzezenie gdy < 20 req pozostalo
 #    - BLOKADA gdy < 5 req (rezerwowe na krytyczne zapytania)
 # ================================================================
+
+log = logging.getLogger(__name__)
+
+# Ostrzegamy RAZ NA PROCES, nie przy kazdym zapytaniu: `_af_load_disk_cache`
+# wola sie per request (do 100/dzien), a uszkodzony plik jest stanem TRWALYM —
+# setna kopia tej samej linii nie wnosi nic, a topi reszte logu.
+_zgloszono_brak_katalogu = False
+_zgloszono_uszkodzony_plik = False
 
 _RAM_CACHE: dict = {}   # football-data.org + bzzoiro (in-memory)
 MAX_RAM_ENTRIES = 200
@@ -90,10 +99,16 @@ def _cache_set(klucz: str, dane):
 # ── Disk cache (API-Football, TTL 24h) ──────────────────────────────
 
 def _af_ensure_dir():
+    global _zgloszono_brak_katalogu
     try:
         CACHE_DIR.mkdir(exist_ok=True)
-    except OSError:
-        pass
+    except OSError as e:
+        if not _zgloszono_brak_katalogu:
+            # Bez katalogu KAZDY zapis cache pada po cichu, wiec kazde zapytanie
+            # idzie do sieci i zjada dzienny budzet API-Football (100 req).
+            log.warning("Nie moge zalozyc %s (%s) — cache dyskowy NIE DZIALA,"
+                        " kazde zapytanie zuzyje budzet API", CACHE_DIR, e)
+            _zgloszono_brak_katalogu = True
 
 def _af_load_disk_cache() -> dict:
     """Laduje caly plik cache z dysku."""
@@ -101,7 +116,16 @@ def _af_load_disk_cache() -> dict:
     if AF_CACHE_FILE.exists():
         try:
             return json.loads(AF_CACHE_FILE.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            global _zgloszono_uszkodzony_plik
+            if not _zgloszono_uszkodzony_plik:
+                # `{}` znaczy "cache pusty", czyli to samo co pierwszy przebieg.
+                # Roznica jest zasadnicza: uszkodzony plik NIE naprawi sie sam
+                # i kazde zapytanie bedzie szlo do sieci az ktos go skasuje.
+                log.warning("Plik cache %s nie do odczytania (%s) — traktuje jak"
+                            " PUSTY; skasuj go, inaczej budzet API bedzie ginal",
+                            AF_CACHE_FILE, e)
+                _zgloszono_uszkodzony_plik = True
             return {}
     return {}
 
@@ -136,8 +160,12 @@ def _af_cache_get(klucz: str) -> dict | None:
                 f"[{wiek_h}h {wiek_m}min]: {klucz[:55]}[/dim yellow]"
             )
             return wpis["data"]
-    except (ValueError, KeyError):
-        pass
+    except (ValueError, KeyError) as e:
+        # Wpis JEST, ale nie umiemy odczytac jego wieku — traktujemy jak brak,
+        # czyli platne zapytanie do API. Cicho wygladalo to jak zwykly cache MISS.
+        log.warning("Wpis cache %r ma zepsuty znacznik czasu (%s: %s) —"
+                    " traktuje jak MISS, poleci zapytanie do API", klucz[:55],
+                    type(e).__name__, e)
     return None
 
 def _af_cache_set(klucz: str, dane: dict, stare_dane: dict | None = None):
@@ -177,6 +205,9 @@ def af_cache_info() -> dict:
         try:
             tsy.append(datetime.fromisoformat(w["ts"]))
         except (ValueError, KeyError):
+            # CISZA CELOWA: to funkcja STATYSTYCZNA (ile wpisow, najstarszy,
+            # najnowszy). Zepsuty wpis wypada z licznika i nie wplywa na zadna
+            # decyzje — o samym zepsuciu glosno mowi juz `_af_cache_get`.
             pass
     rozm = AF_CACHE_FILE.stat().st_size // 1024 if AF_CACHE_FILE.exists() else 0
     return {

@@ -10,12 +10,15 @@ Zero prod Neon — świadomie lokalny SQLite (reference/cache), testowalny na tm
 """
 from __future__ import annotations
 
+import logging
 import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 
 from footstats.config import DB_PATH
+
+log = logging.getLogger(__name__)
 from footstats.utils.normalize import normalize_team_name
 
 _DDL = """
@@ -174,7 +177,14 @@ def team_goal_shares(
                 "SELECT name, goals FROM player_stats WHERE team_norm = ? AND season = ?",
                 (tn, int(season)),
             ).fetchall()
-    except sqlite3.Error:
+    except sqlite3.Error as e:
+        # `{}` znaczy tu "druzyna nie ma zapisanych golkerow", czyli stan
+        # NORMALNY dla nieznanej druzyny. Awaria bazy (brak tabeli, blokada,
+        # uszkodzony plik) wygladala identycznie — i cicho zerowala goal_share,
+        # przez co korekta lambda za kontuzje przestawala dzialac.
+        log.warning("player_db: nie moge odczytac goli %s/%s (%s: %s) —"
+                    " goal_share = 0, korekta lambda za kontuzje NIE zadziala",
+                    team, season, type(e).__name__, e)
         return {}
     total = sum(int(r["goals"] or 0) for r in rows)
     if total <= 0:
@@ -200,7 +210,10 @@ def get_team_players(
                 "WHERE team_norm = ? AND season = ? ORDER BY goals DESC",
                 (tn, int(season)),
             ).fetchall()
-    except sqlite3.Error:
+    except sqlite3.Error as e:
+        log.warning("player_db: nie moge odczytac skladu %s/%s (%s: %s) —"
+                    " oddaje PUSTA liste, nie do odroznienia od nieznanej druzyny",
+                    team, season, type(e).__name__, e)
         return []
     return [dict(r) for r in rows]
 
@@ -289,7 +302,9 @@ def get_team_stats(
                 "ORDER BY matches DESC LIMIT 1",
                 (tn, int(season)),
             ).fetchone()
-    except sqlite3.Error:
+    except sqlite3.Error as e:
+        log.warning("player_db: nie moge odczytac statystyk %s/%s (%s: %s) —"
+                    " mecz pojdzie bez nich", team, season, type(e).__name__, e)
         return None
     return dict(row) if row else None
 
@@ -311,6 +326,9 @@ def team_attack_defense(
 
 
 def _optional_float(v: object) -> float | None:
+    """CISZA CELOWA (tak samo `_optional_int`): konwerter pola opcjonalnego,
+    wolany dla kazdego pola kazdego zawodnika. `None` to uczciwe "nie wiadomo",
+    a puste pole w danych zrodlowych jest stanem normalnym."""
     try:
         return float(v) if v is not None else None
     except (ValueError, TypeError):
