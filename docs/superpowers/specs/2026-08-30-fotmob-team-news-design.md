@@ -104,7 +104,7 @@ class Absencja:
     nazwisko: str
     typ: str                    # "injury" / "suspension"
     powrot: str | None          # "Doubtful" | "Mid September 2026"
-    pewna: bool                 # powrot != "Doubtful" -> absencja twarda
+    pewna: bool                 # patrz regula nizej
     gole_sezon: int | None      # performance.seasonGoals
 
 @dataclass(frozen=True)
@@ -119,8 +119,24 @@ class TeamNews:
     absencje_home: list[Absencja]
     absencje_away: list[Absencja]
     sedzia: str | None
-    sedzia_stats: dict[str, float | None]
+    sedzia_stats: dict[str, float | None]   # klucze ustalone nizej
 ```
+
+**Reguła `pewna`** (bez niej dwie różne rzeczy wpadłyby do jednego `False`):
+
+| `powrot` | `pewna` | znaczenie |
+|---|---|---|
+| `"Doubtful"` | `False` | zawodnik **może** zagrać — absencja niepewna |
+| data, np. `"Mid September 2026"` | `True` | nie zagra na pewno |
+| `None` (źródło nie podało) | `False` | **nie wiadomo** — nie zgadujemy |
+
+Wiersz trzeci jest tu po to, żeby brak danych nie udawał niepewnej absencji przy
+liczeniu edge'u. `availability_edge` waży tylko `pewna=True`; reszta idzie do logu,
+nie do lambdy.
+
+**Klucze `sedzia_stats`** — zamknięty zbiór, dokładnie kolumny tabeli `referees`:
+`avg_yellow`, `avg_red`, `avg_goals`, `home_win_pct`, `n_matches`. Klucza nieobecnego
+u FotMoba **nie ma w słowniku wcale** — nie ma go z wartością `0`.
 
 `typ_skladu` jest w DTO **celowo**. `lastStarting11` to ostatni skład, nie prognoza.
 Zlanie tych dwóch w jedno pole to ten sam kształt błędu, co naprawiony 29.08
@@ -145,6 +161,11 @@ kandydaci --+-> FotMobTeamNews.fetch(data)   1 req/dzień + 1 req/mecz
 
 Stary tor API-Football **zostaje** pod `api_key`, jako drugi w kolejce. Jeśli konto
 wróci — cross-walidacja za darmo. Jeśli nie wróci — nic nie pada.
+
+To nie jest agregator w sensie `sources/aggregator.py`: nie ma głosowania ani
+uzgadniania rozjazdów, jest zwykłe pierwszeństwo — pole wypełnione przez FotMoba
+nie jest nadpisywane przez API-Football. Kolejność żyje w fazie enrichmentu, nie
+w osobnym module.
 
 ### Pułapka: kolumny `referees`
 
