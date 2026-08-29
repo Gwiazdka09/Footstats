@@ -1,0 +1,1289 @@
+{
+ "general": {
+  "matchId": "5071314",
+  "matchTimeUTCDate": "2026-08-30T00:30:00.000Z"
+ },
+ "content": {
+  "lineup": {
+   "matchId": 5071314,
+   "lineupType": "lastStarting11",
+   "source": "lastStartingLineups",
+   "availableFilters": [
+    "season",
+    "marketValue",
+    "age",
+    "country"
+   ],
+   "homeTeam": {
+    "id": 8259,
+    "name": "Houston Dynamo FC",
+    "formation": "4-2-3-1",
+    "starters": [
+     {
+      "id": 186882,
+      "age": 33,
+      "name": "Jonathan Bond",
+      "positionId": 11,
+      "usualPlayingPositionId": 0,
+      "shirtNumber": "31",
+      "countryName": "England",
+      "countryCode": "ENG",
+      "horizontalLayout": {
+       "x": 0.1,
+       "y": 0.5,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.5,
+       "y": 0.1,
+       "height": 0.192,
+       "width": 1
+      },
+      "marketValue": 135803,
+      "performance": {
+       "seasonRating": 6.91
+      },
+      "firstName": "Jonathan",
+      "lastName": "Bond",
+      "rankings": null
+     },
+     {
+      "id": 1274604,
+      "age": 24,
+      "name": "Lawrence Ennali",
+      "positionId": 32,
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "11",
+      "countryName": "Germany",
+      "countryCode": "GER",
+      "horizontalLayout": {
+       "x": 0.292,
+       "y": 0.875,
+       "height": 0.25,
+       "width": 0.385
+      },
+      "verticalLayout": {
+       "x": 0.125,
+       "y": 0.292,
+       "height": 0.192,
+       "width": 0.25
+      },
+      "marketValue": 1251750,
+      "performance": {
+       "seasonGoals": 3,
+       "seasonAssists": 2,
+       "seasonRating": 7.05
+      },
+      "firstName": "Lawrence",
+      "lastName": "Ennali",
+      "rankings": null
+     },
+     {
+      "id": 1910398,
+      "age": 24,
+      "name": "Agustin Resch",
+      "positionId": 34,
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "34",
+      "countryName": "Argentina",
+      "countryCode": "ARG",
+      "horizontalLayout": {
+       "x": 0.292,
+       "y": 0.625,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.375,
+       "y": 0.292,
+       "height": 0.192,
+       "width": 0.25
+      },
+      "marketValue": 237801,
+      "performance": {
+       "seasonGoals": 1,
+       "seasonRating": 6.96
+      },
+      "firstName": "Agustin",
+      "lastName": "Resch",
+      "rankings": null
+     },
+     {
+      "id": 1043762,
+      "age": 26,
+      "name": "Lucas Halter",
+      "positionId": 36,
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "5",
+      "countryName": "Brazil",
+      "countryCode": "BRA",
+      "horizontalLayout": {
+       "x": 0.292,
+       "y": 0.375,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.625,
+       "y": 0.292,
+       "height": 0.192,
+       "width": 0.25
+      },
+      "marketValue": 1190477,
+      "performance": {
+       "seasonRating": 7.08
+      },
+      "firstName": "Lucas",
+      "lastName": "Halter",
+      "rankings": null
+     },
+     {
+      "id": 643577,
+      "age": 28,
+      "name": "Marcelo Saracchi",
+      "positionId": 38,
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "4",
+      "countryName": "Uruguay",
+      "countryCode": "URU",
+      "horizontalLayout": {
+       "x": 0.292,
+       "y": 0.125,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.875,
+       "y": 0.292,
+       "height": 0.192,
+       "width": 0.25
+      },
+      "marketValue": 1423690,
+      "performance": {
+       "seasonRating": 6.52
+      },
+      "firstName": "Marcelo",
+      "lastName": "Saracchi",
+      "rankings": null
+     },
+     {
+      "id": 750922,
+      "age": 30,
+      "name": "Artur",
+      "positionId": 64,
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "6",
+      "countryName": "Brazil",
+      "countryCode": "BRA",
+      "horizontalLayout": {
+       "x": 0.485,
+       "y": 0.7,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.3,
+       "y": 0.485,
+       "height": 0.192,
+       "width": 0.4
+      },
+      "marketValue": 1429410,
+      "performance": {
+       "seasonAssists": 1,
+       "seasonRating": 7.03
+      },
+      "firstName": "",
+      "lastName": "Artur",
+      "rankings": null
+     },
+     {
+      "id": 643646,
+      "age": 30,
+      "name": "Diadie Samassékou",
+      "positionId": 66,
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "18",
+      "countryName": "Mali",
+      "countryCode": "MLI",
+      "horizontalLayout": {
+       "x": 0.485,
+       "y": 0.3,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.7,
+       "y": 0.485,
+       "height": 0.192,
+       "width": 0.4
+      },
+      "marketValue": 447658,
+      "performance": {
+       "seasonRating": 6.6
+      },
+      "firstName": "Diadie",
+      "lastName": "Samassékou",
+      "rankings": null
+     },
+     {
+      "id": 1171013,
+      "age": 23,
+      "name": "Jack McGlynn",
+      "positionId": 83,
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "8",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "horizontalLayout": {
+       "x": 0.678,
+       "y": 0.837,
+       "height": 0.25,
+       "width": 0.385
+      },
+      "verticalLayout": {
+       "x": 0.162,
+       "y": 0.678,
+       "height": 0.192,
+       "width": 0.325
+      },
+      "marketValue": 3960707,
+      "performance": {
+       "seasonGoals": 2,
+       "seasonAssists": 5,
+       "seasonRating": 7.54
+      },
+      "firstName": "Jack",
+      "lastName": "McGlynn",
+      "rankings": null
+     },
+     {
+      "id": 723682,
+      "age": 32,
+      "name": "Agustín Bouzat",
+      "positionId": 85,
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "30",
+      "countryName": "Argentina",
+      "countryCode": "ARG",
+      "horizontalLayout": {
+       "x": 0.678,
+       "y": 0.5,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.5,
+       "y": 0.678,
+       "height": 0.192,
+       "width": 0.337
+      },
+      "marketValue": 354010,
+      "performance": {
+       "seasonGoals": 1,
+       "seasonAssists": 1,
+       "seasonRating": 6.57
+      },
+      "firstName": "Agustín",
+      "lastName": "Bouzat",
+      "rankings": null
+     },
+     {
+      "id": 954194,
+      "age": 25,
+      "name": "Mateusz Bogusz",
+      "positionId": 87,
+      "usualPlayingPositionId": 3,
+      "shirtNumber": "19",
+      "countryName": "Poland",
+      "countryCode": "POL",
+      "horizontalLayout": {
+       "x": 0.678,
+       "y": 0.163,
+       "height": 0.25,
+       "width": 0.193
+      },
+      "verticalLayout": {
+       "x": 0.837,
+       "y": 0.678,
+       "height": 0.192,
+       "width": 0.325
+      },
+      "marketValue": 3647826,
+      "performance": {
+       "seasonGoals": 4,
+       "seasonAssists": 1,
+       "seasonRating": 7.1
+      },
+      "firstName": "Mateusz",
+      "lastName": "Bogusz",
+      "rankings": null
+     },
+     {
+      "id": 1439982,
+      "age": 25,
+      "name": "Duncan McGuire",
+      "positionId": 115,
+      "usualPlayingPositionId": 3,
+      "shirtNumber": "23",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "horizontalLayout": {
+       "x": 0.87,
+       "y": 0.5,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.5,
+       "y": 0.87,
+       "height": 0.192,
+       "width": 1
+      },
+      "marketValue": 1483048,
+      "performance": {
+       "seasonGoals": 2,
+       "seasonRating": 6.31
+      },
+      "firstName": "Duncan",
+      "lastName": "McGuire",
+      "rankings": null
+     }
+    ],
+    "coach": {
+     "id": 31050,
+     "age": 49,
+     "name": "Ben Olsen",
+     "countryName": "USA",
+     "countryCode": "USA",
+     "firstName": "Ben",
+     "lastName": "Olsen",
+     "primaryTeamId": 8259,
+     "primaryTeamName": "Houston Dynamo FC",
+     "usualPlayingPositionId": null,
+     "isCoach": true
+    },
+    "subs": [
+     {
+      "id": 1719247,
+      "age": 23,
+      "name": "Blake Gillingham",
+      "usualPlayingPositionId": 0,
+      "shirtNumber": "26",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "firstName": "Blake",
+      "lastName": "Gillingham",
+      "rankings": null
+     },
+     {
+      "id": 319812,
+      "age": 33,
+      "name": "Antônio Carlos",
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "3",
+      "countryName": "Brazil",
+      "countryCode": "BRA",
+      "marketValue": 113714,
+      "performance": {
+       "seasonRating": 6.63
+      },
+      "firstName": "Antônio",
+      "lastName": "Carlos",
+      "rankings": null
+     },
+     {
+      "id": 166471,
+      "age": 34,
+      "name": "Erik Sviatchenko",
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "28",
+      "countryName": "Denmark",
+      "countryCode": "DEN",
+      "marketValue": 90345,
+      "performance": {
+       "seasonGoals": 1,
+       "seasonRating": 6.32
+      },
+      "firstName": "Erik",
+      "lastName": "Sviatchenko",
+      "rankings": null
+     },
+     {
+      "id": 1501511,
+      "age": 24,
+      "name": "Felipe Andrade",
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "36",
+      "countryName": "Brazil",
+      "countryCode": "BRA",
+      "marketValue": 1411684,
+      "performance": {
+       "seasonGoals": 1,
+       "seasonRating": 6.74
+      },
+      "firstName": "Felipe",
+      "lastName": "Andrade",
+      "rankings": null
+     },
+     {
+      "id": 789046,
+      "age": 31,
+      "name": "Franco Negri",
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "21",
+      "countryName": "Argentina",
+      "countryCode": "ARG",
+      "marketValue": 73272,
+      "performance": {
+       "seasonGoals": 1,
+       "seasonRating": 6.96
+      },
+      "firstName": "Franco",
+      "lastName": "Negri",
+      "rankings": null
+     },
+     {
+      "id": 480787,
+      "age": 31,
+      "name": "Duane Holmes",
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "14",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "marketValue": 298475,
+      "performance": {
+       "seasonRating": 6.6
+      },
+      "firstName": "Duane",
+      "lastName": "Holmes",
+      "rankings": null
+     },
+     {
+      "id": 274623,
+      "age": 36,
+      "name": "Héctor Herrera",
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "16",
+      "countryName": "Mexico",
+      "countryCode": "MEX",
+      "marketValue": 262791,
+      "performance": {
+       "seasonGoals": 2,
+       "seasonRating": 7.01
+      },
+      "firstName": "Héctor",
+      "lastName": "Herrera",
+      "rankings": null
+     },
+     {
+      "id": 1178505,
+      "age": 24,
+      "name": "Ibrahim Aliyu",
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "24",
+      "countryName": "Nigeria",
+      "countryCode": "NGA",
+      "marketValue": 697189,
+      "performance": {
+       "seasonGoals": 2,
+       "seasonRating": 6.97
+      },
+      "firstName": "Ibrahim",
+      "lastName": "Aliyu",
+      "rankings": null
+     },
+     {
+      "id": 763151,
+      "age": 31,
+      "name": "Guilherme Augusto",
+      "usualPlayingPositionId": 3,
+      "shirtNumber": "20",
+      "countryName": "Brazil",
+      "countryCode": "BRA",
+      "marketValue": 1310915,
+      "performance": {
+       "seasonGoals": 12,
+       "seasonAssists": 5,
+       "seasonRating": 7.96
+      },
+      "firstName": "Guilherme",
+      "lastName": "Augusto",
+      "rankings": null
+     }
+    ],
+    "unavailable": [
+     {
+      "id": 1043762,
+      "age": 26,
+      "name": "Lucas Halter",
+      "countryName": "Brazil",
+      "countryCode": "BRA",
+      "marketValue": 1190477,
+      "unavailability": {
+       "type": "suspension",
+       "expectedReturn": "Late August 2026",
+       "expectedReturnDate": "2026-08-30T02:30:00Z"
+      },
+      "performance": {
+       "seasonRating": 7.08
+      },
+      "firstName": "Lucas",
+      "lastName": "Halter"
+     },
+     {
+      "id": 643577,
+      "age": 28,
+      "name": "Marcelo Saracchi",
+      "countryName": "Uruguay",
+      "countryCode": "URU",
+      "marketValue": 1423690,
+      "unavailability": {
+       "injuryId": 130,
+       "type": "injury",
+       "expectedReturn": "Mid September 2026"
+      },
+      "performance": {
+       "seasonRating": 6.52
+      },
+      "firstName": "Marcelo",
+      "lastName": "Saracchi"
+     },
+     {
+      "id": 254939,
+      "age": 37,
+      "name": "Jimmy Maurer",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "marketValue": 50000,
+      "unavailability": {
+       "injuryId": 45,
+       "type": "injury",
+       "expectedReturn": "Late September 2026"
+      },
+      "performance": {
+       "seasonRating": 7.08
+      },
+      "firstName": "Jimmy",
+      "lastName": "Maurer"
+     }
+    ],
+    "averageStarterAge": 27.7,
+    "totalStarterMarketValue": 15562180,
+    "lastMatch": {
+     "matchId": 5071302,
+     "homeTeamId": 1427963,
+     "awayTeamId": 8259,
+     "homeTeamName": "St. Louis City",
+     "awayTeamName": "Houston Dynamo FC",
+     "homeScore": 2,
+     "awayScore": 1,
+     "matchDate": "2026-08-23T02:30:00"
+    }
+   },
+   "awayTeam": {
+    "id": 6603,
+    "name": "San Jose Earthquakes",
+    "formation": "4-2-3-1",
+    "starters": [
+     {
+      "id": 760746,
+      "age": 30,
+      "name": "Angus Gunn",
+      "positionId": 11,
+      "usualPlayingPositionId": 0,
+      "shirtNumber": "1",
+      "countryName": "Scotland",
+      "countryCode": "SCO",
+      "horizontalLayout": {
+       "x": 0.1,
+       "y": 0.5,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.5,
+       "y": 0.1,
+       "height": 0.192,
+       "width": 1
+      },
+      "marketValue": 920033,
+      "performance": {
+       "seasonRating": 6.14
+      },
+      "firstName": "Angus",
+      "lastName": "Gunn",
+      "rankings": null
+     },
+     {
+      "id": 1172905,
+      "age": 26,
+      "name": "Benji Kikanovic",
+      "positionId": 32,
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "28",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "horizontalLayout": {
+       "x": 0.292,
+       "y": 0.875,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.125,
+       "y": 0.292,
+       "height": 0.192,
+       "width": 0.25
+      },
+      "marketValue": 251581,
+      "performance": {
+       "seasonRating": 6.69
+      },
+      "firstName": "Benji",
+      "lastName": "Kikanovic",
+      "rankings": null
+     },
+     {
+      "id": 1439992,
+      "age": 26,
+      "name": "Daniel Munie",
+      "positionId": 34,
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "5",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "horizontalLayout": {
+       "x": 0.292,
+       "y": 0.625,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.375,
+       "y": 0.292,
+       "height": 0.192,
+       "width": 0.25
+      },
+      "marketValue": 1081990,
+      "performance": {
+       "seasonGoals": 4,
+       "seasonAssists": 1,
+       "seasonRating": 6.78
+      },
+      "firstName": "Daniel",
+      "lastName": "Munie",
+      "rankings": null
+     },
+     {
+      "id": 1715118,
+      "age": 22,
+      "name": "Reid Roberts",
+      "positionId": 36,
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "18",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "horizontalLayout": {
+       "x": 0.292,
+       "y": 0.375,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.625,
+       "y": 0.292,
+       "height": 0.192,
+       "width": 0.25
+      },
+      "marketValue": 465244,
+      "performance": {
+       "seasonGoals": 2,
+       "seasonRating": 6.83
+      },
+      "firstName": "Reid",
+      "lastName": "Roberts",
+      "rankings": null
+     },
+     {
+      "id": 666937,
+      "age": 32,
+      "name": "Vítor Costa",
+      "positionId": 38,
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "87",
+      "countryName": "Brazil",
+      "countryCode": "BRA",
+      "horizontalLayout": {
+       "x": 0.292,
+       "y": 0.125,
+       "height": 0.25,
+       "width": 0.385
+      },
+      "verticalLayout": {
+       "x": 0.875,
+       "y": 0.292,
+       "height": 0.192,
+       "width": 0.25
+      },
+      "marketValue": 84443,
+      "performance": {
+       "seasonRating": 6.03
+      },
+      "firstName": "Vítor",
+      "lastName": "Costa",
+      "rankings": null
+     },
+     {
+      "id": 862783,
+      "age": 27,
+      "name": "Jonathan González",
+      "positionId": 64,
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "40",
+      "countryName": "Mexico",
+      "countryCode": "MEX",
+      "horizontalLayout": {
+       "x": 0.485,
+       "y": 0.7,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.3,
+       "y": 0.485,
+       "height": 0.192,
+       "width": 0.4
+      },
+      "marketValue": 206817,
+      "performance": {
+       "seasonRating": 6.38
+      },
+      "firstName": "Jonathan",
+      "lastName": "González",
+      "rankings": null
+     },
+     {
+      "id": 1626423,
+      "age": 22,
+      "name": "Beau Leroux",
+      "positionId": 66,
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "34",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "horizontalLayout": {
+       "x": 0.485,
+       "y": 0.3,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.7,
+       "y": 0.485,
+       "height": 0.192,
+       "width": 0.4
+      },
+      "marketValue": 1813789,
+      "performance": {
+       "seasonGoals": 3,
+       "seasonAssists": 3,
+       "seasonRating": 7.34
+      },
+      "firstName": "Beau",
+      "lastName": "Leroux",
+      "rankings": null
+     },
+     {
+      "id": 1339287,
+      "age": 26,
+      "name": "Ousseni Bouda",
+      "positionId": 83,
+      "usualPlayingPositionId": 3,
+      "shirtNumber": "7",
+      "countryName": "Burkina Faso",
+      "countryCode": "BFA",
+      "horizontalLayout": {
+       "x": 0.678,
+       "y": 0.837,
+       "height": 0.25,
+       "width": 0.193
+      },
+      "verticalLayout": {
+       "x": 0.162,
+       "y": 0.678,
+       "height": 0.192,
+       "width": 0.325
+      },
+      "marketValue": 764484,
+      "performance": {
+       "seasonGoals": 5,
+       "seasonAssists": 1,
+       "seasonRating": 7.04
+      },
+      "firstName": "Ousseni",
+      "lastName": "Bouda",
+      "rankings": null
+     },
+     {
+      "id": 1339609,
+      "age": 21,
+      "name": "Niko Tsakiris",
+      "positionId": 85,
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "10",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "horizontalLayout": {
+       "x": 0.678,
+       "y": 0.5,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.5,
+       "y": 0.678,
+       "height": 0.192,
+       "width": 0.337
+      },
+      "marketValue": 1481020,
+      "performance": {
+       "seasonGoals": 2,
+       "seasonAssists": 4,
+       "seasonRating": 7.33
+      },
+      "firstName": "Niko",
+      "lastName": "Tsakiris",
+      "rankings": null
+     },
+     {
+      "id": 450980,
+      "age": 30,
+      "name": "Timo Werner",
+      "positionId": 87,
+      "usualPlayingPositionId": 3,
+      "shirtNumber": "11",
+      "countryName": "Germany",
+      "countryCode": "GER",
+      "horizontalLayout": {
+       "x": 0.678,
+       "y": 0.163,
+       "height": 0.25,
+       "width": 0.385
+      },
+      "verticalLayout": {
+       "x": 0.837,
+       "y": 0.678,
+       "height": 0.192,
+       "width": 0.325
+      },
+      "marketValue": 2100652,
+      "performance": {
+       "seasonGoals": 6,
+       "seasonAssists": 4,
+       "seasonRating": 7.36
+      },
+      "firstName": "Timo",
+      "lastName": "Werner",
+      "rankings": null
+     },
+     {
+      "id": 1251793,
+      "age": 27,
+      "name": "Preston Judd",
+      "positionId": 115,
+      "usualPlayingPositionId": 3,
+      "shirtNumber": "19",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "horizontalLayout": {
+       "x": 0.87,
+       "y": 0.5,
+       "height": 0.25,
+       "width": 0.192
+      },
+      "verticalLayout": {
+       "x": 0.5,
+       "y": 0.87,
+       "height": 0.192,
+       "width": 1
+      },
+      "marketValue": 574094,
+      "performance": {
+       "seasonGoals": 11,
+       "seasonAssists": 3,
+       "seasonRating": 7.14
+      },
+      "firstName": "Preston",
+      "lastName": "Judd",
+      "rankings": null
+     }
+    ],
+    "coach": {
+     "id": 78588,
+     "age": 74,
+     "name": "Bruce Arena",
+     "countryName": "USA",
+     "countryCode": "USA",
+     "firstName": "Bruce",
+     "lastName": "Arena",
+     "primaryTeamId": 6603,
+     "primaryTeamName": "San Jose Earthquakes",
+     "usualPlayingPositionId": null,
+     "isCoach": true
+    },
+    "subs": [
+     {
+      "id": 1082120,
+      "age": 25,
+      "name": "Francesco Montali",
+      "usualPlayingPositionId": 0,
+      "shirtNumber": "31",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "firstName": "Francesco",
+      "lastName": "Montali",
+      "rankings": null
+     },
+     {
+      "id": 651093,
+      "age": 33,
+      "name": "David Romney",
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "4",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "marketValue": 107532,
+      "performance": {
+       "seasonGoals": 1,
+       "seasonRating": 6.62
+      },
+      "firstName": "David",
+      "lastName": "Romney",
+      "rankings": null
+     },
+     {
+      "id": 1171017,
+      "age": 22,
+      "name": "Jack Jasinski",
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "17",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "marketValue": 120000,
+      "performance": {
+       "seasonGoals": 1,
+       "seasonRating": 6.59
+      },
+      "firstName": "Jack",
+      "lastName": "Jasinski",
+      "rankings": null
+     },
+     {
+      "id": 1610331,
+      "age": 24,
+      "name": "Jamar Ricketts",
+      "usualPlayingPositionId": 1,
+      "shirtNumber": "2",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "marketValue": 265146,
+      "performance": {
+       "seasonAssists": 2,
+       "seasonRating": 6.86
+      },
+      "firstName": "Jamar",
+      "lastName": "Ricketts",
+      "rankings": null
+     },
+     {
+      "id": 825663,
+      "age": 31,
+      "name": "Ian Harkes",
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "6",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "marketValue": 373697,
+      "performance": {
+       "seasonRating": 6.58
+      },
+      "firstName": "Ian",
+      "lastName": "Harkes",
+      "rankings": null
+     },
+     {
+      "id": 1756515,
+      "age": 24,
+      "name": "Nick Fernandez",
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "20",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "marketValue": 185681,
+      "performance": {
+       "seasonGoals": 1,
+       "seasonAssists": 2,
+       "seasonRating": 6.57
+      },
+      "firstName": "Nick",
+      "lastName": "Fernandez",
+      "rankings": null
+     },
+     {
+      "id": 848219,
+      "age": 31,
+      "name": "Paul Marie",
+      "usualPlayingPositionId": 2,
+      "shirtNumber": "3",
+      "countryName": "France",
+      "countryCode": "FRA",
+      "marketValue": 66426,
+      "performance": {
+       "seasonAssists": 4,
+       "seasonRating": 6.62
+      },
+      "firstName": "Paul",
+      "lastName": "Marie",
+      "rankings": null
+     },
+     {
+      "id": 1075251,
+      "age": 26,
+      "name": "Darius Johnson",
+      "usualPlayingPositionId": 3,
+      "shirtNumber": "79",
+      "countryName": "Grenada",
+      "countryCode": "GRN",
+      "marketValue": 146059,
+      "performance": {
+       "seasonRating": 6.25
+      },
+      "firstName": "Darius",
+      "lastName": "Johnson",
+      "rankings": null
+     },
+     {
+      "id": 1409118,
+      "age": 21,
+      "name": "Luka Jovanovic",
+      "usualPlayingPositionId": 3,
+      "shirtNumber": "9",
+      "countryName": "Australia",
+      "countryCode": "AUS",
+      "marketValue": 1204660,
+      "performance": {
+       "seasonRating": 6.2
+      },
+      "firstName": "Luka",
+      "lastName": "Jovanovic",
+      "rankings": null
+     }
+    ],
+    "unavailable": [
+     {
+      "id": 1172905,
+      "age": 26,
+      "name": "Benji Kikanovic",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "marketValue": 251581,
+      "unavailability": {
+       "type": "suspension",
+       "expectedReturn": "Late August 2026",
+       "expectedReturnDate": "2026-08-30T02:30:00Z"
+      },
+      "performance": {
+       "seasonRating": 6.69
+      },
+      "firstName": "Benji",
+      "lastName": "Kikanovic"
+     },
+     {
+      "id": 450980,
+      "age": 30,
+      "name": "Timo Werner",
+      "countryName": "Germany",
+      "countryCode": "GER",
+      "marketValue": 2100652,
+      "unavailability": {
+       "injuryId": 87,
+       "type": "injury",
+       "expectedReturn": "Late September 2026"
+      },
+      "performance": {
+       "seasonGoals": 6,
+       "seasonAssists": 4,
+       "seasonRating": 7.36
+      },
+      "firstName": "Timo",
+      "lastName": "Werner"
+     },
+     {
+      "id": 1075251,
+      "age": 26,
+      "name": "Darius Johnson",
+      "countryName": "Grenada",
+      "countryCode": "GRN",
+      "marketValue": 146059,
+      "unavailability": {
+       "injuryId": 87,
+       "type": "injury",
+       "expectedReturn": "Late September 2026"
+      },
+      "performance": {
+       "seasonRating": 6.25
+      },
+      "firstName": "Darius",
+      "lastName": "Johnson"
+     },
+     {
+      "id": 621915,
+      "age": 34,
+      "name": "Earl Edwards Jr.",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "marketValue": 50000,
+      "unavailability": {
+       "injuryId": 87,
+       "type": "injury",
+       "expectedReturn": "Mid September 2026"
+      },
+      "performance": {
+       "seasonRating": 6.92
+      },
+      "firstName": "Earl",
+      "lastName": "Edwards Jr."
+     },
+     {
+      "id": 1752870,
+      "age": 25,
+      "name": "Nonso Adimabua",
+      "countryName": "Nigeria",
+      "countryCode": "NGA",
+      "marketValue": 176201,
+      "unavailability": {
+       "injuryId": 87,
+       "type": "injury",
+       "expectedReturn": "Mid September 2026"
+      },
+      "performance": {
+       "seasonAssists": 1,
+       "seasonRating": 6.93
+      },
+      "firstName": "Nonso",
+      "lastName": "Adimabua"
+     },
+     {
+      "id": 1026143,
+      "age": 29,
+      "name": "DeJuan Jones",
+      "countryName": "USA",
+      "countryCode": "USA",
+      "marketValue": 1396987,
+      "unavailability": {
+       "injuryId": 73,
+       "type": "injury",
+       "expectedReturn": "Late December 2026"
+      },
+      "performance": {
+       "seasonRating": 7.37
+      },
+      "firstName": "DeJuan",
+      "lastName": "Jones"
+     }
+    ],
+    "averageStarterAge": 26.8,
+    "totalStarterMarketValue": 9744147,
+    "lastMatch": {
+     "matchId": 5071301,
+     "homeTeamId": 6603,
+     "awayTeamId": 207242,
+     "homeTeamName": "San Jose Earthquakes",
+     "awayTeamName": "Minnesota United",
+     "homeScore": 1,
+     "awayScore": 5,
+     "matchDate": "2026-08-23T04:30:00"
+    }
+   }
+  },
+  "matchFacts": {
+   "infoBox": {
+    "legInfo": null,
+    "Match Date": {
+     "utcTime": "2026-08-30T00:30:00.000Z",
+     "isDateCorrect": true
+    },
+    "Tournament": {
+     "id": 10000002,
+     "parentLeagueId": 130,
+     "link": "/leagues/130/overview/major-league-soccer",
+     "leagueName": "Major League Soccer",
+     "roundName": null,
+     "round": null
+    },
+    "Stadium": {
+     "name": "Shell Energy Stadium",
+     "city": "Houston, Texas",
+     "country": "United States",
+     "lat": 29.752239718,
+     "long": -95.352178542,
+     "capacity": 22661,
+     "surface": "grass"
+    },
+    "Referee": {
+     "imgUrl": "https://images.fotmob.com/image_resources/logo/teamlogo/can.png",
+     "text": "Pierre-Luc Lauzière",
+     "countryCode": "CAN",
+     "country": "Canada",
+     "id": 1001069972,
+     "leagueId": 130,
+     "leagueName": "MLS",
+     "stats": [
+      {
+       "type": "matches",
+       "value": 41,
+       "valueType": "total"
+      },
+      {
+       "type": "yellowCards",
+       "value": 4.12,
+       "valueType": "perMatch",
+       "average": 4.19,
+       "total": 169,
+       "averageType": "average",
+       "fillPercentage": 48.96,
+       "averagePercentage": 50
+      },
+      {
+       "type": "redCards",
+       "value": 1,
+       "valueType": "total"
+      },
+      {
+       "type": "unknown",
+       "value": 2,
+       "valueType": "total"
+      },
+      {
+       "type": "penalties",
+       "value": 9,
+       "valueType": "total"
+      },
+      {
+       "type": "fouls",
+       "value": 24.14,
+       "valueType": "perMatch",
+       "average": 24.13,
+       "total": 845,
+       "averageType": "average",
+       "fillPercentage": 50.17,
+       "averagePercentage": 50
+      }
+     ]
+    },
+    "Attendance": null
+   }
+  }
+ }
+}
