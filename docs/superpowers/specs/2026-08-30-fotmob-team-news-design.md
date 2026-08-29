@@ -289,3 +289,56 @@ poprawa.
 | brak ToS na dostęp maszynowy | dostęp może zostać odcięty | wolumen mały (1 req/dzień + 1 na mecz), throttle 0,7 s |
 | `predicted` XI bywa błędne | zła korekta lambdy | `typ_skladu` w DTO; `lastStarting11` traktowany słabiej |
 | nazwy drużyn i lig się rozjeżdżają | cicha utrata meczów | `team_similarity`; mapowanie lig po ID, nie po nazwie |
+
+---
+
+## WYKONANE 2026-08-30
+
+Suita **5486 passed, 11 skipped** (+64 nowe testy w czterech plikach). Pięć mutacji,
+pięć złapanych. Zero nowych zależności. Baseline obu audytów ciszy bez zmian — nowy
+kod nie ma ani jednego cichego handlera.
+
+Nowe: `scrapers/teamnews/{base,fotmob,sedzia}.py`, `scripts/smoke_team_news.py`,
+`scripts/zapisz_fikstury_fotmob.py`. Zmienione: `core/daily_phases.py`, `.env.example`.
+
+### Trzy rzeczy, których projekt nie przewidział
+
+**1. Koszt — złapane przed produkcją.** Pierwsza wersja `fetch(date)` schodziła po
+szczegóły **każdego** meczu dnia. FotMob miał 30.08 **482 mecze w 147 ligach**, czyli
+483 requesty na przebieg, żeby użyć kilkudziesięciu. Dołożone `fetch_dla(date, pary)`
+filtruje po nazwach **na liście dnia**, przed pobraniem szczegółów. Zmierzone na żywym
+źródle: **482 mecze → 5 requestów**. Trzy testy i jedna mutacja pilnują, że filtr
+nie zniknie.
+
+**2. Dokładny klucz nie wystarczył.** Projekt zakładał dopasowanie po
+`normalize_team_name`. Test „Brighton" vs „Brighton & Hove Albion" to obalił.
+Dołożone `_dopasuj_team_news`, świadomie z tym samym `PROG_DOPASOWANIA_MECZU` co tor
+API-Football — dwa progi rozjechałyby się po cichu, a taki rozjazd widać dopiero
+po utracie meczów.
+
+**3. Mecz bez składu tracił tożsamość.** `parsuj_mecz` bierze nazwy z sekcji `lineup`;
+gdy jej nie ma, DTO wychodziło z pustymi nazwami i wypadało z wyniku — mimo że mogło
+nieść samego sędziego. Naprawione przekazaniem nazw z listy dnia.
+
+### Pomiar żywego źródła po wdrożeniu (30.08, 5 meczów, wszystkie `predicted`)
+
+| mecz | XI | sędzia | avg_yellow | avg_red | absencje pewne / wątpliwe |
+|---|---|---|---|---|---|
+| Chelsea – Brighton | 11/11 | Michael Oliver | 3,8 | 0,037 | 6 / 4 |
+| Leeds – Brentford | 11/11 | Tony Harrington | 4,5 | 0,100 | 4 / 2 |
+| Freiburg – Werder | 11/11 | Daniel Siebert | 3,91 | 0,094 | 9 / 1 |
+| Real Madrid – Málaga | 11/11 | J. Martínez Munuera | 4,89 | 0,139 | 12 / 0 |
+| Monaco – Marseille | 11/11 | Willy Delajod | 3,43 | 0,114 | 7 / 0 |
+
+`avg_red` wychodzi w jednostkach **na mecz** (0,04–0,14), nie w sumach sezonu — czyli
+mapowanie jednostek działa na żywych danych, nie tylko na fiksturze.
+
+Rozróżnienie pewnych od wątpliwych absencji ma pokrycie w danych: Real Madryt ma
+12 twardych i zero wątpliwych, Chelsea 6 i 4. Gdyby traktować je jednakowo, korekta λ
+liczyłaby stratę zawodników, którzy zagrają.
+
+### Stan flagi
+
+`FOOTSTATS_TEAM_NEWS` jest **OFF na produkcji**. Włączenie to osobna decyzja i wymaga
+ustawienia w trzech miejscach naraz (API + `footstats-final` + `footstats-evening`).
+Przed flipem: `python scripts/smoke_team_news.py`.
