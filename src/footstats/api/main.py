@@ -66,6 +66,11 @@ class _TimeoutMiddleware(BaseHTTPMiddleware):
         try:
             return await asyncio.wait_for(call_next(request), timeout=timeout)
         except asyncio.TimeoutError:
+            # Klient dostaje 504, ale po stronie serwera nie zostawalo NIC —
+            # nie dalo sie ustalic, ktory endpoint sie przeciaga ani jak czesto.
+            logging.getLogger(__name__).warning(
+                "Timeout %.0fs na %s %s — zwracam 504",
+                timeout, request.method, request.url.path)
             return JSONResponse(
                 {"detail": "Request timeout", "timeout_s": timeout},
                 status_code=504,
@@ -263,8 +268,14 @@ def health() -> dict:
             ).fetchone()
             n = (row["n"] if row else 0) if hasattr(row, "keys") else (row[0] if row else 0)
         auth_ok = n > 0
-    except Exception:  # noqa: BLE001 — health must never return 5xx
-        pass
+    except Exception as e:  # noqa: BLE001 — health must never return 5xx
+        # UWAGA NA ZNACZENIE `False`: to NIE jest "brak aktywnych userow", tylko
+        # "nie udalo sie sprawdzic". Kontrakt odpowiedzi zostaje bez zmian (nie
+        # ruszam ksztaltu JSON-a, bo czyta go monitoring), ale log musi te dwa
+        # stany rozroznic — inaczej awaria bazy wyglada jak pusta baza.
+        logging.getLogger(__name__).warning(
+            "health: nie moge sprawdzic userow (%s: %s) — `auth.ok=false` znaczy"
+            " NIE WIADOMO, nie 'brak userow'", type(e).__name__, e)
 
     try:
         from footstats.utils.db import connect
@@ -275,8 +286,11 @@ def health() -> dict:
             last_pred = row["last_pred"] if row else None
             if last_pred:
                 agent_ok = last_pred >= datetime.now() - timedelta(hours=26)
-    except Exception:  # noqa: BLE001 — health must never return 5xx
-        pass
+    except Exception as e:  # noqa: BLE001 — health must never return 5xx
+        logging.getLogger(__name__).warning(
+            "health: nie moge sprawdzic swiezosci predykcji (%s: %s) —"
+            " `agent.ok=false` znaczy NIE WIADOMO, nie 'agent stoi'",
+            type(e).__name__, e)
 
     return {
         "status": "ok",
@@ -299,6 +313,9 @@ def metrics_endpoint(x_metrics_token: str = Header(default="")):
         from starlette.responses import Response
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
     except ImportError:
+        # CISZA CELOWA: odpowiedz SAMA niesie powod ("prometheus_client not
+        # installed"), wiec wolajacy dowiaduje sie wszystkiego. Log dublowalby
+        # to przy kazdym scrape'ie monitoringu.
         return {"status": "metrics-disabled", "reason": "prometheus_client not installed"}
 
 
