@@ -13,15 +13,40 @@ w `core/daily_phases.py::_enrichuj_finalna_faza`. Konto jest zawieszone od 01.08
 (nie limit — `suspended`), więc `lineup_ok`, `lineup_star_penalty`,
 `lineup_strength_*` i `referee_signal` są puste, a DECISION SCORE ma sufit 70/100.
 
-**Problem jest głębszy niż zawieszone konto.** Job `footstats-final` chodzi o 11:00
-UTC, a oficjalny `startXI` API-Football publikuje ~20-40 min przed gwizdkiem. Mecze
-grane wieczorem → o 11:00 `get_lineup` zwracał `None` dla większości kandydatów
-**także wtedy, gdy konto działało**. Zawieszenie dobiło coś, co strukturalnie nie
-mogło działać w tym harmonogramie.
-
 Konsekwencja: `core/availability_edge.py` — cała ścieżka B, „potwierdzona absencja
-gwiazdy rusza fair-value zanim miękkie booki zareagują" — nigdy nie dostała danych
+gwiazdy rusza fair-value zanim miękkie booki zareagują" — nie dostaje danych
 wejściowych.
+
+### Hipoteza sprawdzona i ODRZUCONA (krok 0, 30.08)
+
+Projekt zaczął się od tezy: *job chodzi o 11:00 UTC, a oficjalny `startXI` publikowany
+jest ~30 min przed gwizdkiem, więc składów nie było także wtedy, gdy konto działało.*
+
+**Pomiar na prod jej nie potwierdził.** `lineup_ok` nie jest kolumną, więc mierzony był
+jego skutek — `decision_score` dokłada +10 za skład i +10 za sędziego wyłącznie
+w `phase == "final"`:
+
+| faza | n nóg | mediana | max | nóg > 80 |
+|---|---|---|---|---|
+| `final` | 38 | 59 | **94** | **9** |
+| `system` | 238 | 57 | 79 | — |
+
+Dziewięć nóg powyżej 80 punktów znaczy, że skład albo sędzia realnie się policzyły —
+i to w kuponach z 05.08 i 10.08, czyli **po** zawieszeniu konta 01.08 (część zapytań
+do AF przechodzi).
+
+Uwaga do liczb: kolumna `decision_score` w kuponach `system` **nie jest** wynikiem
+`score_kandydat` — `core/system_paper.py:170` wpisuje tam `int(prob)`, czyli
+prawdopodobieństwo modelu. Rozkładów obu faz nie wolno porównywać wprost.
+
+**Wniosek dla projektu:** enrichment nie jest martwy, jest na gorącej ścieżce —
+`footstats-final` odpala `daily_agent --faza final` codziennie o 11:00, a ten woła
+`_enrichuj_finalna_faza`. Źródło pod spodem umiera i to naprawiamy. Cel bez zmian,
+uzasadnienie mocniejsze.
+
+**Znalezione przy okazji, poza zakresem:** faza `final` wyprodukowała w miesiącu
+3 kupony (05, 10, 15.08) i zamilkła. Data pokrywa się z awarią Groqa 16-22.08, ale po
+jej naprawie nie wróciła. Osobne zadanie.
 
 ## Decyzje przyjęte przed projektem
 
@@ -233,15 +258,11 @@ nie ręcznie zmyślony kształt.
 - spójność flagi w trzech miejscach
 - `scripts/smoke_team_news.py` — poza pytestem, ręcznie, na żywym źródle
 
-## Krok 0 — pomiar przed budową
+## Krok 0 — WYKONANY 30.08
 
-Jeden `SELECT` na prod: w ilu z 427 rozliczonych predykcji `lineup_ok` było niepuste.
-
-- wynik bliski 0 → potwierdza diagnozę; FotMob to nie ulepszenie, tylko **pierwsze**
-  realne włączenie ścieżki B
-- wynik wysoki → diagnoza błędna, projekt do przemyślenia
-
-Read-only, bez importu `footstats.api.main` (odpala `run_migrations()` przy imporcie).
+Wynik i korekta hipotezy: patrz sekcja „Hipoteza sprawdzona i ODRZUCONA" wyżej.
+Pomiar read-only, bez importu `footstats.api.main` (odpala `run_migrations()`
+przy imporcie).
 
 ## Czego ten projekt NIE obiecuje
 
