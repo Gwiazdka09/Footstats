@@ -1,0 +1,63 @@
+{
+ "leagues": [
+  {
+   "ccode": "ENG",
+   "name": "Premier League",
+   "id": 47,
+   "matches": [
+    {
+     "id": 5795427,
+     "home": {
+      "name": "Chelsea"
+     },
+     "away": {
+      "name": "Brighton"
+     }
+    },
+    {
+     "id": 5795430,
+     "home": {
+      "name": "Leeds"
+     },
+     "away": {
+      "name": "Brentford"
+     }
+    },
+    {
+     "id": 5795433,
+     "home": {
+      "name": "Sunderland"
+     },
+     "away": {
+      "name": "Fulham"
+     }
+    }
+   ]
+  },
+  {
+   "ccode": "GER",
+   "name": "Bundesliga",
+   "id": 54,
+   "matches": [
+    {
+     "id": 5881148,
+     "home": {
+      "name": "Freiburg"
+     },
+     "away": {
+      "name": "Werder Bremen"
+     }
+    },
+    {
+     "id": 5881144,
+     "home": {
+      "name": "Augsburg"
+     },
+     "away": {
+      "name": "Schalke 04"
+     }
+    }
+   ]
+  }
+ ]
+}
