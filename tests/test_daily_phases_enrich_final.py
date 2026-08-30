@@ -91,8 +91,13 @@ def test_fixture_rezerw_nie_jest_dopasowany(api, rezerwy_gosp, rezerwy_gosc):
 
     dp._enrichuj_finalna_faza([k], "klucz")
 
-    assert "lineup_ok" not in k, "skład rezerw doklejony do pierwszego zespołu"
-    assert "referee_name" not in k, "sędzia z meczu rezerw doklejony do pierwszego zespołu"
+    # Od 30.08 brak dopasowanego meczu NIE konczy wiersza (FlashScore stal
+    # wczesniej za `continue` i przez miesiac nie byl wolany ani razu), wiec
+    # `lineup_ok` jest jawnie None zamiast nieobecny. Niezmiennik bez zmian:
+    # ZADNE dane z meczu rezerw nie moga trafic do pierwszego zespolu.
+    assert k.get("lineup_ok") is None, "skład rezerw doklejony do pierwszego zespołu"
+    assert "lineup_star_penalty" not in k, "kara ze składu rezerw doklejona"
+    assert not k.get("referee_name"), "sędzia z meczu rezerw doklejony do pierwszego zespołu"
     assert api["lineup_wywolania"] == [], "pobrano skład dla cudzego meczu"
 
 
@@ -136,13 +141,24 @@ def test_luzne_dopasowanie_wariantu_nazwy(api):
     assert api["lineup_wywolania"] == [11]
 
 
-def test_brak_fixture_zostawia_kandydata_nietknietego(api):
+def test_brak_fixture_nie_dokleja_danych_z_api_football(api):
+    """Kandydat spoza pokrycia AF nie dostaje NICZEGO z API-Football.
+
+    Do 30.08 test brzmial "zostawia kandydata nietknietego" i sprawdzal rownosc
+    calego slownika. Ta obserwacja opisywala BUG: `continue` na braku fixture
+    zabezpieczal takze FlashScore, ktory jest zrodlem NIEZALEZNYM od AF. Konto
+    AF jest zawieszone od 01.08, wiec produkcja przez miesiac raportowala
+    `Final enrichment: 0/N`. Niezmiennik, ktory faktycznie ma znaczenie, to
+    brak danych Z API-FOOTBALL — nie brak jakichkolwiek zmian w slowniku."""
     api["fixtures"] = [_fixture("Arka Gdynia", "Wisla Krakow", fid=3)]
     k = _kandydat()
 
     dp._enrichuj_finalna_faza([k], "klucz")
 
-    assert k == {"gospodarz": "Legia", "goscie": "Lech Poznan"}
+    assert k.get("lineup_ok") is None
+    assert "lineup_star_penalty" not in k
+    assert not k.get("referee_name")
+    assert api["lineup_wywolania"] == []
 
 
 def test_brak_lineup_ok_gdy_zawodnicy_kluczowi_brakuja(api):
@@ -185,12 +201,14 @@ def test_awaria_api_nie_wywraca_joba(api, monkeypatch):
 
 
 def test_pusta_lista_fixtures_nie_wywraca(api):
+    """Zawieszone konto AF oddaje dokladnie to: pusta liste meczow."""
     api["fixtures"] = []
     k = _kandydat()
 
     dp._enrichuj_finalna_faza([k], "klucz")
 
-    assert "lineup_ok" not in k
+    assert k.get("lineup_ok") is None
+    assert api["lineup_wywolania"] == []
 
 
 def test_fixture_bez_nazw_druzyn_pomijany(api):
@@ -241,3 +259,21 @@ def test_flashscore_uzupelnia_brakujacego_sedziego(api):
     assert k["fs_absencje_g"] == "Kowal (uraz)"
     assert "fs_absencje_a" not in k
     assert k["stadium"] == "Łazienkowska"
+
+
+def test_flashscore_wolany_gdy_api_football_nic_nie_zna(api):
+    """Odblokowane 30.08: FlashScore jest zrodlem NIEZALEZNYM od API-Football,
+    a stal za `continue` na braku fixture. Konto AF zawieszone od 01.08 →
+    przez miesiac nie odpalil sie ani razu, a produkcja raportowala
+    `Final enrichment: 0/N`."""
+    api["fixtures"] = []
+    api["fs"] = {"success": True, "referee": "Szymon Marciniak",
+                 "absences": {"home": [{"name": "Kowalski", "reason": "uraz"}],
+                              "away": []}}
+    k = _kandydat()
+
+    dp._enrichuj_finalna_faza([k], "klucz")
+
+    assert api["fs_wywolania"] == [("Legia", "Lech Poznan")]
+    assert k["referee_name"] == "Szymon Marciniak"
+    assert "Kowalski" in k.get("fs_absencje_g", "")
