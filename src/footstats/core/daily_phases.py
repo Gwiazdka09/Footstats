@@ -681,6 +681,71 @@ def _dopasuj_team_news(idx: dict, gospodarz: str, goscie: str):
     return najlepszy
 
 
+def _policz_edge_absencji(kandydaci: list) -> None:
+    """
+    Zamienia potwierdzone absencje na skorygowaną λ i P(Over 2.5). In-place.
+
+    ZAPISUJEMY OBOK, NIE NADPISUJEMY `pw/pr/pp/o25/bt` — i to jest decyzja,
+    nie przeoczenie. Historii kontuzji nie ma ani u nas, ani u FotMoba, więc tej
+    korekty NIE DA SIĘ zwalidować walk-forwardem. Wpuszczenie niezwalidowanej
+    poprawki do typów produkcyjnych byłoby powtórzeniem błędu, który ten projekt
+    już raz zmierzył: 14.08 na n=15 460 żaden z 52 podzbiorów nie przeżył
+    holdoutu. Pola `*_abs` dają liczbę, którą za kilkadziesiąt meczów będzie
+    można porównać z rzeczywistością — i dopiero wtedy jest o czym decydować.
+
+    Udziały w golach biorą się z `player_db` (poprzedni pełny sezon), NIE
+    z `performance.seasonGoals` FotMoba: w końcu sierpnia Premier League miała
+    5 goli na dwie kadry, więc udział jednego strzelca wyszedłby 0,4.
+    """
+    from footstats.core.absencje import udzialy_absencji
+    from footstats.core.availability_edge import over_edge_from_absences
+    from footstats.core.bet_builder import estimate_lambdas_from_probs
+
+    trafione = bez_udzialu = 0
+    for k in kandydaci:
+        # pop, nie get: to pole robocze jednego przebiegu. Zostawione w kandydacie
+        # pojechaloby dalej potokiem i mogloby wyladowac w serializacji.
+        pewne_h = k.pop("_absencje_pewne_nazwiska_home", None) or []
+        pewne_a = k.pop("_absencje_pewne_nazwiska_away", None) or []
+        if not pewne_h and not pewne_a:
+            continue
+
+        gs_h = _goal_shares_for(k.get("gospodarz") or "", "home")
+        gs_a = _goal_shares_for(k.get("goscie") or "", "away")
+        ud_h, brak_h = udzialy_absencji(pewne_h, gs_h)
+        ud_a, brak_a = udzialy_absencji(pewne_a, gs_a)
+
+        trafione += len(ud_h) + len(ud_a)
+        bez_udzialu += len(brak_h) + len(brak_a)
+        if brak_h or brak_a:
+            k["absencje_bez_udzialu"] = len(brak_h) + len(brak_a)
+
+        if not ud_h and not ud_a:
+            # Wiemy, kto nie zagra, ale nie wiemy, ile znaczy. Zgadywanie kary
+            # byłoby gorsze niż jej brak.
+            continue
+
+        lh, la = k.get("lambda_h"), k.get("lambda_a")
+        if not lh or not la:
+            lh, la = estimate_lambdas_from_probs(
+                (k.get("pw") or 0) / 100.0, (k.get("pp") or 0) / 100.0,
+                (k.get("o25") or 0) / 100.0)
+
+        rynek = k.get("market_p_over")
+        wynik = over_edge_from_absences(lh, la, ud_h, ud_a, rynek)
+        k["lambda_h_abs"] = wynik["lh"]
+        k["lambda_a_abs"] = wynik["la"]
+        k["p_over_abs"] = wynik["p_over_adj"]
+        k["edge_absencje"] = wynik["edge"]
+        k["absencje_udzial_home"] = round(sum(ud_h), 4)
+        k["absencje_udzial_away"] = round(sum(ud_a), 4)
+
+    if trafione or bez_udzialu:
+        log.info("team-news: udzialy absencji %d/%d dopasowane w player_db "
+                 "(reszta bez udzialu — znamy nazwisko, nie znamy wagi)",
+                 trafione, trafione + bez_udzialu)
+
+
 def _wzbogac_team_news(kandydaci: list) -> None:
     """
     Dokłada kandydatom przewidywany skład, absencje i sędziego z FotMoba.
@@ -734,14 +799,22 @@ def _wzbogac_team_news(kandydaci: list) -> None:
             k["lineup_ok"] = True
             k["startXI_home"] = list(tn.xi_home)
             k["startXI_away"] = list(tn.xi_away)
-        k["absencje_pewne_home"] = sum(1 for a in tn.absencje_home if a.pewna)
-        k["absencje_pewne_away"] = sum(1 for a in tn.absencje_away if a.pewna)
+        pewne_h = [a.nazwisko for a in tn.absencje_home if a.pewna]
+        pewne_a = [a.nazwisko for a in tn.absencje_away if a.pewna]
+        k["absencje_pewne_home"] = len(pewne_h)
+        k["absencje_pewne_away"] = len(pewne_a)
+        # Nazwiska pod kluczem z podkreśleniem: to wejście do `_policz_edge_absencji`
+        # w tym samym przebiegu, nie pole kandydata do zapisu ani wyświetlenia.
+        k["_absencje_pewne_nazwiska_home"] = pewne_h
+        k["_absencje_pewne_nazwiska_away"] = pewne_a
         if tn.sedzia:
             k["referee_name"] = tn.sedzia
             k["referee_stats"] = dict(tn.sedzia_stats)
 
         wzbogaconych += 1
         prognoz += int(tn.sklad_jest_prognoza)
+
+    _policz_edge_absencji(kandydaci)
 
     komunikat = (f"team-news: {wzbogaconych}/{len(kandydaci)} kandydatow wzbogaconych "
                  f"({prognoz} predicted, {wzbogaconych - prognoz} lastStarting11)")
