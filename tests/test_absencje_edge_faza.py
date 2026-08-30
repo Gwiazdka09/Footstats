@@ -151,3 +151,64 @@ def test_pole_robocze_nie_zostaje_w_kandydacie(monkeypatch, kandydat):
     dp._wzbogac_team_news([kandydat])
 
     assert not [k for k in kandydat if k.startswith("_absencje")]
+
+
+# ── pozycje odblokowuja DWUSTRONNA korekte ──────────────────────────────────
+
+def test_absencje_z_pozycja_traja_do_injuries(monkeypatch, kandydat):
+    """`_apply_injury_corrections` czyta `injuries_home`/`injuries_away` i
+    klasyfikuje po pozycji. Bez tego wpiecia pozycje z FotMoba leza w DTO,
+    ktorego nikt nie czyta — czyli kolejny cichy no-op."""
+    tn = TeamNews(
+        source="fotmob", home="Chelsea", away="Brighton", date="2026-08-30",
+        typ_skladu="predicted",
+        absencje_home=(Absencja("Cole Palmer", "injury", "Mid September 2026",
+                                True, pozycja="F"),),
+        absencje_away=(Absencja("Obronca Jeden", "injury", "Mid September 2026",
+                                True, pozycja="D"),),
+    )
+    monkeypatch.setattr(dp, "_pobierz_team_news", lambda data, pary: [tn])
+
+    dp._wzbogac_team_news([kandydat])
+
+    assert kandydat["injuries_home"] == [{"name": "Cole Palmer", "position": "F"}]
+    assert kandydat["injuries_away"] == [{"name": "Obronca Jeden", "position": "D"}]
+
+
+def test_absencja_bez_pozycji_nie_wchodzi_do_injuries(monkeypatch, kandydat):
+    """Bez pozycji `injury_lambda_factors` i tak zwroci (1.0, 1.0). Wpisanie jej
+    tylko zaszumiloby liste i udawalo, ze cos policzylismy."""
+    tn = TeamNews(
+        source="fotmob", home="Chelsea", away="Brighton", date="2026-08-30",
+        absencje_home=(Absencja("Ktos", "injury", "Mid September 2026", True),),
+    )
+    monkeypatch.setattr(dp, "_pobierz_team_news", lambda data, pary: [tn])
+
+    dp._wzbogac_team_news([kandydat])
+    assert not kandydat.get("injuries_home")
+
+
+def test_watpliwa_absencja_nie_wchodzi_do_injuries(monkeypatch, kandydat):
+    tn = TeamNews(
+        source="fotmob", home="Chelsea", away="Brighton", date="2026-08-30",
+        absencje_home=(Absencja("Cole Palmer", "injury", "Doubtful", False,
+                                pozycja="F"),),
+    )
+    monkeypatch.setattr(dp, "_pobierz_team_news", lambda data, pary: [tn])
+
+    dp._wzbogac_team_news([kandydat])
+    assert not kandydat.get("injuries_home")
+
+
+def test_istniejace_injuries_maja_pierwszenstwo(monkeypatch, kandydat):
+    """Gdyby SofaScore kiedys wrocil, jego dane sa pelniejsze — nie nadpisujemy."""
+    kandydat["injuries_home"] = [{"name": "Z SofaScore", "position": "M"}]
+    tn = TeamNews(
+        source="fotmob", home="Chelsea", away="Brighton", date="2026-08-30",
+        absencje_home=(Absencja("Cole Palmer", "injury", "Mid September 2026",
+                                True, pozycja="F"),),
+    )
+    monkeypatch.setattr(dp, "_pobierz_team_news", lambda data, pary: [tn])
+
+    dp._wzbogac_team_news([kandydat])
+    assert kandydat["injuries_home"] == [{"name": "Z SofaScore", "position": "M"}]

@@ -299,16 +299,26 @@ Sprawdzone na logach produkcyjnych (26-30.08) i sondami HTTP, nie z pamięci.
   Dołożony limit `_MAX_FLASHSCORE_NA_PRZEBIEG = 6` (Playwright = przeglądarka
   na mecz); wcześniej koszt nie istniał, bo ścieżka była martwa.
 
-- [ ] 🔴 **SofaScore: `HTTP 403` na KAŻDE wyszukiwanie drużyny**, także przez
+- [x] ✅ **Pozycje odzyskane 30.08 — z FotMoba, nie z SofaScore.**
+  `/api/data/teams?id=` oddaje skład pogrupowany (keepers/defenders/midfielders/
+  attackers → G/D/M/F, 1:1 z kodami modelu). Smoke na żywym źródle: **37 z 37
+  pewnych absencji dostało pozycję, zero bez dopasowania** (M=14, F=10, D=13).
+  Dwustronna korekta λ ma wejście pierwszy raz od blokady SofaScore. Skład
+  pobierany tylko dla meczów z absencjami, cache per drużyna.
+
+- [ ] 🟡 **SofaScore: `HTTP 403` na KAŻDE wyszukiwanie drużyny**, także przez
   Playwrighta (logi joba 26-30.08: Villarreal, Liverpool FC, Wisła Płock,
   Nottingham Forest, Metz, Korona Kielce...). Skutek jest szerszy niż brak formy:
   **SofaScore to jedyne źródło kontuzji Z POZYCJĄ**, a `injury_lambda_factors`
   klasyfikuje właśnie po pozycji (`_POZ_ATAK` / `_POZ_OBRONA`). Bez pozycji
   `injuries_home`/`injuries_away` są puste, więc `_apply_injury_corrections`
   **nigdy nie odpala** — cała dwustronna korekta λ za kontuzje jest martwa.
-  Do decyzji: szukać źródła pozycji (FotMob podaje `positionId` przy STARTERACH,
-  choć nie przy absencjach), czy uznać dwustronną korektę za nieosiągalną
-  i zostać przy jednostronnej z `availability_edge`.
+  **Pozycje załatwione inaczej (patrz punkt wyżej), więc to już nie blokuje
+  modelu.** Zostaje strata formy i H2H. Zmierzone 30.08: `requests` dostaje 403
+  także na stronie głównej, Playwright lokalnie 200, Playwright z Cloud Runa 403
+  — czyli blokada dotyczy klientów nieprzeglądarkowych ORAZ zakresu datacenter.
+  Nagłówki, stealth i rozgrzewka sesji nie pomagają (sprawdzone wszystkie
+  kombinacje). Realna opcja to tylko inne wyjście sieciowe albo inne źródło formy.
 
 ## 🔴 ZNALEZIONE 30.08 — faza final nie zapisuje kuponu OD 16.08
 

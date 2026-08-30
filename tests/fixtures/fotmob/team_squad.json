@@ -1,0 +1,281 @@
+{
+ "squad": {
+  "squad": [
+   {
+    "title": "coach",
+    "members": [
+     {
+      "id": 30889,
+      "name": "Xabi Alonso",
+      "positionId": null,
+      "injured": null,
+      "injury": null
+     }
+    ]
+   },
+   {
+    "title": "keepers",
+    "members": [
+     {
+      "id": 789571,
+      "name": "Robert Sánchez",
+      "positionId": 0,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1319972,
+      "name": "Mike Penders",
+      "positionId": 0,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1031220,
+      "name": "Gabriel Slonina",
+      "positionId": 0,
+      "injured": null,
+      "injury": null
+     }
+    ]
+   },
+   {
+    "title": "defenders",
+    "members": [
+     {
+      "id": 2062434,
+      "name": "Denner",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 683402,
+      "name": "Tosin Adarabioyo",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 950485,
+      "name": "Maxence Lacroix",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1096400,
+      "name": "Levi Colwill",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1413846,
+      "name": "Jorrel Hato",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 807729,
+      "name": "Reece James",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1197250,
+      "name": "Malo Gusto",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 988805,
+      "name": "Pep Chavarría",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 917802,
+      "name": "Wesley Fofana",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1494947,
+      "name": "Aaron Anselmino",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1400216,
+      "name": "Josh Acheampong",
+      "positionId": 1,
+      "injured": null,
+      "injury": null
+     }
+    ]
+   },
+   {
+    "title": "midfielders",
+    "members": [
+     {
+      "id": 156008,
+      "name": "Jordan Henderson",
+      "positionId": 2,
+      "injured": true,
+      "injury": {
+       "id": "34",
+       "expectedReturn": "Early September 2026"
+      }
+     },
+     {
+      "id": 1473806,
+      "name": "Marco Palestra",
+      "positionId": 2,
+      "injured": true,
+      "injury": {
+       "id": "121",
+       "expectedReturn": "Doubtful"
+      }
+     },
+     {
+      "id": 1272440,
+      "name": "Valentín Barco",
+      "positionId": 2,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1137705,
+      "name": "Enzo Fernández",
+      "positionId": 2,
+      "injured": true,
+      "injury": {
+       "id": "6",
+       "expectedReturn": "Doubtful"
+      }
+     },
+     {
+      "id": 1096353,
+      "name": "Cole Palmer",
+      "positionId": 2,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1239595,
+      "name": "Dário Essugo",
+      "positionId": 2,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 883080,
+      "name": "Morgan Rogers",
+      "positionId": 2,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1137668,
+      "name": "Moisés Caicedo",
+      "positionId": 2,
+      "injured": true,
+      "injury": {
+       "id": "121",
+       "expectedReturn": "Doubtful"
+      }
+     },
+     {
+      "id": 1190867,
+      "name": "Roméo Lavia",
+      "positionId": 2,
+      "injured": null,
+      "injury": null
+     }
+    ]
+   },
+   {
+    "title": "attackers",
+    "members": [
+     {
+      "id": 1207581,
+      "name": "David Datro Fofana",
+      "positionId": 3,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 843040,
+      "name": "Pedro Neto",
+      "positionId": 3,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1021382,
+      "name": "João Pedro",
+      "positionId": 3,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1113692,
+      "name": "Jamie Gittens",
+      "positionId": 3,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 113836,
+      "name": "Danny Welbeck",
+      "positionId": 3,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1183148,
+      "name": "Emanuel Emegha",
+      "positionId": 3,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1530314,
+      "name": "Geovany Quenda",
+      "positionId": 3,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1412137,
+      "name": "Marc Guiu",
+      "positionId": 3,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 1580774,
+      "name": "Estêvão",
+      "positionId": 3,
+      "injured": null,
+      "injury": null
+     },
+     {
+      "id": 976506,
+      "name": "Mykhaylo Mudryk",
+      "positionId": 3,
+      "injured": null,
+      "injury": null
+     }
+    ]
+   }
+  ]
+ }
+}

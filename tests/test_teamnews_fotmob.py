@@ -198,13 +198,12 @@ def test_filtr_ogranicza_liczbe_requestow(monkeypatch):
     kilkudziesieciu. Filtr MUSI dzialac na liscie dnia, nie po pobraniu."""
     dzien = _wczytaj("matches_day.json")
     szczegoly = _wczytaj("match_predicted.json")
-    detale = []
+    sklad = json.loads((_FIKS / "team_squad.json").read_text(encoding="utf-8"))
+    sciezki = []
 
     def _stub(sciezka, **params):
-        if sciezka == "matches":
-            return dzien
-        detale.append(params.get("matchId"))
-        return szczegoly
+        sciezki.append(sciezka)
+        return {"matches": dzien, "matchDetails": szczegoly}.get(sciezka, sklad)
 
     monkeypatch.setattr(fm, "_pobierz", _stub)
     monkeypatch.setattr(fm, "_PRZERWA_S", 0.0)
@@ -212,7 +211,12 @@ def test_filtr_ogranicza_liczbe_requestow(monkeypatch):
     pierwszy = fm.parsuj_liste_dnia(dzien)[0]
     wynik = fm.FotMobTeamNews().fetch_dla("2026-08-30", [(pierwszy.home, pierwszy.away)])
 
-    assert len(detale) == 1, f"pobrano szczegoly {len(detale)} meczow zamiast 1"
+    # Koszt rozbity na rodzaje — zbiorcze liczenie ukrylo by, ktory element rosnie.
+    assert sciezki.count("matches") == 1, "lista dnia pobrana wiecej niz raz"
+    assert sciezki.count("matchDetails") == 1, (
+        f"szczegoly {sciezki.count('matchDetails')} meczow zamiast 1")
+    assert sciezki.count("teams") <= 2, (
+        f"sklady: {sciezki.count('teams')} zapytan, dopuszczalne 2 (obie druzyny)")
     assert len(wynik) == 1
 
 
