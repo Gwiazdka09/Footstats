@@ -275,6 +275,47 @@ Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakłada
 
 ---
 
+## 🔴 ZNALEZIONE 30.08 — faza final nie zapisuje kuponu OD 16.08
+
+**Zmierzone na produkcji, nie podejrzenie.** Kupony `phase='final'` w bazie kończą
+się na **15.08**. Job chodzi codziennie (`model_log` ma 10-49 wierszy dziennie,
+godzina 9 UTC), więc potok z zewnątrz wygląda zdrowo.
+
+Lejek z logów joba (29.08):
+
+```
+Bzzoiro: 40 kandydatów w oknie 72h
+Pre-filtr lig (blacklist):      40 → 33
+Pre-filtr value bet (EV/Kelly): 33 → 6
+Final enrichment:              0/6 kandydatów wzbogacono
+[AI] Model jezykowy nie zwrocil typow — 3 typy zbudowane z modelu
+RUN SUMMARY: kandydaci=40, po filtrach=6, System kupony=0
+```
+
+- [x] ✅ **Cisza załatana 30.08.** Zapis stał za gołym `if zdarzenia_db:` bez gałęzi
+  `else`; odrzucenie przez próg i udany zapis były logowane, a jedyny NIElogowany
+  przypadek okazał się tym, który zachodzi codziennie. `_zgloś_brak_kuponu_do_zapisu`
+  rozróżnia „typy są, kuponu nie ma" od „zero typów". 5 testów, 3 mutacje.
+
+- [x] ✅ **`Final enrichment: 0/6` załatane 30.08** — FotMob zastąpił zawieszone
+  API-Football (`scrapers/teamnews/`). Flaga `FOOTSTATS_TEAM_NEWS` nadal **OFF**.
+
+- [ ] 🔴 **NIENAPRAWIONE: warstwa LLM codziennie nie zwraca struktury kuponu.**
+  `[AI] Model jezykowy nie zwrocil typow` leci w każdym przebiegu od 16.08.
+  Fallback A1 (`typy_awaryjne_z_modelu`) ratuje TYPY — trafiają do `predictions`,
+  stąd 2-7 wierszy dziennie — ale nie buduje `kupon_a.zdarzenia`, więc kupon nie
+  powstaje. `GROQ_MODEL=openai/gpt-oss-120b` jest ustawiony na jobie.
+  Do sprawdzenia: czy `gpt-oss-120b` dostaje `reasoning_effort=low` (bez tego
+  model zużywa budżet na rozumowanie i nie dochodzi do odpowiedzi), oraz czy
+  prompt/parser oczekuje kształtu, którego ten model nie produkuje.
+  **To jest teraz największy pojedynczy dławik potoku** — model liczy 40 meczów
+  dziennie, a kupon nie powstaje ani razu.
+
+- [ ] **`system_paper.py:170` wpisuje `int(prob)` do kolumny `decision_score`.**
+  Kolumna nazwana „decision score" trzyma prawdopodobieństwo modelu, więc rozkładów
+  faz `system` i `final` nie wolno porównywać wprost. Myli przy każdej analizie —
+  kosztowało to jeden błędny wniosek 30.08. Zmiana nazwy wymaga migracji.
+
 ## 🚨 AWARIA 16-22.08 — Groq wycofał model (naprawione 22.08)
 
 **Potok stał 6 dni przy `exit=0`.** `llama-3.1-8b-instant` zniknął z API Groqa →
