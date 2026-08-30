@@ -275,6 +275,19 @@ Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakłada
 
 ---
 
+## 📨 API-Football — odwolanie WYSLANE 30.08 20:28
+
+Konto `Gwiazdka09` / `jakubgwiazdowski12@gmail.com`, zawieszone od 01.08.
+Mejl poszedl na `support@api-sports.io` — pytanie o powod i o to, co zmienic,
+zeby konto wrocilo. Tresc i kontekst: `docs/robocze/2026-08-30-apifootball-odwolanie.md`.
+
+- [ ] **Czekamy na odpowiedz.** Gdyby dopytali o ruch: mamy licznik zuzycia
+  w aplikacji, cache dyskowy 24 h i logi produkcyjne z tym samym komunikatem
+  codziennie od 01.08.
+- **Potok NIE stoi juz na tym koncie** — sklady, absencje, sedzia i pozycje ida
+  z FotMoba (30.08), a FlashScore przestal byc zablokowany za martwym AF.
+  Powrot konta bylby cross-walidacja, nie warunkiem dzialania.
+
 ## 📡 INWENTARZ ŹRÓDEŁ — stan zmierzony 30.08
 
 Sprawdzone na logach produkcyjnych (26-30.08) i sondami HTTP, nie z pamięci.

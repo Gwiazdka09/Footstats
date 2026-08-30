@@ -1,7 +1,9 @@
 # Mejl do API-Football — konto zawieszone
 
-**Status:** SZKIC DO WYSŁANIA PRZEZ CIEBIE. Nic nie zostało wysłane.
-**Data:** 2026-08-30
+**Status:** ✅ **WYSŁANE 2026-08-30, 20:28** przez użytkownika, z konta
+`Gwiazdka09 <jakubgwiazdowski12@gmail.com>` na `support@api-sports.io`.
+Czekamy na odpowiedź.
+**Data szkicu:** 2026-08-30
 
 ## Dane konta (z panelu, 30.08)
 
