@@ -23,11 +23,13 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import requests
 
-from footstats.scrapers.teamnews.base import Absencja, TeamNews, absencja_pewna
+from footstats.scrapers.teamnews.base import (
+    Absencja, TeamNews, absencja_pewna, klucz_gracza,
+)
 from footstats.scrapers.teamnews.sedzia import statystyki_sedziego
 from footstats.utils.normalize import normalize_team_name, team_similarity
 
@@ -93,6 +95,46 @@ def _absencje(surowe: list | None) -> tuple[Absencja, ...]:
             gole_sezon=gole if isinstance(gole, int) else None,
         ))
     return tuple(out)
+
+
+# Grupy składu FotMoba → kody, których oczekuje `core/lambda_optimizer`
+# (`_POZ_ATAK = ("F", "M")`, `_POZ_OBRONA = ("D", "G")`). Mapowanie jest 1:1
+# i pilnuje go `test_kody_sa_dokladnie_tymi_ktorych_oczekuje_model` — rozjazd
+# liter cicho zwróciłby korektę λ do (1.0, 1.0), czyli do stanu sprzed naprawy.
+_GRUPY_POZYCJI = {
+    "keepers": "G",
+    "defenders": "D",
+    "midfielders": "M",
+    "attackers": "F",
+}
+
+
+def parsuj_pozycje(dane: dict) -> dict[str, str]:
+    """
+    Skład drużyny → `{znormalizowane_nazwisko: "G"|"D"|"M"|"F"}`.
+
+    FotMob grupuje skład po pozycji, więc pozycja nie wymaga zgadywania.
+    Grupa `coach` i wszystko spoza `_GRUPY_POZYCJI` (np. `loaned_out`) odpada:
+    zawodnik wypożyczony i tak nie zagra, a trener nie jest zawodnikiem.
+
+    Klucze są normalizowane (bez diakrytyków, casefold), bo nazwiska rozjeżdżają
+    się między źródłami — `Moisés` w jednym, `Moises` w drugim.
+    """
+    grupy = ((dane or {}).get("squad") or {}).get("squad") or []
+    out: dict[str, str] = {}
+    for grupa in grupy:
+        if not isinstance(grupa, dict):
+            continue
+        kod = _GRUPY_POZYCJI.get(str(grupa.get("title") or "").strip().lower())
+        if kod is None:
+            continue
+        for czlonek in grupa.get("members") or []:
+            if not isinstance(czlonek, dict):
+                continue
+            nazwisko = (czlonek.get("name") or "").strip()
+            if nazwisko:
+                out[klucz_gracza(nazwisko)] = kod
+    return out
 
 
 def parsuj_liste_dnia(dane: dict) -> list[MeczDnia]:
@@ -164,6 +206,69 @@ class FotMobTeamNews:
 
     name = "fotmob"
 
+    def __init__(self) -> None:
+        # Cache na przebieg, nie globalny: sklad zmienia sie rzadko, ale trzymanie
+        # go miedzy przebiegami dawaloby zawodnikow sprzed transferu.
+        self._pozycje: dict[int, dict[str, str]] = {}
+
+    def pozycje_druzyny(self, team_id: int | None) -> dict[str, str]:
+        """
+        `{znormalizowane_nazwisko: "G"|"D"|"M"|"F"}` dla druzyny.
+
+        Odblokowuje dwustronna korekte lambda w `_apply_injury_corrections`,
+        ktora klasyfikuje absencje po pozycji. Jedynym zrodlem pozycji byl
+        SofaScore — zmierzony 30.08 jako HTTP 403 na kazde zapytanie, i z Cloud
+        Runa, i lokalnie przez `requests`.
+
+        Awaria degraduje do korekty jednostronnej (`availability_edge`), a nie
+        zatrzymuje potoku: pusty slownik znaczy "bez pozycji", i tak jest
+        traktowany przez `injury_lambda_factors`.
+        """
+        if not team_id:
+            return {}
+        if team_id in self._pozycje:
+            return self._pozycje[team_id]
+        try:
+            dane = _pobierz("teams", id=team_id)
+        except (requests.RequestException, ValueError) as e:
+            log.debug("FotMob sklad druzyny %s pominiety: %s", team_id, e)
+            self._pozycje[team_id] = {}
+            return {}
+        poz = parsuj_pozycje(dane)
+        self._pozycje[team_id] = poz
+        return poz
+
+    def _dodaj_pozycje(self, tn: TeamNews, szczegoly: dict) -> TeamNews:
+        """
+        Dokleja absencjom pozycję ze składu drużyny.
+
+        Skład to DWA dodatkowe requesty na mecz, więc pobieramy go WYŁĄCZNIE
+        wtedy, gdy jest kogo klasyfikować. Mecz bez absencji nie płaci nic.
+
+        Awaria zapytania o skład zostawia absencje bez pozycji — korekta
+        degraduje do jednostronnej (`availability_edge`), zamiast zniknąć.
+        """
+        if not tn.absencje_home and not tn.absencje_away:
+            return tn
+
+        lineup = (szczegoly.get("content") or {}).get("lineup") or {}
+        poz_h = self.pozycje_druzyny((lineup.get("homeTeam") or {}).get("id"))
+        poz_a = self.pozycje_druzyny((lineup.get("awayTeam") or {}).get("id"))
+        if not poz_h and not poz_a:
+            return tn
+
+        def _z_pozycja(absencje, pozycje):
+            return tuple(
+                replace(a, pozycja=pozycje.get(klucz_gracza(a.nazwisko)))
+                for a in absencje
+            )
+
+        return replace(
+            tn,
+            absencje_home=_z_pozycja(tn.absencje_home, poz_h),
+            absencje_away=_z_pozycja(tn.absencje_away, poz_a),
+        )
+
     def fetch(self, date: str) -> list[TeamNews]:
         """
         WSZYSTKIE mecze dnia. Kosztuje 1 + N requestów (30.08: 483) — do smoke'a
@@ -210,6 +315,7 @@ class FotMobTeamNews:
                 log.debug("FotMob matchDetails %s pominiete: %s", m.id, e)
                 continue
             tn = parsuj_mecz(szczegoly, date, home=m.home, away=m.away)
+            tn = self._dodaj_pozycje(tn, szczegoly)
             if tn.home and tn.away:
                 wynik.append(tn)
             if _PRZERWA_S:

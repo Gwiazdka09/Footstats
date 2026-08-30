@@ -8,7 +8,22 @@ na ERROR, bo dla nieoficjalnego API to jedyny sygnał, że przestało istnieć.
 from __future__ import annotations
 
 import typing
+import unicodedata
 from dataclasses import dataclass, field
+
+
+def klucz_gracza(nazwisko: str) -> str:
+    """
+    Nazwisko do porownania miedzy zrodlami: bez diakrytykow, casefold,
+    pojedyncze spacje.
+
+    JEDNA definicja dla calego projektu. Dwie kopie tej normalizacji rozjechalyby
+    sie po cichu, a objawem byloby "gracz nie znaleziony" — czyli brak korekty
+    lambda, nie blad.
+    """
+    bez_znakow = unicodedata.normalize("NFKD", nazwisko or "")
+    bez_znakow = "".join(c for c in bez_znakow if not unicodedata.combining(c))
+    return " ".join(bez_znakow.casefold().split())
 
 # Wartości `expectedReturn`, które znaczą "może zagra". Zbiór, nie pojedyncza
 # stała, bo źródło używa też innych wariantów pisowni.
@@ -43,6 +58,12 @@ class Absencja:
     powrot: str | None = None       # "Doubtful" | "Mid September 2026" | None
     pewna: bool = False             # patrz `absencja_pewna`
     gole_sezon: int | None = None   # performance.seasonGoals
+    # "G"/"D"/"M"/"F" ze skladu druzyny; None = zrodlo nie podalo. Pozycja jest
+    # WARUNKIEM dwustronnej korekty lambda: `injury_lambda_factors` klasyfikuje
+    # po niej, wiec bez niej absencja nie robi nic. `unavailable[]` w matchDetails
+    # jej NIE ma (positionId to None albo sentinel 1000) — przychodzi z osobnego
+    # zapytania o sklad druzyny.
+    pozycja: str | None = None
 
 
 @dataclass(frozen=True)

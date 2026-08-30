@@ -24,18 +24,12 @@ cichym no-opem. `absence_attack_factor` bierze same udziały, bez pozycji.
 from __future__ import annotations
 
 import logging
-import unicodedata
+
+from footstats.scrapers.teamnews.base import klucz_gracza as _klucz
 
 log = logging.getLogger(__name__)
 
 _MIN_CZLONOW = 2   # "Pedro" trafiłoby w dowolnego Pedro w lidze
-
-
-def _klucz(nazwisko: str) -> str:
-    """Nazwisko do porównania: bez diakrytyków, casefold, pojedyncze spacje."""
-    bez_znakow = unicodedata.normalize("NFKD", nazwisko or "")
-    bez_znakow = "".join(c for c in bez_znakow if not unicodedata.combining(c))
-    return " ".join(bez_znakow.casefold().split())
 
 
 def _dopasuj(klucz: str, klucze_bazy: dict[str, float]) -> float | None:

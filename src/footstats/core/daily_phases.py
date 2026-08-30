@@ -818,6 +818,23 @@ def _wzbogac_team_news(kandydaci: list) -> None:
         # w tym samym przebiegu, nie pole kandydata do zapisu ani wyświetlenia.
         k["_absencje_pewne_nazwiska_home"] = pewne_h
         k["_absencje_pewne_nazwiska_away"] = pewne_a
+
+        # DWUSTRONNA korekta λ (`_apply_injury_corrections`, wołane niżej w tym
+        # samym przebiegu) czyta `injuries_*` i klasyfikuje PO POZYCJI. Jedynym
+        # źródłem pozycji był SofaScore — zmierzony 30.08 jako HTTP 403 na każde
+        # zapytanie, i z Cloud Runa, i lokalnie. Bez tego wpięcia pozycje z FotMoba
+        # leżałyby w DTO, którego nikt nie czyta.
+        #
+        # Absencja bez pozycji NIE wchodzi: `injury_lambda_factors` i tak zwróci
+        # dla niej (1.0, 1.0), a wpis udawałby, że coś policzyliśmy.
+        for strona, absencje in (("home", tn.absencje_home), ("away", tn.absencje_away)):
+            klucz = f"injuries_{strona}"
+            if k.get(klucz):
+                continue   # dane innego źródła są pełniejsze — nie nadpisujemy
+            z_pozycja = [{"name": a.nazwisko, "position": a.pozycja}
+                         for a in absencje if a.pewna and a.pozycja]
+            if z_pozycja:
+                k[klucz] = z_pozycja
         if tn.sedzia:
             k["referee_name"] = tn.sedzia
             k["referee_stats"] = dict(tn.sedzia_stats)
