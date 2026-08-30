@@ -104,8 +104,8 @@ Trzy rzeczy poza samymi składami:
 
 - `expectedReturn` **rozróżnia** „Doubtful" od twardego „Mid September 2026" →
   `availability_edge` może ważyć absencję zamiast traktować binarnie
-- `performance.seasonGoals` daje `goal_share` wprost → `core/player_db.py` przestaje
-  zależeć od topscorers API-Football
+- ~~`performance.seasonGoals` daje `goal_share` wprost~~ **OBALONE 30.08 pomiarem,**
+  patrz sekcja „Czego seasonGoals nie potrafi" na końcu
 - statystyki sędziego są bogatsze niż obecny `scrapers/referee_db.py`
 
 ## Architektura
@@ -342,3 +342,53 @@ liczyłaby stratę zawodników, którzy zagrają.
 `FOOTSTATS_TEAM_NEWS` jest **OFF na produkcji**. Włączenie to osobna decyzja i wymaga
 ustawienia w trzech miejscach naraz (API + `footstats-final` + `footstats-evening`).
 Przed flipem: `python scripts/smoke_team_news.py`.
+
+---
+
+## Czego `seasonGoals` nie potrafi — obalone 30.08
+
+Specyfikacja obiecywała, że `performance.seasonGoals` zastąpi topscorers
+API-Football i uniezależni `goal_share`. **Pomiar tego nie potwierdził.**
+
+FotMob pomija pola zerowe, więc `seasonGoals` pojawia się tylko u zawodników,
+którzy już strzelili:
+
+| fikstura | graczy | `seasonGoals` | `seasonRating` |
+|---|---|---|---|
+| Premier League, kolejka 2 | 32 | **5** | 23 |
+| MLS, środek sezonu | 31 | 14 | 31 |
+
+W końcu sierpnia wszystkie ligi europejskie są po 1-3 kolejkach. `goal_share`
+liczony z pięciu goli na dwie kadry dałby jednemu strzelcowi udział 0,4, a model
+policzyłby jego absencję jako utratę 40% ataku. To gorsze niż brak danych.
+
+**Drugie obalenie: absencje nie mają pozycji.** `positionId` jest `None` albo
+sentinelem `1000`, a `usualPlayingPositionId` zawsze `None`. Karmienie
+`injuries_home`/`injuries_away` byłoby **cichym no-opem**, bo
+`injury_lambda_factors` klasyfikuje po pozycji i zwróciłoby `(1.0, 1.0)`.
+
+### Podział pracy, który z tego wynika
+
+```
+FotMob      mówi KTO nie zagra    pewne, aktualne, 147 lig
+player_db   mówi ILE ZNACZY       poprzedni pełny sezon, 2775 graczy
+```
+
+Wpięte przez `core/absencje.py` (dopasowanie nazwisk) →
+`core/availability_edge.py` (`absence_attack_factor` bierze same udziały, bez
+pozycji — dlatego ten moduł w ogóle istnieje osobno).
+
+Dopasowanie nazwisk jest zachowawcze: dokładna równość po zdjęciu diakrytyków,
+plus prefiks przy co najmniej dwóch członach i **tylko gdy jednoznaczny**. Gracz
+bez dopasowania trafia do licznika `absencje_bez_udzialu`, nie do udziałów jako
+zero — zero znaczyłoby „zmierzyłem, nie strzela".
+
+### Korekta λ jest zapisywana OBOK, nie nadpisuje modelu
+
+`lambda_h_abs`, `lambda_a_abs`, `p_over_abs`, `edge_absencje` — `pw/pr/pp/o25/bt`
+zostają nietknięte. To decyzja, nie przeoczenie: historii kontuzji nie ma nigdzie,
+więc korekty nie da się zwalidować walk-forwardem, a 14.08 na `n=15 460` żaden
+z 52 podzbiorów nie przeżył holdoutu. Pola `*_abs` dają liczbę do porównania za
+kilkadziesiąt meczów — i dopiero wtedy jest o czym decydować.
+
+Pilnuje tego `test_MODEL_produkcyjny_zostaje_nietkniety` plus mutacja.
