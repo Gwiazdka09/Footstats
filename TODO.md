@@ -275,6 +275,41 @@ Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakłada
 
 ---
 
+## 📡 INWENTARZ ŹRÓDEŁ — stan zmierzony 30.08
+
+Sprawdzone na logach produkcyjnych (26-30.08) i sondami HTTP, nie z pamięci.
+
+| źródło | technika | co daje | stan |
+|---|---|---|---|
+| football-data.co.uk | CSV | historia 40 lig → `full_dataset.parquet` | ✅ żyje |
+| Bzzoiro | API | terminarz, ML, kursy | ✅ żyje |
+| **FotMob** (nowe 30.08) | `requests` | przewidywany XI, absencje, sędzia+staty | ✅ żyje, flaga OFF |
+| Understat | `requests` | xG, tabele lig | ✅ żyje (5 lig dziennie w logach) |
+| odds_snapshot / The Odds API | API | kursy, snapshoty | ✅ żyje |
+| FlashScore (mobi) | `requests` | wyniki | ✅ żyje |
+| FlashScore (mecz) | Playwright | sędzia, absencje | ⚠️ **odblokowane 30.08** — stało za `continue` |
+| TheSportsDB | `requests` | wyniki reprezentacji/turniejów | ✅ żyje |
+| clubelo | `requests` | ratingi Elo | ✅ żyje |
+| **SofaScore** | Playwright | forma, H2H, **kontuzje Z POZYCJĄ** | 🔴 **403 na każde zapytanie** |
+| **API-Football** | API | składy, sędzia, kursy, wyniki | 🔴 **konto suspended od 01.08** |
+
+- [x] ✅ **FlashScore odblokowany 30.08.** Wywołanie stało NIŻEJ w tej samej pętli
+  co `continue` na braku meczu w API-Football, więc od zawieszenia konta AF nie
+  odpalało się ani razu. Fallback zabezpieczony za martwym źródłem głównym.
+  Dołożony limit `_MAX_FLASHSCORE_NA_PRZEBIEG = 6` (Playwright = przeglądarka
+  na mecz); wcześniej koszt nie istniał, bo ścieżka była martwa.
+
+- [ ] 🔴 **SofaScore: `HTTP 403` na KAŻDE wyszukiwanie drużyny**, także przez
+  Playwrighta (logi joba 26-30.08: Villarreal, Liverpool FC, Wisła Płock,
+  Nottingham Forest, Metz, Korona Kielce...). Skutek jest szerszy niż brak formy:
+  **SofaScore to jedyne źródło kontuzji Z POZYCJĄ**, a `injury_lambda_factors`
+  klasyfikuje właśnie po pozycji (`_POZ_ATAK` / `_POZ_OBRONA`). Bez pozycji
+  `injuries_home`/`injuries_away` są puste, więc `_apply_injury_corrections`
+  **nigdy nie odpala** — cała dwustronna korekta λ za kontuzje jest martwa.
+  Do decyzji: szukać źródła pozycji (FotMob podaje `positionId` przy STARTERACH,
+  choć nie przy absencjach), czy uznać dwustronną korektę za nieosiągalną
+  i zostać przy jednostronnej z `availability_edge`.
+
 ## 🔴 ZNALEZIONE 30.08 — faza final nie zapisuje kuponu OD 16.08
 
 **Zmierzone na produkcji, nie podejrzenie.** Kupony `phase='final'` w bazie kończą
