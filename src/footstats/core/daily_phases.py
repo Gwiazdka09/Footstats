@@ -650,6 +650,17 @@ def _dopasuj_luzno(idx: dict, gospodarz: str, goscie: str) -> dict | None:
 
 FLAGA_TEAM_NEWS = "FOOTSTATS_TEAM_NEWS"
 
+# FlashScore chodzi przez Playwrighta — jedna przegladarka na mecz. Limit istnieje
+# od 30.08, razem z odblokowaniem tej sciezki: wczesniej byla zabezpieczona za
+# martwym API-Football i realnie nie odpalala sie wcale, wiec koszt nie istnial.
+_MAX_FLASHSCORE_NA_PRZEBIEG = 6
+
+
+def _flashscore_szczegoly(gospodarz: str, goscie: str) -> dict:
+    """Wydzielone wywolanie FlashScore — zeby test podmienil je bez Playwrighta."""
+    from footstats.scrapers.flashscore_match import scrape_match_with_search
+    return scrape_match_with_search(gospodarz, goscie)
+
 
 def _pobierz_team_news(data: str, pary: list[tuple[str, str]]) -> list:
     """
@@ -863,7 +874,6 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
     from datetime import date
     from footstats.scrapers.lineup_scraper import get_lineup
     from footstats.scrapers.referee_db import referee_signal, get_referee
-    from footstats.scrapers.flashscore_match import scrape_match_with_search
     from footstats.core.lineup_strength import (
         lineup_confidence_penalty_v2, lineup_offensive_strength,
     )
@@ -892,6 +902,7 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
             idx[(fh, fa)] = f
 
     enriched = 0
+    fs_zostalo = _MAX_FLASHSCORE_NA_PRZEBIEG
     for k in wyniki:
         gh = _norm(k.get("gospodarz", ""))
         ga = _norm(k.get("goscie", ""))
@@ -899,10 +910,14 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
         fixture = idx.get((gh, ga))
         if fixture is None:
             fixture = _dopasuj_luzno(idx, k.get("gospodarz", ""), k.get("goscie", ""))
-        if fixture is None:
-            continue
 
-        fixture_id = fixture.get("fixture", {}).get("id")
+        # Do 30.08 bylo tu `if fixture is None: continue` — i to jest powod, dla
+        # ktorego produkcja od miesiaca raportowala "Final enrichment: 0/N".
+        # Wywolanie FlashScore stoi NIZEJ w tej samej petli, wiec `continue`
+        # zabezpieczal dzialajace, niezalezne zrodlo za martwym zrodlem glownym
+        # (konto API-Football zawieszone od 01.08). Brak meczu w AF ma pomijac
+        # WYLACZNIE czesci zalezne od AF, nie caly wiersz.
+        fixture_id = (fixture or {}).get("fixture", {}).get("id")
 
         # Składy
         if fixture_id:
@@ -924,8 +939,10 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
         else:
             k["lineup_ok"] = None
 
-        # Sędzia
-        ref_name = (fixture.get("fixture", {}).get("referee") or "").split(",")[0].strip()
+        # Sędzia. `fixture` bywa None (kandydat spoza pokrycia API-Football) —
+        # wtedy nazwisko przyjdzie niżej z FlashScore albo zostało już wpisane
+        # przez FotMoba w `_wzbogac_team_news`.
+        ref_name = ((fixture or {}).get("fixture", {}).get("referee") or "").split(",")[0].strip()
         if ref_name:
             ref_data = get_referee(ref_name)
             sig = referee_signal(ref_name)
@@ -938,9 +955,14 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
 
         # Fallback Flashscore (jeśli brak sędziego lub dla topowych kuponów)
         # Pobieramy absencje tylko jeśli mecz jest 'ciekawy' lub jesteśmy w fazie FINAL
-        szukaj_fs = not k.get("referee_name")
+        szukaj_fs = not k.get("referee_name") and fs_zostalo > 0
+        if not k.get("referee_name") and fs_zostalo == 0:
+            log.info("FlashScore: limit %d wywolan na przebieg wyczerpany — %s vs %s "
+                     "zostaje bez sedziego (Playwright kosztuje przegladarke na mecz)",
+                     _MAX_FLASHSCORE_NA_PRZEBIEG, k.get("gospodarz"), k.get("goscie"))
         if szukaj_fs:
-            fs_data = scrape_match_with_search(k.get("gospodarz"), k.get("goscie"))
+            fs_zostalo -= 1
+            fs_data = _flashscore_szczegoly(k.get("gospodarz"), k.get("goscie"))
             if fs_data.get("success"):
                 if not k.get("referee_name") and fs_data.get("referee"):
                     k["referee_name"] = fs_data["referee"]
