@@ -3,13 +3,20 @@
 **Status:** SZKIC DO WYSŁANIA PRZEZ CIEBIE. Nic nie zostało wysłane.
 **Data:** 2026-08-30
 
-## Zanim wyślesz — sprawdź trzy rzeczy
+## Dane konta (z panelu, 30.08)
 
-1. **Adres e-mail konta** — nie wiem, na który adres jest założone konto
-   API-Football, więc zostawiłem `[TWÓJ ADRES E-MAIL KONTA]`. Wpisz ten sam,
-   z którego wysyłasz, inaczej support nie połączy zgłoszenia z kontem.
-2. **Plan** — napisałem „free plan (100 requests/day)". Jeśli masz inny, popraw.
-3. **Data zawieszenia** — pierwszy ślad w naszych logach to **01.08.2026**.
+- **Login:** `Gwiazdka09`
+- **E-mail konta:** `jakubgwiazdowski12@gmail.com`
+- **Powiadomienie w panelu:** „Your account is Suspended" (*Recent Notifications*)
+
+Uwaga: to **inny adres** niż Twój główny (`gwiazdowskijakub47@gmail.com`).
+Wyślij z `jakubgwiazdowski12@gmail.com` — z innego adresu support nie połączy
+zgłoszenia z kontem, a to najczęstszy powód, dla którego takie sprawy stoją.
+
+## Zanim wyślesz — sprawdź dwie rzeczy
+
+1. **Plan** — napisałem „free plan (100 requests/day)". Jeśli masz inny, popraw.
+2. **Data zawieszenia** — pierwszy ślad w naszych logach to **01.08.2026**.
    Jeśli pamiętasz coś wcześniejszego, dopisz.
 
 Kanał: formularz kontaktowy na `dashboard.api-football.com` (zakładka *Support*)
@@ -23,7 +30,8 @@ dołącza identyfikator konta.
   (limit zwraca inny komunikat).
 - Widoczne w logach produkcyjnych codziennie od 01.08.2026 do dziś.
 - Skutek u nas: `/fixtures`, `/fixtures/lineups` i `/odds` przestały zwracać dane.
-- Nie dostaliśmy żadnego powiadomienia mejlem o zawieszeniu.
+- Zero powiadomienia mejlem. Komunikat „Your account is Suspended" widnieje
+  wyłącznie w panelu, w sekcji *Recent Notifications*, i **nie podaje powodu**.
 
 ---
 
@@ -47,8 +55,9 @@ Every request returns HTTP 200 with this body:
 This has been consistent, every day, since 1 August 2026. It affects all
 endpoints I use: `/fixtures`, `/fixtures/lineups` and `/odds`.
 
-I did not receive any email or dashboard notification about the suspension, so
-I have no information about the cause.
+The only indication anywhere is a single line in the dashboard under *Recent
+Notifications*: "Your account is Suspended". It gives no reason, and I received
+no email about it, so I have no information about the cause.
 
 **How I use the API**
 
@@ -71,7 +80,8 @@ If something in my usage broke your terms of service, I will gladly correct it �
 I would simply like to know what it was. If the suspension was applied in error,
 I would be grateful if you could restore access.
 
-Account e-mail: [TWÓJ ADRES E-MAIL KONTA]
+Account username: Gwiazdka09
+Account e-mail: jakubgwiazdowski12@gmail.com
 
 Thank you for your time,
 Jakub
@@ -94,8 +104,9 @@ Każde zapytanie kończy się odpowiedzią HTTP 200 z treścią:
 ```
 
 Dzieje się tak codziennie od 1 sierpnia, na wszystkich używanych przeze mnie
-punktach końcowych: `/fixtures`, `/fixtures/lineups` i `/odds`. Nie otrzymałem
-żadnego powiadomienia o zawieszeniu, więc nie znam przyczyny.
+punktach końcowych: `/fixtures`, `/fixtures/lineups` i `/odds`. Jedyny ślad to
+linijka w panelu, w sekcji *Recent Notifications*: „Your account is Suspended" —
+bez podanego powodu. Nie dostałem żadnej wiadomości e-mail.
 
 Konto obsługuje prywatny, niekomercyjny projekt statystyk piłkarskich, który
 prowadzę sam. Nie ma płacących użytkowników, reklam ani odsprzedaży Waszych
@@ -112,7 +123,8 @@ Jeśli coś w moim sposobie korzystania naruszyło regulamin, chętnie to popraw
 zależy mi wyłącznie na tym, żeby wiedzieć co. Jeśli zawieszenie nastąpiło przez
 pomyłkę, będę wdzięczny za przywrócenie dostępu.
 
-Adres e-mail konta: [TWÓJ ADRES E-MAIL KONTA]
+Login konta: Gwiazdka09
+Adres e-mail konta: jakubgwiazdowski12@gmail.com
 
 Z poważaniem,
 Jakub
