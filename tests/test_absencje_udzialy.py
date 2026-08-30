@@ -50,8 +50,15 @@ def test_dluzsza_forma_nazwiska_w_bazie_dopasowuje_sie():
 
 def test_samo_nazwisko_NIE_wystarcza():
     """Jeden czlon to za malo — "Pedro" trafiloby w dowolnego Pedro w lidze,
-    a przypisanie cudzego udzialu jest gorsze niz brak udzialu."""
-    udzialy, nietrafione = udzialy_absencji(["Pedro"], _UDZIALY)
+    a przypisanie cudzego udzialu jest gorsze niz brak udzialu.
+
+    Baza ma DOKLADNIE JEDEN wpis zaczynajacy sie od tego czlonu — i to jest
+    sedno. Przy dwoch Pedro odrzucalby ich straznik niejednoznacznosci, wiec
+    test przechodzilby nie dzieki progowi czlonow (mutacja _MIN_CZLONOW = 1
+    przezyla pierwsza wersje). Jedno trafienie to realnie grozny przypadek:
+    samo nazwisko cicho przypisuje cudzy udzial."""
+    baza = {"Pedro Neto": 0.3}
+    udzialy, nietrafione = udzialy_absencji(["Pedro"], baza)
     assert udzialy == []
     assert nietrafione == ["Pedro"]
 
@@ -66,11 +73,11 @@ def test_gracz_spoza_bazy_ladauje_w_nietrafionych_a_nie_w_zerach():
 
 def test_niejednoznaczne_dopasowanie_jest_odrzucane(caplog):
     """Dwa wpisy pasuja prefiksem — przypisanie ktoregokolwiek byloby zgadywaniem."""
-    udzialy_bazy = {"Rafael Silva": 0.2, "Rafael Silva Junior": 0.1}
+    udzialy_bazy = {"Rafael Silva Junior": 0.2, "Rafael Silva Neto": 0.1}
     with caplog.at_level(logging.DEBUG):
-        udzialy, nietrafione = udzialy_absencji(["Rafael Silva Jr"], udzialy_bazy)
+        udzialy, nietrafione = udzialy_absencji(["Rafael Silva"], udzialy_bazy)
     assert udzialy == []
-    assert nietrafione == ["Rafael Silva Jr"]
+    assert nietrafione == ["Rafael Silva"]
 
 
 def test_pusta_baza_udzialow_nie_wybucha():
