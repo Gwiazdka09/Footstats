@@ -73,8 +73,23 @@ def _save_cache(key: str, data: dict):
 
 
 # ── Playwright-based SofaScore API ────────────────────────────────────────────
-# SofaScore blokuje po adresie IP: z Cloud Run KAŻDE żądanie wraca 403, także
-# przez Playwright ze stealth (sprawdzone 2026-08-08 — z domowego IP działa).
+# SofaScore blokuje DWIEMA warstwami — zmierzone ponownie 30.08 z jednego IP:
+#
+#   requests (dowolne nagłówki)  → HTTP 403, także na stronie głównej
+#   Playwright Chromium lokalnie → HTTP 200 na wszystkim
+#   Playwright Chromium z Cloud Run → HTTP 403 (logi joba 26-30.08, każda drużyna)
+#
+# Czyli: odrzucany jest klient nieprzeglądarkowy ORAZ zakres adresów datacenter.
+# Nagłówkami, stealth-em ani rozgrzewką sesji się tego nie obchodzi — sprawdzone,
+# wszystkie kombinacje referer/warm-up dają ten sam wynik. Wpis z 2026-08-08
+# mówił "z domowego IP działa" i dziś jest nieaktualny dla `requests`.
+#
+# SKUTEK, KTÓRY NIE JEST OCZYWISTY: to było jedyne źródło POZYCJI zawodników,
+# a `injury_lambda_factors` klasyfikuje absencje właśnie po pozycji. Od blokady
+# `injuries_*` były puste i cała dwustronna korekta λ nigdy nie odpalała.
+# Naprawione 30.08 z innej strony: pozycje idą teraz ze składu drużyny
+# w FotMobie (`scrapers/teamnews/fotmob.pozycje_druzyny`).
+#
 # Po pierwszym 403 nie ma sensu uruchamiać przeglądarki dla kolejnych drużyn:
 # w przebiegu z 7 kandydatami to było ~90 s zmarnowane na pewne niepowodzenie.
 # Flaga procesu, nie trwała — każdy nowy przebieg sprawdza od nowa.
