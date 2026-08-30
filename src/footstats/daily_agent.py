@@ -684,6 +684,40 @@ def _zbierz_migawke_kursow(dry_run: bool = False) -> dict | None:
     from footstats.core.odds_store import zbierz_i_zapisz
     return zbierz_i_zapisz(dry_run=dry_run)
 
+def _zgloś_brak_kuponu_do_zapisu(faza: str, dane: dict | None) -> None:
+    """
+    Mówi, DLACZEGO przebieg nie zapisał kuponu. Nigdy nie przerywa przebiegu.
+
+    Do 30.08 zapis stał za gołym `if zdarzenia_db:` bez gałęzi else. Kupony
+    `phase='final'` w bazie kończą się na 15.08 — czternaście dni ciszy, ani
+    jednej linii o przyczynie. Odrzucenie przez próg i podniesienie kuponu były
+    logowane; jedyny nielogowany przypadek okazał się tym, który realnie zachodzi.
+
+    Dwa stany mają różne przyczyny i różne działania naprawcze, więc dostają
+    różne komunikaty:
+
+      typy są, kuponu nie ma  — warstwa LLM nie oddała struktury kuponu.
+                                Typy i tak trafiają do `predictions` przez
+                                fallback A1 (`typy_awaryjne_z_modelu`), więc
+                                z zewnątrz wygląda to na zdrowy przebieg.
+                                Tak jest CODZIENNIE od 16.08.
+      zero typów              — nic nie przeszło filtrów wartości. Stan znany
+                                i normalny przy pustym terminarzu.
+    """
+    typy = ((dane or {}).get("top3") or []) if isinstance(dane, dict) else []
+    if typy:
+        log.warning(
+            "Faza %s: %d typow powstalo i trafi do `predictions`, ale kupon NIE "
+            "zostal zapisany — warstwa LLM nie oddala struktury kuponu "
+            "(kupon_a.zdarzenia puste). Przebieg konczy sie sukcesem, wiec bez "
+            "tego logu brak kuponow jest niewidoczny.", faza, len(typy))
+    else:
+        log.warning(
+            "Faza %s: zaden kandydat nie przeszedl filtrow wartosci — brak typow "
+            "i brak kuponu. Stan normalny przy pustym terminarzu, ale ma zostawic "
+            "slad, zeby dalo sie odroznic od awarii.", faza)
+
+
 def main():
     from dotenv import load_dotenv
     load_dotenv()
@@ -1041,6 +1075,8 @@ def main():
         kupon_a_db = dane.get("kupon_a") or {}
         zdarzenia_db = kupon_a_db.get("zdarzenia") or []
         kurs_db = kupon_a_db.get("kurs_laczny", 1.0) or 1.0
+        if not zdarzenia_db:
+            _zgloś_brak_kuponu_do_zapisu(args.faza, dane)
         if zdarzenia_db:
             # Sprawdzenie decision_score PRZED zapisem
             avg_score = int(sum(z.get("decision_score", 0) for z in zdarzenia_db) / max(len(zdarzenia_db), 1))
