@@ -683,8 +683,11 @@ def _wymusz_40pct(dane: dict, min_szansa: float = 40.0) -> None:
     Aktualizuje kurs_laczny, szansa_wygranej_pct, wygrana_netto w miejscu.
     """
     for kupon_key in ("kupon_a", "kupon_b"):
-        kupon = dane.get(kupon_key, {})
-        zdarzenia = kupon.get("zdarzenia", [])
+        # `or {}`, nie `get(k, {})`: wartosc domyslna dziala tylko gdy klucza NIE MA,
+        # a model jezykowy potrafi zwrocic klucz OBECNY z wartoscia `null`.
+        # Zmierzone 31.08 — `.get` na None wywalalo caly przebieg.
+        kupon = dane.get(kupon_key) or {}
+        zdarzenia = kupon.get("zdarzenia") or []
         if not zdarzenia:
             continue
 

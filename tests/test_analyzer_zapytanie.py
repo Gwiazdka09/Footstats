@@ -108,12 +108,22 @@ def test_prompt_uzytkownika_trafia_do_zapytania(groq):
     assert wiadomosci[-1] == {"role": "user", "content": "Legia vs Lech"}
 
 
-def test_limit_tokenow_przekazany(groq):
+def test_limit_tokenow_skalowany_pod_model(groq):
+    """Od 31.08 budzet idzie przez `effective_max_tokens`, nie 1:1.
+
+    Zmiana SLUZY temu, o czym mowi naglowek tego pliku: wrogiem jest odpowiedz
+    UCIETA na limicie. `gpt-oss` placi za rozumowanie z tego samego budzetu co
+    odpowiedz, wiec goly `max_tokens` konczyl sie `finish_reason: length`.
+    Wczesniej test wymagal przekazania 1:1 — i to wlasnie pozwalalo urywac."""
+    from footstats.ai.client import effective_max_tokens
+
     groq["klient"] = _Klient(_Odpowiedz("ok"))
 
     an._zapytaj_typera("prompt", max_tokens=1234)
 
-    assert groq["klient"].chat.completions.wywolania[0]["max_tokens"] == 1234
+    przekazane = groq["klient"].chat.completions.wywolania[0]["max_tokens"]
+    assert przekazane == effective_max_tokens(1234)
+    assert przekazane >= 1234, "skalowanie nie moze ZMNIEJSZAC budzetu"
 
 
 # ── kalibracja i statystyki lig w prompcie systemowym ───────────────────────

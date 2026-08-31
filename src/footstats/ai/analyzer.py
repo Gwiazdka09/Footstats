@@ -246,9 +246,15 @@ def _pobierz_podobne_mecze(home: str, away: str, n: int = 3) -> str:
             # Truncate lesson to 100 chars for readability
             header += f"{i}. {lesson[:100]}…\n"
         return header
-    except (ImportError, KeyError, AttributeError, TypeError) as e:
+    except (ImportError, KeyError, AttributeError, TypeError, RuntimeError, OSError) as e:
         # RAG jest opcjonalny, nie blokuje predykcji, ale zostawiamy slad na
         # debug - to per-mecz wzbogacenie, nie caly przebieg.
+        #
+        # RuntimeError i OSError dopisane 31.08: `utils.db.connect()` rzuca
+        # RuntimeError przy braku DATABASE_URL, a psycopg OSError przy awarii
+        # sieci. Bez nich padnieta baza zabijala CALA analize, mimo ze komentarz
+        # wyzej obiecywal, ze RAG jej nie blokuje. Zlapane przy realnym odpaleniu
+        # analizy lokalnie, nie w przegladzie kodu.
         logger.debug(
             "Podobne mecze z historii niedostepne dla %s vs %s (%s: %s)",
             home, away, type(e).__name__, e,
