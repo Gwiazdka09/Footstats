@@ -29,6 +29,11 @@ _LIVE_PATTERNS: tuple[str, ...] = (
     r"footstats[/\\]evening_agent\.py\b",
 )
 
+# Furtka jako przypisanie powłokowe, nie dowolna wzmianka: `echo
+# MOJE_FOOTSTATS_ALLOW_LIVE=1` nie jest świadomym override'em. Wyłącznie `=1` —
+# literówka albo `=0` cicho zdejmowałyby blokadę.
+_ALLOW_PREFIX = re.compile(r"(?:^|[;&|]\s*|\s)FOOTSTATS_ALLOW_LIVE=1(?:\s|$)")
+
 _MSG = (
     "BLOKADA (guard_live_ops): komenda uruchamia LIVE pipeline lokalnie "
     "(prod Neon + Telegram).\n"
@@ -44,7 +49,7 @@ def main() -> int:
     except (AttributeError, ValueError):
         pass
 
-    # Świadomy override — użytkownik wie co robi.
+    # Świadomy override ze środowiska hooka (zmienna w profilu powłoki).
     if os.environ.get("FOOTSTATS_ALLOW_LIVE") == "1":
         return 0
 
@@ -55,6 +60,13 @@ def main() -> int:
 
     command = (payload.get("tool_input") or {}).get("command", "")
     if not command:
+        return 0
+
+    # Ta sama furtka jako PREFIKS komendy — dokładnie forma, którą podaje `_MSG`.
+    # Do 31.08 komunikat obiecywał wyjście, którego nie było: prefiks `VAR=1 cmd`
+    # żyje w powłoce uruchamianej PÓŹNIEJ, a hook czytał własne `os.environ`.
+    # Kto posłuchał komunikatu, dostawał tę samą blokadę drugi raz.
+    if _ALLOW_PREFIX.search(command):
         return 0
 
     for pattern in _LIVE_PATTERNS:
