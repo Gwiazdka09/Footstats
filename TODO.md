@@ -470,12 +470,50 @@ użytkownika prosi o inną modalność (proza + linia `SCORE:`), wygrywa on.
   `updated` przez kolejne dni. Próba mała i z niedzielnego wieczoru
   (mecze południowoamerykańskie), więc to jeden punkt, nie wniosek.
 
+### Limit TPM — zmierzone na produkcji 31.08 20:25
+
+Przebieg `footstats-final-h6gg8` odpalony ręcznie. Wynik: **kupon `phase='final'`
+dalej NIE powstał** (`coupons` = 0 wierszy). Ale przyczyna jest już policzona,
+nie zgadywana:
+
+```
+Typer Groq: 413 — ponawiam z promptem krotszym o polowe    ← moja obsługa 413 zadziałała
+[AI] Model jezykowy nie zwrocil typow — 3 typow z modelu   ← i to nie pomogło
+Faza final: kupon NIE zostal zapisany (kupon_a.zdarzenia puste)
+```
+
+413 przyszło przy **trzech** kandydatach, więc masa nie siedziała w opisach
+meczów. Rozkład promptu (`szacuj_tokeny`):
+
+| składnik | tokeny |
+|---|---|
+| `SYSTEM_TYPER_BAZA` | 2475 |
+| kalibracja | 86 |
+| statystyki lig | 484 |
+| **prompt systemowy razem** | **3045** |
+| `effective_max_tokens(1500)` | **3750** ← 47% całego limitu |
+| limit TPM | 8000 |
+| **zostaje na opisy meczów** | **1205** |
+
+`effective_max_tokens` liczyło sufit jako 75% TPM patrząc **wyłącznie na wyjście**,
+a TPM obejmuje wejście i wyjście razem. Ratunek przez przycinanie promptu
+użytkownika bił w złe miejsce — wycinał opisy meczów, czyli jedyną rzecz,
+której model potrzebuje, i zostawiał balast. Stąd „nie zwrócił typów"
+tuż po **udanym** ponowieniu.
+
+Naprawione: `effective_max_tokens(base, model, prompt_tokens)` domyka rachunek,
+typer podaje sumę systemowego i użytkownika. Podłoga 400 tok.
+
 ### Zostaje otwarte
 
-- [ ] **Typer bije w limit TPM Groqa.** `Limit 8000, Requested 9129` na fazie
-  final. Naprawione objawowo — po 413 prompt jest przycinany o połowę
-  i ponawiany raz (ta sama polityka co `client._groq`) — ale przycięcie GUBI
-  opisy meczów. Docelowo: skrócić prompt systemowy albo podnieść tier.
+- [ ] **Prompt systemowy typera waży 2475 tok** i to jest teraz największy
+  pojedynczy składnik. Przy 3 kandydatach zostaje ~4 tys. tok na wyjście —
+  działa, ale przy 10+ kandydatach znowu będzie ciasno. Skrócenie go to zmiana
+  **instrukcji dla modelu**, więc wymaga pomiaru jakości typów przed i po,
+  nie samego cięcia tekstu.
+- [ ] **Zweryfikować kupon `phase='final'` po najbliższym przebiegu.** Nadal
+  zero od 15.08 — trzy przyczyny naprawione (nazwa modelu, konflikt schematu,
+  budżet TPM), żadna jeszcze nie potwierdzona zapisanym kuponem na produkcji.
 
 ## 🔴 ZNALEZIONE 30.08 — faza final nie zapisuje kuponu OD 16.08
 
