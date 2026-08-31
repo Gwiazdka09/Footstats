@@ -442,15 +442,40 @@ Konflikt gryzie tylko wtedy, gdy OBIE strony żądają JSON-a — tak było w g�
 ścieżce kuponu (`top3`/`kupon_a`) i to jest już naprawione. Gdy prompt
 użytkownika prosi o inną modalność (proza + linia `SCORE:`), wygrywa on.
 
+### Zamknięte tego samego wieczoru
+
+- [x] **`--dry-run` przechodzi CAŁY potok bez bazy.** Zmierzone: przebieg
+  dojechał od KROK 0 do `RUN SUMMARY`, zbudował KUPON A (`Kurs łączny 1.57`)
+  i zaraportował `DRY-RUN: pominięto zapis kuponu do DB`. Po drodze zamknięte
+  trzy blokady: odczyt sędziego (teraz degraduje z jednym ostrzeżeniem),
+  saldo bankrolla, oraz **Krok 0d, który PISAŁ do bazy** przez `upsert_referee`
+  także w podglądzie.
+- [x] **KROK 3b rozstrzygnięty — i przyczyna była inna niż stojący rynek.**
+  `BzzoiroClient._get` trzyma odpowiedzi w cache'u RAM, `CACHE_TTL_MIN = 30`,
+  a KROK 1 i KROK 3b chodzą w TYM SAMYM procesie kilka-kilkanaście minut po
+  sobie. Drugie zapytanie trafiało w cache i porównywało dane samo ze sobą —
+  `0/46` było gwarantowane konstrukcją.
+
+  **Pomiar po naprawie** (11 meczów, cache czyszczony przed każdą próbką):
+
+  | okno | zmienionych |
+  |------|-------------|
+  | 5 min | 0/9 |
+  | 10 min | **2/9** |
+  | 15 min | 2/9 |
+
+  Kursy ruszają się, ale skromnie: obie zmiany dotyczyły **wyłącznie `btts`**
+  (2.11→2.12 i 1.93→1.91), a 1X2 i Over/Under nie drgnęły przez 15 minut.
+  Krok zostaje — teraz faktycznie działa, a nowy log INFO zacznie zbierać
+  `updated` przez kolejne dni. Próba mała i z niedzielnego wieczoru
+  (mecze południowoamerykańskie), więc to jeden punkt, nie wniosek.
+
 ### Zostaje otwarte
 
-- [ ] **`--dry-run` dalej wymaga DB od fazy wzbogacania w górę** — `get_referee`
-  woła `init_referee_table()` (CREATE TABLE), a `daily_phases` nie zna flagi
-  dry-run. Przeciągnięcie jej przez tę warstwę to osobny remont.
-- [ ] **KROK 3b jest drugim identycznym scrapem** tego samego źródła, z tymi
-  samymi parametrami, kilka minut później. Łapie wyłącznie ruch kursów
-  W TRAKCIE przebiegu. Czy warte 34 s — nierozstrzygnięte, brak pomiaru
-  ile razy `updated > 0`. Nowy log INFO da tę liczbę.
+- [ ] **Typer bije w limit TPM Groqa.** `Limit 8000, Requested 9129` na fazie
+  final. Naprawione objawowo — po 413 prompt jest przycinany o połowę
+  i ponawiany raz (ta sama polityka co `client._groq`) — ale przycięcie GUBI
+  opisy meczów. Docelowo: skrócić prompt systemowy albo podnieść tier.
 
 ## 🔴 ZNALEZIONE 30.08 — faza final nie zapisuje kuponu OD 16.08
 
