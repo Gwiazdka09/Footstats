@@ -179,9 +179,17 @@ def _wzbogac_forme_top(wyniki: list, top_n: int = 6) -> None:
                 w["sofa_forma_g"] = f"{''.join(fh['form'])}({fh.get('goals_scored',0)}:{fh.get('goals_conceded',0)})"
             if fa.get("form"):
                 w["sofa_forma_a"] = f"{''.join(fa['form'])}({fa.get('goals_scored',0)}:{fa.get('goals_conceded',0)})"
-            # Pełne dane kontuzji (z pozycją) do korekty λ — nie tylko nazwy do wyświetlenia
-            w["injuries_home"] = fh.get("injuries", []) or []
-            w["injuries_away"] = fa.get("injuries", []) or []
+            # Pełne dane kontuzji (z pozycją) do korekty λ — nie tylko nazwy do wyświetlenia.
+            #
+            # WARUNKOWO, i to jest cała naprawa z 31.08: przypisanie było bezwarunkowe,
+            # więc pusta lista z zablokowanego SofaScore'a (403 → `_empty_form`)
+            # kasowała komplet absencji, które FotMob zapisał 20 linii wcześniej
+            # w `_enrichuj_finalna_faza`. `_apply_injury_corrections` czytało już nic.
+            # Objawem byłaby zerowa korekta λ przy poprawnie pobranych składach.
+            if fh.get("injuries"):
+                w["injuries_home"] = fh["injuries"]
+            if fa.get("injuries"):
+                w["injuries_away"] = fa["injuries"]
             inj_g = [i.get("name", "?") for i in fh.get("injuries", [])[:3]]
             inj_a = [i.get("name", "?") for i in fa.get("injuries", [])[:3]]
             if inj_g:
