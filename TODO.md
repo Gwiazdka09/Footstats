@@ -333,6 +333,66 @@ Sprawdzone na logach produkcyjnych (26-30.08) i sondami HTTP, nie z pamięci.
   Nagłówki, stealth i rozgrzewka sesji nie pomagają (sprawdzone wszystkie
   kombinacje). Realna opcja to tylko inne wyjście sieciowe albo inne źródło formy.
 
+## ✅ NAPRAWIONE 31.08 — faza final znowu buduje kupony
+
+Kupony `phase='final'` stanęły **15.08**. Przyczyny były DWIE i obie milczały.
+
+**1. Wycofana nazwa modelu — TRZECI raz ten sam kształt.** Log joba, codziennie:
+
+```
+Wyspecjalizowany typer Groq zawiodl (NotFoundError: 404 - The model
+`llama-3.1-8b-instant` does not exist) - przechodze na fallback zapytaj_ai
+```
+
+Naprawa z 22.08 objęła tylko `ai/client.py`. `ai/analyzer.py` i `ai/trainer.py`
+miały **własne, zaszyte** nazwy w PIĘCIU miejscach — dwa żywe wywołania
+w analyzerze, dwa w trainerze i etykieta Langfuse raportująca nieprawdę. Żadne
+nie ustawiało `reasoning_effort` ani nie skalowało `max_tokens`, więc sama
+podmiana nazwy i tak spaliłaby budżet `gpt-oss` na rozumowanie.
+Nazwa mieszka teraz w `client.parametry_modelu()`; strażnik
+`test_nazwa_modelu_nie_jest_zaszyta_poza_clientem` znalazł trzy z pięciu miejsc,
+o których nie wiedziałem.
+
+**2. Prompt systemowy walczył z promptem użytkownika.** `SYSTEM_TYPER` kończył
+się blokiem „JSON SCHEMA (OBOWIĄZKOWY)" opisującym POJEDYNCZY typ, a
+`ai_analiza_pewniaczki` parsuje `top3`/`kupon_a`. Żywy dowód po naprawie punktu 1:
+model oddał `{"typ": "1", "kurs": 1.95, "risks_analysis": [...]}`.
+Dlaczego dopiero teraz: `llama-3.1-8b` słabo trzymała się promptu systemowego,
+`gpt-oss-120b` trzyma się go ściśle — **podmiana modelu zmieniła, który prompt
+wygrywa**. Konflikt istniał wcześniej, ale był nieszkodliwy.
+
+Dowód końcowy (żywy Groq, realna ścieżka): fallback A1 nieużyty, `top3=3`,
+`kupon_a` z kursem łącznym.
+
+**Przy okazji, dwie ścieżki obiecujące odporność bez pokrycia w kodzie:**
+`_pobierz_podobne_mecze` (RAG) zabijał całą analizę przy padniętej bazie mimo
+komentarza „nie blokuje predykcji"; `_wymusz_40pct` wywalał się na
+`"kupon_a": null`, bo `dict.get(k, {})` nie działa, gdy klucz istnieje z `None`.
+
+**Wdrożone:** obraz `sha256:8165e33f…` tag `77df454ec`, zbudowany 31.08 18:17.
+
+- [ ] **Do sprawdzenia po przebiegu 01.09 11:00 UTC:** czy w `coupons` pojawił się
+  wiersz `phase='final'` (pierwszy od 15.08).
+
+## 🟢 FOOTSTATS_TEAM_NEWS WŁĄCZONE 31.08
+
+Ustawione w trzech miejscach (`footstats-final`, `footstats-evening`,
+`footstats-api`) przez `--update-env-vars`; liczba kluczy env wzrosła dokładnie
+o 1 w każdym (14→15, 14→15, 18→19), więc nic nie zginęło — kontrola po
+incydencie z `JWT_SECRET` 27.07.
+
+Smoke lokalny na żywym FotMobie tego samego dnia, 3 kandydaci:
+3/3 wzbogacone, wszystkie `predicted`, sędziowie ze statystykami
+(`avg_red` 0,026-0,081 na mecz), absencje **z pozycją** → `injuries_*`
+wypełnione → dwustronna korekta λ ma wejście. Udziały w golach dopasowane
+w `player_db` dla **7 z 14** absencji — licznik `absencje_bez_udzialu` działa.
+
+Nowa wartość `lineupType` u źródła: **`standard`** (skład faktyczny, nie
+prognoza). DTO obsługuje poprawnie — `sklad_jest_prognoza` daje `False`.
+
+- [ ] **Do sprawdzenia po przebiegu:** w logach `team-news: N/M kandydatow
+  wzbogaconych`. Zero przy zdrowym HTTP = alarm zmiany schematu.
+
 ## 🔴 ZNALEZIONE 30.08 — faza final nie zapisuje kuponu OD 16.08
 
 **Zmierzone na produkcji, nie podejrzenie.** Kupony `phase='final'` w bazie kończą
