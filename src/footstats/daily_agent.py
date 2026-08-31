@@ -724,6 +724,29 @@ def _bankroll_do_przebiegu(args, admin_uid: int) -> float:
     return get_current_bankroll(user_id=admin_uid)
 
 
+def _odswiez_sedziow(args) -> None:
+    """
+    Krok 0d: statystyki sędziów z ZawodTyper. W dry-run pomijane.
+
+    `fetch_referees_zawodtyper` woła `upsert_referee`, czyli INSERT/UPDATE do
+    bazy — i robiło to także w podglądzie, poza jakąkolwiek bramką dry-run.
+    Trzeci przypadek tej samej klasy co saldo bankrolla.
+
+    Dodatkowo chodzi przez Playwrighta, więc podgląd płacił za scraping, którego
+    wynik i tak nie miał gdzie trafić.
+    """
+    if getattr(args, "dry_run", False):
+        log.info("dry-run: pomijam odswiezenie sedziow (ZawodTyper pisze do bazy)")
+        return
+
+    try:
+        from footstats.scrapers.zawodtyper_referees import fetch_referees_zawodtyper
+        fetch_referees_zawodtyper()
+        console.print("[green]✓ Sędziowie zaktualizowani z Zawodtyper[/green]")
+    except (OSError, RuntimeError) as e:
+        console.print(f"[dim]Referee update: {e}[/dim]")
+
+
 def _streak_do_przebiegu(args, admin_uid: int) -> tuple[int, float]:
     """
     Seria porażek i mnożnik stawki. W dry-run neutralne, bez pytania bazy.
@@ -914,12 +937,7 @@ def main():
             console.print(f"[dim]Błąd settlement kuponów: {e}[/dim]")
 
     # Krok 0d: Aktualizacja statystyk sędziów z Zawodtyper (raz dziennie)
-    try:
-        from footstats.scrapers.zawodtyper_referees import fetch_referees_zawodtyper
-        fetch_referees_zawodtyper()
-        console.print("[green]✓ Sędziowie zaktualizowani z Zawodtyper[/green]")
-    except (OSError, RuntimeError) as e:
-        console.print(f"[dim]Referee update: {e}[/dim]")
+    _odswiez_sedziow(args)
 
     _sep("KROK 1 — Bzzoiro ML")
     wyniki, indeks = _pobierz_kandydatow(dni=args.dni)

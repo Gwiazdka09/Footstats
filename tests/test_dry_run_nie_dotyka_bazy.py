@@ -109,3 +109,44 @@ def test_dry_run_nie_udaje_serii_porazek(monkeypatch):
 
     assert streak < 3, "prog redukcji stawek to 3 — podglad nie moze go przekroczyc"
     assert mult == 1.0
+
+
+# ── Krok 0d: odswiezenie sedziow z ZawodTyper ───────────────────────────────
+#
+# Trzeci przypadek tej samej klasy. `fetch_referees_zawodtyper` woła
+# `upsert_referee`, czyli INSERT/UPDATE do bazy — i chodziło to takze w dry-run,
+# poza jakakolwiek bramka. Do tego Playwright, wiec podglad placil za scraping,
+# ktorego wynik i tak nie mial gdzie trafic.
+
+def test_dry_run_nie_odswieza_sedziow(monkeypatch):
+    def _wybuch():
+        raise AssertionError("dry-run nie ma prawa pisac do bazy sedziow")
+
+    monkeypatch.setattr(
+        "footstats.scrapers.zawodtyper_referees.fetch_referees_zawodtyper", _wybuch)
+
+    da._odswiez_sedziow(_Args(dry_run=True))   # nie moze rzucic
+
+
+def test_zwykly_przebieg_dalej_odswieza_sedziow(monkeypatch):
+    """Kontrola: statystyki sedziow maja sie aktualizowac raz dziennie."""
+    wywolano = []
+    monkeypatch.setattr(
+        "footstats.scrapers.zawodtyper_referees.fetch_referees_zawodtyper",
+        lambda: wywolano.append(True))
+
+    da._odswiez_sedziow(_Args(dry_run=False))
+
+    assert wywolano == [True]
+
+
+def test_awaria_zrodla_sedziow_nie_zatrzymuje_przebiegu(monkeypatch):
+    """ZawodTyper to zewnetrzna strona — jej padniecie nie moze kosztowac
+    calego dziennego przebiegu."""
+    def _wybuch():
+        raise OSError("zawodtyper nie odpowiada")
+
+    monkeypatch.setattr(
+        "footstats.scrapers.zawodtyper_referees.fetch_referees_zawodtyper", _wybuch)
+
+    da._odswiez_sedziow(_Args(dry_run=False))   # nie moze rzucic
