@@ -81,7 +81,7 @@ def zapisy(monkeypatch):
 def rura(monkeypatch):
     stan = {"odpowiedz": '{"top3": []}'}
     monkeypatch.setattr(an, "_zapytaj_typera",
-                        lambda prompt, max_tokens=1500: stan["odpowiedz"])
+                        lambda prompt, max_tokens=1500, **kw: stan["odpowiedz"])
     monkeypatch.setattr(an, "_sygnaly_summary", lambda w: "sygnaly")
     monkeypatch.setattr(an, "_buduj_opis_meczu", lambda w: "OPIS")
     monkeypatch.setattr(an, "_pobierz_podobne_mecze", lambda h, a, n=3: "")

@@ -85,13 +85,40 @@ def _ollama_available() -> bool:
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
+def parametry_modelu() -> dict:
+    """
+    Parametry wywołania Groqa zależne od WYBRANEGO modelu, w jednym miejscu.
+
+    Zwraca `{"model": ...}` plus `reasoning_effort` dla rodziny `gpt-oss`.
+
+    Po co osobna funkcja zamiast samej stałej `GROQ_MODEL`: nazwa modelu i jego
+    wymagania to jedna decyzja, a rozdzielone rozjeżdżają się po cichu. Tak
+    powstała awaria 16-22.08 (nazwa jako default w kodzie, potok stał 6 dni przy
+    `exit=0`) i jej nawrót 31.08 — `ai/analyzer.py` miał własne, zaszyte
+    `llama-3.1-8b-instant` i codziennie dostawał 404, a fallback to pochłaniał.
+
+    Pilnuje tego `tests/test_model_groq_jedno_zrodlo.py`: nazwa modelu poza tym
+    plikiem = czerwony test.
+    """
+    parametry: dict = {"model": GROQ_MODEL}
+    # `gpt-oss` rozumuje przed odpowiedzia i placi za to z TEGO SAMEGO budzetu
+    # wyjscia. Zmierzone 22.08: przy domyslnym wysilku 330 z 400 tokenow poszlo
+    # na rozumowanie i odpowiedz urwala sie w polowie (`finish_reason: length`).
+    # Przy `low` — 85 tokenow i pelny JSON. Parametr podajemy tylko modelom,
+    # ktore go znaja: reszta odrzucilaby zadanie jako nieznane pole.
+    if "gpt-oss" in GROQ_MODEL:
+        parametry["reasoning_effort"] = "low"
+    return parametry
+
+
 def _groq_call_impl(klucz: str, prompt: str, max_tokens: int) -> str:
     """Inner Groq call with exponential backoff retry. Raises on failure."""
     import groq as groq_lib
 
     client = groq_lib.Groq(api_key=klucz)
+    _p = parametry_modelu()
     resp = client.chat.completions.create(
-        model=GROQ_MODEL,
+        model=_p["model"],
         messages=[
             {
                 "role": "system",
@@ -105,12 +132,9 @@ def _groq_call_impl(klucz: str, prompt: str, max_tokens: int) -> str:
         ],
         max_tokens=max_tokens,
         temperature=0.3,
-        # `gpt-oss` rozumuje przed odpowiedzia i placi za to z TEGO SAMEGO budzetu
-        # wyjscia. Zmierzone: przy domyslnym wysilku 330 z 400 tokenow poszlo na
-        # rozumowanie i odpowiedz urwala sie w polowie (`finish_reason: length`).
-        # Przy `low` — 85 tokenow i pelny JSON. Parametr podajemy tylko modelom,
-        # ktore go znaja: reszta odrzucilaby zadanie jako nieznane pole.
-        **({"reasoning_effort": "low"} if "gpt-oss" in GROQ_MODEL else {}),
+        # Decyzja o `reasoning_effort` mieszka w `parametry_modelu()` — tutaj
+        # tylko przekazana, żeby nie istniała w dwóch miejscach.
+        **{k: v for k, v in _p.items() if k != "model"},
     )
     return resp.choices[0].message.content
 

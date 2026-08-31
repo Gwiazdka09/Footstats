@@ -32,7 +32,9 @@ def rura(monkeypatch):
         "progi": [],
     }
 
-    def fake_typer(prompt, max_tokens=1500):
+    # `**kw` przyjmuje `schemat` dodany 31.08 — atrapa ma nie rozjezdzac sie
+    # z sygnatura produkcyjna przy kazdym nowym parametrze.
+    def fake_typer(prompt, max_tokens=1500, **kw):
         stan["prompty"].append(prompt)
         return stan["odpowiedz"]
 

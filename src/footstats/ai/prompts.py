@@ -31,7 +31,7 @@ def bez_emoji(tekst: str) -> str:
 
 # ── System prompt for the betting analyst role ─────────────────────────────
 
-SYSTEM_TYPER = """Jesteś BEZWZGLĘDNYM ANALITYKIEM DANYCH BUKMACHERSKICH. Nie bądź miły — bądź precyzyjny.
+SYSTEM_TYPER_BAZA = """Jesteś BEZWZGLĘDNYM ANALITYKIEM DANYCH BUKMACHERSKICH. Nie bądź miły — bądź precyzyjny.
 
 KRYTERIA DECYZJI:
 1. VALUE BETTING (PRIORYTET): Twoim celem jest znalezienie przewagi nad bukmacherem (Value), a nie tylko wskazanie faworyta.
@@ -49,21 +49,11 @@ PEWNOŚĆ (confidence_score 0-100):
 - 65-79: Sensowny typ z racjonalnymi argumentami. Nie bój się dawać not 70-80, gdy dane wskazują faworyta!
 - <65: Niska pewność, omijać.
 
-JSON SCHEMA (OBOWIĄZKOWY - Zwróć wyłącznie JSON):
-{
-  "typ": "1" | "2" | "X" | "1X" | "X2" | "Over 1.5" | "Over 2.5" | "Over 3.5" | "Under 2.5" | "Under 3.5" | "BTTS" | "No BTTS" | "Handicap -1" | "Handicap +1" | "1 & Over 1.5" | "1 & BTTS" | "BTTS & Over 2.5" | "Kartki Over 3.5" | "Rożne Over 9.5" | "Gosp. 0.5+" | "Gość 0.5+" | "1.Poł Over 0.5",
-  "kurs": 1.80,
-  "pewnosc_pct": 75,
-  "risks_analysis": ["ryzyko 1", "ryzyko 2", "ryzyko 3"],
-  "uzasadnienie": "Krótko: dlaczego ten typ mimo ryzyk?",
-  "value_bet": true | false
-}
-
 == DEVIL'S ADVOCATE (OBOWIĄZKOWE) ==
 Twoim zadaniem jest przeprowadzenie "ataku" na własną sugestię typu.
 1. Wygeneruj dokładnie 3 najsilniejsze argumenty PRZECIWKO sugerowanemu typowi (np. kontuzje, xG rywala, zmęczenie).
-2. Umieść je w polu "risks_analysis".
-3. Dopiero PO analizie ryzyk oblicz ostateczny "pewnosc_pct".
+2. Umieść je w polu przewidzianym na ryzyka przez schemat odpowiedzi, który dostałeś.
+3. Dopiero PO analizie ryzyk oblicz ostateczną pewność typu.
 4. Każde istotne ryzyko musi realnie obniżać pewność (np. brak kluczowego gracza = -10 pkt).
 
 Odpowiadaj zawsze po polsku. Zawsze zwracaj JSON. Bądź konkretny.
@@ -130,6 +120,31 @@ RAG: PATENT+TWIERDZA→1: 7/8=87% → mocny dowód
 - KONTUZJE ATAKU: Jeśli topowy strzelec (lub pomocnik ofensywny) nie gra z powodu zawieszenia lub kontuzji — ZAKAZ Over 2.5.
 - NIEKOMPLETNE DANE: Jeśli widzisz ryzyko lub rotację (np. mecze Pucharowe), załóż niższy pułap bramek i odrzuć Over. Typuj Under lub bezpieczne zakłady z wyższym kursem i mniejszym ryzykiem utraty (1X/X2). W skrócie: jak są kontuzje/rotacja w obu drużynach = omijaj z daleka.
 """
+
+# Schemat POJEDYNCZEGO typu. Wydzielony 31.08, bo `SYSTEM_TYPER` narzucał go
+# WSZYSTKIM czterem wywołaniom typera, a tylko część tego chce. Zmierzone:
+# `ai_analiza_pewniaczki` parsuje `top3`/`kupon_a`, dostawała `{"typ": ...}`
+# i wpadała w fallback — kupony `phase='final'` zniknęły po 15.08.
+#
+# Dlaczego dopiero po podmianie modelu: `llama-3.1-8b-instant` słabo trzymała
+# się promptu systemowego i szła za promptem użytkownika. `gpt-oss-120b` trzyma
+# się systemowego, więc konflikt, który był tam od początku, stał się widoczny.
+SCHEMAT_POJEDYNCZY_TYP = """JSON SCHEMA (OBOWIĄZKOWY - Zwróć wyłącznie JSON):
+{
+  "typ": "1" | "2" | "X" | "1X" | "X2" | "Over 1.5" | "Over 2.5" | "Over 3.5" | "Under 2.5" | "Under 3.5" | "BTTS" | "No BTTS" | "Handicap -1" | "Handicap +1" | "1 & Over 1.5" | "1 & BTTS" | "BTTS & Over 2.5" | "Kartki Over 3.5" | "Rożne Over 9.5" | "Gosp. 0.5+" | "Gość 0.5+" | "1.Poł Over 0.5",
+  "kurs": 1.80,
+  "pewnosc_pct": 75,
+  "risks_analysis": ["ryzyko 1", "ryzyko 2", "ryzyko 3"],
+  "uzasadnienie": "Krótko: dlaczego ten typ mimo ryzyk?",
+  "value_bet": true | false
+}
+"""
+
+# Zgodność wstecz: domyślny prompt typera to baza + schemat pojedynczego typu,
+# czyli dokładnie to, co było do 31.08. Wołający, który parsuje inny kształt,
+# przekazuje `schemat=None`.
+SYSTEM_TYPER = SYSTEM_TYPER_BAZA + chr(10) + chr(10) + SCHEMAT_POJEDYNCZY_TYP
+
 
 
 # ── Prompt builders (f-string templates with runtime variables) ─────────────
