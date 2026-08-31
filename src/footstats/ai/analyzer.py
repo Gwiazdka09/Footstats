@@ -138,8 +138,21 @@ def _kontynuuj_uciety_json(client, messages: list, partial: str, max_tokens: int
 _BEZ_SCHEMATU = object()   # sentinel: odróżnia "nie podano" od świadomego None
 
 
+def _to_413(e: Exception) -> bool:
+    """Czy Groq odmówił z powodu rozmiaru zapytania.
+
+    Rozpoznawanie po tekście, nie po typie: SDK opakowuje to raz w
+    `APIStatusError`, raz w `BadRequestError`, a `client._groq` sprawdza
+    dokładnie te same dwa napisy. Dwa różne rozpoznania rozjechałyby się
+    po cichu, a objawem byłby kupon z gorszej ścieżki.
+    """
+    tekst = str(e).lower()
+    return "413" in tekst or "request too large" in tekst
+
+
 def _zapytaj_typera(prompt: str, max_tokens: int = 900,
-                    schemat: str | None = _BEZ_SCHEMATU) -> str:  # type: ignore[assignment]
+                    schemat: str | None = _BEZ_SCHEMATU,  # type: ignore[assignment]
+                    _po_przycieciu: bool = False) -> str:
     """
     Groq z systemowym promptem typera + kalibracja + statystyki ligowe.
 
@@ -199,6 +212,22 @@ def _zapytaj_typera(prompt: str, max_tokens: int = 900,
 
         return result
     except Exception as e:  # noqa: BLE001
+        # 413 = prompt + max_tokens ponad limit tokenow na minute. Zmierzone
+        # 31.08: `Limit 8000, Requested 9129` na fazie final. Fallback to
+        # PRZEZYWAL (`client._groq` tnie prompt o polowe i ponawia raz), a typer
+        # nie — wiec kupon powstawal ze sciezki bez kalibracji i statystyk
+        # ligowych w promcie systemowym. Ta sama polityka co tam: nie ufamy
+        # wlasnej arytmetyce tokenow, tylko odpowiedzi zrodla.
+        if not _po_przycieciu and _to_413(e):
+            from footstats.ai.client import dopasuj_do_budzetu, szacuj_tokeny
+            krotszy = dopasuj_do_budzetu(prompt, szacuj_tokeny(prompt) // 2)
+            logger.warning(
+                "Typer Groq: 413 (%s) — ponawiam z promptem krotszym o polowe. "
+                "Czesc opisow meczow przepada, wiec to NIE jest bez kosztu.",
+                type(e).__name__)
+            return _zapytaj_typera(krotszy, max_tokens, schemat,
+                                   _po_przycieciu=True)
+
         # 22.08.2026: Groq wycofal model bez zapowiedzi (404), potok stal 6 dni
         # przy exit=0, bo ten fallback pochlanial blad bez sladu. Log jest
         # jedynym sygnalem, ze wyspecjalizowany typer przestal dzialac.
