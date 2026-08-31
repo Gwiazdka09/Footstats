@@ -99,7 +99,12 @@ def test_brak_obciecia_to_brak_logu(caplog):
 
 def test_typer_liczy_TAKZE_prompt_systemowy(monkeypatch):
     """Prompt systemowy to 3045 tok — pominiecie go w rachunku znaczyloby,
-    ze najwiekszy skladnik nie jest liczony."""
+    ze najwiekszy skladnik nie jest liczony.
+
+    Pierwsza wersja tego testu PRZECHODZILA przy liczeniu samego promptu
+    uzytkownika: bloki kalibracji byly puste, wiec suma i tak miescila sie
+    w limicie. Zeby test cokolwiek rozroznial, systemowy musi byc na tyle
+    duzy, by jego pominiecie WYWALILO budzet — tak jak na produkcji."""
     from footstats.ai import analyzer as an
     from footstats.ai import client as cl
 
@@ -124,7 +129,11 @@ def test_typer_liczy_TAKZE_prompt_systemowy(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
     monkeypatch.setattr(cl, "GROQ_MODEL", _MODEL)
     monkeypatch.setattr(an, "_get_kalibracja_blok", lambda: "")
-    monkeypatch.setattr(an, "_get_liga_statystyki_blok", lambda: "")
+    # ~3000 tok statystyk lig — realny rzad wielkosci bloku doklejanego do
+    # systemowego. Razem z baza daje prompt, przy ktorym pominiecie systemowego
+    # w rachunku konczy sie przekroczeniem limitu.
+    monkeypatch.setattr(an, "_get_liga_statystyki_blok",
+                        lambda: "Premier League: srednia goli 2.71, BTTS 51%. " * 120)
     monkeypatch.setitem(__import__("sys").modules, "groq",
                         type("M", (), {"Groq": staticmethod(lambda api_key: k)}))
 
