@@ -390,8 +390,67 @@ w `player_db` dla **7 z 14** absencji — licznik `absencje_bez_udzialu` działa
 Nowa wartość `lineupType` u źródła: **`standard`** (skład faktyczny, nie
 prognoza). DTO obsługuje poprawnie — `sklad_jest_prognoza` daje `False`.
 
-- [ ] **Do sprawdzenia po przebiegu:** w logach `team-news: N/M kandydatow
-  wzbogaconych`. Zero przy zdrowym HTTP = alarm zmiany schematu.
+- [x] **Sprawdzone 31.08 wieczorem** — `team-news: 3/4 kandydatow wzbogaconych
+  (1 predicted, 2 lastStarting11)` w pełnym przebiegu fazy final (dry-run).
+  Wcześniejszy smoke na 16 kandydatach Bzzoiro: **12/16**, składy 11+11,
+  absencje z pozycjami, sędziowie ze statystykami. Ścieżka żyje end-to-end.
+
+---
+
+## 🔧 NAPRAWIONE 31.08 wieczorem — cztery ciche no-opy
+
+Znalezione **smoke'em na 12 żywych kandydatach**, nie z przeglądu kodu.
+
+1. **`edge_absencje` zawsze `None`.** `market_p_over` nie było ustawiane
+   NIGDZIE w `src/` — tylko czytane w `_policz_edge_absencji` i podstawiane
+   ręcznie w testach. Pole istniało wyłącznie w testach, więc całe porównanie
+   z rynkiem nie działało. Rynek liczony teraz z kursów kandydata
+   (`over_2_5`/`under_2_5`) przez `devig_two_way`. Sam kurs Over nie wystarcza:
+   `1/kurs` zawiera vig → edge wychodziłby systematycznie zaniżony.
+
+2. **SofaScore kasował absencje FotMoba.** Kolejność: FotMob zapisuje
+   `injuries_*` z pozycjami (`daily_agent:1010`) → `_wzbogac_forme_top`
+   nadpisuje je BEZWARUNKOWO (`:1032`) → korekta λ czyta puste (`:1036`).
+   Zablokowany SofaScore zwraca `_empty_form` z `injuries: []`, nie wyjątek.
+   Objawem byłoby zero korekty przy poprawnie pobranych składach.
+
+3. **`0/46` w KROK 3b znaczyło trzy rzeczy naraz** — padnięte źródło, rozjazd
+   nazw albo stojący rynek. Pierwsze dwa dostają teraz WARNING. Funkcja nie
+   miała dotąd żadnego testu.
+
+4. **`--dry-run` miał ścieżkę ZAPISU do prod DB.** `get_current_bankroll` woła
+   `init_bankroll_tables`, które INSERT-uje brakujący wiersz — przed każdą
+   bramką dry-run. Plus `get_loss_streak` i `check_weekly_alert` wymuszały
+   połączenie z bazą. Dry-run bierze teraz neutralne wartości z configu.
+
+**Bonus:** furtka `FOOTSTATS_ALLOW_LIVE=1` w `guard_live_ops` nie działała
+w formie, którą sam hook podawał w komunikacie błędu — czytał `os.environ`
+własnego procesu, a prefiks `VAR=1 cmd` tam nie dociera. Hook nie miał
+żadnego testu, mimo że jest bramką przed podwójnymi kuponami na Telegramie.
+
+### Zmierzone i ODRZUCONE (nie wracać)
+
+Podejrzenie, że konflikt „prompt systemowy vs prompt użytkownika" psuje też
+trzy pozostałe wywołania `_zapytaj_typera`. **Zmierzone na żywym Groqu 31.08
+— NIE psuje:**
+
+- **scout** (`oceń_kupon`): dostał prozę z linią `SCORE: 48`, sparsowaną poprawnie;
+- **superbet betbuilder**: dostał **dokładnie swój** schemat
+  (`ocena_ogolna`/`komentarz`/`betbuilder_wykryty`), nie systemowy.
+
+Konflikt gryzie tylko wtedy, gdy OBIE strony żądają JSON-a — tak było w głównej
+ścieżce kuponu (`top3`/`kupon_a`) i to jest już naprawione. Gdy prompt
+użytkownika prosi o inną modalność (proza + linia `SCORE:`), wygrywa on.
+
+### Zostaje otwarte
+
+- [ ] **`--dry-run` dalej wymaga DB od fazy wzbogacania w górę** — `get_referee`
+  woła `init_referee_table()` (CREATE TABLE), a `daily_phases` nie zna flagi
+  dry-run. Przeciągnięcie jej przez tę warstwę to osobny remont.
+- [ ] **KROK 3b jest drugim identycznym scrapem** tego samego źródła, z tymi
+  samymi parametrami, kilka minut później. Łapie wyłącznie ruch kursów
+  W TRAKCIE przebiegu. Czy warte 34 s — nierozstrzygnięte, brak pomiaru
+  ile razy `updated > 0`. Nowy log INFO da tę liczbę.
 
 ## 🔴 ZNALEZIONE 30.08 — faza final nie zapisuje kuponu OD 16.08
 
