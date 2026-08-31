@@ -153,12 +153,13 @@ def _odswiez_kursy_live(indeks: dict, dni: int = 3) -> dict:
             return indeks
 
         fresh = szybkie_pewniaczki_2dni(c, prog=AGENT_KANDYDAT_PROG, godziny=dni * 24)
-        updated = 0
+        updated = dopasowanych = 0
         for w in fresh:
             g = w.get("gospodarz", "")
             a = w.get("goscie", "")
             key = (_norm(g), _norm(a))
             if key in indeks:
+                dopasowanych += 1
                 old_odds = indeks[key].get("odds", {})
                 new_odds = w.get("odds", {})
                 if new_odds and new_odds != old_odds:
@@ -166,6 +167,22 @@ def _odswiez_kursy_live(indeks: dict, dni: int = 3) -> dict:
                     updated += 1
 
         console.print(f"[green]Odświeżono kursy LIVE: {updated}/{len(indeks)} meczów zaktualizowanych[/green]")
+
+        # `0` znaczylo dotad trzy rzeczy naraz: zrodlo padlo, nazwy sie rozjechaly
+        # albo kursy po prostu stoja. Ten sam ksztalt co `Final enrichment: 0/N`
+        # — wartosc znaczy dwie rzeczy, a cisza czyni je nierozroznialnymi.
+        if indeks and not fresh:
+            log.warning(
+                "Odswiezenie kursow: zrodlo oddalo ZERO meczow przy %d w indeksie "
+                "— to awaria Bzzoiro, nie brak ruchu na kursach.", len(indeks))
+        elif indeks and fresh and dopasowanych == 0:
+            log.warning(
+                "Odswiezenie kursow: zrodlo oddalo %d meczow, ale ZADEN nie trafil "
+                "w indeks (%d kandydatow) — rozjazd nazw druzyn, kursy zostaja stare.",
+                len(fresh), len(indeks))
+        else:
+            log.info("Odswiezenie kursow: %d zmienionych z %d dopasowanych "
+                     "(%d w indeksie)", updated, dopasowanych, len(indeks))
     except (OSError, ValueError, KeyError) as e:
         console.print(f"[yellow]Błąd odświeżenia kursów: {e} — używam starych kursów[/yellow]")
 
