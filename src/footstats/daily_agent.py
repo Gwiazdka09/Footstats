@@ -690,6 +690,32 @@ def _build_parser() -> argparse.ArgumentParser:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _bankroll_do_przebiegu(args, admin_uid: int) -> float:
+    """
+    Saldo do stawek Kelly'ego. W dry-run z configu, BEZ dotykania bazy.
+
+    `--dry-run` obiecuje "nie zapisuje do DB", ale `get_current_bankroll` woła
+    `init_bankroll_tables`, które przy braku wiersza robi INSERT do
+    `bankroll_state` — i dzieje się to PRZED każdą bramką `if not args.dry_run`.
+    Podgląd miał więc ścieżkę zapisu do produkcji, uruchamianą zanim
+    którykolwiek warunek dry-run zdążył cokolwiek zablokować.
+
+    Skutek praktyczny był taki, że całego potoku nie dało się sprawdzić bez
+    dotykania prod DB, więc każda zmiana w fazie final była weryfikowalna
+    dopiero na żywym przebiegu o 11:00 UTC.
+    """
+    from footstats.config import AGENT_BANKROLL
+    from footstats.core.bankroll import get_current_bankroll
+
+    if getattr(args, "dry_run", False):
+        log.info("dry-run: bankroll z configu (%.2f PLN) zamiast salda z bazy "
+                 "— stawki Kelly'ego sa podgladem, nie realnymi kwotami",
+                 float(AGENT_BANKROLL))
+        return float(AGENT_BANKROLL)
+
+    return get_current_bankroll(user_id=admin_uid)
+
+
 def _zbierz_migawke_kursow(dry_run: bool = False) -> dict | None:
     """Pilot rozrzutu kursow — delegacja do `core.odds_store.zbierz_i_zapisz`.
 
@@ -753,14 +779,14 @@ def main():
         _zbierz_migawke_kursow(dry_run=bool(args.dry_run))
 
     from footstats.core.bankroll import (
-        get_current_bankroll, check_daily_stop_loss,
+        check_daily_stop_loss,
         get_stake_multiplier, check_weekly_alert, get_loss_streak,
         is_agent_paused, check_and_auto_pause, get_weekly_drawdown,
     )
     from footstats.utils.admin_user import resolve_admin_user_id
 
     admin_uid = resolve_admin_user_id()
-    current_bankroll = get_current_bankroll(user_id=admin_uid)
+    current_bankroll = _bankroll_do_przebiegu(args, admin_uid)
     date_label = args.date or datetime.now().strftime("%Y-%m-%d")
     dry_tag    = "  [yellow]⚠ DRY-RUN[/yellow]" if args.dry_run else ""
 
