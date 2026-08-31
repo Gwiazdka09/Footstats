@@ -68,9 +68,14 @@ def get_referee(name: str) -> dict | None:
     return dict(row)
 
 
-def referee_signal(name: str) -> str:
-    """Return one of: KARTKOWY | BRAMKOWY | NEUTRALNY | NIEZNANY"""
-    ref = get_referee(name)
+def signal_from_stats(ref: dict | None) -> str:
+    """
+    Klasyfikacja z GOTOWEGO wiersza sędziego: KARTKOWY | BRAMKOWY | NEUTRALNY | NIEZNANY.
+
+    Wydzielone z `referee_signal`, żeby wołający, który już ma wiersz, nie pytał
+    bazy drugi raz o to samo. Faza final robiła dokładnie to: `get_referee(nazwa)`,
+    a zaraz potem `referee_signal(nazwa)` z własnym `get_referee` w środku.
+    """
     if ref is None:
         return "NIEZNANY"
     avg_y = ref.get("avg_yellow") or 0.0
@@ -80,6 +85,11 @@ def referee_signal(name: str) -> str:
     if avg_g > _BRAMKOWY_THRESHOLD:
         return "BRAMKOWY"
     return "NEUTRALNY"
+
+
+def referee_signal(name: str) -> str:
+    """Return one of: KARTKOWY | BRAMKOWY | NEUTRALNY | NIEZNANY"""
+    return signal_from_stats(get_referee(name))
 
 
 def referee_prob_adjustment(signal: str) -> tuple[float, float]:

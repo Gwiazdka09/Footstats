@@ -63,7 +63,6 @@ def api(monkeypatch):
     monkeypatch.setattr("requests.get", fake_get)
     monkeypatch.setattr(lsc, "get_lineup", fake_lineup)
     monkeypatch.setattr(rdb, "get_referee", lambda n: stan["referee"])
-    monkeypatch.setattr(rdb, "referee_signal", lambda n: "KARTKOWY")
     monkeypatch.setattr(fm, "scrape_match_with_search", fake_scrape)
     monkeypatch.setattr(ls, "lineup_confidence_penalty_v2", lambda *a: 0.1)
     monkeypatch.setattr(ls, "lineup_offensive_strength", lambda *a: 0.5)
@@ -225,7 +224,11 @@ def test_fixture_bez_nazw_druzyn_pomijany(api):
 
 def test_sedzia_zapisany_z_fixture(api):
     api["fixtures"] = [_fixture("Legia", "Lech Poznan", fid=5, referee="Jan Kowalski, POL")]
-    api["referee"] = {"avg_yellow": 4.2, "n_matches": 30}
+    # 4.2 bylo PONIZEJ progu KARTKOWY (4.3), a test i tak zadal "KARTKOWY" —
+    # bo atrapa `referee_signal` zwracala te stala niezaleznie od statystyk.
+    # Po rozdzieleniu odczytu od klasyfikacji sygnal liczy sie z tych liczb,
+    # wiec dane musza odpowiadac temu, co test twierdzi.
+    api["referee"] = {"avg_yellow": 5.1, "n_matches": 30}
     k = _kandydat()
 
     dp._enrichuj_finalna_faza([k], "klucz")
@@ -233,7 +236,7 @@ def test_sedzia_zapisany_z_fixture(api):
     assert k["referee_name"] == "Jan Kowalski"
     assert k["referee_signal"] == "KARTKOWY"
     assert k["referee_neutral"] is False
-    assert k["referee_avg_y"] == 4.2
+    assert k["referee_avg_y"] == 5.1
 
 
 def test_flashscore_tylko_gdy_brak_sedziego(api):

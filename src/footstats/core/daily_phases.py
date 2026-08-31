@@ -700,6 +700,36 @@ def _dopasuj_team_news(idx: dict, gospodarz: str, goscie: str):
     return najlepszy
 
 
+def _sedzia_z_bazy(nazwa: str, stan: dict) -> dict | None:
+    """
+    Wiersz sędziego z naszej bazy. `None` gdy sędziego tam nie ma ALBO gdy baza
+    jest nieosiągalna — dwa różne stany, więc drugi zostawia ostrzeżenie.
+
+    Sędzia to wzbogacenie, nie rdzeń. Do 31.08 nieosiągalna baza przewracała
+    CAŁĄ fazę final w `init_referee_table()`, z tracebackiem prowadzącym w głąb
+    warstwy bazy przy płytkiej przyczynie. Skutek praktyczny: potoku nie dało
+    się sprawdzić inaczej niż na produkcji.
+
+    Gdy baza padnie naprawdę, przebieg i tak stanie — na zapisie `predictions`
+    i kuponu, czyli tam, gdzie brak bazy faktycznie ma znaczenie.
+
+    `stan` niesie flagę „już ostrzegałem": 46 kandydatów to byłoby 46 identycznych
+    ostrzeżeń, a szum zabija alarmy tak samo skutecznie jak cisza.
+    """
+    from footstats.scrapers.referee_db import get_referee
+
+    if stan.get("padla"):
+        return None
+    try:
+        return get_referee(nazwa)
+    except (RuntimeError, OSError) as e:
+        stan["padla"] = True
+        log.warning(
+            "Baza sedziow nieosiagalna (%s: %s) — kandydaci ida bez statystyk "
+            "sedziego, reszta wzbogacenia bez zmian", type(e).__name__, e)
+        return None
+
+
 def _kurs(surowa: object) -> float | None:
     """Kurs jako float. Źródła oddają raz float, raz string, raz '-'."""
     try:
@@ -933,7 +963,7 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
     import requests as _req
     from datetime import date
     from footstats.scrapers.lineup_scraper import get_lineup
-    from footstats.scrapers.referee_db import referee_signal, get_referee
+    from footstats.scrapers.referee_db import signal_from_stats
     from footstats.core.lineup_strength import (
         lineup_confidence_penalty_v2, lineup_offensive_strength,
     )
@@ -963,6 +993,9 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
 
     enriched = 0
     fs_zostalo = _MAX_FLASHSCORE_NA_PRZEBIEG
+    # Wspólny na cały przebieg — patrz `_sedzia_z_bazy`: jedno ostrzeżenie,
+    # nie jedno na kandydata.
+    stan_bazy: dict = {}
     for k in wyniki:
         gh = _norm(k.get("gospodarz", ""))
         ga = _norm(k.get("goscie", ""))
@@ -1004,8 +1037,8 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
         # przez FotMoba w `_wzbogac_team_news`.
         ref_name = ((fixture or {}).get("fixture", {}).get("referee") or "").split(",")[0].strip()
         if ref_name:
-            ref_data = get_referee(ref_name)
-            sig = referee_signal(ref_name)
+            ref_data = _sedzia_z_bazy(ref_name, stan_bazy)
+            sig = signal_from_stats(ref_data)
             k["referee_neutral"] = sig in ("NEUTRALNY", "NIEZNANY")
             k["referee_name"] = ref_name
             k["referee_signal"] = sig
@@ -1026,9 +1059,10 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
             if fs_data.get("success"):
                 if not k.get("referee_name") and fs_data.get("referee"):
                     k["referee_name"] = fs_data["referee"]
-                    k["referee_signal"] = referee_signal(fs_data["referee"])
-                    # Spróbuj jeszcze raz pobrać statystyki dla nowego nazwiska
-                    ref_data = get_referee(fs_data["referee"])
+                    # Jeden odczyt, dwa uzycia — sygnal liczy sie z tego samego
+                    # wiersza, ktory zaraz daje `avg_yellow`.
+                    ref_data = _sedzia_z_bazy(fs_data["referee"], stan_bazy)
+                    k["referee_signal"] = signal_from_stats(ref_data)
                     if ref_data:
                         k["referee_avg_y"] = ref_data.get("avg_yellow")
 
