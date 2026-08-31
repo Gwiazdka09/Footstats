@@ -470,6 +470,52 @@ użytkownika prosi o inną modalność (proza + linia `SCORE:`), wygrywa on.
   `updated` przez kolejne dni. Próba mała i z niedzielnego wieczoru
   (mecze południowoamerykańskie), więc to jeden punkt, nie wniosek.
 
+### ⚠️ KOREKTA PRZESŁANKI — „susza kuponów final" była opisana za mocno
+
+Sprawdzone w `coupons` 01.09, bo cała ta linia pracy zakładała regresję:
+
+| faza | ile | okres |
+|---|---|---|
+| `system` | **296** | 31.07 – 31.08, codziennie |
+| `final` | **7** | 05.08 – 15.08 |
+| `manual` | 6 | 24.08 |
+
+Z tych 7 ostatni (15.08) ma `kupon_type=manual` — nie pochodzi z potoku.
+**Automatycznych było PIĘĆ, na DWÓCH dniach** (05.08 i 10.08). Kursy: 5.10,
+23.70, 54.95, 3.43, 77.29. Statusy: LOST, VOID, VOID, LOST, VOID.
+
+Czyli nie było stałego strumienia, który by się urwał. Były dwa dni z kuponami
+o kursach akumulacyjnych — same przepadły albo zostały unieważnione.
+
+To nie unieważnia trzech naprawionych błędów (wycofana nazwa modelu, konflikt
+schematu, budżet TPM) — one realnie blokowały ścieżkę. Ale cel „kupon final
+ma powstawać codziennie" **nigdy nie był stanem, do którego wracamy.**
+
+### Czwarta przyczyna: model ODMAWIA i ma rację
+
+Sonda na realnym prompcie (01.09). Model oddał kompletny, poprawny JSON:
+
+```
+"top3": [],
+"ostrzezenia": "pewnosc (52% dla 1) jest nizsza niz wymog 60% dla
+  pojedynczej nogi. Nie mozna skonstruowac zadnego sensownego kuponu."
+```
+
+Reguła `Every leg: pewnosc_pct >= 60%` stoi w `SYSTEM_TYPER_BAZA`
+(`prompts.py:260`). Kandydaci po filtrach wartości mają `pw` około 52%.
+
+**Decyzja należy do użytkownika, nie do kodu:**
+
+- [ ] zostawić 60% → kupon `final` powstaje rzadko, tylko przy mocnych
+      kandydatach (stan dzisiejszy, spójny z tym, że model nie bije rynku);
+- [ ] obniżyć próg → więcej kuponów, słabszych; poprzednie pięć miało kursy
+      do 77 i wszystkie przepadły lub zostały unieważnione;
+- [ ] uznać `system` (296 kuponów, single-leg, per-tip ROI) za właściwy
+      produkt i przestać gonić `final`.
+
+Log przestał już mylić: świadoma odmowa idzie na INFO z zacytowanym powodem,
+awaria warstwy LLM zostaje WARNING.
+
 ### Limit TPM — zmierzone na produkcji 31.08 20:25
 
 Przebieg `footstats-final-h6gg8` odpalony ręcznie. Wynik: **kupon `phase='final'`
