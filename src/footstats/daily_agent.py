@@ -716,6 +716,24 @@ def _bankroll_do_przebiegu(args, admin_uid: int) -> float:
     return get_current_bankroll(user_id=admin_uid)
 
 
+def _streak_do_przebiegu(args, admin_uid: int) -> tuple[int, float]:
+    """
+    Seria porażek i mnożnik stawki. W dry-run neutralne, bez pytania bazy.
+
+    To odczyty (SELECT), więc produkcji nie zagrażały — ale wymuszały
+    połączenie z bazą, przez co całego potoku nie dało się sprawdzić inaczej
+    niż na produkcji. Wartości są NEUTRALNE, nie wymyślone: 0 porażek jest
+    poniżej progu 3, a mnożnik 1.0 nie rusza stawek, więc podgląd pokazuje
+    stawki dokładnie takie, jak je podano.
+    """
+    from footstats.core.bankroll import get_loss_streak, get_stake_multiplier
+
+    if getattr(args, "dry_run", False):
+        return 0, 1.0
+
+    return get_loss_streak(user_id=admin_uid), get_stake_multiplier(user_id=admin_uid)
+
+
 def _zbierz_migawke_kursow(dry_run: bool = False) -> dict | None:
     """Pilot rozrzutu kursow — delegacja do `core.odds_store.zbierz_i_zapisz`.
 
@@ -779,8 +797,7 @@ def main():
         _zbierz_migawke_kursow(dry_run=bool(args.dry_run))
 
     from footstats.core.bankroll import (
-        check_daily_stop_loss,
-        get_stake_multiplier, check_weekly_alert, get_loss_streak,
+        check_daily_stop_loss, check_weekly_alert,
         is_agent_paused, check_and_auto_pause, get_weekly_drawdown,
     )
     from footstats.utils.admin_user import resolve_admin_user_id
@@ -807,8 +824,7 @@ def main():
         return
 
     # Streak detection
-    streak = get_loss_streak(user_id=admin_uid)
-    stake_mult = get_stake_multiplier(user_id=admin_uid)
+    streak, stake_mult = _streak_do_przebiegu(args, admin_uid)
     if streak >= 3:
         console.print(f"[yellow]STREAK: {streak} przegranych z rzędu → stawki x{stake_mult:.0%}[/yellow]")
         args.stawka = round(args.stawka * stake_mult, 1)
@@ -825,7 +841,7 @@ def main():
             current_bankroll,
         )
         return
-    elif check_weekly_alert(user_id=admin_uid):
+    elif not args.dry_run and check_weekly_alert(user_id=admin_uid):
         console.print("[bold yellow]ALERT: tygodniowy drawdown przekroczył 20% bankrolla![/bold yellow]")
 
     # Rolling accuracy alert (ciche — nie blokuje agenta)

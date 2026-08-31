@@ -68,3 +68,44 @@ def test_dry_run_zostawia_slad_w_logu(monkeypatch, caplog):
         da._bankroll_do_przebiegu(_Args(dry_run=True), admin_uid=1)
 
     assert "dry" in caplog.text.lower()
+
+
+# ── streak i mnoznik stawki ─────────────────────────────────────────────────
+#
+# Drugi przystanek tej samej podrozy: po naprawie bankrolla przebieg padl
+# linie nizej, na `get_loss_streak`. Te odczyty sa niegrozne dla produkcji
+# (SELECT), ale wymuszaja polaczenie z baza, wiec caly potok dalej nie dawal
+# sie sprawdzic bez produkcji.
+
+def test_dry_run_nie_pyta_bazy_o_streak(monkeypatch):
+    def _wybuch(**kw):
+        raise AssertionError("dry-run nie ma prawa dotknac bazy dla streaka")
+
+    monkeypatch.setattr("footstats.core.bankroll.get_loss_streak", _wybuch)
+    monkeypatch.setattr("footstats.core.bankroll.get_stake_multiplier", _wybuch)
+
+    assert da._streak_do_przebiegu(_Args(dry_run=True), admin_uid=1) == (0, 1.0)
+
+
+def test_zwykly_przebieg_czyta_streak(monkeypatch):
+    """Kontrola: redukcja stawek po serii porazek musi dzialac na produkcji."""
+    monkeypatch.setattr("footstats.core.bankroll.get_loss_streak",
+                        lambda user_id: 4)
+    monkeypatch.setattr("footstats.core.bankroll.get_stake_multiplier",
+                        lambda user_id: 0.5)
+
+    assert da._streak_do_przebiegu(_Args(dry_run=False), admin_uid=3) == (4, 0.5)
+
+
+def test_dry_run_nie_udaje_serii_porazek(monkeypatch):
+    """Neutralne wartosci, nie wymyslone: 0 przegranych i mnoznik 1.0 nie
+    zmieniaja stawek, wiec podglad pokazuje stawki takie, jak je podano."""
+    monkeypatch.setattr("footstats.core.bankroll.get_loss_streak",
+                        lambda user_id: pytest.fail("nie wolno"))
+    monkeypatch.setattr("footstats.core.bankroll.get_stake_multiplier",
+                        lambda user_id: pytest.fail("nie wolno"))
+
+    streak, mult = da._streak_do_przebiegu(_Args(dry_run=True), admin_uid=1)
+
+    assert streak < 3, "prog redukcji stawek to 3 — podglad nie moze go przekroczyc"
+    assert mult == 1.0
