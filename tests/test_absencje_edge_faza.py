@@ -212,3 +212,77 @@ def test_istniejace_injuries_maja_pierwszenstwo(monkeypatch, kandydat):
 
     dp._wzbogac_team_news([kandydat])
     assert kandydat["injuries_home"] == [{"name": "Z SofaScore", "position": "M"}]
+
+
+# ── rynkowe P(Over) z kursow ────────────────────────────────────────────────
+#
+# Do 31.08 `market_p_over` nie bylo ustawiane NIGDZIE w src/ — tylko czytane
+# w `_policz_edge_absencji` i podstawiane recznie w tym pliku. Zmierzone na
+# 12 zywych kandydatach FotMoba: `edge_absencje` wyszlo None na KAZDYM, mimo
+# poprawnie policzonego `p_over_abs`. Pole istnialo wylacznie w testach.
+
+def test_edge_liczony_z_kursow_gdy_brak_market_p_over(monkeypatch, kandydat):
+    """Kursy Over/Under sa w kandydacie Bzzoiro — maja wystarczyc za rynek."""
+    kandydat["odds"] = {"over_2_5": 1.80, "under_2_5": 2.10}
+    monkeypatch.setattr(dp, "_pobierz_team_news", lambda data, pary: [_tn()])
+
+    dp._wzbogac_team_news([kandydat])
+
+    assert kandydat["edge_absencje"] is not None
+
+
+def test_rynek_z_kursow_jest_bez_marzy(monkeypatch, kandydat):
+    """1/1.80 = 0.5556 zawiera vig. Po zdewigowaniu 0.5385.
+
+    Roznica jest mala, ale ma znak: surowe 1/kurs zawyzalo rynek, wiec edge
+    wychodzilby systematycznie ZANIZONY. Blad tego ksztaltu (2-z-3 w 1X2)
+    dal 28.08 +37.8% zamiast +6.24%."""
+    kandydat["odds"] = {"over_2_5": 1.80, "under_2_5": 2.10}
+    monkeypatch.setattr(dp, "_pobierz_team_news", lambda data, pary: [_tn()])
+
+    dp._wzbogac_team_news([kandydat])
+
+    assert kandydat["edge_absencje"] == pytest.approx(
+        kandydat["p_over_abs"] - 0.5385, abs=1e-3)
+
+
+def test_sam_kurs_over_NIE_wystarcza(monkeypatch, kandydat):
+    """Bez pary nie da sie zdjac marzy, a edge z vigiem klamie w jedna strone."""
+    kandydat["odds"] = {"over_2_5": 1.80}
+    monkeypatch.setattr(dp, "_pobierz_team_news", lambda data, pary: [_tn()])
+
+    dp._wzbogac_team_news([kandydat])
+
+    assert kandydat["edge_absencje"] is None
+
+
+def test_kursy_jako_tekst_tez_licza_sie(monkeypatch, kandydat):
+    """Zrodla oddaja kursy raz jako float, raz jako string."""
+    kandydat["odds"] = {"over_2_5": "1.80", "under_2_5": "2.10"}
+    monkeypatch.setattr(dp, "_pobierz_team_news", lambda data, pary: [_tn()])
+
+    dp._wzbogac_team_news([kandydat])
+
+    assert kandydat["edge_absencje"] is not None
+
+
+def test_smieciowy_kurs_nie_wywraca_przebiegu(monkeypatch, kandydat):
+    kandydat["odds"] = {"over_2_5": "-", "under_2_5": 0.0}
+    monkeypatch.setattr(dp, "_pobierz_team_news", lambda data, pary: [_tn()])
+
+    dp._wzbogac_team_news([kandydat])
+
+    assert kandydat["edge_absencje"] is None
+    assert kandydat["p_over_abs"] is not None, "reszta korekty ma dzialac dalej"
+
+
+def test_market_p_over_ma_pierwszenstwo_przed_kursami(monkeypatch, kandydat):
+    """Jawnie podany rynek wygrywa — kursy sa uzupelnieniem, nie nadpisaniem."""
+    kandydat["market_p_over"] = 0.55
+    kandydat["odds"] = {"over_2_5": 1.80, "under_2_5": 2.10}
+    monkeypatch.setattr(dp, "_pobierz_team_news", lambda data, pary: [_tn()])
+
+    dp._wzbogac_team_news([kandydat])
+
+    assert kandydat["edge_absencje"] == pytest.approx(
+        kandydat["p_over_abs"] - 0.55, abs=1e-4)

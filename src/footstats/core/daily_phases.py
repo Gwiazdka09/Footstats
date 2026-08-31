@@ -692,6 +692,35 @@ def _dopasuj_team_news(idx: dict, gospodarz: str, goscie: str):
     return najlepszy
 
 
+def _kurs(surowa: object) -> float | None:
+    """Kurs jako float. Źródła oddają raz float, raz string, raz '-'."""
+    try:
+        return float(str(surowa).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _rynek_p_over(odds: object) -> float | None:
+    """
+    P(Over 2.5) rynku z kursów kandydata, po zdjęciu marży. None gdy brak pary.
+
+    Do 31.08 `market_p_over` nie było ustawiane NIGDZIE w src/ — tylko czytane
+    niżej i podstawiane ręcznie w testach. Zmierzone na 12 żywych kandydatach
+    FotMoba: `edge_absencje` wyszło None na KAŻDYM, mimo poprawnie policzonego
+    `p_over_abs`. Pole istniało wyłącznie w testach.
+
+    Samego kursu Over NIE wystarczy: 1/kurs zawiera vig, więc rynek wyszedłby
+    zawyżony, a edge systematycznie zaniżony. Bez pary zostaje None — brak
+    pomiaru, nie zero.
+    """
+    if not isinstance(odds, dict):
+        return None
+    from footstats.core.calibration_metrics import devig_two_way
+
+    para = devig_two_way(_kurs(odds.get("over_2_5")), _kurs(odds.get("under_2_5")))
+    return None if para is None else round(para[0], 4)
+
+
 def _policz_edge_absencji(kandydaci: list) -> None:
     """
     Zamienia potwierdzone absencje na skorygowaną λ i P(Over 2.5). In-place.
@@ -742,7 +771,10 @@ def _policz_edge_absencji(kandydaci: list) -> None:
                 (k.get("pw") or 0) / 100.0, (k.get("pp") or 0) / 100.0,
                 (k.get("o25") or 0) / 100.0)
 
+        # Jawny `market_p_over` wygrywa — kursy są uzupełnieniem, nie nadpisaniem.
         rynek = k.get("market_p_over")
+        if rynek is None:
+            rynek = _rynek_p_over(k.get("odds"))
         wynik = over_edge_from_absences(lh, la, ud_h, ud_a, rynek)
         k["lambda_h_abs"] = wynik["lh"]
         k["lambda_a_abs"] = wynik["la"]
