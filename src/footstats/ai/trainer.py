@@ -35,6 +35,8 @@ from footstats.data.historical_loader import download_all, load_cached
 
 log = logging.getLogger(__name__)
 
+from footstats.ai.client import effective_max_tokens, parametry_modelu
+
 LESSONS_FILE = Path(__file__).parents[3] / "data" / "groq_lessons.json"
 
 SYSTEM_TRAINER = """Jesteś ekspertem od analizy statystycznej zakładów sportowych.
@@ -123,14 +125,16 @@ def ask_groq_trainer(report_text: str, n_matches: int) -> dict | None:
     if _HAS_GROQ_SDK and klucz:
         client = _GroqSDK(api_key=klucz)
         try:
+            _p = parametry_modelu()
             resp = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model=_p["model"],
                 messages=[
                     {"role": "system", "content": SYSTEM_TRAINER},
                     {"role": "user",   "content": prompt},
                 ],
                 temperature=0.3,
-                max_tokens=3000,
+                max_tokens=effective_max_tokens(3000),
+                **{k: v for k, v in _p.items() if k != "model"},
             )
             raw = resp.choices[0].message.content.strip()
             if "```json" in raw:
@@ -155,13 +159,13 @@ def ask_groq_trainer(report_text: str, n_matches: int) -> dict | None:
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {klucz}", "Content-Type": "application/json"},
             json={
-                "model": "llama-3.1-8b-instant",
+                **parametry_modelu(),
                 "messages": [
                     {"role": "system", "content": SYSTEM_TRAINER},
                     {"role": "user",   "content": prompt},
                 ],
                 "temperature": 0.3,
-                "max_tokens": 3000,
+                "max_tokens": effective_max_tokens(3000),
             },
             timeout=60,
         )

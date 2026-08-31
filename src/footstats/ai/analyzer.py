@@ -45,6 +45,7 @@ def _get_langfuse() -> Langfuse | None:
 
 from footstats.ai.prompts import (
     SYSTEM_TYPER as _SYSTEM_TYPER,
+    SYSTEM_TYPER_BAZA as _SYSTEM_TYPER_BAZA,
     build_mecz_prompt,
     build_pewniaczki_prompt,
     build_kupon_prompt,
@@ -114,11 +115,14 @@ def _kontynuuj_uciety_json(client, messages: list, partial: str, max_tokens: int
         {"role": "user", "content": "Kontynuuj JSON od miejsca ucięcia. Zwróć TYLKO brakującą część (bez wstępu)."},
     ]
     try:
+        from footstats.ai.client import effective_max_tokens, parametry_modelu
+        _p = parametry_modelu()
         resp2 = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=_p["model"],
             messages=cont_messages,
-            max_tokens=max_tokens,
+            max_tokens=effective_max_tokens(max_tokens),
             temperature=0.1,
+            **{k: v for k, v in _p.items() if k != "model"},
         )
         return partial + resp2.choices[0].message.content
     except (AttributeError, IndexError) as e:
@@ -131,15 +135,38 @@ def _kontynuuj_uciety_json(client, messages: list, partial: str, max_tokens: int
         return partial
 
 
-def _zapytaj_typera(prompt: str, max_tokens: int = 900) -> str:
-    """Groq z systemowym promptem wyspecjalizowanego typera + kalibracja + liga statystyki."""
+_BEZ_SCHEMATU = object()   # sentinel: odróżnia "nie podano" od świadomego None
+
+
+def _zapytaj_typera(prompt: str, max_tokens: int = 900,
+                    schemat: str | None = _BEZ_SCHEMATU) -> str:  # type: ignore[assignment]
+    """
+    Groq z systemowym promptem typera + kalibracja + statystyki ligowe.
+
+    `schemat` steruje blokiem JSON SCHEMA w promcie SYSTEMOWYM:
+
+        pominięty  → schemat pojedynczego typu (zachowanie sprzed 31.08)
+        None       → BRAK schematu w systemie; wygrywa ten z promptu użytkownika
+        tekst      → własny blok schematu
+
+    Po co: prompt systemowy narzucał kształt `{"typ", "kurs", "risks_analysis"}`
+    wszystkim czterem wywołaniom typera, a `ai_analiza_pewniaczki` parsuje
+    `top3` i `kupon_a`. Do 22.08 nie było widać, bo `llama-3.1-8b-instant`
+    słabo trzymała się promptu systemowego; `gpt-oss-120b` trzyma się go
+    ściśle i od tego momentu kupony `phase='final'` przestały powstawać.
+    """
     klucz = os.getenv("GROQ_API_KEY", "").strip()
     if not klucz:
         raise RuntimeError("Brak GROQ_API_KEY w .env")
 
     kal_blok   = _get_kalibracja_blok()
     liga_blok  = _get_liga_statystyki_blok()
-    system     = _SYSTEM_TYPER
+    if schemat is _BEZ_SCHEMATU:
+        system = _SYSTEM_TYPER
+    elif schemat:
+        system = _SYSTEM_TYPER_BAZA + chr(10) + chr(10) + schemat
+    else:
+        system = _SYSTEM_TYPER_BAZA
     if kal_blok:
         system += f"\n\n== KALIBRACJA Z DANYCH HISTORYCZNYCH ==\n{kal_blok}\n"
     if liga_blok:
@@ -153,11 +180,17 @@ def _zapytaj_typera(prompt: str, max_tokens: int = 900) -> str:
             {"role": "system", "content": system},
             {"role": "user",   "content": prompt},
         ]
+        # Nazwa modelu i jego wymagania przychodzą z `ai/client.py` — jedynego
+        # miejsca, które ma prawo je znać. Zaszyta tutaj `llama-3.1-8b-instant`
+        # dawała 404 codziennie od 16.08, a `except` niżej to pochłaniał.
+        from footstats.ai.client import effective_max_tokens, parametry_modelu
+        _p = parametry_modelu()
         resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=_p["model"],
             messages=messages,
-            max_tokens=max_tokens,
+            max_tokens=effective_max_tokens(max_tokens),
             temperature=0.25,
+            **{k: v for k, v in _p.items() if k != "model"},
         )
 
         result = resp.choices[0].message.content
@@ -298,7 +331,10 @@ def analizuj_mecz_ai(
     lf = _get_langfuse()
     if lf:
         with lf.start_as_current_observation(name=f"Analiza: {gospodarz} vs {goscie}", as_type="span"):
-            with lf.start_as_current_observation(name="Groq Inference", as_type="generation", model="llama-3.1-8b-instant", input=prompt) as gen:
+            # Etykieta modelu w observability musi mowic PRAWDE — zaszyta nazwa
+            # raportowalaby Langfuse'owi model, ktorego od 16.08 nie ma.
+            from footstats.ai.client import GROQ_MODEL as _MODEL_OBSERWACJI
+            with lf.start_as_current_observation(name="Groq Inference", as_type="generation", model=_MODEL_OBSERWACJI, input=prompt) as gen:
                 surowa_odpowiedz = zapytaj_ai(prompt, max_tokens=500)
                 gen.update(output=surowa_odpowiedz)
     else:
@@ -810,7 +846,9 @@ def ai_analiza_pewniaczki(
         prompt = f"{prompt}{rag_similar}"
 
     # Langfuse observability is handled globally
-    tekst = _zapytaj_typera(prompt, max_tokens=1500)
+    # `schemat=None`: prompt użytkownika niesie własny kształt (top3/kupon_a),
+    # więc systemowy nie może żądać innego — patrz docstring `_zapytaj_typera`.
+    tekst = _zapytaj_typera(prompt, max_tokens=1500, schemat=None)
     dane = _wyciagnij_json(tekst)
     sparsowane = "top3" in dane
     if not sparsowane:
