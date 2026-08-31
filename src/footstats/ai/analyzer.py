@@ -717,12 +717,20 @@ from footstats.ai.analyzer_helpers import (
 # Re-eksport wsteczny (importowany z tego modułu przez testy/inne moduły):
 from footstats.ai.analyzer_helpers import _analizuj_forme  # noqa: F401
 
-def _dopisz_typy_z_modelu(dane: dict, wyniki: list) -> int:
+def _dopisz_typy_z_modelu(dane: dict, wyniki: list,
+                          odmowa_llm: bool = False) -> int:
     """A1 — wypelnia `top3` typami modelu, gdy warstwa LLM nic nie wypisala.
 
     Zwraca liczbe dopisanych typow. Zero oznacza, ze zaden mecz nie przeszedl
     filtrow selekcji (brak kursu, longshot, prob ponizej progu) — wtedy cisza
     jest poprawna i niczego nie wymyslamy na sile.
+
+    `odmowa_llm` — model oddal POPRAWNY JSON i swiadomie nie wystawil typu
+    (regula `Every leg: pewnosc_pct >= 60%` z promptu systemowego). To decyzja,
+    nie awaria, wiec idzie na INFO razem z podanym przez model powodem.
+    Zmierzone 31.08: kandydaci po filtrach mieli `pw` okolo 52%, model odmowil
+    i mial racje — a log mowil "Model jezykowy nie zwrocil typow", czyli
+    brzmial jak padniecie warstwy LLM.
     """
     from footstats import config as _cfg
     if not _cfg.TYPY_BEZ_LLM:
@@ -743,9 +751,18 @@ def _dopisz_typy_z_modelu(dane: dict, wyniki: list) -> int:
     nota = ("Typy wybrane przez model bez udzialu LLM-a"
             " (warstwa opisowa nie zwrocila listy).")
     dane["ostrzezenia"] = f"{ostrz} | {nota}" if isinstance(ostrz, str) and ostrz else nota
-    logger.warning("[AI] Model jezykowy nie zwrocil typow — %d typow zbudowanych"
-                   " z modelu (Poisson/ensemble), zapis oznaczony kupon_type='model'.",
-                   len(legi))
+
+    if odmowa_llm:
+        # Decyzja modelu, nie jego awaria — WARNING wysylalby na polowanie
+        # za bugiem, ktorego nie ma. Powod pochodzi od modelu, wiec go cytujemy.
+        logger.info("[AI] LLM swiadomie nie wystawil typu (progi z promptu) —"
+                    " %d typow z modelu (Poisson/ensemble), kupon_type='model'."
+                    " Powod podany przez model: %s",
+                    len(legi), (ostrz or "nie podano")[:300])
+    else:
+        logger.warning("[AI] Model jezykowy nie zwrocil typow — %d typow zbudowanych"
+                       " z modelu (Poisson/ensemble), zapis oznaczony kupon_type='model'.",
+                       len(legi))
     return len(legi)
 
 
@@ -899,7 +916,10 @@ def ai_analiza_pewniaczki(
     # Bez tego pusta lub niesparsowana odpowiedz kasowala CALY dzien predykcji,
     # mimo ze Poisson policzyl je wczesniej i bez udzialu Groqa.
     if not dane.get("top3"):
-        _dopisz_typy_z_modelu(dane, wyniki)
+        # `sparsowane` odróżnia dwa stany, które do 31.08 dawały ten sam WARNING:
+        # model oddał poprawny JSON i świadomie nie wystawił typu (progi
+        # z promptu) vs warstwa LLM padła. Pierwsze to decyzja, drugie to awaria.
+        _dopisz_typy_z_modelu(dane, wyniki, odmowa_llm=sparsowane)
     if sparsowane or dane.get("top3"):
         # C2: override realnego tipu argmaxem modelu (gated GROQ_TIP_OVERRIDE,
         # default OFF). PRZED pewnością/bramkami → liczą się na finalnym tipie.
