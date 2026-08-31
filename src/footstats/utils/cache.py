@@ -79,6 +79,34 @@ def _cache_get(klucz: str):
             return wpis["data"]
     return None
 
+def uniewaznij_cache(prefiks: str) -> int:
+    """
+    Usuwa z cache'u RAM wpisy o danym prefiksie klucza. Zwraca ile usunięto.
+
+    Po co: `CACHE_TTL_MIN` = 30 minut, a KROK 1 i KROK 3b dziennego agenta
+    chodzą w TYM SAMYM procesie, w odstępie kilku-kilkunastu minut. Drugie
+    zapytanie trafiało więc w cache i porównywało bajt w bajt te same dane —
+    `Odswiezono kursy LIVE: 0/46` było gwarantowane konstrukcją, nie
+    obserwacją rynku.
+
+    Pusty prefiks jest odrzucany: pasowałby do każdego klucza i po cichu
+    wyczyściłby cały cache, w tym wpisy API-Football, gdzie jedno zapytanie
+    to 1% dziennego budżetu.
+    """
+    if not prefiks:
+        raise ValueError(
+            "uniewaznij_cache wymaga niepustego prefiksu — pusty skasowalby "
+            "caly cache, w tym drogie wpisy API-Football"
+        )
+    do_usuniecia = [k for k in _RAM_CACHE if k.startswith(prefiks)]
+    for k in do_usuniecia:
+        del _RAM_CACHE[k]
+    if do_usuniecia:
+        log.debug("Cache: uniewazniono %d wpisow o prefiksie %r",
+                  len(do_usuniecia), prefiks)
+    return len(do_usuniecia)
+
+
 def _ram_cache_cleanup(ttl_minutes: int = 60):
     """Remove expired entries from RAM cache."""
     now = datetime.now()

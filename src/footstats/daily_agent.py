@@ -152,6 +152,14 @@ def _odswiez_kursy_live(indeks: dict, dni: int = 3) -> dict:
             console.print(f"[yellow]Bzzoiro niedostępny: {msg} — używam starych kursów[/yellow]")
             return indeks
 
+        # Bez tego krok czytal WLASNY cache i nie mogl zobaczyc zadnej zmiany:
+        # `CACHE_TTL_MIN` to 30 minut, a KROK 1 i KROK 3b chodza w tym samym
+        # procesie kilka-kilkanascie minut po sobie. `0/46` bylo gwarantowane
+        # konstrukcja, nie obserwacja rynku. Prefiks tylko Bzzoiro — cache jest
+        # wspolny, a wpisy API-Football kosztuja 1% dziennego budzetu kazdy.
+        from footstats.utils.cache import uniewaznij_cache
+        uniewaznij_cache("bz:")
+
         fresh = szybkie_pewniaczki_2dni(c, prog=AGENT_KANDYDAT_PROG, godziny=dni * 24)
         updated = dopasowanych = 0
         for w in fresh:
