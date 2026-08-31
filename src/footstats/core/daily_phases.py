@@ -704,7 +704,10 @@ def _kurs(surowa: object) -> float | None:
     """Kurs jako float. Źródła oddają raz float, raz string, raz '-'."""
     try:
         return float(str(surowa).strip())
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as e:
+        # Debug, nie warning: pojedynczy śmieciowy kurs to normalny stan źródła.
+        # Ale cisza tutaj znaczyłaby to samo co brak rynku, a to dwie różne rzeczy.
+        log.debug("Kurs nie do sparsowania (%r): %s", surowa, e)
         return None
 
 
