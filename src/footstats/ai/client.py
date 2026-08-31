@@ -60,16 +60,45 @@ def _is_reasoning_model(model: str) -> bool:
     return any(h in m for h in _REASONING_HINTS)
 
 
-def effective_max_tokens(base: int, model: str | None = None) -> int:
+# Zapas na narzut wiadomości po stronie dostawcy (role, separatory) — TPM liczy
+# je razem z treścią, a nasze oszacowanie ich nie widzi.
+_MARGINES_TPM = 200
+# Poniżej tego odpowiedź jest bezużyteczna nawet z `_kontynuuj_uciety_json`.
+_MIN_WYJSCIA = 400
+
+
+def effective_max_tokens(base: int, model: str | None = None,
+                         prompt_tokens: int | None = None) -> int:
     """
     Auto-skaluje max_tokens do wybranego modelu. Reasoning (gpt-oss/qwen3/r1...) →
     base × AI_REASONING_FACTOR (miejsce na myślenie + treść). Sufit ~75% tok/min
     (jeden call nie zjada całego limitu). Non-reasoning → base bez zmian.
+
+    `prompt_tokens` — rozmiar WEJŚCIA (system + użytkownik). Bez niego sufit
+    liczy się wyłącznie z wyjścia, a TPM obejmuje jedno i drugie. Zmierzone
+    31.08 na produkcji: prompt systemowy typera waży 3045 tok, rezerwa wyjścia
+    3750 tok, czyli 6795 z limitu 8000 znikało, ZANIM doszedł choć jeden mecz.
+    Skutkiem było 413 przy trzech kandydatach i kupon zbudowany z modelu
+    zamiast z LLM-a.
+
+    Przycinanie promptu użytkownika tego nie naprawiało: wycinało opisy meczów,
+    czyli jedyną rzecz, której model potrzebuje, i zostawiało balast.
     """
     m = model or GROQ_MODEL
     val = int(base * AI_REASONING_FACTOR) if _is_reasoning_model(m) else base
     ceiling = int(AI_TPM_LIMIT * 0.75)   # ~75% limitu tok/min = bezpieczny sufit
-    return max(base, min(val, ceiling))
+
+    if prompt_tokens is None:
+        return max(base, min(val, ceiling))
+
+    dostepne = AI_TPM_LIMIT - prompt_tokens - _MARGINES_TPM
+    wynik = max(_MIN_WYJSCIA, min(val, ceiling, dostepne))
+    if wynik < min(val, ceiling):
+        logger.warning(
+            "[AI] Budzet TPM: wejscie %d tok zjada limit %d — wyjscie sciete "
+            "do %d (bez tego %d). Skroc prompt systemowy albo podnies tier.",
+            prompt_tokens, AI_TPM_LIMIT, wynik, min(val, ceiling))
+    return wynik
 
 
 def _ollama_available() -> bool:

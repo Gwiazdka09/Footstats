@@ -196,12 +196,19 @@ def _zapytaj_typera(prompt: str, max_tokens: int = 900,
         # Nazwa modelu i jego wymagania przychodzą z `ai/client.py` — jedynego
         # miejsca, które ma prawo je znać. Zaszyta tutaj `llama-3.1-8b-instant`
         # dawała 404 codziennie od 16.08, a `except` niżej to pochłaniał.
-        from footstats.ai.client import effective_max_tokens, parametry_modelu
+        from footstats.ai.client import (
+            effective_max_tokens, parametry_modelu, szacuj_tokeny,
+        )
         _p = parametry_modelu()
+        # TPM liczy WEJŚCIE + wyjście, a prompt systemowy typera waży 3045 tok
+        # (baza 2475 + kalibracja + statystyki lig). Bez tego rachunku rezerwa
+        # wyjścia i systemowy zjadały 6795 z limitu 8000, ZANIM doszedł choć
+        # jeden mecz — stąd 413 przy trzech kandydatach 31.08.
+        wejscie = sum(szacuj_tokeny(m["content"]) for m in messages)
         resp = client.chat.completions.create(
             model=_p["model"],
             messages=messages,
-            max_tokens=effective_max_tokens(max_tokens),
+            max_tokens=effective_max_tokens(max_tokens, prompt_tokens=wejscie),
             temperature=0.25,
             **{k: v for k, v in _p.items() if k != "model"},
         )
