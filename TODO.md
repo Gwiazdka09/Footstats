@@ -535,6 +535,42 @@ unieważnione.
 Log przestał już mylić: świadoma odmowa idzie na INFO z zacytowanym powodem,
 awaria warstwy LLM zostaje WARNING.
 
+### ✅ KUPON LLM SKLADA SIE — 01.09, po czterech naprawach
+
+Zweryfikowane offline na zywym Groqu (pelny potok, `--dry-run`):
+
+```
+KUPON A: Bromley vs Leyton Orient | typ 1 | kurs 2.50 | pewnosc 55% | Kelly 6.3 PLN
+         Kurs laczny 2.50 | Wygrana netto 22.00 PLN | Szansa 55.0%
+KUPON B: Kurs laczny 1.86 | Wygrana netto 8.18 PLN  | Szansa 53.0%
+```
+
+**Zero fallbacku A1** — typy pochodza z LLM-a, nie z modelu. Noga ma pewnosc
+**55%**, czyli dokladnie to, co prog 60% blokowal.
+
+Cztery przyczyny, kazda zmierzona osobno, zadna zgadnieta:
+
+1. wycofana nazwa modelu zaszyta poza `ai/client.py` → 404 pochlaniany fallbackiem
+2. prompt systemowy narzucal schemat, ktorego wolajacy nie parsuje
+3. sufit `max_tokens` liczyl sie tylko z wyjscia → 413 przy 3 kandydatach
+4. prompt zadal CZTERECH kuponow niezaleznie od liczby meczow → odpowiedz sie
+   urywala, a siec ratunkowa (`_kontynuuj_uciety_json`) sama wpadala w 413,
+   bo tez nie liczyla wejscia
+
+- [ ] **Potwierdzic na produkcji.** Offline dziala; wiersz `phase='final'`
+  w `coupons` bedzie pierwszy od 15.08. Nastepny przebieg planowy: 09:00 UTC.
+
+### Naprawione 01.09 — `kalibracja-rozlicz` klamal w monitoringu
+
+`status.code: 4` przy zdrowym przebiegu. Handler jest `def`, wiec leci w watku
+puli — `asyncio.wait_for` anulowal korutyne, nie watek, a praca konczyla sie
+30 minut po tym, jak Scheduler dostal 504 z naszego `_TimeoutMiddleware`.
+
+Dopisanie sciezki do `_LONG_RUNNING_PATHS` NIE wystarczyloby: 120 s przy pracy
+trwajacej 30 minut i `attemptDeadline` o maksimum 30 minut. Endpoint oddaje
+teraz 202 od razu, praca leci w tle, liczniki ida do logu. Niezmiennik
+"awaria nie moze byc cicha" zostaje — zmienil sie kanal na ERROR w logu.
+
 ### Limit TPM — zmierzone na produkcji 31.08 20:25
 
 Przebieg `footstats-final-h6gg8` odpalony ręcznie. Wynik: **kupon `phase='final'`
