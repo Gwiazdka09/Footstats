@@ -108,6 +108,19 @@ def _get_liga_statystyki_blok() -> str:
         return ""
 
 
+# Bledy SDK Groqa (413, rate-limit, transport) nie sa podklasami OSError ani
+# RuntimeError, wiec bez tego `_kontynuuj_uciety_json` przepuszczalby je na
+# zewnatrz razem z uratowanym fragmentem. Import warunkowy: brak pakietu nie
+# moze wywalic importu modulu.
+try:
+    from groq import APIError as _APIErrorGroqa
+    _BLEDY_GROQA: tuple = (_APIErrorGroqa,)
+except ImportError as _e:                                    # pragma: no cover
+    logger.debug("groq SDK niedostepny (%s) — kontynuacja ucietego JSON bez "
+                 "jego typow bledow", _e)
+    _BLEDY_GROQA = ()
+
+
 def _kontynuuj_uciety_json(client, messages: list, partial: str, max_tokens: int = 700) -> str:
     """Wysyła ucięty JSON jako assistant turn i prosi o dokończenie."""
     cont_messages = messages + [
@@ -115,17 +128,28 @@ def _kontynuuj_uciety_json(client, messages: list, partial: str, max_tokens: int
         {"role": "user", "content": "Kontynuuj JSON od miejsca ucięcia. Zwróć TYLKO brakującą część (bez wstępu)."},
     ]
     try:
-        from footstats.ai.client import effective_max_tokens, parametry_modelu
+        from footstats.ai.client import (
+            effective_max_tokens, parametry_modelu, szacuj_tokeny,
+        )
         _p = parametry_modelu()
+        # Kontynuacja wysyla CALA rozmowe PLUS urwany fragment, czyli wiecej niz
+        # pierwotne zapytanie — a to juz balansowalo na granicy TPM. Bez rozmiaru
+        # wejscia w rachunku ratunek przed urwaniem sam wpadal w 413.
+        wejscie = sum(szacuj_tokeny(m["content"]) for m in cont_messages)
         resp2 = client.chat.completions.create(
             model=_p["model"],
             messages=cont_messages,
-            max_tokens=effective_max_tokens(max_tokens),
+            max_tokens=effective_max_tokens(max_tokens, prompt_tokens=wejscie),
             temperature=0.1,
             **{k: v for k, v in _p.items() if k != "model"},
         )
         return partial + resp2.choices[0].message.content
-    except (AttributeError, IndexError) as e:
+    except (AttributeError, IndexError, TypeError, ValueError, OSError,
+            RuntimeError) + _BLEDY_GROQA as e:
+        # Waskie `(AttributeError, IndexError)` przepuszczalo 413 i bledy
+        # transportowe na zewnatrz, a wraz z nimi przepadal uratowany fragment.
+        # Kazda awaria kontynuacji ma konczyc sie oddaniem tego, co juz jest —
+        # bez siegania po `except Exception`, ktory zapadka slusznie limituje.
         logger.warning(
             "Dokonczenie ucietego JSON od Groqa nie powiodlo sie (%s: %s) - "
             "zwracam czesciowa (ucieta) odpowiedz, dalszy parsing JSON moze sie "

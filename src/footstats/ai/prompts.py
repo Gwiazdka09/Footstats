@@ -227,6 +227,13 @@ def build_pewniaczki_prompt(
     # przeladowaniu configu, bez przeladowywania tego modulu.
     from footstats.config import KUPON_MIN_PEWNOSC_PCT
 
+    # Liczba zadanych kuponow jest POCHODNA liczby meczow. `Fill all four`
+    # kazalo wypisywac cztery niezaleznie od tego, ilu mamy kandydatow —
+    # a `Each slip = a DIFFERENT match` czynilo czwarty niemozliwym.
+    # Placilismy tokenami WYJSCIA za pola nie do wypelnienia i 01.09
+    # odpowiedz urwala sie w polowie (`wyjscie sciete do 2640`), przez co
+    # kupon `final` znowu nie powstal mimo poprawnych typow w `top3`.
+
     return f"""ROLE: ultra-skeptical betting analyst. You look NOT for a winner, but for reasons a pick will LOSE.
 
 DATA: {n_mecze} matches within 72h. [metoda:POISSON] = full factor analysis; [metoda:ML] = Bzzoiro only, no history.
@@ -259,7 +266,7 @@ TASK: reply with JSON ONLY (no text before/after). Keep the keys exactly as show
   "kupon_b": {{...}}, "kupon_c": {{...}}, "kupon_d": {{...}},
   "ostrzezenia": "2-3 zdania"
 }}
-kupon_b/c/d: same structure as kupon_a, different match and market - b: 1X2, c: Over/Under, d: BTTS. Fill all four.
+kupon_b/c/d: same structure as kupon_a, different match and market - b: 1X2, c: Over/Under, d: BTTS. Fill {min(n_mecze, 4)} of them (one per match); omit the rest entirely.
 LANGUAGE: JSON keys and "typ" values stay exactly as above (ASCII). All free text - "uzasadnienie", "ryzyko", "ryzyko_ogolne", "ostrzezenia" - write in POLISH.
 
 ABSOLUTE BANS:
