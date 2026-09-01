@@ -540,9 +540,17 @@ def _wyciagnij_json(tekst: str) -> dict:
     try:
         return json.loads(tekst)
     except json.JSONDecodeError:
+        # Sam poczatek nie rozstrzyga niczego: odpowiedz URWANA i odpowiedz
+        # USZKODZONA wygladaja na pierwszych 200 znakach identycznie, a maja
+        # przeciwne naprawy (budzet wyjscia vs prompt/parser). Bilans nawiasow
+        # rozdziela je od razu — niezbilansowane znaczy urwanie. Koncowka jest
+        # w logu, bo smiec siedzi zwykle wlasnie tam.
         logger.error("[AI] Nie udalo sie sparsowac JSON z odpowiedzi modelu —"
-                  " przebieg NIE zapisze zadnych predykcji. Poczatek odpowiedzi: %s",
-                  tekst[:200].replace("\n", " "))
+                  " przebieg NIE zapisze zadnych predykcji. Dlugosc %d zn.,"
+                  " nawiasy: otwarte %d / zamkniete %d (rozjazd = odpowiedz urwana)."
+                  " POCZATEK: %s ||| KONIEC: %s",
+                  len(tekst), tekst.count("{"), tekst.count("}"),
+                  tekst[:250].replace("\n", " "), tekst[-250:].replace("\n", " "))
         return {"typ": "brak", "pewnosc": 0, "uzasadnienie": tekst[:300], "value_bet": False}
 
 
