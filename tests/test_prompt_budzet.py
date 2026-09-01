@@ -57,11 +57,20 @@ def test_kontrakt_json_kompletny(fragment):
     "1.20",        # kurs ponizej — nigdy
     "AKO",         # tylko single
     "BetBuilder",  # Over+BTTS z jednego meczu
-    "60",          # minimalna pewnosc nogi
     "12%",         # podatek
 ])
 def test_zakazy_przetrwaly_kompresje(zakaz):
     assert zakaz in _szkielet(), f"kompresja zgubila regule: {zakaz}"
+
+
+def test_prog_pewnosci_nogi_zostal():
+    """Wczesniej ten test szukal literalu "60". Prog jest od 01.09 pokretlem
+    (`KUPON_MIN_PEWNOSC_PCT`), a druga kopia liczby w tescie rozjechalaby sie
+    z konfiguracja przy pierwszej zmianie — cicho, bo test dalej by przechodzil
+    na starej wartosci gdziekolwiek indziej w prompcie."""
+    from footstats.config import KUPON_MIN_PEWNOSC_PCT
+
+    assert f"pewnosc_pct >= {KUPON_MIN_PEWNOSC_PCT}%" in _szkielet()
 
 
 def test_wymog_trzech_ryzyk_zostal():

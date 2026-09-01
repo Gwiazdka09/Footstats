@@ -220,6 +220,13 @@ def build_pewniaczki_prompt(
     # prompt byl przycinany na slepo w KAZDYM przebiegu. Struktura kuponu byla
     # powielona 4x, a regula "wysoka pewnosc + wysoki kurs" powtorzona 3x.
     # `tests/test_prompt_budzet.py` pilnuje i rozmiaru, i kompletu zakazow.
+    #
+    # Prog pewnosci nogi jest POKRETLEM (`KUPON_MIN_PEWNOSC_PCT`), nie stala:
+    # to decyzja o strategii zakladow, a te zmienia sie bez zmiany kodu.
+    # Import lokalny, zeby podmiana zmiennej srodowiskowej dzialala po
+    # przeladowaniu configu, bez przeladowywania tego modulu.
+    from footstats.config import KUPON_MIN_PEWNOSC_PCT
+
     return f"""ROLE: ultra-skeptical betting analyst. You look NOT for a winner, but for reasons a pick will LOSE.
 
 DATA: {n_mecze} matches within 72h. [metoda:POISSON] = full factor analysis; [metoda:ML] = Bzzoiro only, no history.
@@ -256,8 +263,8 @@ kupon_b/c/d: same structure as kupon_a, different match and market - b: 1X2, c: 
 LANGUAGE: JSON keys and "typ" values stay exactly as above (ASCII). All free text - "uzasadnienie", "ryzyko", "ryzyko_ogolne", "ostrzezenia" - write in POLISH.
 
 ABSOLUTE BANS:
-- One slip = EXACTLY 1 leg (single). No accumulators (AKO). 4 slips = 4 different matches.
-- Leg odds < 1.20: NEVER. Every leg: pewnosc_pct >= 60%.
+- One slip = EXACTLY 1 leg (single). No accumulators (AKO). Each slip = a DIFFERENT match; fill as many slips as there are qualifying matches and leave the rest empty.
+- Leg odds < 1.20: NEVER. Every leg: pewnosc_pct >= {KUPON_MIN_PEWNOSC_PCT}%.
 - Relegation groups + Over 2.5: FORBIDDEN.
 - BetBuilder (Over+BTTS from one match): FORBIDDEN."""
 

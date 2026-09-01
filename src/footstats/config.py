@@ -58,6 +58,22 @@ BZZOIRO_MAX_ROZN   = 20.0  # max. roznica (%) Poisson vs Bzzoiro ML bez alarmu
 # panel raportowal prog, ktorego nie bylo. Zaden test tego toru nie dotykal.
 # Realnie odsiewal dopiero `najlepszy_typ` (MIN_PROB=40) juz na etapie selekcji.
 AGENT_KANDYDAT_PROG = float(os.getenv("AGENT_KANDYDAT_PROG", "50"))
+
+# Minimalna pewnosc POJEDYNCZEJ nogi w prompcie kuponu (`build_pewniaczki_prompt`).
+# Bylo zaszyte 60% i blokowalo kupon `final` przy 1-3 kandydatach, ktorzy zostaja
+# po filtrach wartosci — zmierzone 01.09 na zywym modelu:
+#
+#     prog | 1 mecz | 3 mecze | 5 meczow      (liczba typow w `top3`)
+#       60 |   0    |    0    |    3
+#       50 |   1    |    3    |    3
+#       45 |   1    |    3    |    3
+#       40 |   0    |    1    |    3
+#
+# 50, nie 45 ani 40, bo linia obok w TYM SAMYM prompcie mowi `<50%: avoid`.
+# Nizszy prog postawilby dwie reguly w sprzecznosci, a przy 40% model zaczynal
+# cytowac progi, ktorych nikt nie ustawil (63%).
+KUPON_MIN_PEWNOSC_PCT = int(os.getenv("KUPON_MIN_PEWNOSC_PCT", "50"))
+
 AGENT_BANKROLL      = 100.0 # bankroll do Kelly Criterion (PLN)
 AGENT_KELLY_FRACTION = 4    # bezpieczny fractional Kelly: f*/4 (bardziej konserwatywny dla 100 PLN)
 
