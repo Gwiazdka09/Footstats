@@ -250,7 +250,7 @@ CONFIDENCE (cold calculation, not optimism):
 
 RISK: every pick MUST carry a "ryzyko" field with the 3 strongest arguments AGAINST it. Missing = under-analysis.
 
-BETTING SLIPS:
+COUPONS:
 {bez_emoji(cel_kuponow_text)}
 
 MATCHES:
@@ -270,7 +270,7 @@ kupon_b/c/d: same structure as kupon_a, different match and market - b: 1X2, c: 
 LANGUAGE: JSON keys and "typ" values stay exactly as above (ASCII). All free text - "uzasadnienie", "ryzyko", "ryzyko_ogolne", "ostrzezenia" - write in POLISH.
 
 ABSOLUTE BANS:
-- One slip = EXACTLY 1 leg (single). No accumulators (AKO). Each slip = a DIFFERENT match; fill as many slips as there are qualifying matches and leave the rest empty.
+- One kupon (kupon_a..d) = EXACTLY 1 leg (single). No accumulators (AKO). Each kupon = a DIFFERENT match; fill as many as there are qualifying matches and leave the rest empty.
 - Leg odds < 1.20: NEVER. Every leg: pewnosc_pct >= {KUPON_MIN_PEWNOSC_PCT}%.
 - Relegation groups + Over 2.5: FORBIDDEN.
 - BetBuilder (Over+BTTS from one match): FORBIDDEN."""

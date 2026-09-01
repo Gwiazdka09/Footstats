@@ -378,51 +378,42 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
 
 
 def _buduj_cel_kuponow(cel_a: float | None, cel_b: float | None, stawka: float) -> str:
-    """Generuje sekcję FILOZOFIA KUPONÓW — standardową lub z celem wygranej."""
+    """Generuje sekcję WYBÓR TYPU — zgodną z zakazem akumulatorów.
+
+    Do 01.09 ta sekcja pochodziła z ery AKO i mówiła dosłownie „Zbuduj 2 kupony
+    AKO", „Min 3 nogi, max 6 nóg", „nie buduj singla" oraz „pojedyncza noga tylko
+    gdy kurs >= 1.80" — podczas gdy blok ZAKAZÓW dodany 31.08 żądał „One slip =
+    EXACTLY 1 leg (single). No accumulators (AKO)". Prompt przeczył sam sobie.
+
+    Model rozstrzygał to na korzyść surowszej reguły. Zmierzone na prawdziwych
+    kandydatach: przy celach ustawionych odrzucał każdy mecz poniżej kursu 1.80
+    („nie spełnia wymogu minimalnego kursu"), a w gałęzi produkcyjnej dostawał
+    progi 63-86% na nogę przy zakazie mówiącym 50%. `kupon_a` zostawał pusty.
+
+    Progi per noga nie mogą tu wracać: jedyny próg pewności nogi żyje
+    w `KUPON_MIN_PEWNOSC_PCT` i jest wpisywany do bloku ZAKAZÓW. Dwie kopie
+    tej samej reguły rozjeżdżają się po cichu — to była już trzecia.
+    """
+    # Zakaz powtarzania meczu NIE wraca tutaj: stoi już w ZAKAZACH jako
+    # „Each kupon = a DIFFERENT match". Druga kopia tej samej reguły to
+    # dokładnie mechanizm, który wywołał ten bug.
+    baza = (
+        "Każdy kupon = JEDEN mecz, JEDNA noga. Zero akumulatorów.\n"
+        "Wybierz rynek o najwyższej pewności modelu, nie o najwyższym kursie.\n"
+        "Kurs bierz z linii KURSY / KURSY RYNKÓW — nie wystawiaj typu bez kursu."
+    )
     if cel_a is None and cel_b is None:
-        return """Oba kupony muszą mieć szansa_wygranej_pct >= 40%.
-Liczba nóg: 2-6, ale TYLKO tyle ile pozwala utrzymać >=40% szansy.
-Matematyka: szansa_kuponu = p1 × p2 × ... × pN (iloczyn pewności każdej nogi).
+        return baza
 
-Progi pewności minimalnej per noga (żeby utrzymać 40% przy N nogach):
-  2 nogi: każda noga >= 63%
-  3 nogi: każda noga >= 74%
-  4 nogi: każda noga >= 80%
-  5 nogi: każda noga >= 83%
-  6 nogi: każda noga >= 86%
-
-ZASADA: dodaj nogę TYLKO jeśli jej pewność jest wystarczająco wysoka żeby produkt >= 40%.
-Zacznij od najsilniejszych typów i dodawaj kolejne tylko gdy spełniają próg.
-Jeśli nie ma 6 typów z >=86% — zrób mniej nóg.
-KUPON A: zbuduj z 2-6 nóg z max pewnością, kurs łączny dobierz naturalnie.
-KUPON B: alternatywna kombinacja, inne mecze lub inne rynki, też >=40% szansy."""
-
-    def _opis_kuponu(label: str, cel: float | None, default_cel: float, default_kurs: str, min_szansa: int) -> str:
-        if cel is None:
-            return f"{label}: kurs ~{default_kurs}, szansa min {min_szansa}%."
-        kurs_docelowy = round(cel / (stawka * 0.88), 1)
-        return (
-            f"{label}: CEL wygrana netto ~{cel:.0f} PLN od stawki {stawka:.0f} PLN.\n"
-            f"  Wymagany kurs_laczny ~{kurs_docelowy:.1f}x.\n"
-            f"  Szansa min {min_szansa}% (akceptuj mniej nóg jeśli trzeba — cel kursu ważniejszy).\n"
-            f"  Dobieraj nogi o najwyższym EV_netto w tej samej lidze, unikaj >2 nóg z tej samej ligi."
-        )
-
-    opis_a = _opis_kuponu("KUPON A", cel_a, 50.0, "11-14x", 25)
-    opis_b = _opis_kuponu("KUPON B", cel_b, 100.0, "22-28x", 15)
-
-    return f"""Zbuduj 2 kupony AKO z podanymi celami. Kurs łączny jest PRIORYTETEM nad min szansą.
-Zasada singla: pojedyncza noga tylko gdy kurs >= 1.80. Kurs 1.35-1.80 tylko jako noga AKO.
-Min 3 nogi, max 6 nóg na kupon. Max 2 nogi z tej samej ligi. Nie łącz typów z jednego meczu.
-WAŻNE: aby osiągnąć wysoki kurs, musisz zebrać 4-6 nóg — nie buduj singla ani 2-nożnego kuponu!
-
-ZASADA WSPÓLNYCH NÓG (kotwice):
-- Noga z pewnosc_pct >= 75% to KOTWICA — może pojawić się w obu kuponach (to dobra dywersyfikacja).
-- Noga z pewnosc_pct < 75% musi być UNIKALNA — wchodzi tylko do jednego kuponu.
-- Kupon B musi różnić się od A przynajmniej w 2 nogach poniżej 75% pewności (inne mecze / inne typy).
-
-{opis_a}
-{opis_b}"""
+    # Cel wygranej jest PREFERENCJĄ przy remisie, nie nadrzędnym kryterium:
+    # singiel na rynku z pewnością >= progu nie osiągnie kursu 5x, więc
+    # „wymagany kurs_laczny" byłby żądaniem niemożliwym — dokładnie tym,
+    # które kasowało kupon. Prod (`daily_agent --faza final`) celów nie podaje.
+    cele = [f"{etykieta}: preferuj wyższy kurs ~{cel:.0f} PLN wygranej netto"
+            f" od stawki {stawka:.0f} PLN, ale NIGDY kosztem progu pewności."
+            for etykieta, cel in (("KUPON A", cel_a), ("KUPON B", cel_b))
+            if cel is not None]
+    return baza + "\n" + "\n".join(cele)
 
 
 def _analizuj_forme(mecze: list) -> dict:

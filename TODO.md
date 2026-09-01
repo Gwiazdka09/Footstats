@@ -612,9 +612,18 @@ typer podaje sumę systemowego i użytkownika. Podłoga 400 tok.
   działa, ale przy 10+ kandydatach znowu będzie ciasno. Skrócenie go to zmiana
   **instrukcji dla modelu**, więc wymaga pomiaru jakości typów przed i po,
   nie samego cięcia tekstu.
+- [ ] **`SYSTEM_TYPER_BAZA` niesie CZWARTĄ kopię reguł AKO** — `ZASADA SINGLA:
+  single dozwolony tylko gdy kurs >= 1.80`, `== BUDOWANIE KUPONU AKO ==
+  Optymalna liczba: 4-6 zdarzen`, `Max 6 nog w AKO`. Przeczy wprost blokowi
+  ZAKAZÓW (`EXACTLY 1 leg`, `No accumulators`, `odds < 1.20: NEVER`).
+  01.09 zmierzone: **nie blokuje** — po naprawie kursów rynków kupon powstał
+  mimo tej sprzeczności, więc nie ruszam jej pod presją. Ale to ten sam
+  materiał, który trzeba i tak wyciąć przy skracaniu promptu systemowego
+  (pozycja wyżej) — wycięcie sekcji AKO załatwia oba naraz.
 - [ ] **Zweryfikować kupon `phase='final'` po najbliższym przebiegu.** Nadal
-  zero od 15.08 — trzy przyczyny naprawione (nazwa modelu, konflikt schematu,
-  budżet TPM), żadna jeszcze nie potwierdzona zapisanym kuponem na produkcji.
+  zero od 15.08 — pięć przyczyn naprawionych (nazwa modelu, konflikt schematu,
+  budżet TPM, `np.float64` w SQL, brak kursów rynków >50% w opisie meczu),
+  żadna jeszcze nie potwierdzona zapisanym kuponem na produkcji.
 
 ## 🔴 ZNALEZIONE 30.08 — faza final nie zapisuje kuponu OD 16.08
 

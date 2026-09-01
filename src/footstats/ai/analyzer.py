@@ -670,6 +670,23 @@ def _buduj_opis_meczu(w: dict) -> str:
         k1 = odds.get("home"); kx = odds.get("draw"); k2 = odds.get("away")
         if k1 or kx or k2:
             linie.append(f"  KURSY: 1={k1 or '–'} X={kx or '–'} 2={k2 or '–'}")
+        # Rynki poza 1X2 maja WLASNE kursy w tym samym slowniku. Do 01.09 linia
+        # wyzej renderowala trzy klucze z szesciu, wiec model widzial cenę tylko
+        # dla 1X2 — a to jedyne rynki, na ktorych nasze prawdopodobienstwa NIE
+        # przekraczaja progu pewnosci (30-42% vs BTTS 56%, Over 53%). Efekt:
+        # `top3` sie zapelnialo, `kupon_a` zostawal pusty, a model pisal wprost
+        # "Brak kursow dla rynkow Over/Under i BTTS uniemozliwia budowe kuponow".
+        # Renderowane NIEZALEZNIE od 1X2: zrodlo bywa oddaje same totale.
+        rynki = [
+            f"{etykieta}={odds[klucz]}"
+            for etykieta, klucz in (("Over2.5", "over_2_5"),
+                                    ("Under2.5", "under_2_5"),
+                                    ("BTTS", "btts"))
+            if odds.get(klucz)
+        ]
+        if rynki:
+            linie.append(f"  KURSY RYNKÓW: {' '.join(rynki)}")
+        if k1 or kx or k2:
             # EV brutto (bez podatku) — AI uwzględni 12% we własnej analizie
             ev_parts = []
             for label, p_val, kurs_raw in [
