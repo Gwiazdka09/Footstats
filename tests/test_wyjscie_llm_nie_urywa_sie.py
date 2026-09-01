@@ -98,12 +98,30 @@ def _klient(create):
 # Rozmiar realny, nie symboliczny: na produkcji 01.09 samo wejscie pierwszego
 # zapytania wazylo 5160 tok, a kontynuacja dokłada do niego urwany fragment.
 # Mniejsza atrapa NIE dotyka limitu i test przechodzi nie sprawdzajac niczego.
-# Wieksza tez nie dziala: wejscie ponad CALY limit nie da sie naprawic
-# skracaniem wyjscia, wiec test zadalby rzeczy niemozliwej. Cel: ~7000 tok.
-_ROZMOWA = [
-    {"role": "system", "content": "instrukcja " * 3000},
-    {"role": "user", "content": "mecze " * 150},
-]
+# Wieksza tez nie dziala: wejscia ponad CALY limit nie da sie naprawic
+# skracaniem wyjscia, wiec test zadalby rzeczy niemozliwej.
+#
+# Rozmiar liczony TYM SAMYM licznikiem, ktorego uzywa kod, a nie stalym tekstem.
+# Wersja ze stalym tekstem byla wywazona pod tokenizer `o200k`; na CI `tiktoken`
+# nie pobierze pliku BPE (guard sieci), `szacuj_tokeny` spada na heurystyke
+# i ten sam napis "wazy" 25156 tok zamiast ~7000 — wtedy samo wejscie przekracza
+# caly limit i testu nie da sie spelnic. Zmierzone na CI 01.09.
+_CEL_TOK = 5000
+
+
+def _rozmowa_o_rozmiarze(cel_tok: int = _CEL_TOK) -> list[dict]:
+    from footstats.ai.client import szacuj_tokeny
+
+    tekst = "instrukcja "
+    while szacuj_tokeny(tekst) < cel_tok:
+        tekst *= 2
+    while szacuj_tokeny(tekst) > cel_tok and len(tekst) > 32:
+        tekst = tekst[: int(len(tekst) * 0.9)]
+    return [{"role": "system", "content": tekst},
+            {"role": "user", "content": "mecze"}]
+
+
+_ROZMOWA = _rozmowa_o_rozmiarze()
 _URWANY = '{"top3": [{"mecz": "A vs B", "typ": "1"' + ", x" * 400
 
 

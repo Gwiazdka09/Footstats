@@ -40,10 +40,26 @@ def _czysty_enkoder():
 
 
 def _tiktoken_albo_skip():
+    """Zwraca modul `tiktoken` albo pomija test, gdy encoding nie jest osiagalny.
+
+    Sam import NIE wystarczy: `tiktoken` pobiera plik BPE z SIECI przy pierwszym
+    uzyciu. Na CI guard z `conftest` blokuje polaczenia, wiec pakiet jest, a
+    encoding sie nie laduje — i `szacuj_tokeny` po cichu spada na heurystyke.
+    Testy porownujace tokenizer Z heurystyka nie maja wtedy czego mierzyc.
+
+    Zmierzone na CI 01.09, po naprawie kolekcji:
+
+        assert 46 < 46   (test_zwykly_tekst_nie_jest_juz_przeszacowany)
+        RuntimeError: Test probowal polaczyc sie z siecia: ('57.150.97.129', 443)
+
+    Lokalnie plik BPE jest w cache, wiec oba przechodzily — awaria wylacznie na CI.
+    """
+    tiktoken = pytest.importorskip("tiktoken")
     try:
-        import tiktoken  # noqa: F401
-    except ImportError:
-        pytest.skip("tiktoken niedostepny w tym srodowisku")
+        tiktoken.get_encoding(client.ENCODING_TOKENIZERA)
+    except (OSError, RuntimeError, ValueError) as e:
+        pytest.skip(f"encoding {client.ENCODING_TOKENIZERA} nieosiagalny offline: {e}")
+    return tiktoken
 
 
 # ── sedno: koniec przeszacowania ────────────────────────────────────────────
@@ -59,8 +75,7 @@ def test_zwykly_tekst_nie_jest_juz_przeszacowany(_czysty_enkoder=None):
 def test_emoji_nie_jest_zanizone():
     """Pomyłka w TĘ stronę to 413 i padnięty przebieg — tu margines bezpieczeństwa
     musi trzymać, mimo że emoji ma najgorszy stosunek znak/token."""
-    _tiktoken_albo_skip()
-    import tiktoken
+    tiktoken = _tiktoken_albo_skip()
 
     faktyczne = len(tiktoken.get_encoding(client.ENCODING_TOKENIZERA).encode(EMOJI))
     assert client.szacuj_tokeny(EMOJI) >= faktyczne
