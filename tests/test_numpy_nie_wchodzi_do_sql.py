@@ -137,6 +137,11 @@ def test_executemany_tez_czysci():
         [(np.float64(1.0),), (np.int64(2),)],
     )
 
+    # Porownanie WARTOSCI tu nie wystarcza: `np.float64(1.0) == 1.0` jest prawda,
+    # wiec test przechodzil takze bez czyszczenia. Liczy sie TYP — to on decyduje,
+    # ktorego adaptera uzyje psycopg2 i czy do SQL trafi `np.float64(1.0)`.
+    typy = [type(krotka[0]) for krotka in zapis["seq"]]
+    assert typy == [float, int], f"typy po czyszczeniu: {typy}"
     assert zapis["seq"] == [(1.0,), (2,)]
 
 
