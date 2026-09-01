@@ -181,22 +181,48 @@ def _get_fixtures_api(api_key: str, date_str: str) -> list[dict]:
 
 
 def _get_matches_fdb(fdb_key: str, date_str: str) -> list[dict]:
-    """Pobiera zakończone mecze z football-data.org (pełna historia)."""
+    """Pobiera zakończone mecze z football-data.org dla JEDNEGO dnia.
+
+    `dateTo` w API v4 jest WYŁĄCZAJĄCE. Zmierzone 01.09 na żywym kluczu, HTTP 200,
+    bez limitu:
+
+        2026-08-28 .. 2026-08-28  ->  count=0
+        2026-08-27 .. 2026-08-28  ->  count=2, wyłącznie mecze z 08-27
+        2026-08-25 .. 2026-08-31  ->  63 mecze, w tym Wrexham vs Birmingham (08-28)
+
+    Poprzednia wersja wołała z `dateFrom == dateTo`, czyli o PUSTY przedział —
+    więc to źródło nie oddało ani jednego meczu, odkąd istnieje. Było przy tym
+    drugim z czterech ogniw rozliczania i JEDYNYM sięgającym dalej niż dobę
+    wstecz (API-Football na planie Free odmawia starszych dat). Skutek: 24 kupony
+    z 25-30.08 wisiały ACTIVE mimo dostępnych wyników i wypadały potem na VOID.
+
+    Pytamy więc o [dzień, dzień+1) i odsiewamy to, co przyszło z dnia następnego —
+    inaczej ta sama para grająca dzień później rozliczyłaby kupon obcym wynikiem.
+    """
     import requests
     from requests import RequestException
     if not fdb_key:
         return []
+    nastepny = (datetime.fromisoformat(date_str) + timedelta(days=1)).date().isoformat()
     try:
         r = requests.get(
             "https://api.football-data.org/v4/matches",
             headers={"X-Auth-Token": fdb_key},
-            params={"dateFrom": date_str, "dateTo": date_str, "status": "FINISHED"},
+            params={"dateFrom": date_str, "dateTo": nastepny, "status": "FINISHED"},
             timeout=15,
         )
         r.raise_for_status()
-        return r.json().get("matches", [])
+        mecze = r.json().get("matches", [])
+        return [m for m in mecze
+                if isinstance(m, dict) and str(m.get("utcDate", ""))[:10] == date_str]
     except (RequestException, ValueError, KeyError) as e:
-        log.debug("football-data.org error for date %s: %s", date_str, e)
+        # WARNING, nie debug. Limit planu Free to 10 zapytań/min, a rozliczanie
+        # chodzi po kilkudziesięciu kuponach — 429 dawało pustą listę
+        # nieodróżnialną od "tego dnia nic nie grano", i to na poziomie logu,
+        # którego produkcja nie zapisuje.
+        log.warning("football-data.org nie oddalo meczow dla %s (%s: %s) — "
+                    "kupony z tego dnia zostaja nierozliczone",
+                    date_str, type(e).__name__, e)
         return []
 
 

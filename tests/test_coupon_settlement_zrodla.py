@@ -319,12 +319,22 @@ def test_fdb_pyta_o_mecze_zakonczone(monkeypatch):
 
     def _get(url, headers=None, params=None, timeout=None):
         zebrane.update(params=params, headers=headers)
-        return _Odp(200, {"matches": [1]})
+        # Atrapa musi wygladac jak MECZ. Wczesniej byl tu goly `1`, wiec test
+        # przechodzil, nie mierzac ani daty, ani ksztaltu odpowiedzi — i nie
+        # zauwazyl, ze pytamy o pusty przedzial (dateFrom == dateTo).
+        return _Odp(200, {"matches": [{
+            "utcDate": "2026-08-02T18:00:00Z",
+            "homeTeam": {"name": "A"}, "awayTeam": {"name": "B"},
+            "score": {"fullTime": {"home": 1, "away": 0}},
+        }]})
 
     monkeypatch.setattr(requests, "get", _get)
-    assert cs._get_matches_fdb("klucz", "2026-08-02") == [1]
+    mecze = cs._get_matches_fdb("klucz", "2026-08-02")
+    assert len(mecze) == 1
     assert zebrane["params"]["status"] == "FINISHED"
     assert zebrane["headers"]["X-Auth-Token"] == "klucz"
+    # `dateTo` jest WYLACZAJACE — rowne daty to pusty przedzial i zero wynikow.
+    assert zebrane["params"]["dateTo"] > zebrane["params"]["dateFrom"]
 
 
 def test_fdb_blad_daje_pusta_liste(monkeypatch):
