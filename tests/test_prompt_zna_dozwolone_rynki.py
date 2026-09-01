@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import pytest
 
-from footstats.ai.prompts import SYSTEM_TYPER_BAZA, build_pewniaczki_prompt
+from footstats.ai.prompts import SCHEMAT_POJEDYNCZY_TYP, SYSTEM_TYPER, build_pewniaczki_prompt
 from footstats.core.rynki import TYP_DO_ODDS_KEY, rynki_dla_promptu
 
 
@@ -43,13 +43,25 @@ def test_prompt_uzytkownika_nie_podsuwa_rynku_bez_wyceny(zakazany):
     assert zakazany.lower() not in _prompt().lower()
 
 
-@pytest.mark.parametrize("zakazany", ["handicap", "kartk", "betbuilder", "bet builder"])
+@pytest.mark.parametrize("zakazany", ["handicap", "kartk", "betbuilder", "bet builder",
+                                      "rożne", "1.poł", "over 1.5", "over 3.5"])
 def test_prompt_SYSTEMOWY_tez_nie_podsuwa(zakazany):
-    """Systemowy idzie przy KAZDYM wywolaniu — to on zaproponowal handicap."""
-    assert zakazany.lower() not in SYSTEM_TYPER_BAZA.lower(), (
+    """Systemowy idzie przy KAZDYM wywolaniu — to on zaproponowal handicap.
+
+    Sprawdzamy `SYSTEM_TYPER`, czyli baze RAZEM ze schematem: pierwsza wersja
+    tego testu patrzyla na sama `SYSTEM_TYPER_BAZA` i przechodzila, bo enum
+    22 rynkow (z "Handicap +1") siedzial w schemacie doklejanym obok. Test
+    zielony, prompt dalej podsuwal handicap.
+    """
+    assert zakazany.lower() not in SYSTEM_TYPER.lower(), (
         f"prompt systemowy proponuje {zakazany!r}, rynek spoza TYP_DO_ODDS_KEY — "
         f"noga na nim zostanie skasowana przez weryfikacje jako halucynacja"
     )
+
+
+@pytest.mark.parametrize("rynek", rynki_dla_promptu())
+def test_schemat_pojedynczego_typu_wymienia_dozwolone(rynek):
+    assert rynek in SCHEMAT_POJEDYNCZY_TYP
 
 
 def test_lista_jest_generowana_a_nie_przepisana(monkeypatch):

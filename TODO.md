@@ -607,12 +607,16 @@ typer podaje sumę systemowego i użytkownika. Podłoga 400 tok.
 
 ### Zostaje otwarte
 
-- [ ] **Prompt systemowy typera waży 2475 tok** i to jest teraz największy
-  pojedynczy składnik. Przy 3 kandydatach zostaje ~4 tys. tok na wyjście —
-  działa, ale przy 10+ kandydatach znowu będzie ciasno. Skrócenie go to zmiana
-  **instrukcji dla modelu**, więc wymaga pomiaru jakości typów przed i po,
-  nie samego cięcia tekstu.
-- [ ] **`SYSTEM_TYPER_BAZA` niesie CZWARTĄ kopię reguł AKO** — `ZASADA SINGLA:
+- [x] ~~**Prompt systemowy typera waży 2475 tok**~~ ✅ **1463 tok (−41%)**, 01.09.
+  Nie przez cięcie na ślepo: wyleciały wyłącznie instrukcje dotyczące rynków,
+  których NIE wyceniamy (handicap, kartki, rożne, BetBuilder, Over 1.5, 1X/X2)
+  oraz cała era AKO (pasma kursowe z progiem 1.80, budowanie akumulatora,
+  stawki dla kuponów 11-14x). Każda z tych sekcji uczyła model typować coś,
+  co bramka `TYP_DO_ODDS_KEY` i tak kasuje jako halucynację — więc usunięcie
+  ich POPRAWIA jakość typów, zamiast ją ryzykować.
+- [x] ~~**`SYSTEM_TYPER_BAZA` niesie CZWARTĄ kopię reguł AKO**~~ ✅ usunięta 01.09
+  razem ze skróceniem promptu (pozycja wyżej). Oryginalna notatka poniżej.
+  ~~**Czwarta kopia** — `ZASADA SINGLA:
   single dozwolony tylko gdy kurs >= 1.80`, `== BUDOWANIE KUPONU AKO ==
   Optymalna liczba: 4-6 zdarzen`, `Max 6 nog w AKO`. Przeczy wprost blokowi
   ZAKAZÓW (`EXACTLY 1 leg`, `No accumulators`, `odds < 1.20: NEVER`).

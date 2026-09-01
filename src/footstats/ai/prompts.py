@@ -59,37 +59,11 @@ Twoim zadaniem jest przeprowadzenie "ataku" na własną sugestię typu.
 4. Każde istotne ryzyko musi realnie obniżać pewność (np. brak kluczowego gracza = -10 pkt).
 
 Odpowiadaj zawsze po polsku. Zawsze zwracaj JSON. Bądź konkretny.
-           Over 1.5 gdy obie druzyny strzelaja regularnie, wynik klasy A vs D).
-           EV przy 1.23 i P=93%: 0.93x1.23x0.88-1 = +0.7% – ledwo na plusie, wiec pewnosc musi byc pewna.
-1.35-1.80: DOPUSZCZALNE TYLKO w AKO jako noga — NIGDY jako standalone single.
-           Przy stawce 5-10 PLN zysk netto z singla 1.67 to tylko ~2-3 PLN – nieoplacalne.
-           W AKO mnozy kurs laczny — wtedy ma sens.
-> 1.80  : standard dla singla i AKO, liczymy EV_netto normalnie.
-ZASADA SINGLA: single (1 noga) dozwolony tylko gdy kurs >= 1.80 LUB stawka >= 50 PLN.
-
-== BUDOWANIE KUPONU AKO ==
-Cel: wlasciwy kurs laczny, nie liczba zdarzen. Optymalna liczba: 4-6 zdarzen.
-Struktura "kotwica + wartosc": 1-2 tanich pewnych zdarzen (1.20-1.40, pewnosc >=90%)
-  + 3-4 wartosciowych zdarzen (1.50-2.00, EV_netto > 3%).
-Max 2 mecze tej samej ligi w kuponie (korelacja dnia/pogody/sedziow).
-Nie lacze typow z tego samego meczu (np. "1" i "Over" z PSG – oba ida w gore lub dol razem).
-Kazde zdarzenie musi miec wlasne uzasadnienie – nie "dolaczone dla kursu".
-Nie wkladaj meczow z ROTACJA, ZMECZENIE obu druzyn, ani ROZBIÉZNOSC.
-
-== STAWKI (stale stawki, flat betting) ==
-Kupon A (kurs ~11-14):  10 PLN – bardziej pewny, nizsza stawka na ryzyko
-Kupon B (kurs ~20-30):   5 PLN – wyzsze ryzyko = nizsza stawka
-Single value bet:       10-15 PLN gdy EV_netto > 5% i brak czynnikow ostrzegawczych
-Eksperymentalny (>30):   2-3 PLN
-Zasada: nie zmieniaj stawki po wygranej ani po stracie. Emocje to najgorszy doradca.
-
 == DOBOR TYPOW ==
 Over 2.5: mocny sygnal gdy lambda_g + lambda_a > 2.8 (Poisson). Sprawdz BTTS jako potwierdzenie.
-Over 1.5: kotwica gdy obie druzyny strzelajace, pewnosc >=95%. Bezpieczne "dokladanie" do AKO.
 Under 2.5: lambda_g + lambda_a < 2.0, obie defensywne, brak HIGH_STAKES (bo desperacja = gole).
 BTTS: oba ataki w formie, zadna druzyna nie ma COMFORT/VACATION (bo te druzyny nie ryzykuja).
 1/X/2: EV_netto > 3%, brak ROTACJA/ZMECZENIE, Poisson i ML zgodne.
-1X / X2: bezpieczniejsze ale niskie kursy – tylko gdy EV_netto > 0 po podatku.
 
 == PRZYKLADY ==
 KOTWICA: 1=91% kurs=1.28 EV=+2.5% klasa A vs D → OK
@@ -98,17 +72,15 @@ NIE: kurs<1.20 NIGDY | ROZBIEŻNOŚĆ>15% POMIŃ | ROTACJA POMIŃ
 RAG: PATENT+TWIERDZA→1: 7/8=87% → mocny dowód
 
 == ZAKAZY BEZWZGLEDNE (nauczone na stratach 04.04.2026) ==
-1. Max 6 nog w AKO – bez wyjatkow. Wiecej nog = iluzja pewnosci, nie wieksza szansa.
-2. Grupy spadkowe i relegacyjne: Over 2.5 ZABRONIONE.
+1. Grupy spadkowe i relegacyjne: Over 2.5 ZABRONIONE.
    Druzyny walczace o przezycie graja defensywnie i chaotycznie. Lambda z sezonu ich nie opisuje.
-3. Duplikacja selekcji miedzy kuponami: max 1 wspolna selekacja.
+2. Duplikacja selekcji miedzy kuponami: max 1 wspolna selekacja.
    Jezeli ta sama noga pada, tracisz podwojnie. To nie dywersyfikacja – to multiplikacja bledu.
-4. "Kupon 19 pewniaczkow": NIE BUDUJ. Kazda noga ponizej 1.20 to NIGDY. 19 nog to 19 szans na blad.
 
 == POLITYKA "OVER 2.5" I KONTUZJI (PEŁNA ANALIZA) ==
 - SCEPTYCYZM WOBEC OVER 2.5: Wymagaj dowodow na SIŁĘ ATAKU OBU drużyn. Jeśli brakuje informacji lub jedna z drużyn ma słaby atak, ODRZUC Over 2.5. Słaba obrona to nie jest wystarczający powód na Over.
 - KONTUZJE ATAKU: Jeśli topowy strzelec (lub pomocnik ofensywny) nie gra z powodu zawieszenia lub kontuzji — ZAKAZ Over 2.5.
-- NIEKOMPLETNE DANE: Jeśli widzisz ryzyko lub rotację (np. mecze Pucharowe), załóż niższy pułap bramek i odrzuć Over. Typuj Under lub bezpieczne zakłady z wyższym kursem i mniejszym ryzykiem utraty (1X/X2). W skrócie: jak są kontuzje/rotacja w obu drużynach = omijaj z daleka.
+- NIEKOMPLETNE DANE: Jeśli widzisz ryzyko lub rotację (np. mecze Pucharowe), załóż niższy pułap bramek i odrzuć Over. Typuj Under 2.5. W skrócie: jak są kontuzje/rotacja w obu drużynach = omijaj z daleka.
 """
 
 # Schemat POJEDYNCZEGO typu. Wydzielony 31.08, bo `SYSTEM_TYPER` narzucał go
@@ -190,7 +162,7 @@ KOMENTARZ FOOTSTATS:
 ═══════════════════════════════════════
 
 ZADANIE – Wykonaj analizę "Devil's Advocate" podając 3 ryzyka, a następnie wybierz JEDEN najlepszy typ spośród:
-  1, X, 2, 1X, X2, BTTS, Over, Under
+  {", ".join(rynki_dla_promptu())}
 
 Odpowiedź TYLKO w formacie JSON (bez żadnego tekstu przed ani po):
 {{
