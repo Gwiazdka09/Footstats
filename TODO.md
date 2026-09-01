@@ -504,14 +504,33 @@ Sonda na realnym prompcie (01.09). Model oddał kompletny, poprawny JSON:
 Reguła `Every leg: pewnosc_pct >= 60%` stoi w `SYSTEM_TYPER_BAZA`
 (`prompts.py:260`). Kandydaci po filtrach wartości mają `pw` około 52%.
 
-**Decyzja należy do użytkownika, nie do kodu:**
+**ROZSTRZYGNIĘTE 01.09 przez użytkownika: obniżyć do 40-50%.**
+Wdrożone **50%** jako `KUPON_MIN_PEWNOSC_PCT` (pokrętło, nie stała).
 
-- [ ] zostawić 60% → kupon `final` powstaje rzadko, tylko przy mocnych
-      kandydatach (stan dzisiejszy, spójny z tym, że model nie bije rynku);
-- [ ] obniżyć próg → więcej kuponów, słabszych; poprzednie pięć miało kursy
-      do 77 i wszystkie przepadły lub zostały unieważnione;
-- [ ] uznać `system` (296 kuponów, single-leg, per-tip ROI) za właściwy
-      produkt i przestać gonić `final`.
+Dlaczego 50, a nie 45/40: linia obok w TYM SAMYM prompcie mówi `<50%: avoid`.
+Niższy próg postawiłby dwie reguły w sprzeczności — a zmierzone zachowanie
+przy 40% było dokładnie takie, model zaczynał cytować progi, których nikt
+nie ustawił (63%).
+
+Zmierzone na żywym modelu (liczba typów w `top3`, jedna próbka na komórkę,
+warunek `4 slips` poluzowany jednakowo we wszystkich wierszach):
+
+| próg | 1 mecz | 3 mecze | 5 meczów |
+|---|---|---|---|
+| 60 | 0 | 0 | 3 |
+| **50** | **1** | **3** | 3 |
+| 45 | 1 | 3 | 3 |
+| 40 | 0 | 1 | 3 |
+
+Druga reguła blokowała niezależnie od progu: `4 slips = 4 different matches`
+przy 1-3 kandydatach jest niewykonalna. Teraz model wypełnia tyle kuponów,
+ilu ma kwalifikujących się meczów. **Zakaz akumulatorów zostaje** — poprzednie
+pięć kuponów `final` miało kursy do 77 i wszystkie przepadły lub zostały
+unieważnione.
+
+- [ ] **Zmierzyć skutek po ~20 rozliczonych kuponach.** Obniżenie progu ma
+      zwiększyć liczbę kuponów; czy nie kosztem trafności — nie wiadomo,
+      i tego nie da się przewidzieć, tylko rozliczyć.
 
 Log przestał już mylić: świadoma odmowa idzie na INFO z zacytowanym powodem,
 awaria warstwy LLM zostaje WARNING.
