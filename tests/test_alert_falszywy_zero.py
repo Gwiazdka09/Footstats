@@ -29,7 +29,7 @@ def test_zapis_liczy_ile_wierszy_naprawde_poszlo(monkeypatch):
     """Bez tego licznika alarm nie ma jak odróżnić „nic nie zapisano" od
     „zapisano, tylko potem wycięto z kuponu"."""
     import footstats.core.backtest as bt
-    monkeypatch.setattr(bt, "save_prediction", lambda **kw: 1)
+    monkeypatch.setattr(bt, "save_prediction", lambda **kw: (1, True))
 
     dane = {"top3": [{"mecz": "A vs B", "typ": "1", "kurs": 1.5},
                      {"mecz": "C vs D", "typ": "2", "kurs": 2.0}]}
@@ -46,7 +46,7 @@ def test_nieudany_zapis_nie_liczy_sie_jako_zapisany(monkeypatch):
     def kaprysny(**kw):
         if kw["team_home"] == "A":
             raise RuntimeError("baza padla")
-        return 1
+        return 1, True
 
     monkeypatch.setattr(bt, "save_prediction", kaprysny)
 
@@ -60,7 +60,7 @@ def test_nieudany_zapis_nie_liczy_sie_jako_zapisany(monkeypatch):
 
 def test_brak_typow_do_zapisu_daje_zero(monkeypatch):
     import footstats.core.backtest as bt
-    monkeypatch.setattr(bt, "save_prediction", lambda **kw: 1)
+    monkeypatch.setattr(bt, "save_prediction", lambda **kw: (1, True))
 
     dane: dict = {"top3": []}
     _auto_zapisz_backtest(dane, [])

@@ -71,7 +71,7 @@ def zapisy(monkeypatch):
     zapisane: list[dict] = []
     import footstats.core.backtest as bt
     monkeypatch.setattr(bt, "save_prediction",
-                        lambda **kw: zapisane.append(kw) or 1)
+                        lambda **kw: (zapisane.append(kw), (1, True))[1])
     return zapisane
 
 

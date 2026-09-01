@@ -108,8 +108,9 @@ def _wiersze(sciezka):
 
 def _zapisz(home="Legia", away="Wisła", tip="1", odds=52.58, data="2026-08-20"):
     from footstats.core.backtest import save_prediction
-    return save_prediction(match_date=data, team_home=home, team_away=away,
-                           ai_tip=tip, ai_confidence=55, odds=odds)
+    _id, _ = save_prediction(match_date=data, team_home=home, team_away=away,
+                             ai_tip=tip, ai_confidence=55, odds=odds)
+    return _id
 
 
 def _noga(home="Legia", away="Wisła", tip="1", odds=1.85, data="2026-08-20"):

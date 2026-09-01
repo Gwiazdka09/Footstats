@@ -99,7 +99,7 @@ def _today():
 def _insert_prediction(team_home="PSG", team_away="Lyon", ai_tip="1",
                        ai_confidence=70, odds=1.85, actual_result=None,
                        tip_correct=None, league="Ligue 1", kupon_type="A"):
-    return save_prediction(
+    _id, _ = save_prediction(
         match_date=_today(),
         team_home=team_home,
         team_away=team_away,
@@ -110,6 +110,7 @@ def _insert_prediction(team_home="PSG", team_away="Lyon", ai_tip="1",
         odds=odds,
         kupon_type=kupon_type,
     )
+    return _id
 
 
 class TestSavePrediction:

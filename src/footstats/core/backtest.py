@@ -82,9 +82,15 @@ def save_prediction(
     prob_draw:            float | None = None,
     prob_away:            float | None = None,
     model_source:         str = "",
-) -> int:
+) -> tuple[int, bool]:
     """
-    Zapisuje typ AI przed meczem. Zwraca id nowo utworzonego rekordu.
+    Zapisuje typ AI przed meczem. Zwraca `(id, utworzony)`.
+
+    `utworzony=False` znaczy, że wiersz o tym samym (mecz, data, tip) już był —
+    dedup zwraca wtedy jego id. Do 01.09 funkcja oddawała samo id, więc wołający
+    NIE MIAŁ JAK odróżnić wstawienia od trafienia w duplikat i liczył oba tak
+    samo. Log potrafił wtedy powiedzieć „Zapisano 4 predykcji" w przebiegu,
+    po którym w bazie nie przybył ani jeden wiersz (`footstats-final-66gjs`).
 
     prob_home/draw/away: prob modelu 1X2 (%) — D3: pozwala porównać selekcję Groq (ai_tip)
     z argmax modelu na danych settled (wcześniej brak → analiza Cel B bug 2 niemożliwa).
@@ -105,7 +111,7 @@ def save_prediction(
             (team_home, team_away, match_date, ai_tip),
         ).fetchone()
         if istnieje:
-            return istnieje["id"]
+            return istnieje["id"], False
 
         row = conn.execute(
             """
@@ -121,7 +127,7 @@ def save_prediction(
              kupon_type, rules_json, prompt_version, factors_json,
              prob_home, prob_draw, prob_away, model_source),
         ).fetchone()
-        return row["id"]
+        return row["id"], True
 
 
 # ── 2. update_result ─────────────────────────────────────────────────────

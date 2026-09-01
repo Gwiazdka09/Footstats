@@ -304,10 +304,16 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
     _TYP_NORM = {"Over": "Over 2.5", "Under": "Under 2.5",
                  "OVER": "Over 2.5", "UNDER": "Under 2.5"}
 
+    # DWIE liczby, bo opisuja dwa rozne stany. `zapisanych` = ile typow ma
+    # pokrycie w bazie (nowe + juz istniejace) — na tym stoi detektor cichej
+    # awarii, a ponowny przebieg tego samego dnia LEGALNIE nie tworzy nic nowego.
+    # `nowych` = ile wierszy naprawde przybylo. Do 01.09 byla jedna liczba i log
+    # mowil "Zapisano 4 predykcji" w przebiegu, po ktorym baza nie urosla.
     zapisanych = 0
+    nowych = 0
 
     def _zapisz(typy: list, kupon_type: str) -> None:
-        nonlocal zapisanych
+        nonlocal zapisanych, nowych
         for t in typy:
             # A1: typ zbudowany bez LLM-a dostaje wlasna etykiete, zeby dalo sie
             # go odsiac w analizach (`by_kupon`) i zmierzyc osobno.
@@ -339,7 +345,7 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
             # dane (gated GROQ_TIP_OVERRIDE) PRZED tym zapisem → backtest = live.
             pw = w.get("pw"); pr = w.get("pr"); pp = w.get("pp")
             try:
-                save_prediction(
+                _, utworzony = save_prediction(
                     match_date=w.get("data", today),
                     team_home=home,
                     team_away=away,
@@ -356,6 +362,7 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
                     model_source=w.get("model_source", ""),
                 )
                 zapisanych += 1
+                nowych += utworzony
             except Exception as e:  # noqa: BLE001 — zapis nie moze zabic przebiegu
                 # Cisza tutaj byla ostatnim miejscem, w ktorym dzien predykcji
                 # mogl zniknac bez sladu. `predictions` to nie telemetria —
@@ -375,6 +382,7 @@ def _auto_zapisz_backtest(dane: dict, wyniki: list) -> None:
     # sie PRZED nia (KROK 3) — wiec dzien z zapisanymi predykcjami, ktorym
     # weryfikacja wycieta cały top3, byl zglaszany jako "ZERO predykcji".
     dane["_zapisanych"] = zapisanych
+    dane["_nowych"] = nowych
 
 
 def _buduj_cel_kuponow(cel_a: float | None, cel_b: float | None, stawka: float) -> str:

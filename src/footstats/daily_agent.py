@@ -575,8 +575,15 @@ def _zapisz_predykcje_po_weryfikacji(dane: dict, wyniki: list, indeks: dict) -> 
 
     _auto_zapisz_backtest(dane, wyniki)
     n = dane.get("_zapisanych", 0)
+    nowych = dane.get("_nowych", n)
     if n:
-        log.info("Zapisano %d predykcji PO weryfikacji kursow", n)
+        # Obie liczby, bo "typ ma pokrycie w bazie" i "wiersz naprawde przybyl"
+        # to dwa rozne stany. `save_prediction` deduplikuje po (mecz, data, tip),
+        # wiec powtorzony przebieg tego samego dnia daje n>0 i nowych=0 — i to
+        # jest POPRAWNE. Do 01.09 log pokazywal samo `n` i mowil "Zapisano 4"
+        # w przebiegu, po ktorym baza nie urosla (`footstats-final-66gjs`).
+        log.info("Zapisano %d predykcji PO weryfikacji kursow (%d nowych, %d juz bylo)",
+                 n, nowych, n - nowych)
     else:
         log.error("Zaden typ nie przezyl weryfikacji — ZERO predykcji zapisanych")
     return n
