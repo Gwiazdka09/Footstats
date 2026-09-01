@@ -58,6 +58,11 @@ def _zapisz_kupon_do_db(
                 "odds":           k.get("kurs", 1.0),
                 "decision_score": k.get("decision_score", 0),
                 "mecz":           k.get("mecz", f"{home} vs {away}"),
+                # `liga` dokładana 01.09, razem z `system_paper`. Naprawa tylko
+                # jednego źródła zostawiłaby schemat nóg NIESPÓJNY — a to właśnie
+                # niespójność, nie sam brak pola, kazała `user_stats` pominąć
+                # grupowanie `per_league`.
+                "liga":           k.get("liga", ""),
             })
 
         from datetime import datetime as _dt

@@ -165,9 +165,17 @@ def build_single_leg_coupons(wyniki: list[dict], stake: float = DEFAULT_STAKE,
         if exists:
             continue
 
+        # `liga` dokładana 01.09. Bez niej analiza ROI per liga jest niemożliwa:
+        # z 243 rozliczonych kuponów lige udało się odtworzyć dla 25 (dopasowanie
+        # do `predictions` po nazwach drużyn), bo `predictions` zapisuje wyłącznie
+        # typy, które przeszły przez LLM-a. `core/user_stats.py` z tego samego
+        # powodu POMIJA grupowanie `per_league` — to jedyne źródło kuponów, które
+        # realnie chodzi na produkcji, więc bez tego pola pytanie "które ligi się
+        # opłacają" zostaje bez odpowiedzi na zawsze.
         leg = {
             "home": home, "away": away, "tip": tip, "odds": kurs,
             "mecz": mecz, "decision_score": int(prob),
+            "liga": w.get("liga", ""),
         }
         cid = save_coupon(
             phase="system", kupon_type="SINGLE", legs=[leg],

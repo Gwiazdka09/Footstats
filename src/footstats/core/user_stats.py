@@ -7,11 +7,17 @@ rozliczonym wynikiem, więc żadne z nich nie wchodzą do win-rate/streak (spec 
 
 Żadnych INSERT/UPDATE/DELETE — tylko SELECT.
 
-Uwaga o per_league: schemat legów kuponu jest NIESPÓJNY między źródłami kuponów
-— risk_proposals.py/system_coupons.py dopisują klucz "liga" do legów, ale
-daily_io.py/system_paper.py go nie mają (home/away/tip/odds/decision_score/mecz).
-Grupowanie per_league byłoby więc zawodne (część kuponów bez ligi) bez ujednolicenia
-schematu legów u źródła — dlatego POMINIĘTE w tej wersji.
+Uwaga o per_league: schemat legów był NIESPÓJNY między źródłami — risk_proposals.py
+i system_coupons.py dopisywały klucz "liga", a daily_io.py i system_paper.py nie.
+**Ujednolicone 01.09**: oba brakujące źródła dokładają teraz "liga".
+
+Grupowanie per_league dalej NIE jest włączone, ale z innego powodu: 326 kuponów
+zapisanych PRZED tą zmianą nie ma tego pola i już go nie dostanie. Zmierzone
+01.09 — próba policzenia ROI per liga przez dopasowanie do `predictions` po
+nazwach drużyn objęła 25 z 243 rozliczonych kuponów, bo `predictions` zapisuje
+wyłącznie typy, które przeszły przez LLM-a. Statystyka per_league będzie więc
+wiarygodna dopiero na kuponach od 01.09 w górę — włączać ją, gdy uzbiera się
+próba, nie wcześniej.
 """
 
 from dataclasses import dataclass
