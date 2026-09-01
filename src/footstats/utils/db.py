@@ -34,6 +34,36 @@ def _get_pool() -> "psycopg2.pool.ThreadedConnectionPool":
     return _pool
 
 
+def _natywna(v):
+    """Skalar numpy → odpowiednik natywny Pythona. Reszta bez zmian.
+
+    `numpy.float64` jest PODKLASĄ Pythonowego `float`, więc psycopg2 adaptuje ją
+    swoim adapterem dla floatów — a ten używa `repr()`. Do NumPy 1.x
+    `repr(np.float64(0.5))` dawało `'0.5'`; NumPy 2.x zmienił to na
+    `'np.float64(0.5)'` i taki literał lądował w SQL, gdzie Postgres czyta `np`
+    jako nazwę schematu:
+
+        [AI] Nie udalo sie zapisac predykcji ...: schema "np" does not exist
+
+    Zmierzone 01.09 na produkcji — przebieg zapisał ZERO predykcji. Awaria była
+    nieregularna, bo zależała od tego, czy prawdopodobieństwa przyszły z Poissona
+    (numpy) czy z Bzzoiro-ML (czyste floaty).
+
+    Sprawdzamy `__module__`, a nie `isinstance`, żeby nie wciągać numpy do importu
+    warstwy bazy — i żeby objąć wszystkie typy skalarne naraz.
+    """
+    if type(v).__module__ == "numpy" and hasattr(v, "item"):
+        return v.item()
+    return v
+
+
+def _czysc_params(params):
+    """Parametry zapytania z wartościami natywnymi. `None` przechodzi bez zmian."""
+    if not params:
+        return params
+    return tuple(_natywna(p) for p in params)
+
+
 class _Conn:
     """sqlite3-compatible psycopg2 connection wrapper."""
 
@@ -73,12 +103,12 @@ class _Conn:
     def execute(self, sql: str, params: tuple = ()):
         import psycopg2.extras as _extras
         cur = self._raw.cursor(cursor_factory=_extras.RealDictCursor)
-        cur.execute(self._fix(sql), params or None)
+        cur.execute(self._fix(sql), _czysc_params(params) or None)
         return cur
 
     def executemany(self, sql: str, seq):
         cur = self._raw.cursor()
-        cur.executemany(self._fix(sql), seq)
+        cur.executemany(self._fix(sql), (_czysc_params(p) for p in seq))
         return cur
 
     def executescript(self, script: str) -> None:
