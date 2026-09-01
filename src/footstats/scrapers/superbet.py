@@ -28,16 +28,23 @@ from datetime import datetime
 from pathlib import Path
 from footstats.utils.paths import katalog_cache
 
-try:
-    from playwright.sync_api import sync_playwright, Error as PWError, TimeoutError as PWTimeout
-except ImportError:
-    logger.error("BLAD: pip install playwright  nastepnie  python -m playwright install chromium")
-    sys.exit(1)
-
 from dotenv import load_dotenv
 load_dotenv()
 
+# Zrodlo prawdy o dostepnosci playwrighta jest JEDNO: `base_playwright`. Ten modul
+# mial wlasna galez `except ImportError`, ktora wolala `sys.exit(1)` — modul
+# biblioteczny ubijal interpreter, wiec pytest przerywal CALA kolekcje:
+#
+#   INTERNALERROR> File ".../superbet.py", line 35, in <module>
+#   INTERNALERROR>     sys.exit(1)
+#   INTERNALERROR> SystemExit: 1
+#
+# Zmierzone na CI 01.09: 5094 zebranych testow, ZERO uruchomionych. Lokalnie
+# playwright jest zainstalowany, wiec awaria pokazywala sie wylacznie na CI.
 from footstats.scrapers.base_playwright import (
+    PWError,
+    PWTimeout,
+    sync_playwright,
     SUPERBET_CONFIG as _CFG,
     zamknij_popup as _zamknij_popup_base,
     akceptuj_cookies as _akceptuj_cookies_base,

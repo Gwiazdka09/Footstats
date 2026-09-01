@@ -11,18 +11,43 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from footstats.utils.paths import katalog_cache
-from typing import Any, Callable, Generator, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generator, TypeVar
+
+if TYPE_CHECKING:  # tylko dla adnotacji — `from __future__ import annotations` je odracza
+    from playwright.sync_api import Browser, Page
 
 from footstats.core.circuit_breaker import CircuitBreaker
 from footstats.core.exceptions import FootStatsCircuitOpenError
 
 logger = logging.getLogger(__name__)
 
+class _PlaywrightNiedostepny(Exception):
+    """Zastępuje typy błędów playwrighta, gdy pakietu nie ma. NIGDY nie jest podnoszony.
+
+    Istnieje po to, żeby `except (PWTimeout, PWError)` rozsiane po scraperach dało
+    się w ogóle wykonać bez zainstalowanego pakietu. Wcześniej gałąź `except
+    ImportError` zostawiała obie nazwy niezdefiniowane, więc każdy
+    `from footstats.scrapers.base_playwright import PWError` kończył się
+    ImportError — awaria przesunięta o jeden import dalej, nie usunięta.
+    """
+
+
+def _brak_playwrighta(*_a, **_k):
+    """Podstawiane pod `sync_playwright`, gdy pakietu nie ma. Głośne przy UŻYCIU."""
+    raise RuntimeError(
+        "playwright niedostepny — `pip install playwright` i `python -m playwright "
+        "install chromium`. Import modulu jest celowo cichy (brak pakietu to normalny "
+        "stan CI), glosny jest dopiero moment, w ktorym ktos chce przegladarki."
+    )
+
+
 try:
-    from playwright.sync_api import Browser, Error as PWError, Page, TimeoutError as PWTimeout, sync_playwright
+    from playwright.sync_api import Error as PWError, TimeoutError as PWTimeout, sync_playwright
     PLAYWRIGHT_OK = True
 except ImportError:
     PLAYWRIGHT_OK = False
+    PWError = PWTimeout = _PlaywrightNiedostepny
+    sync_playwright = _brak_playwrighta
     logger.info("[BasePlaywright] UWAGA: playwright niedostepny, zainstaluj: pip install playwright && playwright install chromium")
 
 _T = TypeVar("_T")
