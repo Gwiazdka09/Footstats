@@ -23,6 +23,53 @@ import os
 log = logging.getLogger(__name__)
 
 
+def _zapisz_kupony_system(wyniki: list[dict]) -> tuple[int, int]:
+    """Zapisuje kupony konta System. Zwraca `(single_leg, risk_*)`.
+
+    DWIE sciezki, celowo rozdzielone:
+
+    * `build_single_leg_coupons` — paper trading, 1 typ na mecz. To GLOWNY
+      produkt: zbiera dane walidacyjne (326 wierszy) i na nim stoi pomiar ROI.
+    * `generate_system_coupons` — propozycje dnia w koszykach low/medium/high,
+      `shared=TRUE`, czyli widoczne na liscie "Najlepsi typerzy".
+
+    Druga zyla dotad WYLACZNIE w lokalnym drafcie (`daily_agent.py`), wylaczonym
+    przy migracji do Cloud Run — stad `kupon_type LIKE 'risk_%'` = 0 wierszy
+    w calej historii i pusty leaderboard (`shared=TRUE` = 0 na 339 kuponow).
+
+    Karmimy ja `na_ksztalt_pred_ml(wyniki)`, czyli NASZYM modelem, a nie
+    `predykcje_tygodnia()` z Bzzoiro jak robil stary kod — produkcja gra
+    Poisson-DC, wiec wersja z Bzzoiro wystawialaby na leaderboard typy z innego
+    modelu niz mierzony.
+
+    Awaria propozycji NIE moze zabic paper-tradingu: to dodatek, a tamto jest
+    zrodlem danych. Stad osobny `try`.
+    """
+    from footstats.core.system_paper import build_single_leg_coupons
+
+    created = build_single_leg_coupons(wyniki)
+
+    risk_created = 0
+    try:
+        from footstats.core.system_coupons import (
+            generate_system_coupons, na_ksztalt_pred_ml,
+        )
+        gotowe = na_ksztalt_pred_ml(wyniki)
+        if gotowe:
+            risk_created = len(generate_system_coupons(gotowe) or [])
+        else:
+            log.info("Propozycje ryzyka pominiete: zaden z %d meczow nie ma "
+                     "kompletu prawdopodobienstw 1X2 z modelu", len(wyniki))
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
+        # GLOSNO, ale bez przerywania: brak tych kuponow oznacza pusty
+        # leaderboard, co z zewnatrz wyglada jak "nikt jeszcze nic nie wystawil".
+        log.warning("Propozycje ryzyka (risk_*) nie powstaly (%s: %s) — "
+                    "lista 'Najlepsi typerzy' zostanie bez wpisow konta System",
+                    type(e).__name__, e)
+
+    return created, risk_created
+
+
 def _wykryj_model_source() -> str:
     """Czy quick_picks REALNIE użyje Poisson-DC, czy fallback Bzzoiro-ML.
 
@@ -219,8 +266,7 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
                 **_swiezosc_danych_system(),
             }
 
-        from footstats.core.system_paper import build_single_leg_coupons
-        created = build_single_leg_coupons(wyniki)
+        created, risk_created = _zapisz_kupony_system(wyniki)
         # Sygnał świeżości PO zapisie: created>0 → stale_days=0; created=0 +
         # brak kuponu od >=prog_dni → STALE (rozróżnia benign vs starvation).
         fresh = _swiezosc_danych_system()
@@ -233,7 +279,8 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
         return {
             "ok": True, "dry_run": False, "model_source": model_source,
             "fixtures_source": fixtures_source,
-            "candidates": len(wyniki), "created": created, **fresh,
+            "candidates": len(wyniki), "created": created,
+            "risk_created": risk_created, **fresh,
         }
     except Exception as e:  # noqa: BLE001 — endpoint musi być graceful (nigdy 500)
         log.error("generuj_system_draft błąd: %s", e, exc_info=True)

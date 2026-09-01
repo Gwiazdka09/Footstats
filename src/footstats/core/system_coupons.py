@@ -17,6 +17,40 @@ from footstats.utils.db import connect as _connect
 _log = logging.getLogger(__name__)
 
 
+def na_ksztalt_pred_ml(wyniki: list[dict]) -> list[dict]:
+    """Mecze z `quick_picks` w kształcie, którego oczekuje `build_tips`.
+
+    `build_tips` czyta `m["pred_ml"]` z nazwami z API Bzzoiro (`prob_home_win`,
+    `prob_draw`, `prob_away_win`, `prob_over_25`, `prob_btts_yes`), a nasze
+    `wyniki` niosą `pw/pr/pp/bt/o25`. Bez tłumaczenia `build_tips` NIE PADA —
+    podstawia domyślne wartości:
+
+        ph = to_pct(ml.get("prob_home_win"), 40.0)
+
+    czyli wyprodukowałby kupony ze zmyślonych 40/25/35/55/45, nie do odróżnienia
+    od prawdziwych, i wystawił je na publiczny leaderboard (`shared=TRUE`).
+
+    Dlatego mecz BEZ kompletu prawdopodobieństw 1X2 wypada tutaj, zamiast iść
+    dalej z podkładką. Zero też liczy się jako brak: `quick_picks` oddaje 0.0
+    dla meczu spoza pokrycia modelu, a to nie jest "szansa 0%".
+
+    Rynki totali (BTTS, Over 2.5) są opcjonalne — `build_tips` sam je pominie,
+    gdy klucza nie ma, i wtedy nie wystawi na nie typu.
+    """
+    gotowe: list[dict] = []
+    for w in wyniki:
+        pw, pr, pp = w.get("pw"), w.get("pr"), w.get("pp")
+        if not all(isinstance(v, (int, float)) and v > 0 for v in (pw, pr, pp)):
+            continue
+        ml = {"prob_home_win": pw, "prob_draw": pr, "prob_away_win": pp}
+        if isinstance(w.get("o25"), (int, float)) and w["o25"] > 0:
+            ml["prob_over_25"] = w["o25"]
+        if isinstance(w.get("bt"), (int, float)) and w["bt"] > 0:
+            ml["prob_btts_yes"] = w["bt"]
+        gotowe.append({**w, "pred_ml": ml})
+    return gotowe
+
+
 def _existing_system_tiers(system_uid: int, date_str: str) -> set[str]:
     init_coupon_tables()
     with _connect() as conn:
