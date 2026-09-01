@@ -285,17 +285,23 @@ def test_rozliczanie_wymaga_sekretu(srodowisko):
     assert r.status_code == 401
 
 
-def test_rozliczanie_zwraca_raport(srodowisko, monkeypatch):
+def test_rozliczanie_potwierdza_przyjecie(srodowisko, monkeypatch):
+    """Od 01.09 praca leci w TLE, wiec odpowiedz potwierdza PRZYJECIE, nie wynik.
+
+    Powod jest zmierzony: praca trwa ~30 minut, `attemptDeadline` Schedulera ma
+    maksimum 30 minut, a `_TimeoutMiddleware` cial zadanie po 10 s i Scheduler
+    zapisywal `status.code: 4` mimo ze robota dochodzila do konca. Liczniki
+    przenioslly sie do logu — pilnuje ich `test_kalibracja_rozlicz_w_tle.py`."""
     import footstats.core.kalibracja_rozlicz as kr
     monkeypatch.setattr(kr, "rozlicz_dziennik",
                         lambda **kw: {"sprawdzone": 5, "rozliczone": 3,
                                       "bez_wyniku": 2, "bledy": 0})
 
-    dane = client.post("/api/cron/kalibracja-rozlicz",
-                       headers={"X-Cron-Secret": SEKRET}).json()
+    odp = client.post("/api/cron/kalibracja-rozlicz",
+                      headers={"X-Cron-Secret": SEKRET})
 
-    assert dane["rozliczone"] == 3
-    assert dane["ok"] is True
+    assert odp.status_code == 202
+    assert odp.json()["started"] is True
 
 
 def test_rozliczanie_przekazuje_okno(srodowisko, monkeypatch):
@@ -323,8 +329,14 @@ def test_rozliczanie_dry_run(srodowisko, monkeypatch):
     assert przekazane["dry_run"] is True
 
 
-def test_awaria_rozliczania_to_500_a_nie_cisza(srodowisko, monkeypatch):
-    """Scheduler musi zobaczyc blad — HTTP 200 ukrylby awarie."""
+def test_awaria_rozliczania_NIE_jest_cisza(srodowisko, monkeypatch, caplog):
+    """Niezmiennik zostaje: awaria nie moze zniknac. Zmienil sie tylko kanal.
+
+    Do 01.09 bylo to HTTP 500. Odpowiedz wychodzi teraz PRZED praca, wiec
+    wyjatek nie ma gdzie wyplynac — ERROR w logu jest jedynym sygnalem, jaki
+    zostal, i dlatego musi byc."""
+    import logging
+
     import footstats.core.kalibracja_rozlicz as kr
 
     def wybucha(**kw):
@@ -332,9 +344,14 @@ def test_awaria_rozliczania_to_500_a_nie_cisza(srodowisko, monkeypatch):
 
     monkeypatch.setattr(kr, "rozlicz_dziennik", wybucha)
 
-    r = client.post("/api/cron/kalibracja-rozlicz", headers={"X-Cron-Secret": SEKRET})
+    with caplog.at_level(logging.ERROR):
+        r = client.post("/api/cron/kalibracja-rozlicz",
+                        headers={"X-Cron-Secret": SEKRET})
 
-    assert r.status_code == 500
+    assert r.status_code == 202
+    assert [x for x in caplog.records if x.levelno >= logging.ERROR], (
+        "awaria w tle bez ERROR-a bylaby cichym powodzeniem"
+    )
 
 
 # ── TRZECI WYMIAR: czy kupony w ogóle powstają (dodane 24.08 po awarii I7) ──

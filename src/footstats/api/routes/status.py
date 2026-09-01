@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import footstats.config as cfg
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 
 from footstats.api.auth import require_auth
 from footstats.core.draft_health import PROG_STALE_DNI, ocena_swiezosci
@@ -365,27 +365,54 @@ def _wyslij_raport(ok: bool, kupony: int, predykcje: int, rozliczone: int,
         return False
 
 
-@router.post("/cron/kalibracja-rozlicz")
-def cron_kalibracja_rozlicz(
-    x_cron_secret: str = Header(default=""),
-    dni_wstecz: int = 14,
-    dry_run: bool = False,
-) -> dict:
-    """Dopisuje wyniki do dziennika kalibracji (`model_log`).
+def _rozlicz_dziennik_w_tle(dni_wstecz: int, dry_run: bool) -> None:
+    """Wlasciwa praca dziennika kalibracji. Log jest JEDYNYM zrodlem wyniku.
 
-    Osobny trigger od rozliczania kuponow: kupony scigaja sie z czasem i maja
-    okno 2-3 dni, dziennik nadrabia zaleglosci szerszym oknem. Patrz
-    `core/kalibracja_rozlicz.py`.
+    Odpowiedz HTTP poszla juz do Schedulera, wiec wyjatek nie ma gdzie wyplynac —
+    dlatego lapiemy go tutaj i zostawiamy ERROR. Bez tego 202 zamienialby kazda
+    awarie w ciche powodzenie.
     """
-    _sprawdz_cron_secret(x_cron_secret)
     try:
         from footstats.core.kalibracja_rozlicz import rozlicz_dziennik
         raport = rozlicz_dziennik(dni_wstecz=dni_wstecz, dry_run=dry_run)
         _log.info("cron_kalibracja_rozlicz: %s", raport)
-        return {"ok": True, **raport}
     except (ValueError, KeyError, RuntimeError, OSError, psycopg2.Error) as e:
-        # Scheduler musi zobaczyc blad — HTTP 200 ukrylby awarie. `psycopg2.Error`
-        # w krotce, bo bez niej brak tabeli konczyl sie golym tracebackiem
-        # zamiast czytelnego komunikatu (2026-08-06).
+        # `psycopg2.Error` w krotce, bo bez niej brak tabeli konczyl sie golym
+        # tracebackiem zamiast czytelnego komunikatu (2026-08-06).
         _log.error("cron_kalibracja_rozlicz blad: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/cron/kalibracja-rozlicz", status_code=202)
+def cron_kalibracja_rozlicz(
+    background_tasks: BackgroundTasks,
+    x_cron_secret: str = Header(default=""),
+    dni_wstecz: int = 14,
+    dry_run: bool = False,
+) -> dict:
+    """Dopisuje wyniki do dziennika kalibracji (`model_log`). Praca leci W TLE.
+
+    Osobny trigger od rozliczania kuponow: kupony scigaja sie z czasem i maja
+    okno 2-3 dni, dziennik nadrabia zaleglosci szerszym oknem. Patrz
+    `core/kalibracja_rozlicz.py`.
+
+    DLACZEGO W TLE — zmierzone na produkcji 01.09:
+
+        05:00:44  Scheduler POST (attemptDeadline 300 s)
+        05:00:54  Timeout 10s ... — zwracam 504     (_TimeoutMiddleware)
+        05:31:19  cron_kalibracja_rozlicz: {'sprawdzone': 175, 'rozliczone': 34}
+
+    Praca dochodzila do konca (handler jest `def`, wiec leci w watku puli, a
+    `asyncio.wait_for` anuluje korutyne, nie watek), ale Scheduler zapisywal
+    `status.code: 4`. Zdrowy przebieg wygladal w monitoringu na zepsuty, a
+    prawdziwa awaria byla od niego NIEODROZNIALNA.
+
+    Dopisanie sciezki do `_LONG_RUNNING_PATHS` by nie wystarczylo: tamten limit
+    to 120 s, praca trwa ~30 minut, a `attemptDeadline` Schedulera ma maksimum
+    30 minut. Zaden uklad timeoutow nie utrzyma tu zadania synchronicznego.
+
+    202, nie 200: 200 z licznikami znaczyloby "policzone", a w tym momencie nic
+    jeszcze nie jest policzone.
+    """
+    _sprawdz_cron_secret(x_cron_secret)
+    background_tasks.add_task(_rozlicz_dziennik_w_tle, dni_wstecz, dry_run)
+    return {"started": True, "dni_wstecz": dni_wstecz, "dry_run": dry_run}
