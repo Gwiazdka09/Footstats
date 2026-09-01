@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import re
 
+from footstats.core.rynki import rynki_dla_promptu
+
 # Emoji i znaki ozdobne kosztuja 2-4 TOKENY przy jednym-dwoch znakach (zmierzone
 # tokenizerem: "⚔️" = 4 tokeny, "🏅" = 3, "⚠️" = 4), a nie niosa nic ponad sasiadujace
 # slowo. W opisach czynnikow siedza, bo te same napisy ida do konsoli i Telegrama —
@@ -36,7 +38,7 @@ SYSTEM_TYPER_BAZA = """Jesteś BEZWZGLĘDNYM ANALITYKIEM DANYCH BUKMACHERSKICH. 
 KRYTERIA DECYZJI:
 1. VALUE BETTING (PRIORYTET): Twoim celem jest znalezienie przewagi nad bukmacherem (Value), a nie tylko wskazanie faworyta.
    Jeśli kurs na czyste zwycięstwo (1 lub 2) jest niższy niż 1.60, zabraniam wystawiania tego typu.
-   W takim przypadku przeanalizuj alternatywy o wyższym kursie (1.65 - 2.20): Over 2.5 gola, BTTS (Obie strzelą), lub Handicap -1.5.
+   W takim przypadku przeanalizuj alternatywy o wyższym kursie (1.65 - 2.20): Over 2.5 gola lub BTTS (Obie strzelą).
 2. FORMA (60% wagi): Przeanalizuj ostatnie 5 meczów każdej drużyny. Zwycięstwa vs porażki. Gole dla/przeciw. Trend wzrostowy czy spadkowy?
 3. H2H (20% wagi): Historia bezpośrednich starć. Kto wygrywa, gole, pattern.
 PRZED WYSTAWIENIEM TYPU:
@@ -81,12 +83,6 @@ Single value bet:       10-15 PLN gdy EV_netto > 5% i brak czynnikow ostrzegawcz
 Eksperymentalny (>30):   2-3 PLN
 Zasada: nie zmieniaj stawki po wygranej ani po stracie. Emocje to najgorszy doradca.
 
-== RYNEK KARTEK (BetBuilder) ==
-- Sędzia KARTKOWY (avg > 4.3): silny sygnał na Over 3.5 / 4.5 żółtych kartek.
-- Sędzia NEUTRALNY: unikaj wysokich linii na kartki, chyba że mecz to HIGH_STAKES (CL/Derby).
-- BetBuilder: szukaj korelacji. Jeśli sędzia jest KARTKOWY a mecz jest wyrównany (1X2 ~ kursy 2.50)
-  -> rośnie szansa na frustrację i kartki. Idealne do AKO.
-
 == DOBOR TYPOW ==
 Over 2.5: mocny sygnal gdy lambda_g + lambda_a > 2.8 (Poisson). Sprawdz BTTS jako potwierdzenie.
 Over 1.5: kotwica gdy obie druzyny strzelajace, pewnosc >=95%. Bezpieczne "dokladanie" do AKO.
@@ -109,12 +105,6 @@ RAG: PATENT+TWIERDZA→1: 7/8=87% → mocny dowód
    Jezeli ta sama noga pada, tracisz podwojnie. To nie dywersyfikacja – to multiplikacja bledu.
 4. "Kupon 19 pewniaczkow": NIE BUDUJ. Kazda noga ponizej 1.20 to NIGDY. 19 nog to 19 szans na blad.
 
-== BET BUILDer (ZAKŁADY ŁĄCZONE) ==
-- Jeśli widzisz 'bb_z_kursem' PREFERUJ ten format — zawiera kurs_fair (1/p_Poisson) i % szansy. Wybierz typ z najwyższym kursem który masz powód popierać danymi.
-- Jeśli brak 'bb_z_kursem', korzystaj z 'bet_builder_sugestie'. Wolno Ci postawić DOKŁADNIE TEN sugerowany typ jako jedną nogę (np. "1 & Over 1.5").
-- BetBuilder noga zastępuje standardowy 1X2 — nie dodawaj jej NA DODATEK do 1/X/2 z tego samego meczu.
-- Kurs_fair to kurs bez marży bukmachera. Realny kurs BetBuilder w Superbet będzie o ~10% niższy.
-
 == POLITYKA "OVER 2.5" I KONTUZJI (PEŁNA ANALIZA) ==
 - SCEPTYCYZM WOBEC OVER 2.5: Wymagaj dowodow na SIŁĘ ATAKU OBU drużyn. Jeśli brakuje informacji lub jedna z drużyn ma słaby atak, ODRZUC Over 2.5. Słaba obrona to nie jest wystarczający powód na Over.
 - KONTUZJE ATAKU: Jeśli topowy strzelec (lub pomocnik ofensywny) nie gra z powodu zawieszenia lub kontuzji — ZAKAZ Over 2.5.
@@ -129,15 +119,23 @@ RAG: PATENT+TWIERDZA→1: 7/8=87% → mocny dowód
 # Dlaczego dopiero po podmianie modelu: `llama-3.1-8b-instant` słabo trzymała
 # się promptu systemowego i szła za promptem użytkownika. `gpt-oss-120b` trzyma
 # się systemowego, więc konflikt, który był tam od początku, stał się widoczny.
-SCHEMAT_POJEDYNCZY_TYP = """JSON SCHEMA (OBOWIĄZKOWY - Zwróć wyłącznie JSON):
-{
-  "typ": "1" | "2" | "X" | "1X" | "X2" | "Over 1.5" | "Over 2.5" | "Over 3.5" | "Under 2.5" | "Under 3.5" | "BTTS" | "No BTTS" | "Handicap -1" | "Handicap +1" | "1 & Over 1.5" | "1 & BTTS" | "BTTS & Over 2.5" | "Kartki Over 3.5" | "Rożne Over 9.5" | "Gosp. 0.5+" | "Gość 0.5+" | "1.Poł Over 0.5",
+# Enum typow GENEROWANY z `TYP_DO_ODDS_KEY`, nie przepisany. Do 01.09 wyliczal
+# 22 rynki, z ktorych wyceniamy 6 — byly tam m.in. "Handicap +1", "Kartki
+# Over 3.5" i "Rozne Over 9.5". Model brał je za dozwolone, a weryfikacja
+# kasowala noge jako halucynacje ("brak realnego kursu w Bzzoiro"). Zmierzone
+# 01.09: `Usunieto 4 halucynowanych nog` i pusty kupon mimo poprawnych typow.
+# BTTS NIE swiadomie poza lista, dopoki BTTS_TWO_WAY jest wylaczone.
+_TYPY_ENUM = " | ".join(f'"{_r}"' for _r in rynki_dla_promptu())
+
+SCHEMAT_POJEDYNCZY_TYP = f"""JSON SCHEMA (OBOWIĄZKOWY - Zwróć wyłącznie JSON):
+{{
+  "typ": {_TYPY_ENUM},
   "kurs": 1.80,
   "pewnosc_pct": 75,
   "risks_analysis": ["ryzyko 1", "ryzyko 2", "ryzyko 3"],
   "uzasadnienie": "Krótko: dlaczego ten typ mimo ryzyk?",
   "value_bet": true | false
-}
+}}
 """
 
 # Zgodność wstecz: domyślny prompt typera to baza + schemat pojedynczego typu,
@@ -225,7 +223,11 @@ def build_pewniaczki_prompt(
     # to decyzja o strategii zakladow, a te zmienia sie bez zmiany kodu.
     # Import lokalny, zeby podmiana zmiennej srodowiskowej dzialala po
     # przeladowaniu configu, bez przeladowywania tego modulu.
-    from footstats.config import KUPON_MIN_PEWNOSC_PCT
+    from footstats.config import BTTS_TWO_WAY, KUPON_MIN_PEWNOSC_PCT
+
+    # Lista z tego samego slownika, co bramka weryfikacji — przepisana
+    # rozjechalaby sie z nia przy pierwszej zmianie mapy.
+    _RYNKI = ", ".join(rynki_dla_promptu(BTTS_TWO_WAY))
 
     # Liczba zadanych kuponow jest POCHODNA liczby meczow. `Fill all four`
     # kazalo wypisywac cztery niezaleznie od tego, ilu mamy kandydatow —
@@ -267,13 +269,17 @@ TASK: reply with JSON ONLY (no text before/after). Keep the keys exactly as show
   "ostrzezenia": "2-3 zdania"
 }}
 kupon_b/c/d: same structure as kupon_a, different match and market - b: 1X2, c: Over/Under, d: BTTS. Fill {min(n_mecze, 4)} of them (one per match); omit the rest entirely.
-LANGUAGE: JSON keys and "typ" values stay exactly as above (ASCII). All free text - "uzasadnienie", "ryzyko", "ryzyko_ogolne", "ostrzezenia" - write in POLISH.
+LANGUAGE: JSON keys and "typ" values exactly as above (ASCII). All free text in POLISH.
 
 ABSOLUTE BANS:
 - One kupon (kupon_a..d) = EXACTLY 1 leg (single). No accumulators (AKO). Each kupon = a DIFFERENT match; fill as many as there are qualifying matches and leave the rest empty.
 - Leg odds < 1.20: NEVER. Every leg: pewnosc_pct >= {KUPON_MIN_PEWNOSC_PCT}%.
-- Relegation groups + Over 2.5: FORBIDDEN.
+- Markets: ONLY {_RYNKI}. Any other market is discarded before settlement.
 - BetBuilder (Over+BTTS from one match): FORBIDDEN."""
+# Zakaz "grupy spadkowe + Over 2.5" NIE stoi juz tutaj: ma wlasny punkt
+# w `SYSTEM_TYPER_BAZA` ("2. Grupy spadkowe i relegacyjne: Over 2.5 ZABRONIONE"),
+# ktory idzie przy KAZDYM wywolaniu. Druga kopia tej samej reguly to dokladnie
+# mechanizm, ktory 01.09 dal cztery rozjezdzajace sie wersje zasad o singlu.
 
 
 def build_kupon_prompt(stawka: float, picks_text: str, ml_kontekst: str) -> str:

@@ -24,6 +24,7 @@ from footstats.utils.normalize import (
 )
 from footstats.config import BTTS_TWO_WAY
 from footstats.core.checkpoint import save_predictions_batch, cleanup_old_checkpoints
+from footstats.core.rynki import TYP_DO_ODDS_KEY, TYPY_BTTS_NIE
 from footstats.daily_agent_output import (  # noqa: F401  re-export (ścieżki + patch-targety)
     LOGS_DIR,
     _blad,
@@ -261,28 +262,12 @@ def _analizuj_groq(
 
 # ── Krok 4: Weryfikacja halucynacji ──────────────────────────────────────────
 
-_TYP_DO_ODDS_KEY = {
-    "1":           "home",
-    "2":           "away",
-    "x":           "draw",
-    "over 2.5":    "over_2_5",
-    "over":        "over_2_5",
-    "o2.5":        "over_2_5",
-    "under 2.5":   "under_2_5",
-    "under":       "under_2_5",
-    "btts":        "btts",
-    "obie strzelą": "btts",
-    # Strona NIE — model potrafil ja wytypowac (`koryguj_tip_ou_btts`), ale bez
-    # wpisu w tej mapie noga byla kasowana i podpisywana jako halucynacja Groqa.
-    "btts no":     "btts_no",
-    "no btts":     "btts_no",
-    "btts nie":    "btts_no",
-    "nie btts":    "btts_no",
-    "ng":          "btts_no",
-}
-
-# Typy, ktore graja tylko przy wlaczonym BTTS_TWO_WAY (patrz config).
-_TYPY_BTTS_NIE = {"btts no", "no btts", "btts nie", "nie btts", "ng"}
+# Mapa i lista rynkow zyja w `core.rynki` — czyta je TAKZE `ai.prompts`, zeby
+# enum typow w promptcie nie mogl sie rozjechac z bramka weryfikacji. Do 01.09
+# schemat wyliczal 22 rynki (m.in. "Handicap +1", "Kartki Over 3.5"), z ktorych
+# wyceniamy 6 — noga na pozostalych byla kasowana jako halucynacja Groqa.
+_TYP_DO_ODDS_KEY = TYP_DO_ODDS_KEY
+_TYPY_BTTS_NIE = TYPY_BTTS_NIE
 
 
 def wykryj_anomalie_runu(n_kandydatow: int, n_po_filtrach: int, n_kuponow_system: int,
@@ -503,6 +488,11 @@ def _weryfikuj_kupony(dane: dict, indeks: dict) -> dict:
             kupon["kurs_laczny"] = round(kurs_l, 2)
         else:
             dane[kupon_key] = {}
+
+    # Strukturalny slad, nie tylko tekst w `ostrzezenia`: `_zgloś_brak_kuponu_do_zapisu`
+    # musi odroznic "LLM nie oddal kuponu" od "kupon byl, weryfikacja go oproznila".
+    # 01.09 oba stany dostawaly ten sam komunikat i wskazywaly na zla warstwe.
+    dane["_usuniete_nogi"] = list(usuniete)
 
     if usuniete:
         ostrzegawcze = dane.get("ostrzezenia", "") or ""
@@ -797,7 +787,17 @@ def _zgloś_brak_kuponu_do_zapisu(faza: str, dane: dict | None) -> None:
                                 i normalny przy pustym terminarzu.
     """
     typy = ((dane or {}).get("top3") or []) if isinstance(dane, dict) else []
-    if typy:
+    usuniete = ((dane or {}).get("_usuniete_nogi") or []) if isinstance(dane, dict) else []
+    if typy and usuniete:
+        # Trzeci stan, dodany 01.09. LLM oddal nogi, skasowala je NASZA bramka
+        # slownikowa (`TYP_DO_ODDS_KEY`). Naprawa jest po stronie promptu —
+        # ma nie podsuwac rynkow bez wyceny — a nie po stronie parsera.
+        log.warning(
+            "Faza %s: %d typow powstalo, ale kupon NIE zostal zapisany — "
+            "weryfikacja kursow skasowala WSZYSTKIE nogi kuponu (%d): %s. "
+            "To rynki spoza mapy wyceny, wiec wina jest po stronie promptu, "
+            "nie parsera.", faza, len(typy), len(usuniete), " | ".join(usuniete[:5]))
+    elif typy:
         log.warning(
             "Faza %s: %d typow powstalo i trafi do `predictions`, ale kupon NIE "
             "zostal zapisany — warstwa LLM nie oddala struktury kuponu "
