@@ -137,8 +137,26 @@ ZNACZNIKI_REZERW = {
 #
 # 0.80 to wynik, jaki `team_similarity` daje legalnemu skrótowi nazwy
 # ("Legia" ~ "Legia Warszawa") — niżej schodzić nie ma po co, a wyżej odcięłoby
-# właśnie te warianty. Wspólny dla wszystkich miejsc szukających fixture'a, żeby
-# nie rozjechał się po modułach tak, jak rozjechało się samo dopasowywanie.
+# właśnie te warianty.
+#
+# NIE JEST WSPÓLNY DLA WSZYSTKICH, wbrew temu, co pisało tu do 2026-09-03.
+# Ścieżka rozliczeń ma własne progi: `results_updater._znajdz_wynik` używa 0.70,
+# `evening_agent` 0.6. Komentarz twierdzący coś przeciwnego był gorszy niż jego
+# brak, bo zniechęcał do sprawdzenia.
+#
+# ZMIERZONE 03.09 na 32 zaległych kuponach — te rozjazdy nic nie zmieniają:
+#
+#     próg 0.60 -> 31/32      próg 0.80 -> 31/32
+#     próg 0.70 -> 31/32      próg 0.85 ->  4/32
+#
+# Powód: po aliasach trafienia mają 1.00, a nietrafienia ≤0.30, więc przedział
+# 0.60-0.80 jest pusty. Ochronę daje REGUŁA (`_tylko_rodzajowe`,
+# `_BAZY_WIELOZNACZNE`), nie wysokość progu — token-prefix zwraca dokładnie 0.80,
+# więc żaden próg ≤0.80 go nie odsiewa.
+#
+# Dlatego progi zostają jak są: ujednolicenie nie kupuje niczego mierzalnego,
+# a podniesienie do 0.80 na ścieżce rozliczeń grozi utratą przypadków spoza tej
+# próbki — czyli dokładnie tym, co naprawiamy.
 PROG_DOPASOWANIA_MECZU = 0.80
 
 
