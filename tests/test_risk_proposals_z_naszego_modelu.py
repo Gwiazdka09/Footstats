@@ -130,3 +130,57 @@ def test_awaria_propozycji_nie_zabija_paper_tradingu(monkeypatch):
 
     assert created == 3
     assert risk == 0
+
+
+# ── INTEGRACJA: caly przeplyw, zero atrap ───────────────────────────────────
+#
+# ZMIERZONE NA PRODUKCJI 02.09, pierwszy draft po podpieciu:
+#
+#     Propozycje ryzyka (risk_*) nie powstaly (KeyError: 'id')
+#     cron_draft: {'candidates': 48, 'created': 31, 'risk_created': 0}
+#
+# Adapter tlumaczyl `pred_ml`, ale `build_tips` czyta TAKZE `m["id"]`, `m["gosp"]`
+# i `m["gosc"]` — nazwy z API Bzzoiro, ktorych `quick_picks` nie ma (`gospodarz`,
+# `goscie`, brak id). Testy adaptera sprawdzaly KSZTALT jego wyjscia, a test
+# podpiecia zaslepial konsumenta — wiec zaden nie przepuscil danych przez
+# `build_daily_proposals`. Ten to robi.
+
+def test_caly_przeplyw_produkuje_propozycje():
+    from footstats.core.risk_proposals import build_daily_proposals
+
+    gotowe = na_ksztalt_pred_ml([_mecz(), _mecz(gospodarz="Liverpool", goscie="Everton")])
+    propozycje = build_daily_proposals(gotowe)
+
+    assert any(p["legs"] for p in propozycje.values()), (
+        f"zaden koszyk nie dostal nogi: { {k: len(v['legs']) for k, v in propozycje.items()} }"
+    )
+
+
+def test_przeplyw_nie_gubi_nazw_druzyn():
+    """`build_tips` czyta `gosp`/`gosc`, nie `gospodarz`/`goscie`."""
+    from footstats.core.risk_proposals import build_daily_proposals
+
+    propozycje = build_daily_proposals(na_ksztalt_pred_ml([_mecz()]))
+    nogi = [l for p in propozycje.values() for l in p["legs"]]
+
+    assert nogi, "brak nog"
+    assert nogi[0]["home"] == "Arsenal"
+    assert nogi[0]["away"] == "Chelsea"
+
+
+def test_kazdy_mecz_ma_wlasne_id():
+    """`match_id` trafia do nogi — dwa mecze nie moga dzielic identyfikatora."""
+    gotowe = na_ksztalt_pred_ml([
+        _mecz(),
+        _mecz(gospodarz="Liverpool", goscie="Everton"),
+    ])
+
+    assert gotowe[0]["id"] != gotowe[1]["id"]
+
+
+def test_id_jest_deterministyczne():
+    """Ten sam mecz tego samego dnia = ten sam id (idempotencja zapisu)."""
+    a = na_ksztalt_pred_ml([_mecz()])[0]["id"]
+    b = na_ksztalt_pred_ml([_mecz()])[0]["id"]
+
+    assert a == b

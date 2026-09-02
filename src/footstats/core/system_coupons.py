@@ -47,7 +47,21 @@ def na_ksztalt_pred_ml(wyniki: list[dict]) -> list[dict]:
             ml["prob_over_25"] = w["o25"]
         if isinstance(w.get("bt"), (int, float)) and w["bt"] > 0:
             ml["prob_btts_yes"] = w["bt"]
-        gotowe.append({**w, "pred_ml": ml})
+        # `build_tips` czyta TAKZE `m["id"]`, `m["gosp"]`, `m["gosc"]` — nazwy
+        # z API Bzzoiro, ktorych `quick_picks` nie ma. Pierwsze podejscie tlumaczylo
+        # samo `pred_ml` i produkcja odpowiedziala `KeyError: 'id'` (02.09, draft
+        # 05:31 UTC: candidates=48, created=31, risk_created=0).
+        # `id` skladamy z pary druzyn i daty: musi byc stabilne (idempotencja
+        # zapisu przy powtorzonym drafcie) i rozne dla roznych meczow.
+        gosp = w.get("gospodarz", "")
+        gosc = w.get("goscie", "")
+        gotowe.append({
+            **w,
+            "pred_ml": ml,
+            "id": f"{gosp}|{gosc}|{w.get('data', '')}",
+            "gosp": gosp,
+            "gosc": gosc,
+        })
     return gotowe
 
 
