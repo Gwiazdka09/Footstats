@@ -273,13 +273,36 @@ def bezpieczny_parse_prob(pred_ml: dict) -> tuple | None:
 # ── Budzet API-Football – z logowaniem ─────────────────────────────
 
 def bezpieczny_budget_use(endpoint: str,
-                          budget_daily: int = 100,
-                          block_threshold: int = 5,
-                          warn_threshold: int = 20) -> int:
+                          budget_daily: int | None = None,
+                          block_threshold: int | None = None,
+                          warn_threshold: int | None = None) -> int:
     """
     Wersja af_budget_use z pelnym logowaniem stanow budzetu.
     Rzuca BladBudzetu zamiast RuntimeError (latwiej lapac).
+
+    None = wez wartosc z `utils.cache`, ktory jest JEDYNYM zrodlem limitu.
+
+    Do 2026-09-03 staly tu literaly 100/5/20, a `api_football._get` wola te funkcje
+    z samym `endpoint`. Podniesienie `AF_BUDGET_DAILY` do 7500 (plan Pro) nie
+    zmienialo wiec NICZEGO na sciezce zapytan — log przeczyl sam sobie:
+
+        AF req uzyto: 3/7500 | pozostalo ~96
+
+    Skutek na produkcji bylby cichy: po ~95 zapytaniach `BladBudzetu` blokuje ruch,
+    a `_get` oddaje WYGASLE dane z cache. Bez bledu i bez alarmu, przy 7500
+    dostepnych. Import lokalny, zeby nie robic cyklu `cache` <-> `logging`.
     """
+    from footstats.utils.cache import (
+        AF_BLOCK_THRESHOLD, AF_BUDGET_DAILY, AF_WARN_THRESHOLD,
+    )
+
+    if budget_daily is None:
+        budget_daily = AF_BUDGET_DAILY
+    if block_threshold is None:
+        block_threshold = AF_BLOCK_THRESHOLD
+    if warn_threshold is None:
+        warn_threshold = AF_WARN_THRESHOLD
+
     cache_dir  = katalog_cache("api_football")
     budget_file = cache_dir / "af_budget.json"
 
@@ -421,10 +444,17 @@ def raport_diagnostyczny() -> dict:
         )
         budget = BezpiecznyCache.wczytaj_json(cache_dir / "af_budget.json")
         if budget:
+            # Trzecia kopia limitu — te same 100, ta sama pulapka. Raport nie
+            # blokuje ruchu, ale pokazuje liczbe, na podstawie ktorej czlowiek
+            # ocenia, czy budzet sie konczy; falszywe "zostalo 96" wyglada
+            # dokladnie jak prawdziwe.
+            from footstats.utils.cache import AF_BUDGET_DAILY as _limit_af
+
             raport["cache"]["budzet_af"] = {
                 "dzien":     budget.get("dzien"),
                 "uzyto":     budget.get("uzyto", 0),
-                "pozostalo": 100 - budget.get("uzyto", 0),
+                "limit":     _limit_af,
+                "pozostalo": _limit_af - budget.get("uzyto", 0),
             }
 
     # ── Biblioteki ─────────────────────────────────────────────────
