@@ -60,6 +60,44 @@ _ROZROZNIAJACE = {
     "wednesday",
 }
 
+# Bazy, dla których SAM SKRÓT nie mówi, o który klub chodzi.
+#
+# Reguła „różne człony = różne kluby" (niżej w `team_similarity`) rozstrzyga
+# przypadek, w którym OBIE strony mają człon i te człony sobie przeczą
+# (United vs City). Gdy jedna strona nie ma go wcale, to zwykle skrócona pisownia
+# tej samej drużyny — „Colchester" to Colchester United, bo innego Colchester nie ma.
+#
+# Ale nie zawsze. Zmierzone 2026-09-03 na 1063 nazwach z
+# `data/hist_cache/full_dataset.parquet`: SIEDEM baz nosi w danych więcej niż
+# jeden klub —
+#
+#   bristol    Bristol City  vs Bristol Rovers
+#   dundee     Dundee        vs Dundee United
+#   edinburgh  FC Edinburgh  vs Edinburgh City
+#   guangzhou  Guangzhou FC  vs Guangzhou City
+#   man        Man City      vs Man United
+#   oxford     Oxford        vs Oxford City
+#   sheffield  Sheffield United vs Sheffield Weds
+#
+# UWAGA NA PIERWSZY POMIAR: dał pięć, bez `bristol` i `sheffield`, bo grupował
+# tokeny po surowym `t in _ROZROZNIAJACE`, z pominięciem `_ROZ_SKROTY`. Dataset
+# zapisuje „Sheffield Weds", więc `weds` nie liczyło się jako człon tożsamości
+# i baza wychodziła „sheffield weds" zamiast „sheffield". Wniosek do kopiowania
+# przy każdym podobnym wyliczeniu: grupuj przez `_czlony_rozrozniajace`, nie
+# przez samą przynależność do zbioru — inaczej pomiar wygląda czysto i mierzy
+# co innego. Skutkiem byłoby dopasowanie „Sheffield" do Sheffield United.
+#
+# Dla tych baz zostaje fail-closed. Listę odtwarza z datasetu test
+# `test_lista_baz_dwuznacznych_zgadza_sie_z_danymi` — żeby przy kolejnej lidze
+# dopisać wpis, a nie dowiedzieć się o braku z kuponu rozliczonego cudzym wynikiem.
+#
+# Czego ta lista NIE obejmuje: klubów spoza datasetu. „Newcastle" jest tu
+# jednoznaczne, bo Newcastle Jets w danych nie występuje. Gdy wejdzie, test to
+# pokaże — ale dopiero wtedy.
+_BAZY_WIELOZNACZNE = {
+    "bristol", "dundee", "edinburgh", "guangzhou", "man", "oxford", "sheffield",
+}
+
 # Skróty tych samych członów — "Dundee Utd" to nadal Dundee United.
 # Bez tego reguła "różne człony = różne kluby" rozdzielałaby klub od jego
 # własnego skrótu.
@@ -345,7 +383,21 @@ def team_similarity(a: str, b: str) -> float:
     baza_a = {t for t in tokeny_a if _ROZ_SKROTY.get(t, t) not in _ROZROZNIAJACE}
     baza_b = {t for t in tokeny_b if _ROZ_SKROTY.get(t, t) not in _ROZROZNIAJACE}
     if roz_a != roz_b and baza_a == baza_b:
-        return 0.0
+        # BRAK członu to SKRÓT, nie sprzeczność. Do 2026-09-03 pusty zbiór był
+        # tu traktowany jak konkurencyjna wartość, więc "Colchester United" wobec
+        # "Colchester" dostawało 0.0 zamiast ~1.0. Zmierzony skutek: `_znajdz_wynik`
+        # (próg 0.70 na obu stronach) nie dopasował ANI JEDNEGO z 32 zaległych
+        # kuponów, mimo że wyniki były w API-Football — dopasowanie przewracała
+        # druga strona pary, np. sim(gospodarz)=1.00 przy sim(gość)=0.00.
+        #
+        # Sprzeczność wymaga DWÓCH członów, które sobie przeczą (United vs City).
+        # Wyjątek: bazy z `_BAZY_WIELOZNACZNE`, gdzie skrót naprawdę nie wskazuje
+        # klubu — tam zostaje fail-closed, bo lepiej nie rozliczyć i zauważyć,
+        # niż rozliczyć kupon wynikiem cudzego meczu.
+        if roz_a and roz_b:
+            return 0.0
+        if baza_a & _BAZY_WIELOZNACZNE:
+            return 0.0
 
     def _initials(s: str) -> str:
         """Inicjały — TYLKO dla nazw wielowyrazowych.

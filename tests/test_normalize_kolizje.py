@@ -30,6 +30,10 @@ PROG_ROZLICZEN = 0.6
 
 # ── nazwy nie moga sie zlewac ───────────────────────────────────────────────
 
+# Uwaga: rozna NORMALIZACJA to slabsze kryterium niz rozne podobienstwo.
+# "Bolton Wanderers" i "Bolton" dalej normalizuja sie roznie (czlon `wanderers`
+# zostaje) — zmienilo sie tylko to, jak `team_similarity` te roznice OCENIA.
+# Dlatego ta lista zostaje bez zmian.
 @pytest.mark.parametrize("a,b", [
     ("Manchester United", "Manchester City"),
     ("Dundee United", "Dundee FC"),
@@ -47,8 +51,15 @@ def test_rozne_kluby_maja_rozna_normalizacje(a, b):
 @pytest.mark.parametrize("a,b", [
     ("Manchester United", "Manchester City"),
     ("Dundee United", "Dundee FC"),
-    ("Bolton Wanderers", "Bolton"),
-    ("Cardiff City", "Cardiff"),
+    # "Bolton Wanderers"/"Bolton" i "Cardiff City"/"Cardiff" byly tu do 2026-09-03.
+    # To NIE sa rozne kluby, tylko pelna i skrocona nazwa tej samej druzyny —
+    # trafily tutaj, bo regula "rozne czlony = rozne kluby" traktowala BRAK czlonu
+    # jak konkurencyjna wartosc. Pilnuje ich teraz
+    # `test_kolizje_skrotow_klubow.test_krotka_forma_jednoznacznej_bazy_laczy_sie_z_pelna`,
+    # z odwrotnym oczekiwaniem. Pary faktycznie dwuznaczne (Manchester, Sheffield,
+    # Bristol, Dundee) zostaja tam w osobnym tescie fail-closed.
+    ("Sheffield United", "Sheffield Wednesday"),
+    ("Bristol City", "Bristol Rovers"),
 ])
 def test_rozne_kluby_ponizej_progu_rozliczen(a, b):
     """Ponizej 0.6 — warstwa rozliczen ich nie pomyli."""
