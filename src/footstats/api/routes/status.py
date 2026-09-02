@@ -241,6 +241,16 @@ def pipeline_health(
         alarm_wyslany = _wyslij_alarm(powody, wiek_h, nierozliczone)
         _log.error("pipeline-health NIEZDROWY: %s", "; ".join(powody))
 
+    # Stan bramki API-Football. CELOWO POZA `powody`: wyłączone źródło nie jest
+    # awarią potoku i nie ma zapalać Telegrama — 02.09, przy koncie zawieszonym
+    # od 01.08, powstało 31 kuponów.
+    #
+    # Jest tu, bo zamknięta bramka wygląda w logach IDENTYCZNIE jak źródło bez
+    # meczów na dziś: obie sytuacje to puste `[]`. Tego samego dnia dwa razy
+    # trzeba było zgadywać, czy API milczy, czy jest wyłączone — a odpowiedź
+    # („konto zawieszone") nie dała się odczytać z logów w ogóle.
+    from footstats.core.apisports_gate import stan as _stan_af
+
     return {
         "ok": ok,
         "wiek_predykcji_h": wiek_h,
@@ -248,6 +258,7 @@ def pipeline_health(
         # Liczba w odpowiedzi, nie tylko w alarmie — inaczej nie da się śledzić
         # trendu ani sprawdzić stanu bez czekania, aż coś się zepsuje.
         "wiek_kuponu_dni": wiek_kuponu_dni,
+        "apisports": _stan_af(),
         "powody": powody,
         "alarm_wyslany": alarm_wyslany,
     }
