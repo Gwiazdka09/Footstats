@@ -11,7 +11,6 @@ from footstats.utils.cache import (
 from footstats.utils.logging import bezpieczny_budget_use, BladBudzetu
 from footstats.utils.console import console
 from footstats.utils.helpers import _s
-from footstats.config import ENV_APISPORTS, _czytaj_wszystkie_klucze
 from footstats.utils.normalize import (
     PROG_DOPASOWANIA_MECZU,
     normalize_team_name,
@@ -46,26 +45,10 @@ _APISPORTS_LIGI = {
     179: {"kod": "SPO", "nazwa": "Scottish Premiership",   "kraj": "Scotland",    "druzyny": 12},
 }
 
-def _blad_konta(data) -> str | None:
-    """Komunikat bledu z tresci odpowiedzi api-sports, albo None gdy jej brak.
-
-    api-sports zglasza problemy Z KONTEM przy HTTP 200, w polu `errors`:
-      {"errors": {"access": "Your account is suspended..."}, "response": []}
-      {"errors": {"token": "Error/Missing application key"}}
-      {"errors": {"requests": "You have reached the request limit for the day"}}
-
-    Uwaga na typ: przy poprawnej odpowiedzi `errors` bywa PUSTA LISTA `[]`,
-    a nie pustym slownikiem — dlatego liczy sie prawdziwosciowosc, nie `is None`.
-    Odpowiedz nie bedaca slownikiem (proxy, strona bledu) tez jest bledem.
-    """
-    if not isinstance(data, dict):
-        return "odpowiedz nie jest obiektem JSON"
-    errors = data.get("errors")
-    if not errors:
-        return None
-    if isinstance(errors, dict):
-        return "; ".join(f"{k}: {v}" for k, v in errors.items())
-    return str(errors)
+# Jedna definicja, dwa uzycia (tu i w bramce). Wczesniej detekcja bledu konta
+# zyla wylacznie w tym pliku, wiec piec surowych `requests.get` w
+# `results_updater`/`evening_agent` nie rozpoznawalo zawieszenia w ogole.
+from footstats.core.apisports_gate import blad_konta as _blad_konta  # noqa: E402
 
 
 class APIFootball:
@@ -146,11 +129,20 @@ class APIFootball:
         """
         cache_key = f"af:{endpoint}:{params}"
 
-        # 1. Disk cache – zawsze proba
+        # 1. Disk cache – zawsze proba. PRZED bramka: cache to nasze wlasne dane,
+        # a nie ruch do dostawcy, wiec zamknieta bramka nie ma powodu go odcinac.
         if not force_network:
             cached = _af_cache_get(cache_key)
             if cached is not None:
                 return cached
+
+        # 1b. Bramka (`core.apisports_gate`) — jedyne miejsce decydujace, czy
+        # w ogole wolno ruszyc siec. Zatrzaskuje sie sama po blokadzie konta.
+        from footstats.core.apisports_gate import wlaczone as _af_wlaczone
+
+        if not _af_wlaczone():
+            log.info("API-Football wylaczony przez bramke — %s bez zapytania", endpoint)
+            return None
 
         # 2. Sprawdz budzet zanim wykonamy request
         bud = af_budget_status()
@@ -197,6 +189,12 @@ class APIFootball:
                 blad = _blad_konta(data)
                 if blad:
                     self._valid = False
+                    # Blokada konta zatrzaskuje bramke dla CALEGO procesu —
+                    # inaczej kazdy kolejny wolajacy powtarzalby ten sam
+                    # odrzucony request az do konca doby.
+                    from footstats.core.apisports_gate import zglos_odpowiedz
+
+                    zglos_odpowiedz(data)
                     console.print(
                         f"[bold red]API-Football odrzucil zapytanie (HTTP 200): {blad}[/bold red]\n"
                         "[dim]Sprawdz konto na dashboard.api-football.com — "
@@ -579,7 +577,9 @@ def fetch_odds_af(home: str, away: str, data: str) -> dict | None:
     APIFootball. Zwraca dict {home, draw, away, over_2_5, under_2_5, btts}
     (tylko realnie znalezione rynki) albo None gdy brak klucza/meczu/kursów.
     """
-    klucz = _czytaj_wszystkie_klucze().get(ENV_APISPORTS)
+    from footstats.core.apisports_gate import klucz as _klucz_af
+
+    klucz = _klucz_af()
     if not klucz:
         return None
 

@@ -541,10 +541,29 @@ class TestRunEveningAgentIntegration:
         new_status = call_args.args[1] if len(call_args.args) > 1 else "LOST"
         assert new_status == "LOST"
 
-    def test_run_evening_agent_no_api_key_returns_empty(self, monkeypatch):
-        """Missing APISPORTS_KEY → empty dict returned immediately."""
-        monkeypatch.setenv("APISPORTS_KEY", "")
-        with patch("footstats.evening_agent.load_dotenv"):
+    def test_run_evening_agent_bez_api_football_dalej_pracuje(self, monkeypatch):
+        """Brak API-Football NIE zatrzymuje wieczornego przebiegu.
+
+        Wcześniej `run_evening_agent` wychodziło natychmiast z `{}`, gdy zabrakło
+        `APISPORTS_KEY`. To był zbyt szeroki warunek: API-Football jest tu JEDNYM
+        ze źródeł wyników, a nie warunkiem działania. Razem z nim wypadały
+        auto-refit kalibracji i fallback kursu zamknięcia na football-data.co.uk,
+        które tego klucza w ogóle nie potrzebują.
+
+        Kontrakt po zmianie: przebieg idzie dalej, tyle że bez fixture'ów z AF
+        (`checked` policzone, nogi zostają PENDING).
+        """
+        monkeypatch.setattr("footstats.core.apisports_gate.klucz", lambda: None)
+        with (
+            patch("footstats.evening_agent.load_dotenv"),
+            patch("footstats.evening_agent.init_coupon_tables"),
+            patch("footstats.evening_agent.init_db"),
+            patch("footstats.evening_agent.get_active_coupons", return_value=[]),
+            patch("footstats.evening_agent._send_telegram_summary"),
+            patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
+        ):
             from footstats.evening_agent import run_evening_agent
             result = run_evening_agent("2026-06-05")
-        assert result == {}
+
+        assert result != {}, "brak jednego źródła nie może ubić całego przebiegu"
+        assert set(result) >= {"checked", "won", "lost", "active"}

@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 from datetime import datetime
 from footstats.utils.paths import katalog_cache
@@ -41,9 +42,22 @@ AF_CACHE_FILE = CACHE_DIR / "af_cache.json"      # dane API-Football
 AF_BUDGET_FILE= CACHE_DIR / "af_budget.json"      # licznik dzienny
 
 AF_CACHE_TTL_H   = 24    # Disk cache TTL dla API-Football (godziny)
-AF_BUDGET_DAILY  = 100   # maks. req/dzien API-Football
-AF_WARN_THRESHOLD= 20    # ostrzegaj gdy tyle req zostalo
-AF_BLOCK_THRESHOLD= 5    # blokuj automatyczne zapytania gdy tyle zostalo
+
+# Dzienny budzet API-Football. 100 to byl limit planu Free; od 2026-09-02 konto
+# jest na planie **Pro** — zmierzone przez `/status`:
+#   {"plan": "Pro", "active": true, "requests": {"limit_day": 7500}}
+#   naglowki: x-ratelimit-limit: 300 (na MINUTE), x-ratelimit-requests-limit: 7500
+# Stara wartosc 100 nie powodowalaby bledow, tylko CICHE dlawienie: `_get`
+# oddaje wtedy wygasle dane z cache zamiast pytac siec, wiec potok wygladalby
+# zdrowo jadac na wczorajszych danych. Czytane z env, zeby zmiana planu nie
+# wymagala redeployu kodu.
+AF_BUDGET_DAILY  = int(os.getenv("AF_BUDGET_DAILY", "7500"))
+
+# Progi wyprowadzone z budzetu, nie wpisane osobno — przy dwoch niezaleznych
+# liczbach zmiana planu poprawialaby jedna i zostawiala druga (20 pozostalych
+# z 7500 to nie jest "ostrzezenie", to zaokraglenie).
+AF_WARN_THRESHOLD  = max(20, AF_BUDGET_DAILY // 5)    # ostrzegaj gdy tyle req zostalo
+AF_BLOCK_THRESHOLD = max(5, AF_BUDGET_DAILY // 20)    # blokuj automaty gdy tyle zostalo
 
 # ── Rate guard (football-data.org, 10 req/min) ──────────────────────
 

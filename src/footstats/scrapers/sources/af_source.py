@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 
-from footstats.config import ENV_APISPORTS, _czytaj_wszystkie_klucze
 from footstats.scrapers.api_football import APIFootball
 from footstats.scrapers.sources.base import MatchData
 from footstats.utils.helpers import _s
@@ -26,7 +25,9 @@ class APIFootballSource:
 
     def __init__(self, klient: APIFootball | None = None) -> None:
         if klient is None:
-            klucz = _czytaj_wszystkie_klucze().get(ENV_APISPORTS)
+            from footstats.core.apisports_gate import klucz as _klucz_af
+
+            klucz = _klucz_af()
             klient = APIFootball(klucz or "")
         self._klient = klient
 

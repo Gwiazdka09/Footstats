@@ -64,12 +64,26 @@ def test_pusta_kolejka_milczy():
 # ── liczenie tego, co jeszcze w zasięgu ─────────────────────────────────────
 
 def test_horyzont_obejmuje_najdluzej_siegajace_zrodlo():
-    """FlashScore sięga ~7 dni — dopóki któreś źródło może odpowiedzieć,
-    brak rozliczenia jest podejrzany."""
-    assert HORYZONT_ZRODEL_DNI == 7
+    """Dopóki KTÓREKOLWIEK źródło może odpowiedzieć, brak rozliczenia jest podejrzany.
+
+    Było `== 7` (zasięg `flashscore.mobi`), ale wpisana na sztywno liczba mierzyła
+    stan źródeł, a nie regułę. Od 2026-09-02 (plan Pro + pliki CSV
+    football-data.co.uk z całymi sezonami) najdłuższe źródło sięga znacznie dalej.
+
+    Regułą jest: horyzont MUSI przekraczać `VOID_AFTER_DAYS`. Kupon dostaje 10 dni
+    na rozliczenie i przez te 10 dni ma mieć gdzie szukać wyniku — inaczej umiera
+    jako VOID nie dlatego, że nikt nie zna wyniku, tylko dlatego, że przestaliśmy
+    pytać. Dokładnie to trzymało 23 kupony z 25-31.08 nierozliczone.
+    """
+    from footstats.core.coupon_settlement import VOID_AFTER_DAYS
+
+    assert HORYZONT_ZRODEL_DNI > VOID_AFTER_DAYS
 
 
-@pytest.mark.parametrize("dni,oczekiwane", [(0, True), (1, True), (7, True), (8, False), (30, False)])
+@pytest.mark.parametrize("dni,oczekiwane", [
+    (0, True), (1, True), (7, True), (30, True),
+    (HORYZONT_ZRODEL_DNI + 1, False), (365, False),
+])
 def test_czy_data_jeszcze_osiagalna(dni, oczekiwane):
     from footstats.core.coupon_settlement import data_jeszcze_osiagalna
 
@@ -82,12 +96,16 @@ def test_data_nie_do_sparsowania_nie_liczy_sie_jako_osiagalna():
     assert data_jeszcze_osiagalna("nie-data") is False
 
 
-def test_kupony_z_1408_dzis_juz_poza_zasiegiem():
-    """Kotwica na realnym stanie produkcji z 23.08: te kupony są nie do odzyskania,
-    więc nie mają prawa generować alarmu."""
+def test_kupon_starszy_niz_horyzont_nie_alarmuje():
+    """Kupon, którego już żadne źródło nie pokrywa, nie ma prawa generować alarmu.
+
+    Wcześniej ten test brzmiał „kupony z 14.08 są 23.08 poza zasięgiem" i sprawdzał
+    offset 9 dni — kotwica na ówczesnym horyzoncie 7. Po jego rozsunięciu 9 dni
+    JEST w zasięgu i to jest poprawa, nie regresja, więc liczbę liczymy od stałej.
+    """
     from footstats.core.coupon_settlement import data_jeszcze_osiagalna
 
-    assert data_jeszcze_osiagalna(_dni_temu(9)) is False
+    assert data_jeszcze_osiagalna(_dni_temu(HORYZONT_ZRODEL_DNI + 1)) is False
 
 
 # ── alarm faktycznie wychodzi z endpointu ───────────────────────────────────
@@ -175,7 +193,8 @@ def test_dzisiejszy_mecz_nie_liczy_sie_jako_zalegly():
 
 
 @pytest.mark.parametrize("dni,oczekiwane", [
-    (1, True), (7, True), (8, False), (30, False),
+    (1, True), (7, True), (30, True),
+    (HORYZONT_ZRODEL_DNI + 1, False), (365, False),
 ])
 def test_zaleglosc_liczy_sie_od_wczoraj_do_horyzontu(dni: int, oczekiwane: bool):
     from footstats.core.coupon_settlement import czeka_zbyt_dlugo

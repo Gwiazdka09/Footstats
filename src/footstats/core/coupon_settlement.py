@@ -31,11 +31,22 @@ from footstats.utils.normalize import normalize_team_name, team_similarity
 # oznaczamy VOID, żeby nie blokowały na zawsze i nie liczyły się do accuracy/M1.
 VOID_AFTER_DAYS = 10
 
-# Najdluzej siegajace zrodlo wynikow. `flashscore.mobi` obsluguje ~7 dni wstecz
-# (`flashscore_results.py`), darmowy plan API-Football tylko `dzis +/-1 dzien`
-# (`results_updater.AF_HORYZONT_DNI`). Poza tym oknem wyniku nie zdobedzie zadna
-# sciezka — i to jest OK, nie awaria.
-HORYZONT_ZRODEL_DNI = 7
+# Najdluzej siegajace zrodlo wynikow.
+#
+# Bylo 7, bo tyle obsluguje `flashscore.mobi` (`flashscore_results.py`), a
+# darmowy API-Football siegal tylko `dzis +/-1 dzien`. Ta liczba byla wieksza niz
+# zakladalismy tylko dlatego, ze nikt jej nie przemierzyl po zmianie planu.
+#
+# 2026-09-02, plan Pro: API-Football oddaje mecze z DOWOLNEJ daty (zmierzone do
+# 2020-08-01), a football-data.co.uk trzyma cale sezony w plikach CSV. Prog 7
+# byl wtedy JEDYNYM powodem, dla ktorego kupon z 25.08 nie mial szans na wynik
+# — mimo ze `VOID_AFTER_DAYS` daje mu 10 dni zycia. Dwie stale opisujace ten sam
+# czas rozjechaly sie o 3 dni i przez te 3 dni kupony umieraly jako VOID zamiast
+# sie rozliczyc.
+#
+# 30 dni: z zapasem ponad `VOID_AFTER_DAYS`, wiec to VOID decyduje o zamknieciu
+# kuponu, a nie cichy brak zrodla.
+HORYZONT_ZRODEL_DNI = 30
 
 
 def data_jeszcze_osiagalna(mdate: str, dzis: date | None = None) -> bool:

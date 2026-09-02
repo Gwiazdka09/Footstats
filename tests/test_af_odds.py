@@ -184,17 +184,24 @@ class TestZnajdzFixtureId:
 
 class TestFetchOddsAf:
     def test_brak_klucza_apisports_zwraca_none(self, monkeypatch):
-        monkeypatch.setattr(
-            "footstats.scrapers.api_football._czytaj_wszystkie_klucze",
-            lambda: {"APISPORTS_KEY": None},
-        )
+        # Seam przesunął się do `core.apisports_gate`. `fetch_odds_af` importuje
+        # `klucz` LOKALNIE, wewnątrz funkcji, więc patchujemy ŹRÓDŁO, nie miejsce
+        # użycia — patch na `api_football._czytaj_wszystkie_klucze` przechodził
+        # obok i test szedł realnie do sieci (guard conftestu to złapał).
+        monkeypatch.setattr("footstats.core.apisports_gate.klucz", lambda: None)
+        assert fetch_odds_af("Real Madrid", "Barcelona", "2026-06-21") is None
+
+    def test_zamknieta_bramka_zwraca_none(self, monkeypatch):
+        """Wyłącznik musi działać także tutaj — klucz jest, ale ruchu nie ma."""
+        monkeypatch.setenv("APISPORTS_KEY", "dummy_key")
+        monkeypatch.setenv("APISPORTS_ENABLED", "0")
         assert fetch_odds_af("Real Madrid", "Barcelona", "2026-06-21") is None
 
     def test_pelny_przeplyw_zwraca_kursy(self, monkeypatch):
-        monkeypatch.setattr(
-            "footstats.scrapers.api_football._czytaj_wszystkie_klucze",
-            lambda: {"APISPORTS_KEY": "dummy_key"},
-        )
+        # Seam to teraz bramka, nie `_czytaj_wszystkie_klucze` w `api_football`
+        # (ten import zniknal razem z podpieciem `core.apisports_gate`).
+        monkeypatch.setenv("APISPORTS_KEY", "dummy_key")
+        monkeypatch.delenv("APISPORTS_ENABLED", raising=False)
         with patch.object(APIFootball, "znajdz_fixture_id", return_value=555), \
              patch.object(APIFootball, "kursy_fixture", return_value={"home": 1.5, "draw": 3.5, "away": 4.5}):
             wynik = fetch_odds_af("Real Madrid", "Barcelona", "2026-06-21")
@@ -202,18 +209,18 @@ class TestFetchOddsAf:
         assert wynik == {"home": 1.5, "draw": 3.5, "away": 4.5}
 
     def test_brak_fixture_id_zwraca_none(self, monkeypatch):
-        monkeypatch.setattr(
-            "footstats.scrapers.api_football._czytaj_wszystkie_klucze",
-            lambda: {"APISPORTS_KEY": "dummy_key"},
-        )
+        # Seam to teraz bramka, nie `_czytaj_wszystkie_klucze` w `api_football`
+        # (ten import zniknal razem z podpieciem `core.apisports_gate`).
+        monkeypatch.setenv("APISPORTS_KEY", "dummy_key")
+        monkeypatch.delenv("APISPORTS_ENABLED", raising=False)
         with patch.object(APIFootball, "znajdz_fixture_id", return_value=None):
             assert fetch_odds_af("Real Madrid", "Barcelona", "2026-06-21") is None
 
     def test_puste_kursy_zwraca_none(self, monkeypatch):
-        monkeypatch.setattr(
-            "footstats.scrapers.api_football._czytaj_wszystkie_klucze",
-            lambda: {"APISPORTS_KEY": "dummy_key"},
-        )
+        # Seam to teraz bramka, nie `_czytaj_wszystkie_klucze` w `api_football`
+        # (ten import zniknal razem z podpieciem `core.apisports_gate`).
+        monkeypatch.setenv("APISPORTS_KEY", "dummy_key")
+        monkeypatch.delenv("APISPORTS_ENABLED", raising=False)
         with patch.object(APIFootball, "znajdz_fixture_id", return_value=555), \
              patch.object(APIFootball, "kursy_fixture", return_value={}):
             assert fetch_odds_af("Real Madrid", "Barcelona", "2026-06-21") is None

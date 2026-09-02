@@ -945,8 +945,11 @@ def _enrichuj_finalna_faza(wyniki: list, api_key: str) -> None:
     """
     _wzbogac_team_news(wyniki)
 
-    if not api_key:
-        console.print("[dim]APISPORTS_KEY niedostępny — pomijam enrichment składów/sędziego[/dim]")
+    from footstats.core.apisports_gate import wlaczone as _af_wlaczone
+
+    if not api_key or not _af_wlaczone():
+        console.print("[dim]API-Football niedostępny (bramka zamknięta lub brak klucza) —"
+                      " pomijam enrichment składów/sędziego[/dim]")
         return
 
     # Faza 1: opcjonalny auto-refresh bazy graczy (goal_share). Domyślnie OFF —

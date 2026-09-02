@@ -8,7 +8,6 @@ Użycie:
     python -m footstats.evening_agent --date 2026-04-09
 """
 
-import os
 import sys
 import argparse
 from datetime import datetime
@@ -163,11 +162,16 @@ def _fetch_results_today(api_key: str, date_str: str, retries: int = 3) -> list[
                       f"(prog {AF_HORYZONT_DNI} dni) — pomijam zapytanie.[/dim]")
         return []
 
+    from footstats.scrapers.results_updater import _naglowek_af
+    naglowki = _naglowek_af(api_key)
+    if naglowki is None:
+        return []
+
     for attempt in range(1, retries + 1):
         try:
             r = requests.get(
                 f"{API_BASE}/fixtures",
-                headers={"x-apisports-key": api_key},
+                headers=naglowki,
                 params={"date": date_str, "status": "FT"},
                 timeout=15,
             )
@@ -200,10 +204,16 @@ def _fetch_closing_odds(api_key: str, fixture_id: int) -> float | None:
     Pobiera kurs 1X2 'Home Win' z API-Football /odds dla danego fixture.
     Zwraca closing odds bukmachera (Bet365 id=1 lub pierwszy dostępny), lub None.
     """
+    from footstats.scrapers.results_updater import _naglowek_af
+    naglowki = _naglowek_af(api_key)
+    if naglowki is None:
+        # Kurs zamknięcia i tak ma darmowy fallback (football-data.co.uk, kolumny
+        # closing Pinnacle) — patrz wołający. Zamknięta bramka nie gubi CLV.
+        return None
     try:
         r = requests.get(
             f"{API_BASE}/odds",
-            headers={"x-apisports-key": api_key},
+            headers=naglowki,
             params={"fixture": fixture_id, "bet": 1},  # bet=1 → Match Winner
             timeout=10,
         )
@@ -254,10 +264,22 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     Uruchamiany o 23:00 przez Task Scheduler — automatyczne rozliczanie kuponu.
     """
     load_dotenv()
-    api_key = os.getenv("APISPORTS_KEY", "").strip()
+    # Klucz przez bramkę (`core.apisports_gate`) — domyślnie ZAMKNIĘTĄ, bo konto
+    # api-sports jest zawieszone (2026-09-02).
+    #
+    # Wcześniej brak klucza ZATRZYMYWAŁ cały wieczorny przebieg. To było zbyt
+    # ostre: API-Football jest tu jednym ze źródeł wyników, a nie warunkiem
+    # działania — kupony rozlicza `settle_active_coupons` (pięć źródeł), kurs
+    # zamknięcia ma fallback na football-data.co.uk, a auto-refit kalibracji
+    # nie dotyka tego API w ogóle. Zatrzymanie na starcie kasowało te trzy
+    # rzeczy razem z tą jedną, której brakowało.
+    from footstats.core.apisports_gate import klucz as _klucz_af
+
+    api_key = _klucz_af() or ""
     if not api_key:
-        console.print("[red]Brak APISPORTS_KEY w .env — evening agent zatrzymany[/red]")
-        return {}
+        console.print("[yellow]API-Football niedostępny (bramka zamknięta lub brak "
+                      "klucza) — jadę bez niego: rozliczenie z pozostałych źródeł, "
+                      "kurs zamknięcia z football-data.co.uk[/yellow]")
 
     date_str = date_str or datetime.now().strftime("%Y-%m-%d")
     from datetime import datetime as dt

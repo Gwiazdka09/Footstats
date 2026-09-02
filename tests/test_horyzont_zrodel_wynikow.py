@@ -27,6 +27,14 @@ to był równoległy cron w tym samym oknie czasowym.)
 Te testy pilnują progu po stronie API-Football — tej samej dyscypliny, którą
 FlashScore miał od początku — w OBU miejscach. Próg jest env-strojony
 (`AF_HORYZONT_DNI`), bo płatny plan nie ma tego ograniczenia.
+
+AKTUALIZACJA 2026-09-02: konto przeszło na plan **Pro** i okno dat zniknęło
+całkowicie (zmierzone: `/fixtures?date=` oddaje mecze nawet z 2020-08-01), więc
+domyślny próg to teraz 30 dni, nie 1. Testy poniżej USTAWIAJĄ próg jawnie zamiast
+polegać na domyślnej wartości — pilnują MECHANIZMU (próg jest respektowany,
+zapytanie nie wychodzi), a nie konkretnej liczby, która zmienia się razem z planem.
+Wcześniej mierzyły jedno i drugie naraz, więc zmiana planu wywalała je na czerwono
+bez żadnej realnej regresji.
 """
 from __future__ import annotations
 
@@ -39,6 +47,15 @@ import footstats.scrapers.results_updater as ru
 
 def _dzien(offset: int) -> str:
     return (date.today() + timedelta(days=offset)).isoformat()
+
+
+@pytest.fixture(autouse=True)
+def prog_jak_na_darmowym_planie(monkeypatch):
+    """Próg 1 dnia — wartość, dla której te scenariusze były pisane.
+
+    Ustawiany jawnie, żeby test nie zmieniał znaczenia przy zmianie planu.
+    """
+    monkeypatch.setattr(ru, "AF_HORYZONT_DNI", 1)
 
 
 @pytest.fixture
@@ -76,6 +93,22 @@ def test_prog_da_sie_rozsunac_bez_zmiany_kodu(monkeypatch):
     """Płatny plan nie ma tego ograniczenia — próg musi być strojony env-em."""
     monkeypatch.setattr(ru, "AF_HORYZONT_DNI", 3650)
     assert ru.data_w_zasiegu_af(_dzien(-8)) is True
+
+
+def test_domyslny_prog_obejmuje_okno_zycia_kuponu():
+    """Domyślna wartość musi sięgać dalej niż `VOID_AFTER_DAYS`.
+
+    Inaczej wraca dokładnie ta pułapka, która trzymała 23 kupony nierozliczone:
+    kupon ma 10 dni na rozliczenie, a źródła przestawały odpowiadać wcześniej,
+    więc umierał jako VOID zamiast dostać wynik. Czytamy stałą z modułu (nie
+    fixture), bo pytanie brzmi o DOMYŚLNĄ wartość.
+    """
+    import importlib
+
+    from footstats.core.coupon_settlement import VOID_AFTER_DAYS
+
+    swiezy = importlib.reload(ru)
+    assert swiezy.AF_HORYZONT_DNI > VOID_AFTER_DAYS
 
 
 # ── zapytania faktycznie nie wychodzą ───────────────────────────────────────
@@ -235,3 +268,33 @@ def test_kazde_zapytanie_o_fixtures_po_dacie_ma_prog():
         "Kazde wejscie musi wolac `data_w_zasiegu_af` — inaczej placimy "
         "requestem za pytanie, na ktore darmowy plan nie odpowie."
     )
+
+# ── bramka: klucz wstrzyknięty parametrem też nie przechodzi ────────────────
+
+def test_zamknieta_bramka_blokuje_klucz_podany_parametrem(bez_sieci, monkeypatch):
+    """`_naglowek_af` to DRUGA linia obrony i musi mieć własny test.
+
+    `_get_api_key()` przechodzi przez bramkę, ale klucz bywa tu wstrzykiwany
+    parametrem — z `coupon_settlement`, `evening_agent` i z testów. Gdyby
+    `_naglowek_af` sprawdzało tylko obecność klucza, wyłącznik miałby dziurę
+    dokładnie tam, gdzie chodzi o niego najbardziej: przy koncie zawieszonym
+    przez dostawcę.
+
+    Mutacja `if not api_key or not wlaczone()` -> `if not api_key` PRZEŻYŁA całą
+    resztę suity — stąd ten test.
+    """
+    monkeypatch.setenv("APISPORTS_ENABLED", "0")
+    assert ru._fetch_fixtures_by_date("klucz-wstrzykniety", _dzien(0)) == []
+    assert bez_sieci == [], "zamknieta bramka nie zatrzymala zapytania"
+
+
+def test_zatrzasnieta_bramka_blokuje_mimo_wlaczonego_env(bez_sieci, monkeypatch):
+    """Po blokadzie konta env już nie pomaga — zatrzask jest silniejszy."""
+    from footstats.core import apisports_gate
+
+    monkeypatch.delenv("APISPORTS_ENABLED", raising=False)
+    apisports_gate.zglos_odpowiedz(
+        {"errors": {"access": "Your account is suspended, check on dashboard."}}
+    )
+    assert ru._fetch_fixtures("klucz-wstrzykniety", 106, _dzien(0)) == []
+    assert bez_sieci == []

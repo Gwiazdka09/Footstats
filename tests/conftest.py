@@ -214,6 +214,24 @@ def _block_network(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def reset_bramki_apisports():
+    """Zeruje zatrzask `core.apisports_gate` przed każdym testem.
+
+    Zatrzask jest globalny NA PROCES i celowo nie ma resetu w locie — produkcyjny
+    job startuje czysty, a po blokadzie konta ma milczeć do końca przebiegu.
+    pytest to jednak JEDEN proces grający tysiące takich przebiegów: bez tego
+    resetu pierwszy test podający odpowiedź „account suspended" zamykał bramkę
+    dla całej reszty suity. Objaw był mylący — 81 testów czerwonych w suicie,
+    wszystkie zielone uruchamiane osobno.
+    """
+    from footstats.core import apisports_gate
+
+    apisports_gate._ZAWIESZONE = False
+    yield
+    apisports_gate._ZAWIESZONE = False
+
+
+@pytest.fixture(autouse=True)
 def reset_rate_limiter():
     """Reset slowapi in-memory limiter before each test to prevent cross-test contamination."""
     try:

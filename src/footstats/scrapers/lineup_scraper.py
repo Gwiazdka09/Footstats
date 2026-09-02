@@ -5,12 +5,22 @@ _BASE = "https://v3.football.api-sports.io"
 
 
 def get_lineup(fixture_id: int, api_key: str) -> dict | None:
-    """Pobiera sklady z API-Football /fixtures/lineups."""
+    """Pobiera sklady z API-Football /fixtures/lineups.
+
+    None gdy bramka `core.apisports_gate` zamknieta — wolajacy traktuje to tak
+    samo jak brak skladu w zrodle (kara 0 do decision_score, patrz
+    `lineup_confidence_penalty`).
+    """
+    from footstats.scrapers.results_updater import _naglowek_af
+
+    naglowki = _naglowek_af(api_key)
+    if naglowki is None:
+        return None
     try:
         resp = requests.get(
             f"{_BASE}/fixtures/lineups",
             params={"fixture": fixture_id},
-            headers={"x-apisports-key": api_key},
+            headers=naglowki,
             timeout=15,
         )
         resp.raise_for_status()

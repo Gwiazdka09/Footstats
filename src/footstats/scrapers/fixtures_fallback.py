@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
-from footstats.config import ENV_APISPORTS, _czytaj_wszystkie_klucze
+from footstats.config import ENV_APISPORTS
 from footstats.scrapers.api_football import APIFootball
 from footstats.utils.helpers import _s
 
@@ -48,9 +48,9 @@ class FixturesFallbackClient:
         dni: int = 2,
     ) -> None:
         if klient_af is None:
-            klucz = klucz_af if klucz_af is not None else (
-                _czytaj_wszystkie_klucze().get(ENV_APISPORTS) or ""
-            )
+            from footstats.core.apisports_gate import klucz as _klucz_af
+
+            klucz = klucz_af if klucz_af is not None else (_klucz_af() or "")
             klient_af = APIFootball(klucz) if klucz else None
         self._klient = klient_af
         self._dni = max(1, dni)

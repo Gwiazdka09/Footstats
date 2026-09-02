@@ -630,7 +630,9 @@ def _pobierz_apifootball_ekstraklasa(dni: int = 3) -> list[dict]:
     """Dociąga kandydatów z Ekstraklasy przez API-Football (jeśli klucz dostępny)."""
     from dotenv import load_dotenv
     load_dotenv()
-    klucz = os.getenv("APISPORTS_KEY", "").strip()
+    from footstats.core.apisports_gate import klucz as _klucz_af
+
+    klucz = _klucz_af()
     if not klucz:
         return []
     try:
@@ -1082,7 +1084,9 @@ def main():
     # -- Faza draft/final: enrichment składów/sędziego (Decision Score → po Groq) ──
     if args.faza:
         _sep(f"FAZA {args.faza.upper()} — Składy + Sędzia (API-Football)")
-        _enrichuj_finalna_faza(wyniki, os.getenv("APISPORTS_KEY", ""))
+        from footstats.core.apisports_gate import klucz as _klucz_af
+
+        _enrichuj_finalna_faza(wyniki, _klucz_af() or "")
         console.print(f"[cyan]{args.faza.capitalize()}: {len(wyniki)} kandydatów po wzbogaceniu o składy/sędziego[/cyan]")
 
         # 11.5: Korekta BTTS/Over2.5 per sędzia (po enrichmencie)

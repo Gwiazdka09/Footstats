@@ -78,7 +78,30 @@ _ALIASY: dict[str, str] = {
 
 
 def _get_api_key() -> str | None:
-    return (os.getenv(API_KEY_ENV) or "").strip() or None
+    """Klucz API-Football przez bramkę — patrz `core.apisports_gate`.
+
+    Bramka jest domyślnie ZAMKNIĘTA (konto zawieszone 2026-09-02), więc zwraca
+    tu None i cała ta ścieżka degraduje do FlashScore / football-data, tak samo
+    jak przy braku klucza. To nie jest awaria — patrz komunikaty niżej.
+    """
+    from footstats.core.apisports_gate import klucz
+
+    return klucz()
+
+
+def _naglowek_af(api_key: str | None) -> dict[str, str] | None:
+    """Nagłówek autoryzacji AF albo None, gdy nie wolno wysłać zapytania.
+
+    Drugie zabezpieczenie obok `_get_api_key`. Klucz bywa tu wstrzykiwany przez
+    parametr (testy, `coupon_settlement`, `evening_agent`), więc sama bramka na
+    odczycie klucza nie zamyka wszystkich dróg — a przy zawieszonym koncie każde
+    wysłane zapytanie zbliża nas do blokady trwałej.
+    """
+    from footstats.core.apisports_gate import wlaczone
+
+    if not api_key or not wlaczone():
+        return None
+    return {"x-apisports-key": api_key}
 
 
 _norm = _norm_ascii
@@ -124,18 +147,28 @@ def _liga_ids_dla_nazwy(league_str: str) -> list[int]:
     return []
 
 
-# Ile dni wstecz/wprzod API-Football w ogole odpowiada. Darmowy plan wpuszcza
-# wylacznie okno `dzis +/-1 dzien` i na wszystko poza nim zwraca odmowe:
-#   "Free plans do not have access to this date, try from 2026-08-22 to 2026-08-24"
-# Zapytanie o starsza date to WYDANY request bez szans na odpowiedz. Zmierzone
-# 23.08 na przebiegu rozliczenia o 06:00: 21 kuponow z 14-15.08 czekalo na wyniki,
-# a odpytywanie ich zjadlo 42 ze 100 dziennych zapytan — tego samego limitu
-# potrzebuje potok dzienny na sklady i sedziego.
+# Ile dni wstecz/wprzod pytamy API-Football.
 #
-# `flashscore.mobi` ma wlasny prog (~7 dni) i pilnuje go od poczatku; tu chodzi
-# o te sama dyscypline po stronie API-Football. Platny plan nie ma ograniczenia
-# — wtedy wystarczy rozsunac `AF_HORYZONT_DNI`.
-AF_HORYZONT_DNI = int(os.getenv("AF_HORYZONT_DNI", "1"))
+# HISTORIA TEJ STALEJ. Darmowy plan wpuszczal wylacznie okno `dzis +/-1 dzien`
+# i na wszystko poza nim zwracal odmowe:
+#   "Free plans do not have access to this date, try from 2026-08-22 to 2026-08-24"
+# Zapytanie o starsza date bylo WYDANYM requestem bez szans na odpowiedz —
+# zmierzone 23.08 na rozliczeniu o 06:00: 21 kuponow z 14-15.08 zjadlo 42 ze 100
+# dziennych zapytan. Stad prog 1.
+#
+# 2026-09-02: konto przeszlo na plan **Pro**. Okno dat zniknelo CALKOWICIE —
+# zmierzone bezposrednio, `/fixtures?date=`:
+#   2026-08-29 -> 1369 meczow    2026-03-01 -> 1096 meczow
+#   2026-08-15 -> 1222 meczow    2025-05-01 ->  253 meczow
+#   2026-07-01 ->  196 meczow    2020-08-01 ->  424 meczow   (errors: [] wszedzie)
+#
+# Budzet tez przestal byc waskim gardlem: 7500 req/dzien zamiast 100.
+#
+# Dlaczego 30, a nie „bez limitu": `coupon_settlement.VOID_AFTER_DAYS` i tak
+# zamyka kupony po 10 dniach, a `HORYZONT_ZRODEL_DNI` konczy szukanie po 30.
+# Prog ma odcinac zapytania BEZ SENSU, a nie te bez odpowiedzi — po Pro te dwa
+# zbiory przestaly byc tym samym.
+AF_HORYZONT_DNI = int(os.getenv("AF_HORYZONT_DNI", "30"))
 
 
 def data_w_zasiegu_af(date_str: str, dzis: date | None = None) -> bool:
@@ -159,10 +192,13 @@ def _fetch_fixtures(api_key: str, league_id: int, date_str: str) -> list[dict]:
         log.info("Data %s poza zasiegiem API-Football (prog %d dni) —"
                  " nie wydaje zapytania (liga=%s).", date_str, AF_HORYZONT_DNI, league_id)
         return []
+    naglowki = _naglowek_af(api_key)
+    if naglowki is None:
+        return []
     try:
         r = requests.get(
             f"{API_BASE}/fixtures",
-            headers={"x-apisports-key": api_key},
+            headers=naglowki,
             params={"league": league_id, "date": date_str},
             timeout=15,
         )
@@ -184,10 +220,13 @@ def _fetch_fixtures_by_date(api_key: str, date_str: str) -> list[dict]:
         log.info("Data %s poza zasiegiem API-Football (prog %d dni) —"
                  " nie wydaje zapytania.", date_str, AF_HORYZONT_DNI)
         return []
+    naglowki = _naglowek_af(api_key)
+    if naglowki is None:
+        return []
     try:
         r = requests.get(
             f"{API_BASE}/fixtures",
-            headers={"x-apisports-key": api_key},
+            headers=naglowki,
             params={"date": date_str},
             timeout=15,
         )
@@ -235,10 +274,13 @@ def _fixture_to_result(fixture: dict, api_key: str = None) -> tuple[str, str, st
 def _fetch_match_stats(api_key: str, fixture_id: int) -> dict:
     """Pobiera statystyki (strzały, rożne, kartki, possession) + timeline zdarzeń dla meczu."""
     res: dict = {}
+    naglowki = _naglowek_af(api_key)
+    if naglowki is None:
+        return res
     try:
         r = requests.get(
             f"{API_BASE}/fixtures/statistics",
-            headers={"x-apisports-key": api_key},
+            headers=naglowki,
             params={"fixture": fixture_id},
             timeout=15,
         )
@@ -258,10 +300,13 @@ def _fetch_match_stats(api_key: str, fixture_id: int) -> dict:
 
 def _fetch_match_events(api_key: str, fixture_id: int) -> list[dict]:
     """Pobiera oś czasu zdarzeń (gole, kartki, zmiany) z minutami dla meczu."""
+    naglowki = _naglowek_af(api_key)
+    if naglowki is None:
+        return []
     try:
         r = requests.get(
             f"{API_BASE}/fixtures/events",
-            headers={"x-apisports-key": api_key},
+            headers=naglowki,
             params={"fixture": fixture_id},
             timeout=15,
         )
@@ -591,10 +636,14 @@ def update_active_coupons(
         if req_count >= 80:
             date_cache[date_str] = []
             return []
+        naglowki = _naglowek_af(api_key)
+        if naglowki is None:
+            date_cache[date_str] = []
+            return []
         try:
             r = requests.get(
                 f"{API_BASE}/fixtures",
-                headers={"x-apisports-key": api_key},
+                headers=naglowki,
                 params={"date": date_str},
                 timeout=15,
             )
