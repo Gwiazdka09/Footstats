@@ -192,6 +192,32 @@ def _remove_prefixes_suffixes(tokens: list[str]) -> list[str]:
 
 
 _DEFAULT_MAPPINGS: dict[str, str] = {
+    # ── Aliasy wyprowadzone z kuponów, ktore sie NIE rozliczyly (2026-09-03) ──
+    #
+    # Kierunek jest istotny: mapujemy SKROT NA NAZWE IDENTYFIKUJACA, nie odwrotnie.
+    # "wolves" -> "wolverhampton" usuwa kolizje z "Chattanooga Red Wolves" (0.80,
+    # oba kluby graly 29.08 i wpadaja do jednej puli `_fetch_fixtures_by_date`).
+    # Mapowanie w druga strone by ja STWORZYLO.
+    "wolves":              "wolverhampton",
+    "wolverhampton wanderers": "wolverhampton",
+    # TPS i Inter Turku sa z tego samego miasta, graja w Veikkausliidze i oba
+    # mialy mecz 31.08. Bez tego aliasu "Turku PS" vs "Inter Turku" = 0.80, czyli
+    # POWYZEJ progu 0.70 — kupon na TPS mogl dostac wynik Interu.
+    "turku ps":            "turun palloseura",
+    "tps turku":           "turun palloseura",
+    "kups":                "kuopion palloseura",
+    # Rezerwy Celty wystepuja pod wlasna nazwa. Alias sprowadza obie pisownie do
+    # formy ZE ZNACZNIKIEM rezerw, wiec `ZNACZNIKI_REZERW` dalej odroznia je od
+    # pierwszego zespolu.
+    "celta fortuna":       "celta de vigo ii",
+    # CELOWO NIE MA TU aliasu "shanghai sipg" -> "shanghai port", choc to ta sama
+    # druzyna po zmianie nazwy (2021). Dodalem go i cofnalem: dataset historyczny
+    # zawiera OBIE pisownie jako osobne druzyny, wiec alias zlewa ich wiersze —
+    # a `normalize_team_name` karmi takze historie modelu (lambda per druzyna),
+    # nie tylko rozliczenia. Zlapal to `test_zadne_dwie_rozne_druzyny_z_datasetu_
+    # sie_nie_zlewaja`. Para i tak dostaje 0.77, czyli powyzej progu 0.70, wiec
+    # alias nie naprawial NICZEGO zmierzonego — a kosztowalby zmiane danych modelu.
+
     "barca":               "barcelona",
     "paris saint germain": "psg",
     "paris sg":            "psg",
@@ -427,11 +453,39 @@ def team_similarity(a: str, b: str) -> float:
     znaczace_a = [t for t in tokens_a if len(t) >= 3]
     znaczace_b = [t for t in tokens_b if len(t) >= 3]
 
-    if znaczace_a and all(
+    # Wspólny token RODZAJOWY to nie dopasowanie, dodane 2026-09-03.
+    #
+    # Reguła niżej uznaje dopasowanie, gdy znaczące tokeny krótszej nazwy mają
+    # przedrostek w dowolnym tokenie dłuższej. To jest potrzebne i działa:
+    # "Legia" ~ "Legia Warszawa", "Lyon" ~ "Olympique Lyonnais" (człon
+    # identyfikujący bywa DRUGIM słowem, więc wymaganie zaczepienia od początku
+    # byłoby za ostre — sprawdzone, psuje Lyon).
+    #
+    # Ale gdy jedynym łącznikiem jest wyraz RODZAJOWY, to nie jest ta sama drużyna:
+    #
+    #   City    vs  Manchester City    = 0.80
+    #   United  vs  Newcastle United   = 0.80
+    #
+    # Oba powyżej progu rozliczeń 0.70, a `_znajdz_wynik` bierze PIERWSZY fixture
+    # powyżej progu, nie najlepszy. `_ROZROZNIAJACE` mamy już zdefiniowane jako
+    # dokładnie te wyrazy, które nie identyfikują klubu w pojedynkę.
+    #
+    # Czego to NIE łapie: wspólnego tokenu identyfikującego dwóch różnych klubów
+    # ("Turku PS" vs "Inter Turku" = 0.80, oba z Turku, ta sama liga, ten sam
+    # dzień). Tam potrzebny jest jawny alias — patrz `_DEFAULT_MAPPINGS` i
+    # `tests/test_aliasy_nazw_z_zaleglosci.py`. Reguła ogólna tego nie rozstrzygnie,
+    # bo "turku" niesie tożsamość tak samo jak "bristol".
+    def _tylko_rodzajowe(znaczace: list[str]) -> bool:
+        """Czy nazwa nie wnosi NIC poza wyrazem rodzajowym (City, United, ...)."""
+        return bool(znaczace) and all(
+            _ROZ_SKROTY.get(t, t) in _ROZROZNIAJACE for t in znaczace
+        )
+
+    if not _tylko_rodzajowe(znaczace_a) and znaczace_a and all(
         any(tb.startswith(ta) for tb in tokens_b) for ta in znaczace_a
     ):
         return 0.80
-    if znaczace_b and all(
+    if not _tylko_rodzajowe(znaczace_b) and znaczace_b and all(
         any(ta.startswith(tb) for ta in tokens_a) for tb in znaczace_b
     ):
         return 0.80
