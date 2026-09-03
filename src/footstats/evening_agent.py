@@ -12,6 +12,13 @@ import sys
 import argparse
 from datetime import datetime
 from pathlib import Path
+from statistics import median
+
+# Bukmacher-benchmark do kursu zamkniecia (CLV). Ten sam operator, ktorego kolumny
+# closing bierze darmowy fallback `scrapers/closing_odds.py` (football-data.co.uk)
+# i wobec ktorego mierzylismy edge 28.08 — dwa zrodla CLV musza mierzyc wobec tego
+# samego, inaczej ich wyniki nie sa porownywalne.
+ID_PINNACLE = 4
 
 from footstats.utils.normalize import normalize_team_name, team_similarity
 
@@ -201,8 +208,27 @@ def _find_fixture_id(home: str, away: str, fixtures: list[dict]) -> int | None:
 
 def _fetch_closing_odds(api_key: str, fixture_id: int) -> float | None:
     """
-    Pobiera kurs 1X2 'Home Win' z API-Football /odds dla danego fixture.
-    Zwraca closing odds bukmachera (Bet365 id=1 lub pierwszy dostępny), lub None.
+    Pobiera kurs zamknięcia 1X2 'Home Win' z API-Football /odds — z PINNACLE.
+
+    Do 2026-09-03 brało `bookmakers[0]`, czyli kogokolwiek dostawca zwrócił
+    pierwszego (docstring twierdził „Bet365 id=1" — nieprawda w obu członach:
+    kod nikogo nie szukał, a Bet365 ma id 8).
+
+    ZMIERZONE na Aston Villa vs Arsenal (31.08), strona gospodarza, 12 bukmacherów:
+
+        William Hill 5.80 ... Pinnacle 6.34 ... Betfair 6.50
+
+    Rozrzut 12% na tym samym zdarzeniu, a pierwszy na liście był NAJNIŻSZY.
+    To nie szum, tylko obciążenie: CLV porównuje kurs wzięty z kursem zamknięcia,
+    więc systematycznie gorszy benchmark zawyża naszą przewagę — a kolejność
+    zależy od dostawcy, nie od nas.
+
+    Pinnacle, bo to ten sam operator, którego kolumny closing bierze darmowy
+    fallback `closing_odds.py`. Dwa źródła CLV muszą mierzyć wobec tego samego,
+    inaczej ich wyniki nie są porównywalne.
+
+    Bez Pinnacle: MEDIANA stawki. Odporna na skrajności i deterministyczna —
+    „pierwszy z listy" nie był ani jednym, ani drugim.
     """
     from footstats.scrapers.results_updater import _naglowek_af
     naglowki = _naglowek_af(api_key)
@@ -225,14 +251,36 @@ def _fetch_closing_odds(api_key: str, fixture_id: int) -> float | None:
         bookmakers = resp[0].get("bookmakers", [])
         if not bookmakers:
             return None
-        bets = bookmakers[0].get("bets", [])
-        if not bets:
+
+        def _kurs_gospodarza(bookmaker: dict) -> float | None:
+            """Kurs strony gospodarza z pierwszego rynku bukmachera, albo None."""
+            for bet in bookmaker.get("bets", []):
+                for v in bet.get("values", []):
+                    # values: [{"value": "Home", "odd": "1.85"}, {"value": "Draw", ...}]
+                    if str(v.get("value", "")).lower() in ("home", "1"):
+                        try:
+                            return float(v["odd"])
+                        except (TypeError, ValueError) as e:
+                            # Cisza tutaj znaczylaby "ten bukmacher nie podal kursu",
+                            # a znaczy "podal cos, czego nie umiemy odczytac". Przy
+                            # Pinnacle wywraca to CALY benchmark CLV na mediane,
+                            # nie zmieniajac niczego widocznego.
+                            console.print(
+                                f"[yellow]Kurs {v.get('odd')!r} od bukmachera "
+                                f"{bookmaker.get('name')} nieparsowalny ({e}) — "
+                                f"pomijam go w benchmarku CLV[/yellow]"
+                            )
+                            return None
             return None
-        values = bets[0].get("values", [])
-        # values: [{"value": "Home", "odd": "1.85"}, {"value": "Draw", ...}, ...]
-        for v in values:
-            if str(v.get("value", "")).lower() in ("home", "1"):
-                return float(v["odd"])
+
+        kursy = {b.get("id"): _kurs_gospodarza(b) for b in bookmakers}
+        kursy = {bid: k for bid, k in kursy.items() if k}
+
+        if not kursy:
+            return None
+        if ID_PINNACLE in kursy:
+            return kursy[ID_PINNACLE]
+        return median(sorted(kursy.values()))
     except (ValueError, KeyError, requests.RequestException):
         pass
     return None
