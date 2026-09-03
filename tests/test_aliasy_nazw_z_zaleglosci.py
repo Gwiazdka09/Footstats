@@ -42,6 +42,17 @@ PROG_ROZLICZEN = 0.70  # `results_updater._znajdz_wynik`
     ("Turun Palloseura", "Turku PS"),
     ("Kuopion Palloseura", "KuPS"),
     ("Celta Fortuna", "Celta de Vigo II"),
+    # Dopisane 03.09 rano: kupon #351 (AGF vs FC Midtjylland, 02.09) byl jedynym,
+    # ktory po nocnej naprawie zostal nierozliczony z powodu NAZWY. Wynik
+    # "Aarhus 0-2 FC Midtjylland" byl u dostawcy jako FT, ale sim("AGF","Aarhus")
+    # = 0.22. Dataset zna tylko jedna druzyne "Aarhus", wiec alias jest jednoznaczny.
+    ("AGF", "Aarhus"),
+    # Kupon #180 (28.08). Wczoraj uznalem go za nierozliczalny — BLEDNIE. Dostawca
+    # nazywa ten klub `Sichuan Jiuniu`, czyli nazwa SPRZED przenosin: klub przeniosl
+    # sie do Shenzhen i zmienil nazwe w 2024 (zrodlo: Wikipedia, Shenzhen Peng City
+    # F.C.). Pelna kolejka CSL 27-30.08 ma 8 meczow, dokladnie 16 druzyn ligi, i
+    # `Sichuan Jiuniu vs SHANGHAI SIPG` JEST naszym meczem.
+    ("Shenzhen Peng City", "Sichuan Jiuniu"),
 ])
 def test_alias_laczy_nasza_nazwe_z_nazwa_dostawcy(nasza, dostawcy):
     """Pary wzięte z realnych kuponów i realnych fixture'ów, nie wymyślone."""
@@ -86,5 +97,32 @@ def test_aliasy_zyja_w_kodzie_a_nie_tylko_w_pliku():
     # Klucze to formy SKRÓCONE, wartości — identyfikujące. Kierunek nie jest
     # kosmetyką: "wolverhampton" -> "wolves" STWORZYŁOBY kolizję z
     # "Chattanooga Red Wolves" (0.80, ten sam dzień). Odwrotny ją usuwa.
-    for klucz in ("wolves", "turku ps", "kups", "celta fortuna"):
+    for klucz in ("wolves", "turku ps", "kups", "celta fortuna", "agf",
+                  "sichuan jiuniu"):
         assert klucz in _DEFAULT_MAPPINGS, f"alias {klucz!r} tylko w pliku = martwy po wdrożeniu"
+
+
+def test_alias_zmiany_nazwy_nie_skleja_wierszy_datasetu():
+    """Czym ten alias rozni sie od cofnietego `shanghai sipg` -> `shanghai port`.
+
+    Oba to zmiany nazwy tego samego klubu. Roznica jest w DANYCH: dataset
+    historyczny zawiera OBIE pisownie Shanghai jako osobne druzyny, wiec tamten
+    alias zlewal ich wiersze i zmienial lambda per druzyna. Nazwy "Sichuan" dataset
+    nie zna w ogole, wiec tutaj nie ma czego sklejac.
+
+    Test pilnuje tej przeslanki, a nie samego wyniku — gdyby dataset kiedys dostal
+    wiersze "Sichuan Jiuniu", ten alias trzeba przemyslec tak samo jak tamten.
+    """
+    from pathlib import Path
+
+    sciezka = Path("data/hist_cache/full_dataset.parquet")
+    if not sciezka.exists():
+        pytest.skip("brak datasetu historycznego")
+
+    pd = pytest.importorskip("pandas")
+    df = pd.read_parquet(sciezka)
+    nazwy = set(df["home"].dropna().astype(str)) | set(df["away"].dropna().astype(str))
+
+    assert not [x for x in nazwy if "sichuan" in x.lower()], (
+        "dataset zna teraz 'Sichuan' — alias zaczal sklejac wiersze, przemysl go"
+    )

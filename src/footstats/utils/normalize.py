@@ -228,6 +228,23 @@ _DEFAULT_MAPPINGS: dict[str, str] = {
     # formy ZE ZNACZNIKIEM rezerw, wiec `ZNACZNIKI_REZERW` dalej odroznia je od
     # pierwszego zespolu.
     "celta fortuna":       "celta de vigo ii",
+    # Dopisane 03.09 rano. Kupon #351 (AGF vs FC Midtjylland, 02.09) byl JEDYNYM,
+    # ktory po nocnej naprawie zostal nierozliczony z powodu nazwy: wynik
+    # "Aarhus 0-2 FC Midtjylland" byl u dostawcy jako FT, ale sim("AGF","Aarhus")
+    # = 0.22. Dataset zna tylko jedna druzyne "Aarhus", wiec skrot jest jednoznaczny.
+    "agf":                 "aarhus",
+    "agf aarhus":          "aarhus",
+    # Kupon #180 (28.08). Uznalem go najpierw za nierozliczalny ("inny mecz, nie
+    # inna pisownia") — BLEDNIE. Dostawca uzywa nazwy SPRZED przenosin klubu:
+    # Sichuan Jiuniu przeniosl sie do Shenzhen i zostal Shenzhen Peng City w 2024.
+    # Pelna kolejka CSL 27-30.08 ma 8 meczow, czyli komplet 16 druzyn ligi, i
+    # `Sichuan Jiuniu vs SHANGHAI SIPG` (0-1) JEST tym meczem.
+    #
+    # Dlaczego wolno tu to, czego NIE wolno bylo przy `shanghai sipg` -> `shanghai
+    # port`: tamten alias zlewal DWA ISTNIEJACE wiersze datasetu w jeden i zmienial
+    # lambda per druzyna. Nazwy "Sichuan" dataset nie zna wcale, wiec nie ma czego
+    # sklejac. Pilnuje tego `test_alias_zmiany_nazwy_nie_skleja_wierszy_datasetu`.
+    "sichuan jiuniu":      "shenzhen peng city",
     # CELOWO NIE MA TU aliasu "shanghai sipg" -> "shanghai port", choc to ta sama
     # druzyna po zmianie nazwy (2021). Dodalem go i cofnalem: dataset historyczny
     # zawiera OBIE pisownie jako osobne druzyny, wiec alias zlewa ich wiersze —
