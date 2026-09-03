@@ -167,3 +167,34 @@ def test_alias_nieciecza_nie_ma_czego_skleic_w_datasecie() -> None:
     assert not kolidujace, (
         f"dataset zna juz nazwe 'Nieciecza' ({kolidujace}) — alias zlalby wiersze"
     )
+
+
+def test_cfr_1907_cluj_rozstrzygniete_wiedza_a_nie_podobienstwem() -> None:
+    """Bez aliasu ta para SLUSZNIE sie nie dopasowuje — i to jest cala pointa.
+
+    Zmierzone 2026-09-03 na skladzie Ligi I: `CFR 1907 Cluj` (zapis API-Football)
+    punktuje **rowno 0.800** wobec `CFR Cluj` I wobec `U. Cluj` — dwoch roznych
+    klubow z Kluż-Napoki. Margines przewagi odmowil wyboru zamiast zgadnac,
+    dzieki czemu statystyki CFR nie wladowaly sie w mecze Universitatei.
+
+    Alias rozstrzyga to wiedza o klubie, nie progiem. Podniesienie progu albo
+    zniesienie marginesu "zeby sie dopasowalo" byloby dokladnie tym bledem,
+    przed ktorym ten remis chronil.
+    """
+    from footstats.utils.normalize import normalize_team_name, team_similarity
+
+    assert normalize_team_name("CFR 1907 Cluj") == normalize_team_name("CFR Cluj")
+    assert normalize_team_name("CFR 1907 Cluj") != normalize_team_name("U. Cluj")
+    assert team_similarity("CFR 1907 Cluj", "U. Cluj") < 1.0
+
+
+def test_wsg_wattens_to_wsg_tirol() -> None:
+    """WSG Tirol gra pod ta nazwa od 2019; API-Football zostalo przy WSG Wattens.
+
+    Podobienstwo wynosi 0.125 — zaden prog tego nie zmostkuje, wiec albo alias,
+    albo 68 meczow Austrii bez strzalow.
+    """
+    from footstats.utils.normalize import normalize_team_name, team_similarity
+
+    assert normalize_team_name("WSG Wattens") == normalize_team_name("Tirol")
+    assert team_similarity("WSG Wattens", "Tirol") == 1.0

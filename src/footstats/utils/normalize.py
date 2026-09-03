@@ -253,6 +253,17 @@ _DEFAULT_MAPPINGS: dict[str, str] = {
     # Bezpieczne z tego samego powodu co "sichuan jiuniu": nazwy "Nieciecza"
     # dataset nie zna wcale, a "Termalica B-B." to jedyny pasujacy wiersz.
     "nieciecza":           "termalica b b",
+    # CFR 1907 Cluj (zapis API-Football) to CFR Cluj z datasetu. Bez aliasu para
+    # NIE dopasowuje sie i to jest zachowanie POPRAWNE: "cfr 1907 cluj" punktuje
+    # 0.800 rowno wobec "CFR Cluj" i wobec "U. Cluj" — dwoch roznych klubow z tego
+    # samego miasta. Margines przewagi slusznie odmawia zgadywania, a alias
+    # rozstrzyga to wiedza, nie podobienstwem. Dataset nie zna zapisu "CFR 1907",
+    # wiec nie ma czego sklejac.
+    "cfr 1907 cluj":       "cfr cluj",
+    # WSG Tirol grala jako WSG Wattens do 2019 i API-Football zostalo przy starej
+    # nazwie. Podobienstwo wynosi 0.125 — zaden prog tego nie zmostkuje.
+    # Dataset zna wylacznie "Tirol".
+    "wsg wattens":         "tirol",
     # CELOWO NIE MA TU aliasu "shanghai sipg" -> "shanghai port", choc to ta sama
     # druzyna po zmianie nazwy (2021). Dodalem go i cofnalem: dataset historyczny
     # zawiera OBIE pisownie jako osobne druzyny, wiec alias zlewa ich wiersze —

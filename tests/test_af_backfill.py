@@ -565,3 +565,24 @@ def test_rozliczenia_dalej_dostaja_zdarzenia() -> None:
     assert "_fetch_statystyki_surowe" in zrodlo
     assert "_fetch_match_events" in zrodlo
     assert '"_events"' in zrodlo
+
+
+def test_nieczytelny_wynik_liczony_osobno_od_niezgodnego() -> None:
+    """Dwa rozne stany zrodla, dwa liczniki.
+
+    "AF podal INNY rezultat" znaczy zle dopasowanie meczu. "AF nie podal
+    rezultatu wcale" znaczy dziure w danych dostawcy. Wspolny worek zamazalby
+    roznice, a to wlasnie proporcja tych dwoch mowi, czy szukac bledu u siebie,
+    czy u niego. Liczymy zamiast logowac per mecz — przy kilkuset meczach log
+    bylby szumem.
+    """
+    df = _df_liga([{"date": "2026-08-01", "home": "Legia", "away": "Lech",
+                    "hg": 2.0, "ag": 1.0}])
+    zepsuty = _fixture(1, "2026-08-01T18:00:00+00:00", "Legia", "Lech", 2, 1)
+    zepsuty["goals"] = {"home": None, "away": None}
+
+    pary, raport = ab.dopasuj_mecze(df, [zepsuty])
+
+    assert pary == []
+    assert raport["wynik_nieczytelny"] == 1
+    assert raport["wynik_niezgodny"] == 0

@@ -264,7 +264,8 @@ def dopasuj_mecze(
     """
     juz_pobrane = juz_pobrane or set()
     raport = {"dopasowane": 0, "brak_w_af": 0, "wiele_kandydatow": 0,
-              "wynik_niezgodny": 0, "nazwa_nierozpoznana": 0, "juz_mamy": 0}
+              "wynik_niezgodny": 0, "wynik_nieczytelny": 0,
+              "nazwa_nierozpoznana": 0, "juz_mamy": 0}
     if df_liga is None or df_liga.empty or not fixtures:
         raport["brak_w_af"] = 0 if df_liga is None or df_liga.empty else len(df_liga)
         return [], raport
@@ -325,8 +326,21 @@ def dopasuj_mecze(
         try:
             zgadza = (float(gole["home"]) == float(r.hg)
                       and float(gole["away"]) == float(r.ag))
-        except (KeyError, TypeError, ValueError):
-            zgadza = False
+        except (KeyError, TypeError, ValueError) as e:
+            # Osobny licznik, nie wspolny worek z niezgodnym wynikiem: "AF podal
+            # INNY rezultat" znaczy zle dopasowanie meczu, a "AF nie podal
+            # rezultatu wcale" — dziure u dostawcy. Proporcja tych dwoch mowi,
+            # czy szukac bledu u siebie, czy u niego.
+            #
+            # Decyzje niesie LICZNIK, nie log: przy kilkuset meczach linia na
+            # kazdy bylaby szumem, ktory niszczy alarmy tak samo skutecznie jak
+            # cisza (ta sama zasada co `quick_picks.raport_pokrycia_poissona`).
+            # Log na `debug` zostaje dla pojedynczego przypadku, gdy licznik
+            # juz powie, ze jest czego szukac.
+            log.debug("Fixture %s ma nieczytelny wynik (%s: %s)",
+                      (m.get("fixture") or {}).get("id"), type(e).__name__, e)
+            raport["wynik_nieczytelny"] += 1
+            continue
         if not zgadza:
             raport["wynik_niezgodny"] += 1
             continue
