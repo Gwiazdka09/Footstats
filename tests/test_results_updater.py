@@ -25,9 +25,14 @@ import footstats.scrapers.results_updater as ru
 
 
 class _Odp:
-    def __init__(self, status=200, dane=None):
+    def __init__(self, status=200, dane=None, naglowki=None):
         self.status_code = status
         self._dane = dane if dane is not None else {}
+        # Prawdziwy `requests.Response` ZAWSZE ma `headers`. Atrapa ich nie miala,
+        # dopoki nikt ich nie czytal — `_fetch_statystyki_surowe` czyta stamtad
+        # `x-ratelimit-requests-remaining`, jedyna wiarygodna bramke budzetu
+        # backfillu (zbiorczy licznik /status ma opoznienie).
+        self.headers = naglowki if naglowki is not None else {}
 
     def raise_for_status(self):
         if self.status_code >= 400:

@@ -895,9 +895,37 @@ def download_all(
     return df
 
 
-def load_cached() -> pd.DataFrame:
-    """Wczytuje pełny dataset z dysku (bez pobierania)."""
+def load_cached(z_af: bool = True) -> pd.DataFrame:
+    """Wczytuje pełny dataset z dysku (bez pobierania), scalony ze statystykami AF.
+
+    Statystyki meczowe z API-Football leżą w OSOBNYM pliku (`af_stats.parquet`),
+    bo ta funkcja czyta plik, który `download_all()` nadpisuje w całości — patrz
+    docstring `footstats.data.af_stats`. Scalenie przy odczycie jest jedynym
+    miejscem, którego cotygodniowe odświeżenie danych nie może skasować.
+
+    `z_af=False` oddaje surowy parquet. Potrzebne wyłącznie do pomiaru A/B:
+    oba ramiona muszą iść z TEGO SAMEGO pliku i różnić się dokładnie jedną rzeczą.
+    """
     f = CACHE_DIR / "full_dataset.parquet"
     if not f.exists():
         raise FileNotFoundError(f"Brak cache. Uruchom najpierw download_all(). Szukałem w: {f}")
-    return pd.read_parquet(f)
+    df = pd.read_parquet(f)
+    if not z_af:
+        return df
+
+    # Import lokalny — `af_stats` bierze stąd `CACHE_DIR`, więc na poziomie
+    # modułu byłby to cykl.
+    from footstats.data.af_stats import raport_pokrycia, scal_statystyki
+
+    przed = raport_pokrycia(df)
+    df = scal_statystyki(df)
+    po = raport_pokrycia(df)
+    # Log jest tu po to, żeby BRAK pliku w obrazie nie wyglądał identycznie jak
+    # liga, która strzałów po prostu nie ma. To dwa różne stany i pomylenie ich
+    # kosztowało już ten projekt cicho zdegradowaną λ w połowie lig.
+    log.info(
+        "Dataset %d meczow | pokrycie strzalow hst %.1f%% -> %.1f%%, ast %.1f%% -> %.1f%%",
+        len(df), 100 * przed["hst"], 100 * po["hst"],
+        100 * przed["ast"], 100 * po["ast"],
+    )
+    return df

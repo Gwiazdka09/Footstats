@@ -1,0 +1,26 @@
+{
+  "_komentarz": "Mapa liga_datasetu -> id ligi w API-Football. WYBRANA RECZNIE 2026-09-03 z wydruku /leagues?country=&type=league, kazda pozycja obejrzana osobno. Automatyczne dopasowanie po nazwie NIE moze tego zrobic i to nie jest ostroznosc teoretyczna: dataset mowi 'ROU-Superliga', a API 'Liga I'; dataset mowi 'USA-MLS', a API 'Major League Soccer' — dopasowanie tekstowe przegapiloby obie. W druga strone Holandia oddaje obok siebie 'Eredivisie' (88), 'Eerste Divisie' (89) i 'Eredivisie Women' (91), wiec automat wybralby druga klase albo lige kobiet. Bledny wybor jest CICHY: statystyki z innych rozgrywek wladowalyby sie w mecze, ktorych nie dotycza.",
+  "_bez_statystyk_w_af": {
+    "_komentarz": "Ligi jawnie WYLACZONE z backfillu. API zwraca dla nich fixture'y, ale /fixtures/statistics jest puste — zmierzone na sezonie 2025, po 3 mecze kazda, 0/3 ze strzalami. Wpis tutaj zamiast ciszy, zeby zaden przyszly przebieg nie placil za nie ponownie i zeby bylo widac, ze o nich pamietano.",
+    "ENG-National League": "id=43, sezon 2025: 553 fixture'y, 0/3 ze statystykami",
+    "FIN-Veikkausliiga": "id=244, sezon 2025: 179 fixture'ow, 0/3 ze statystykami",
+    "ARG-Copa De La Liga Profesional": "puchar, nie wystepuje w /leagues?type=league"
+  },
+
+  "POL-Ekstraklasa":      {"af_league_id": 106, "nazwa_af": "Ekstraklasa",                "kraj": "Poland"},
+  "AUT-Bundesliga":       {"af_league_id": 218, "nazwa_af": "Bundesliga",                 "kraj": "Austria"},
+  "ARG-Liga Profesional": {"af_league_id": 128, "nazwa_af": "Liga Profesional Argentina", "kraj": "Argentina"},
+  "BRA-Serie A":          {"af_league_id": 71,  "nazwa_af": "Serie A",                    "kraj": "Brazil"},
+  "CHN-Super League":     {"af_league_id": 169, "nazwa_af": "Super League",               "kraj": "China"},
+  "DNK-Superliga":        {"af_league_id": 119, "nazwa_af": "Superliga",                  "kraj": "Denmark"},
+  "IRL-Premier Division": {"af_league_id": 357, "nazwa_af": "Premier Division",           "kraj": "Ireland"},
+  "JPN-J1 League":        {"af_league_id": 98,  "nazwa_af": "J1 League",                  "kraj": "Japan"},
+  "MEX-Liga MX":          {"af_league_id": 262, "nazwa_af": "Liga MX",                    "kraj": "Mexico"},
+  "NOR-Eliteserien":      {"af_league_id": 103, "nazwa_af": "Eliteserien",                "kraj": "Norway"},
+  "ROU-Superliga":        {"af_league_id": 283, "nazwa_af": "Liga I",                     "kraj": "Romania"},
+  "RUS-Premier League":   {"af_league_id": 235, "nazwa_af": "Premier League",             "kraj": "Russia"},
+  "SWE-Allsvenskan":      {"af_league_id": 113, "nazwa_af": "Allsvenskan",                "kraj": "Sweden"},
+  "SWZ-Super League":     {"af_league_id": 207, "nazwa_af": "Super League",               "kraj": "Switzerland"},
+  "SWZ-Challenge League": {"af_league_id": 208, "nazwa_af": "Challenge League",           "kraj": "Switzerland"},
+  "USA-MLS":              {"af_league_id": 253, "nazwa_af": "Major League Soccer",        "kraj": "USA"}
+}

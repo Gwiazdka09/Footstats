@@ -249,6 +249,10 @@ def test_kazde_zapytanie_o_fixtures_po_dacie_ma_prog():
         "daily_phases.py",      # status=NS, tylko dzisiejsze mecze
         "fixtures_fallback.py",  # nadchodzące mecze
         "api_football.py",       # znajdz_fixture_id — mecz z terminarza, nie wynik
+        # Pyta o `/fixtures?league=&season=`, NIGDY po dacie — próg zasięgu
+        # nie ma tu czego pilnować. Łańcuch `"date"` w tym pliku to nazwa
+        # KOLUMNY datasetu i odczyt pola z odpowiedzi, nie parametr zapytania.
+        "af_backfill.py",
     }
 
     winowajcy = []
