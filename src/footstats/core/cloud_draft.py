@@ -23,6 +23,50 @@ import os
 log = logging.getLogger(__name__)
 
 
+def domyslny_limit_kursow(budzet_dzienny: int | None = None) -> int:
+    """Ile meczów dopytać o kursy, gdy Bzzoiro nie dało fixture'ów.
+
+    Do 2026-09-03 stała 15 z jawnym uzasadnieniem w `dolacz_kursy`:
+    „1 mecz = 2 zapytania AF przy dziennym limicie 100 — dlatego limit jest twardy".
+    Oba człony są nieaktualne:
+
+      * limit dzienny to 7500, nie 100 (plan Pro, zmierzone przez `/status`);
+      * `znajdz_fixture_id` czyta `/fixtures?date=`, CACHE'OWANE na poziomie `_get`
+        — jeden request na dzień dzielony przez wszystkie mecze, więc realny koszt
+        to ~1 zapytanie na mecz, nie 2.
+
+    Skutek starej wartości: przy nieczynnym Bzzoiro kursy dostawało 15 kandydatów,
+    a reszta wypadała z typowania, bo `najlepszy_typ` pomija typ bez kursu. Przy
+    48 kandydatach (draft 02.09) to dwie trzecie puli.
+
+    Dzielnik 50 zostawia 98% budżetu na resztę dnia (rozliczenia, składy, sędzia)
+    i sprowadza plan Free dokładnie do dawnych 15 — zejście z Pro nie może być
+    regresją.
+    """
+    from footstats.utils.cache import AF_BUDGET_DAILY
+
+    if budzet_dzienny is None:
+        budzet_dzienny = AF_BUDGET_DAILY
+    return max(15, budzet_dzienny // 50)
+
+
+def limit_kursow_z_env() -> int:
+    """`FALLBACK_ODDS_LIMIT` albo wartość wyliczona z budżetu.
+
+    Śmieciowa wartość NIE wywraca draftu — to jest wyłącznik awaryjny, a literówka
+    w zmiennej środowiskowej nie może ubić całego przebiegu.
+    """
+    surowa = os.getenv("FALLBACK_ODDS_LIMIT", "").strip()
+    if not surowa:
+        return domyslny_limit_kursow()
+    try:
+        return int(surowa)
+    except ValueError:
+        log.warning("FALLBACK_ODDS_LIMIT=%r nie jest liczba — biore wyliczone z budzetu",
+                    surowa)
+        return domyslny_limit_kursow()
+
+
 def _zapisz_kupony_system(wyniki: list[dict]) -> tuple[int, int]:
     """Zapisuje kupony konta System. Zwraca `(single_leg, risk_*)`.
 
@@ -229,7 +273,7 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
         # ograniczony budżet szedł tylko na mecze, które faktycznie rozważamy.
         if fixtures_source != "bzzoiro" and kandydaci:
             from footstats.scrapers.fixtures_fallback import dolacz_kursy
-            limit = int(os.getenv("FALLBACK_ODDS_LIMIT", "15"))
+            limit = limit_kursow_z_env()
             uzupelnione = dolacz_kursy(kandydaci, limit=limit)
             log.info("fallback: kursy AF dociagniete dla %d/%d kandydatow (limit %d)",
                      uzupelnione, len(kandydaci), limit)

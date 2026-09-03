@@ -144,9 +144,14 @@ def dolacz_kursy(wyniki: list[dict], limit: int = 15) -> int:
     Po co: `system_paper.najlepszy_typ` pomija każdy typ bez kursu, więc fallback
     bez kursów dałby poprawne prawdopodobieństwa i ZERO kuponów.
 
-    Budżet: 1 mecz = 2 zapytania AF (`znajdz_fixture_id` + `kursy_fixture`) przy
-    dziennym limicie 100 — dlatego `limit` jest twardy, a kolejność idzie od
-    najpewniejszych typów, żeby budżet szedł na mecze, które realnie dadzą kupon.
+    Budżet: realnie ~1 zapytanie na mecz. `znajdz_fixture_id` czyta
+    `/fixtures?date=`, które `_get` cache'uje — jeden request na dzień dzielony
+    przez wszystkie mecze; płatne jest tylko `kursy_fixture`. Domyślny `limit`
+    wylicza `cloud_draft.domyslny_limit_kursow` z `AF_BUDGET_DAILY` (150 przy
+    planie Pro, 15 przy Free).
+
+    Kolejność i tak idzie od najpewniejszych typów: gdyby budżet kiedyś znowu był
+    wąski, ma iść na mecze, które realnie dadzą kupon.
 
     Graceful: błąd pojedynczego meczu nie przerywa reszty ani nie rzuca w górę.
     """
