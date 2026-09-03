@@ -3,6 +3,7 @@ import logging
 import requests
 import pandas as pd
 from datetime import datetime
+from statistics import median
 from footstats.utils.cache import (
     _af_cache_get, _af_cache_set, af_budget_status,
     _af_load_disk_cache, _af_budget_load, _af_budget_save,
@@ -456,14 +457,52 @@ class APIFootball:
 
         return wyniki
 
+    # Etykieta wartosci u dostawcy -> nasz klucz kursu. Jedna tabela zamiast
+    # trzech galezi `if nazwa == ...`, zeby dodanie rynku bylo jedna linia.
+    _RYNKI_AF: dict[str, dict[str, str]] = {
+        "Match Winner": {"home": "home", "draw": "draw", "away": "away"},
+        "Goals Over/Under": {"over 2.5": "over_2_5", "under 2.5": "under_2_5"},
+        # Obie strony, nie tylko "yes". Bez "no" model moze typowac BTTS NIE,
+        # ale nikt nie potrafi tego wycenic — noga byla kasowana po cichu (15.08).
+        "Both Teams Score": {"yes": "btts", "no": "btts_no"},
+    }
+
     def kursy_fixture(self, fix_id: int) -> dict:
         """
-        Pobiera kursy bukmacherskie dla danego fixture przez /odds (1 req, cache'owane).
+        Kursy bukmacherskie dla fixture'a przez /odds (1 req, cache'owane).
 
-        Parsuje PIERWSZEGO dostępnego bukmachera z odpowiedzi (rynki: "Match Winner"
-        -> home/draw/away, "Goals Over/Under" -> over_2_5/under_2_5, "Both Teams Score"
-        -> btts). Pomija rynki, których brak (zero fałszywych wartości).
-        Zwraca pusty dict gdy brak danych/bukmacherów.
+        Kurs rynku to MEDIANA wszystkich bukmacherow, ktorzy go notuja — nie kurs
+        pierwszego z listy, jak bylo do 2026-09-03.
+
+        ZMIERZONE na 20 meczach z naszych lig (Match Winner, strona gospodarza):
+
+            max      vs pierwszy: +6.99%
+            mediana  vs pierwszy: +0.61%   (mediana roznic 0.00%)
+            Pinnacle vs pierwszy: +3.09%
+
+        DLACZEGO NIE MAX, choc kusi: te kursy ida do EV, Kelly'ego, `total_odds`
+        kuponu i ROI, wiec branie najlepszego z dwunastu podnioslby wynik
+        paper-tradingu o ~7% bez jednego wygranego zakladu wiecej. To mechanizm,
+        ktorym backtesty produkuja nieistniejacy edge — a tu jest juz zmierzone,
+        ze przewagi nad rynkiem nie ma.
+
+        DLACZEGO MEDIANA, skoro srednio nie zmienia nic: "pierwszy z listy" to nie
+        jest zaden kurs, tylko kolejnosc, w jakiej dostawca zwrocil bukmacherow.
+        Pojedyncze mecze roznia sie do 19%, a wynik potrafil sie zmienic bez zadnej
+        zmiany po naszej stronie.
+
+        I DRUGI, MOCNIEJSZY POWOD: `scrapers/odds_api.py` (The Odds API) agreguje
+        mediana OD POCZATKU, z tym samym uzasadnieniem — "max zawyzalby EV kursem,
+        ktorego user u swojego bukmachera nie dostanie". Oba zrodla wypelniaja TO
+        SAMO pole `odds`, wiec ta sciezka byla po prostu odstepstwem: zapisany kurs
+        zalezal od tego, ktore zrodlo akurat zadzialalo.
+
+        ZBIERANIE OD WSZYSTKICH domyka tez luki: na 14 meczach `Goals Over/Under`
+        byl u pierwszego bukmachera w 11, a u ktoregokolwiek w 14. Te 21% meczow
+        traci lo kurs na Over/Under 2.5 mimo istniejacego rynku, a
+        `system_paper.najlepszy_typ` pomija kazdy typ bez kursu.
+
+        Pusty dict gdy brak danych/bukmacherow — zero falszywych wartosci.
         """
         dane = self._get("/odds", {"fixture": fix_id})
         if not dane:
@@ -473,55 +512,22 @@ class APIFootball:
         if not response:
             return {}
 
-        bookmakers = response[0].get("bookmakers", [])
-        if not bookmakers:
-            return {}
-
-        bets = bookmakers[0].get("bets", [])
-        wynik: dict = {}
-
-        for bet in bets:
-            nazwa = bet.get("name", "")
-            values = bet.get("values", [])
-
-            if nazwa == "Match Winner":
-                for v in values:
-                    label = v.get("value", "")
+        zebrane: dict[str, list[float]] = {}
+        for bookmaker in response[0].get("bookmakers", []):
+            for bet in bookmaker.get("bets", []):
+                etykiety = self._RYNKI_AF.get(bet.get("name", ""))
+                if not etykiety:
+                    continue
+                for v in bet.get("values", []):
+                    klucz = etykiety.get((v.get("value", "") or "").strip().lower())
+                    if not klucz:
+                        continue
                     odd = _parse_odd(v.get("odd"))
                     if odd is None:
                         continue
-                    if label == "Home":
-                        wynik["home"] = odd
-                    elif label == "Draw":
-                        wynik["draw"] = odd
-                    elif label == "Away":
-                        wynik["away"] = odd
+                    zebrane.setdefault(klucz, []).append(odd)
 
-            elif nazwa == "Goals Over/Under":
-                for v in values:
-                    label = (v.get("value", "") or "").lower()
-                    odd = _parse_odd(v.get("odd"))
-                    if odd is None:
-                        continue
-                    if "over 2.5" in label:
-                        wynik["over_2_5"] = odd
-                    elif "under 2.5" in label:
-                        wynik["under_2_5"] = odd
-
-            elif nazwa == "Both Teams Score":
-                # Obie strony, nie tylko "yes". Bez "no" model moze typowac BTTS NIE,
-                # ale nikt nie potrafi tego wycenic — noga byla kasowana po cichu.
-                for v in values:
-                    strona = (v.get("value", "") or "").lower()
-                    odd = _parse_odd(v.get("odd"))
-                    if odd is None:
-                        continue
-                    if strona == "yes":
-                        wynik["btts"] = odd
-                    elif strona == "no":
-                        wynik["btts_no"] = odd
-
-        return wynik
+        return {k: round(median(sorted(v)), 2) for k, v in zebrane.items() if v}
 
     def znajdz_fixture_id(self, home: str, away: str, data: str) -> int | None:
         """
