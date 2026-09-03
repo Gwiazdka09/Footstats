@@ -745,6 +745,12 @@ def regresje_datasetu(stary: pd.DataFrame, nowy: pd.DataFrame) -> list[str]:
     Świadomie nie robimy merge'u ze starym zbiorem: dopisałby Japonii kursy
     z poprzedniej wersji i przyczyna (parser biorący pustą kolumnę) nigdy by
     nie wypłynęła. Strażnik ma pokazać sprawę, nie zakleić.
+
+    ZNANE OGRANICZENIE: porównanie jest z wersją BEZPOŚREDNIO poprzednią, więc
+    łapie ubytek skokowy, a nie powolne wykrwawianie. Liga tracąca 0.2 pp
+    pokrycia tygodniowo przejdzie sto razy i po roku zostanie bez 10 pp. Na to
+    trzeba osobnego pomiaru wobec punktu odniesienia sprzed sezonu — tutaj
+    świadomie tego nie ma, bo pilnujemy klasy błędu, którą realnie trafiliśmy.
     """
     if stary is None or stary.empty or "league" not in stary.columns:
         return []

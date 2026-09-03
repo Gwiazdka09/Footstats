@@ -56,17 +56,23 @@ jobs:
 
           plik = CACHE_DIR / "full_dataset.parquet"
           przed = pd.read_parquet(plik) if plik.exists() else pd.DataFrame()
+
+          # Sprawdzenie regresji siedzi WEWNATRZ `download_all()` i odmawia
+          # nadpisania pliku, gdy ktorakolwiek liga traci mecze albo pokrycie
+          # kolumny. Ten krok NIE powtarza tej reguly wlasnym warunkiem.
+          #
+          # Wczesniej stal tu wlasny prog na LICZBIE WIERSZY (spadek ponizej 98%
+          # poprzedniej wartosci). Incydent z 2026-09-03 przeszedlby przez niego
+          # bez mrugniecia: zrodlo dolozylo w `new/JPN.csv` prawie puste kolumny
+          # B365C*, parser wzial je zamiast pelnych AvgC*, Japonia stracila kursy
+          # w 4353 meczach — a wierszy w calym zbiorze PRZYBYLO (139 102 na
+          # 140 148), wiec prog byl spelniony i PR wygladalby zdrowo. Suma
+          # globalna maskuje utrate w jednej lidze; `download_all` porownuje
+          # PER LIGA i takze pokrycie kolumn, nie tylko liczbe meczow.
           po = download_all()
 
-          n_przed, n_po = len(przed), len(po)
-          maks = po["date"].max() if n_po else "brak"
-          print(f"::notice::dataset {n_przed} -> {n_po} meczow, ostatni {maks}")
-
-          # Zbiór historyczny może tylko rosnąć (poza korektami źródła). Nagły
-          # spadek znaczy, że któreś źródło padło albo okno sezonów się zsunęło —
-          # taki plik nie ma prawa trafić do PR-a, bo model straciłby historię.
-          if n_przed and n_po < n_przed * 0.98:
-              sys.exit(f"BLAD: dataset skurczyl sie {n_przed} -> {n_po}")
+          maks = po["date"].max() if len(po) else "brak"
+          print(f"::notice::dataset {len(przed)} -> {len(po)} meczow, ostatni {maks}")
           PY
 
       # Świadomie bez gotowej akcji "create-pull-request": to zadanie ma prawo
