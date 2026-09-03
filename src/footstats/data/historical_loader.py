@@ -189,6 +189,50 @@ def _parse_date(s: str) -> pd.Timestamp | None:
 
 # ─────────────────────────── FDCO sezonowy ────────────────────────────────
 
+def _wpisz_kursy(
+    out: pd.DataFrame,
+    df: pd.DataFrame,
+    docelowe: tuple[str, ...],
+    warianty: list[tuple[str, ...]],
+) -> None:
+    """Przepisuje do `out[docelowe]` ten wariant kolumn, który MA najwięcej danych.
+
+    O wyborze decyduje POKRYCIE, nie kolejność. Kolumna, która istnieje i jest
+    pusta, spełniała dotąd warunek obecności tak samo dobrze jak wypełniona:
+    źródło dołożyło w `new/JPN.csv` kolumny B365C* wypełnione dopiero od sezonu
+    2025 (170 z 4563 wierszy), przy `AvgCH` pełnym w 100% — i odświeżenie
+    datasetu 2026-09-03 skasowało kursy w 4353 japońskich meczach. Bez kursów
+    mecz cicho wypada z ramienia RYNKOWEGO walk-forwardu (`wf_harness.predict_one`
+    je devigauje), więc pomiar „model vs rynek" robi się węższy, zamiast krzyknąć.
+
+    Liczy się wiersz z KOMPLETEM kolumn wariantu: devig potrzebuje wszystkich
+    wyjść naraz, a dwa z trzech dają marżę, której nikt nie wystawił. Z tego
+    samego powodu wariantów się nie miesza w obrębie jednego meczu.
+
+    Remis rozstrzyga kolejność `warianty` — przy równym pokryciu zostaje ten
+    sam dostawca co dotąd, żeby poprawka nie przestawiła kursów w ligach,
+    w których nic się nie zepsuło. Zmiana preferencji dostawcy to osobna
+    decyzja i osobny pomiar.
+
+    Ta funkcja istnieje, bo ta sama reguła żyła w tym pliku w TRZECH kopiach
+    (kursy 1X2 w `new`, 1X2 w `season`, Over/Under w `season`). Trzy kopie jednej
+    reguły to trzy okazje, żeby rozjechały się po cichu.
+    """
+    najlepszy: tuple[int, tuple[str, ...]] | None = None
+    for wariant in warianty:
+        if not set(wariant) <= set(df.columns):
+            continue
+        kolumny = [pd.to_numeric(df[k], errors="coerce") for k in wariant]
+        pokrycie = int(pd.concat(kolumny, axis=1).notna().all(axis=1).sum())
+        if pokrycie and (najlepszy is None or pokrycie > najlepszy[0]):
+            najlepszy = (pokrycie, wariant)
+
+    if najlepszy is None:
+        return
+    for cel, zrodlo in zip(docelowe, najlepszy[1]):
+        out[cel] = pd.to_numeric(df[zrodlo], errors="coerce")
+
+
 def _download_fdco_season(league_code: str, season: str) -> pd.DataFrame | None:
     url = f"{BASE_FDCO}/mmz4281/{season}/{league_code}.csv"
     raw = _get(url)
@@ -223,26 +267,20 @@ def _download_fdco_season(league_code: str, season: str) -> pd.DataFrame | None:
     out["hy"]      = pd.to_numeric(df.get("HY"),  errors="coerce")
     out["ay"]      = pd.to_numeric(df.get("AY"),  errors="coerce")
 
-    # Kursy – preferuj Bet365, fallback na Average
-    for h_col, d_col, a_col in [
+    # Kursy – przy równym pokryciu Bet365, dalej Average (patrz `_wpisz_kursy`)
+    _wpisz_kursy(out, df, ("odds_h", "odds_d", "odds_a"), [
         ("B365H", "B365D", "B365A"),
         ("BbAvH", "BbAvD", "BbAvA"),
         ("AvgH",  "AvgD",  "AvgA"),
         ("WHH",   "WHD",   "WHA"),
-    ]:
-        # Komplet trzech kolumn — patrz komentarz w `_download_fdco_new`.
-        if {h_col, d_col, a_col} <= set(df.columns):
-            out["odds_h"] = pd.to_numeric(df[h_col], errors="coerce")
-            out["odds_d"] = pd.to_numeric(df[d_col], errors="coerce")
-            out["odds_a"] = pd.to_numeric(df[a_col], errors="coerce")
-            break
+    ])
 
     # Over 2.5
-    for oh, ou in [("B365>2.5", "B365<2.5"), ("BbAv>2.5", "BbAv<2.5"), ("Avg>2.5", "Avg<2.5")]:
-        if {oh, ou} <= set(df.columns):
-            out["odds_over25"]  = pd.to_numeric(df[oh], errors="coerce")
-            out["odds_under25"] = pd.to_numeric(df[ou], errors="coerce")
-            break
+    _wpisz_kursy(out, df, ("odds_over25", "odds_under25"), [
+        ("B365>2.5", "B365<2.5"),
+        ("BbAv>2.5", "BbAv<2.5"),
+        ("Avg>2.5",  "Avg<2.5"),
+    ])
 
     out["source"] = "fdco_season"
     return out.dropna(subset=["home", "away", "hg", "ag"])
@@ -329,20 +367,16 @@ def _download_fdco_new(country_code: str) -> pd.DataFrame | None:
     out["ag"]      = pd.to_numeric(df.get("AG"), errors="coerce")
     out["result"]  = df.get("Res", "")
 
-    # Kursy (format "new" używa B365CH/B365CD/B365CA lub AvgCH itd.)
-    # Komplet TRZECH kolumn, nie tylko pierwszej: część plików `new/` ma kurs
+    # Kursy (format "new" używa B365CH/B365CD/B365CA lub AvgCH itd.).
+    # Komplet kolumn wariantu, nie tylko pierwszej: część plików `new/` ma kurs
     # gospodarza bez kursu gościa, a sprawdzanie samego `h_col` kończyło się
     # `KeyError: 'B365CA'`, które przerywało pobieranie całego kraju.
-    for h_col, d_col, a_col in [
+    # O wyborze wariantu decyduje pokrycie — patrz `_wpisz_kursy`.
+    _wpisz_kursy(out, df, ("odds_h", "odds_d", "odds_a"), [
         ("B365CH", "B365CD", "B365CA"),
         ("AvgCH",  "AvgCD",  "AvgCA"),
         ("MaxCH",  "MaxCD",  "MaxCA"),
-    ]:
-        if {h_col, d_col, a_col} <= set(df.columns):
-            out["odds_h"] = pd.to_numeric(df[h_col], errors="coerce")
-            out["odds_d"] = pd.to_numeric(df[d_col], errors="coerce")
-            out["odds_a"] = pd.to_numeric(df[a_col], errors="coerce")
-            break
+    ])
 
     out["source"] = "fdco_new"
     return out.dropna(subset=["home", "away", "hg", "ag"])
@@ -682,6 +716,66 @@ def merge_xg_into_dataset(df_main: pd.DataFrame, df_xg: pd.DataFrame) -> pd.Data
     return df_main
 
 
+# ─────────────────────── strażnik jakości datasetu ────────────────────────
+
+# Kolumny, których ubytek realnie zwęża pomiar — nie wszystkie, jakie są w zbiorze.
+# `odds_*` niosą ramię RYNKOWE walk-forwardu (`wf_harness.predict_one` je devigauje),
+# `hst`/`ast` wchodzą do λ przez `form.sily_ligowe` (WAGA_STRZALOW).
+_KOLUMNY_PILNOWANE = ("odds_h", "odds_d", "odds_a", "odds_over25", "hst", "ast")
+
+# O ile punktów procentowych może spaść pokrycie kolumny w JEDNEJ lidze, zanim
+# uznamy to za incydent. Skala wzięta z realnych zdarzeń, nie z sufitu: jeden
+# sezon znikający z pliku obejmującego jedenaście to ~9 pp i jest najmniejszą
+# zmianą, którą chcemy zobaczyć; pojedynczy poprawiony u źródła mecz przesuwa
+# pokrycie o ułamek punktu. Ten sam próg stosujemy do liczby meczów w lidze.
+_PROG_REGRESJI = 0.05
+
+
+def regresje_datasetu(stary: pd.DataFrame, nowy: pd.DataFrame) -> list[str]:
+    """Lista ubytków nowego zbioru wobec poprzedniego. Pusta = wszystko w porządku.
+
+    Porównanie idzie PER LIGA, bo liga jest jednostką, w której źródło wymienia
+    pliki. Suma globalna zamaskowała incydent z 2026-09-03: `new/JPN.csv` dostał
+    dołożone, prawie puste kolumny B365C*, przez co Japonia straciła kursy
+    w 4353 meczach — ale 39 pozostałych lig w tym samym odświeżeniu urosło,
+    więc globalnie wyszło −3347 (3.8%), czyli tyle, ile łatwo wziąć za
+    wahliwość źródła. Plik miał przy tym WIĘCEJ wierszy niż poprzedni, komplet
+    40 lig i świeższą datę ostatniego meczu.
+
+    Świadomie nie robimy merge'u ze starym zbiorem: dopisałby Japonii kursy
+    z poprzedniej wersji i przyczyna (parser biorący pustą kolumnę) nigdy by
+    nie wypłynęła. Strażnik ma pokazać sprawę, nie zakleić.
+    """
+    if stary is None or stary.empty or "league" not in stary.columns:
+        return []
+
+    problemy: list[str] = []
+    ligi_stare = set(stary["league"].dropna())
+    ligi_nowe = set(nowy["league"].dropna()) if "league" in nowy.columns else set()
+
+    for liga in sorted(ligi_stare - ligi_nowe):
+        problemy.append(f"{liga}: liga zniknela ze zbioru ({int((stary['league'] == liga).sum())} meczow)")
+
+    for liga in sorted(ligi_stare & ligi_nowe):
+        s = stary[stary["league"] == liga]
+        n = nowy[nowy["league"] == liga]
+        if len(s) and (len(s) - len(n)) / len(s) > _PROG_REGRESJI:
+            problemy.append(f"{liga}: meczow {len(s)} -> {len(n)}")
+
+        for kol in _KOLUMNY_PILNOWANE:
+            if kol not in s.columns or kol not in n.columns or not len(s) or not len(n):
+                continue
+            p_stare = float(s[kol].notna().mean())
+            p_nowe = float(n[kol].notna().mean())
+            if p_stare - p_nowe > _PROG_REGRESJI:
+                problemy.append(
+                    f"{liga}: pokrycie {kol} {100 * p_stare:.1f}% -> {100 * p_nowe:.1f}%"
+                    f" ({int(s[kol].notna().sum())} -> {int(n[kol].notna().sum())} meczow)"
+                )
+
+    return problemy
+
+
 # ─────────────────────────── główna funkcja ───────────────────────────────
 
 def download_all(
@@ -692,13 +786,18 @@ def download_all(
     include_xg: bool = False,
     xg_leagues: list[str] | None = None,
     xg_seasons: list[str] | None = None,
+    pozwol_na_regresje: bool = False,
 ) -> pd.DataFrame:
     """
     Pobiera dane ze wszystkich źródeł i łączy w jeden DataFrame.
 
     Domyślny zakres = dokładnie to, z czego zbudowany jest `full_dataset.parquet`
-    na produkcji: 8 lig sezonowych + Ekstraklasa + austriacka Bundesliga,
-    ostatnie `LICZBA_SEZONOW` sezonów, BEZ xgabora.
+    na produkcji: WSZYSTKIE klucze `FDCO_LEAGUES` (22) i `FDCO_NEW_LEAGUES` (16),
+    ostatnie `LICZBA_SEZONOW` sezonów, BEZ xgabora. Część plików `new/` trzyma
+    po dwie rozgrywki, więc w zbiorze wychodzi 40 lig.
+
+    `pozwol_na_regresje=True` przepuszcza zapis mimo ubytku wobec poprzedniego
+    pliku — do świadomej decyzji człowieka, gdy źródło naprawdę usunęło ligę.
 
     Wcześniej domyślne były `["N1"]` + `["POL"]` + xgabora, więc odświeżenie
     danych wywołaniem bez argumentów ścinało dataset z 10 lig do 2 i dokładało
@@ -758,8 +857,33 @@ def download_all(
         else:
             print("  -> brak danych xG (soccerdata niedostepne lub brak polaczenia)")
 
-    # Cache pełny dataset
+    # Strażnik PRZED zapisem: nowy zbiór nie może być uboższy od tego, który
+    # już mamy. Kolejność ma znaczenie — „zapisz, potem zaloguj ostrzeżenie"
+    # to dokładnie tryb, w którym incydent JPN (patrz `regresje_datasetu`)
+    # przeżył cały dzień na produkcji.
     out_f = CACHE_DIR / "full_dataset.parquet"
+    if out_f.exists():
+        try:
+            poprzedni = pd.read_parquet(out_f)
+        except (OSError, ValueError) as e:
+            # Nieczytelny poprzednik nie może blokować odświeżenia, ale musi być
+            # słyszalny: tracimy wtedy jedyny punkt odniesienia dla porównania.
+            log.warning("Nie da sie odczytac poprzedniego datasetu (%s: %s)"
+                        " — zapis BEZ sprawdzenia regresji", type(e).__name__, e)
+            poprzedni = None
+        if poprzedni is not None:
+            problemy = regresje_datasetu(poprzedni, df)
+            if problemy:
+                opis = "\n  - ".join(problemy)
+                if not pozwol_na_regresje:
+                    raise ValueError(
+                        f"Nowy dataset jest UBOZSZY od obecnego — nie nadpisuje {out_f}.\n"
+                        f"  - {opis}\n"
+                        "Sprawdz zrodlo (czy nie zmienilo kolumn), a gdy ubytek jest"
+                        " uzasadniony, powtorz z download_all(pozwol_na_regresje=True)."
+                    )
+                log.warning("Regresja datasetu przepuszczona swiadomie:\n  - %s", opis)
+
     df.to_parquet(out_f, index=False)
     print(f"\n[HistLoader] Lacznie: {len(df):,} meczow -> zapisano do {out_f}")
     return df
