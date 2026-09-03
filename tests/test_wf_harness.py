@@ -230,6 +230,10 @@ def _run_walkforward_ref(df, league=None, flags=None, run_tag="run",
             "actual_res": actual,
             "tip": res["tip"], "pred_tip": res["tip"],
             "pred_conf": res["conf"],
+            # Wektor musi byc TAKZE tutaj: ta funkcja jest swiadoma druga
+            # implementacja tej samej petli i test porownuje ramki wiersz po
+            # wierszu. Rozjazd zlapie sie natychmiast, i o to chodzi.
+            "pw": res["pw"], "pr": res["pr"], "pp": res["pp"],
             "correct": correct,
             "no_odds": 1 if res["no_odds"] else 0,
         })
@@ -250,3 +254,30 @@ def test_run_walkforward_matches_reference_implementation(use_bayesian):
     pd.testing.assert_frame_equal(
         new.reset_index(drop=True), ref.reset_index(drop=True)
     )
+
+
+def test_run_walkforward_zapisuje_pelny_wektor_prawdopodobienstw():
+    """Brier wieloklasowy potrzebuje pw/pr/pp, nie samego `pred_conf`.
+
+    `pred_conf` niesie prawdopodobienstwo TYPU WYBRANEGO; z niego nie da sie
+    odtworzyc dwoch pozostalych wyjsc. Bez pelnego wektora kazdy pomiar jakosci
+    prawdopodobienstw wymagalby powtorzenia calego replayu.
+    """
+    df = _hist_df_english()
+    out = run_walkforward(df, league="TEST", flags=ModelFlags(
+        use_bayesian=False, use_ensemble=True, use_calibration=False), verbose=False)
+    assert {"pw", "pr", "pp"}.issubset(out.columns)
+    assert out["pw"].between(0, 100).all()
+    # Suma trzech wyjsc to caly rozklad 1X2 — odchylenie znaczy, ze ktores
+    # ramie zwrocilo prawdopodobienstwa nieznormalizowane.
+    sumy = out["pw"] + out["pr"] + out["pp"]
+    assert sumy.between(99.0, 101.0).all(), f"rozklad nie sumuje sie do 100: {sumy.describe()}"
+
+
+def test_run_walkforward_zachowuje_dotychczasowe_kolumny():
+    """Dodanie wektora jest ADDYTYWNE — `wf_db` i raporty czytaja stare nazwy."""
+    df = _hist_df_english()
+    out = run_walkforward(df, league="TEST", flags=ModelFlags(
+        use_bayesian=False, use_ensemble=True, use_calibration=False), verbose=False)
+    assert {"tip", "pred_tip", "pred_conf", "correct", "match_date",
+            "no_odds", "actual_res", "league"}.issubset(out.columns)

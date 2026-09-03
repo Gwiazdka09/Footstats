@@ -177,6 +177,12 @@ def run_walkforward(df, league=None, flags=None, run_tag="run",
             "actual_res": actual,
             "tip": res["tip"], "pred_tip": res["tip"],
             "pred_conf": res["conf"],
+            # Pelny wektor, nie sam `pred_conf`. Brier wieloklasowy i log-loss
+            # licza sie ze WSZYSTKICH trzech wyjsc, a `pred_conf` niesie tylko
+            # to wybrane — z niego nie da sie odtworzyc pozostalych dwoch.
+            # Bez tych kolumn kazdy pomiar jakosci prawdopodobienstw wymagalby
+            # powtorzenia calego replayu (~90 s na lige na ramie).
+            "pw": res["pw"], "pr": res["pr"], "pp": res["pp"],
             "correct": correct,
             "no_odds": 1 if res["no_odds"] else 0,
         })
