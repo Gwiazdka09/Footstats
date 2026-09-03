@@ -126,3 +126,44 @@ def test_alias_zmiany_nazwy_nie_skleja_wierszy_datasetu():
     assert not [x for x in nazwy if "sichuan" in x.lower()], (
         "dataset zna teraz 'Sichuan' — alias zaczal sklejac wiersze, przemysl go"
     )
+
+
+def test_termalica_i_nieciecza_to_ten_sam_klub() -> None:
+    """Zrodla wziely INNE czlony tej samej nazwy — podobienstwo wynosi 0.0.
+
+    Bruk-Bet Termalica Nieciecza: football-data zapisuje "Termalica B-B.",
+    API-Football "Nieciecza". Nie ma wspolnego tokenu, wiec `team_similarity`
+    daje dokladnie zero i zadne dopasowanie rozmyte tego nie przeskoczy —
+    to musi byc alias albo nic.
+
+    Zmierzone na backfillu Ekstraklasy 2026-09-03: ten jeden klub odpowiadal za
+    WSZYSTKIE 34 niedopasowane mecze z 659 rozwazanych.
+    """
+    from footstats.utils.normalize import normalize_team_name, team_similarity
+
+    assert normalize_team_name("Nieciecza") == normalize_team_name("Termalica B-B.")
+    assert team_similarity("Nieciecza", "Termalica B-B.") == 1.0
+
+
+def test_alias_nieciecza_nie_ma_czego_skleic_w_datasecie() -> None:
+    """Ten sam warunek, ktory przepuscil `sichuan jiuniu`, a zatrzymal `shanghai sipg`.
+
+    Alias jest bezpieczny tylko wtedy, gdy dataset nie zna nazwy zrodlowej —
+    inaczej zlewa dwa istniejace wiersze i zmienia lambda per druzyna.
+    `normalize_team_name` karmi takze historie modelu, nie tylko rozliczenia.
+    """
+    import pandas as pd
+    import pytest
+
+    from footstats.data.historical_loader import CACHE_DIR
+
+    plik = CACHE_DIR / "full_dataset.parquet"
+    if not plik.exists():
+        pytest.skip("brak full_dataset.parquet w tym srodowisku")
+
+    df = pd.read_parquet(plik)
+    druzyny = set(df["home"].astype(str)) | set(df["away"].astype(str))
+    kolidujace = {t for t in druzyny if "nieciecz" in t.lower()}
+    assert not kolidujace, (
+        f"dataset zna juz nazwe 'Nieciecza' ({kolidujace}) — alias zlalby wiersze"
+    )

@@ -245,6 +245,14 @@ _DEFAULT_MAPPINGS: dict[str, str] = {
     # lambda per druzyna. Nazwy "Sichuan" dataset nie zna wcale, wiec nie ma czego
     # sklejac. Pilnuje tego `test_alias_zmiany_nazwy_nie_skleja_wierszy_datasetu`.
     "sichuan jiuniu":      "shenzhen peng city",
+    # Bruk-Bet Termalica Nieciecza: football-data zapisuje "Termalica B-B.",
+    # API-Football "Nieciecza" — kazde zrodlo wzielo INNY czlon tej samej nazwy,
+    # wiec podobienstwo wynosi dokladnie 0.0 i zadne dopasowanie rozmyte tego
+    # nie zmostkuje. Zmierzone 2026-09-03 na backfillu Ekstraklasy: ten jeden
+    # klub odpowiadal za 34 z 34 niedopasowanych meczow (625/659 = 95%).
+    # Bezpieczne z tego samego powodu co "sichuan jiuniu": nazwy "Nieciecza"
+    # dataset nie zna wcale, a "Termalica B-B." to jedyny pasujacy wiersz.
+    "nieciecza":           "termalica b b",
     # CELOWO NIE MA TU aliasu "shanghai sipg" -> "shanghai port", choc to ta sama
     # druzyna po zmianie nazwy (2021). Dodalem go i cofnalem: dataset historyczny
     # zawiera OBIE pisownie jako osobne druzyny, wiec alias zlewa ich wiersze —
