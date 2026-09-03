@@ -271,7 +271,7 @@ def _fixture_to_result(fixture: dict, api_key: str = None) -> tuple[str, str, st
     return home, away, wynik, stats
 
 
-def _fetch_statystyki_surowe(api_key: str, fixture_id: int) -> tuple[dict, int | None]:
+def _fetch_statystyki_surowe(api_key: str, fixture_id: int) -> tuple[dict | None, int | None]:
     """Statystyki meczu z /fixtures/statistics: ({nazwa drużyny: {typ: wartość}}, pozostało).
 
     Wydzielone z `_fetch_match_stats`, bo backfill historyczny
@@ -285,11 +285,11 @@ def _fetch_statystyki_surowe(api_key: str, fixture_id: int) -> tuple[dict, int |
     przestrzeliłby limit i wywalił poranny job na HTTP 429. `None` znaczy
     „nagłówka nie było", nie „zero".
     """
-    res: dict = {}
+    res: dict | None = {}
     pozostalo: int | None = None
     naglowki = _naglowek_af(api_key)
     if naglowki is None:
-        return res, pozostalo
+        return None, pozostalo
     try:
         r = requests.get(
             f"{API_BASE}/fixtures/statistics",
@@ -312,13 +312,21 @@ def _fetch_statystyki_surowe(api_key: str, fixture_id: int) -> tuple[dict, int |
             s_list = team_stat.get("statistics", [])
             res[t_name] = {s["type"]: s["value"] for s in s_list}
     except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+        # None, nie {}: zapytanie sie NIE UDALO, a to co innego niz "API
+        # odpowiedzialo, ze statystyk nie ma". Backfill zapisuje trwaly slad
+        # "brak_statystyk", zeby nie placic drugi raz — gdyby przejsciowe 429
+        # albo zerwane polaczenie wygladalo tak samo jak pusta odpowiedz, jeden
+        # zly kwadrans zatrulby dane na stale i zaden kolejny przebieg by tego
+        # nie odkrecil.
         log.debug("Match stats error (id=%s): %s", fixture_id, e)
+        return None, pozostalo
     return res, pozostalo
 
 
 def _fetch_match_stats(api_key: str, fixture_id: int) -> dict:
     """Pobiera statystyki (strzały, rożne, kartki, possession) + timeline zdarzeń dla meczu."""
     res, _ = _fetch_statystyki_surowe(api_key, fixture_id)
+    res = {} if res is None else res
 
     events = _fetch_match_events(api_key, fixture_id)
     if events:

@@ -317,3 +317,60 @@ def test_wyzszy_prog_odrzuca_slabe_dopasowanie():
     assert ru._znajdz_wynik(
         _pending("Jagiellonia Białystok", "Lech"), fixtures, min_similarity=0.99
     ) is None
+
+
+def test_nieudane_zapytanie_o_statystyki_zwraca_none_a_nie_pusty_slownik(monkeypatch):
+    """Awaria sieci MUSI byc odrozializna od "API odpowiedzialo, ze nie ma".
+
+    `af_backfill` zapisuje trwaly slad `brak_statystyk`, zeby nie placic drugi
+    raz za mecz, ktorego dostawca nie ma. Gdyby HTTP 429 albo zerwane polaczenie
+    wygladalo tak samo jak pusta odpowiedz, jeden zly kwadrans zatrulby dane na
+    stale — kolejne przebiegi pomijalyby te mecze bez zapytania, a plik
+    wygladalby na kompletny.
+    """
+    import requests as _rq
+
+    from footstats.scrapers import results_updater as ru
+
+    def _wybuch(url, **kw):
+        raise _rq.ConnectionError("zerwane polaczenie")
+
+    monkeypatch.setattr(ru.requests, "get", _wybuch)
+    stat, pozostalo = ru._fetch_statystyki_surowe("klucz", 123)
+
+    assert stat is None, "awaria sieci nie moze wygladac jak brak statystyk"
+    assert pozostalo is None
+
+
+def test_http_500_tez_zwraca_none(monkeypatch):
+    """`raise_for_status` na 4xx/5xx idzie ta sama sciezka co bledy polaczenia."""
+    import requests as _rq
+
+    from footstats.scrapers import results_updater as ru
+
+    class _Odp429:
+        status_code = 429
+        headers = {"x-ratelimit-requests-remaining": "0"}
+
+        def raise_for_status(self):
+            raise _rq.HTTPError("HTTP 429")
+
+        def json(self):
+            return {}
+
+    monkeypatch.setattr(ru.requests, "get", lambda url, **kw: _Odp429())
+    assert ru._fetch_statystyki_surowe("klucz", 1)[0] is None
+
+
+def test_pusta_odpowiedz_api_to_slownik_a_nie_none(monkeypatch):
+    """Kontrola od drugiej strony: gdy API ODPOWIE i nic nie ma, to `{}`.
+
+    Bez tego `return None` na kazdej sciezce bylby zielony, a backfill nigdy
+    nie zapisalby sladu i placilby za te same mecze w kolko.
+    """
+    from footstats.scrapers import results_updater as ru
+
+    monkeypatch.setattr(ru.requests, "get",
+                        lambda url, **kw: _Odp(200, {"response": []}))
+    stat, _ = ru._fetch_statystyki_surowe("klucz", 1)
+    assert stat == {}

@@ -548,7 +548,11 @@ class TestPobieraczaProdukcyjnego:
             raise AssertionError("zamknieta bramka, a poszlo zapytanie")
 
         monkeypatch.setattr(ru.requests, "get", _nie_wolno)
-        assert ab.pobierz_statystyki("klucz", 1) == ({}, None)
+        # None, nie {}: zamknieta bramka znaczy "NIE ZAPYTALISMY", a nie
+        # "API odpowiedzialo, ze statystyk nie ma". Gdyby zwracala {}, backfill
+        # zapisalby trwaly slad `brak_statystyk` dla kazdego meczu przy
+        # zawieszonym koncie — i po odwieszeniu nikt by ich juz nie pobral.
+        assert ab.pobierz_statystyki("klucz", 1) == (None, None)
 
 
 def test_rozliczenia_dalej_dostaja_zdarzenia() -> None:
@@ -586,3 +590,76 @@ def test_nieczytelny_wynik_liczony_osobno_od_niezgodnego() -> None:
     assert pary == []
     assert raport["wynik_nieczytelny"] == 1
     assert raport["wynik_niezgodny"] == 0
+
+
+# ────────────── przejsciowy blad != trwaly brak statystyk ──────────────────
+
+
+class TestBleduPobrania:
+    def test_nieudane_zapytanie_nie_zapisuje_trwalego_sladu(self, tmp_path) -> None:
+        """`None` znaczy "nie udalo sie zapytac", `{}` znaczy "API: nie ma".
+
+        Slad `brak_statystyk` jest TRWALY — kolejny przebieg pomija taki mecz bez
+        zapytania, zeby nie placic drugi raz. Gdyby przejsciowe HTTP 429 albo
+        zerwane polaczenie zapisywalo sie tak samo jak pusta odpowiedz, jeden zly
+        kwadrans zatrulby dane na stale, a nastepny przebieg wygladalby na
+        kompletny.
+        """
+        plik = tmp_path / "af_stats.parquet"
+        wynik = ab.backfill(_pary(3), pobierz=lambda k, f: (None, 7000), api_key="k",
+                            sciezka=plik, zapis_co=1, budzet=100)
+
+        assert wynik["blad_pobrania"] == 3
+        assert wynik["ok"] == 0 and wynik["bez_statystyk"] == 0
+        assert af_stats.wczytaj_af_stats(plik).empty, (
+            "nieudane zapytanie zostawilo slad — te mecze nie beda juz ponowione"
+        )
+
+    def test_po_bledzie_mecz_wraca_przy_wznowieniu(self, tmp_path) -> None:
+        plik = tmp_path / "af_stats.parquet"
+        ab.backfill(_pary(2), pobierz=lambda k, f: (None, 7000), api_key="k",
+                    sciezka=plik, zapis_co=1, budzet=100)
+
+        zapytania: list[int] = []
+
+        def _pobierz(api_key, fixture_id):
+            zapytania.append(fixture_id)
+            return _pobierz_ok(api_key, fixture_id)
+
+        ab.backfill(_pary(2), pobierz=_pobierz, api_key="k",
+                    sciezka=plik, zapis_co=1, budzet=100)
+        assert zapytania == [1000, 1001], "mecz po bledzie nie zostal ponowiony"
+
+    def test_seria_bledow_konczy_przebieg(self, tmp_path) -> None:
+        """Dziesiec bledow pod rzad znaczy trwala awarie, nie wpadke sieci.
+
+        Bez tego backfill waliby w padniete API az do wyczerpania budzetu,
+        nie przynoszac ani jednego wiersza.
+        """
+        plik = tmp_path / "af_stats.parquet"
+        zapytania: list[int] = []
+
+        def _pobierz(api_key, fixture_id):
+            zapytania.append(fixture_id)
+            return None, 7000
+
+        wynik = ab.backfill(_pary(40), pobierz=_pobierz, api_key="k",
+                            sciezka=plik, zapis_co=10, budzet=100)
+        assert wynik["powod_stopu"] == "bledy_pobrania"
+        assert len(zapytania) == ab.MAKS_BLEDOW_POD_RZAD
+
+    def test_udane_zapytanie_zeruje_licznik_bledow(self, tmp_path) -> None:
+        """Pojedyncze wpadki rozsiane po przebiegu nie moga go ubic."""
+        plik = tmp_path / "af_stats.parquet"
+        licznik = {"n": 0}
+
+        def _pobierz(api_key, fixture_id):
+            licznik["n"] += 1
+            if licznik["n"] % 2:
+                return None, 7000
+            return _pobierz_ok(api_key, fixture_id)
+
+        wynik = ab.backfill(_pary(20), pobierz=_pobierz, api_key="k",
+                            sciezka=plik, zapis_co=5, budzet=100)
+        assert wynik["powod_stopu"] == "koniec"
+        assert wynik["ok"] == 10

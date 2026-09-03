@@ -60,6 +60,12 @@ REZERWA_POTOKU = 1500
 # Co ile meczów zrzucamy plik: tyle najwyżej requestów traci ubity proces.
 ZAPIS_CO = 100
 
+# Ile nieudanych zapytań POD RZĄD kończy przebieg. Pojedyncza wpadka sieci jest
+# normalna; dziesięć z rzędu znaczy, że coś jest trwale nie tak (limit minutowy
+# 300/min, padnięty dostawca, zerwana sieć) — i wtedy dalsze walenie w API tylko
+# pali budżet, nie przynosząc ani jednego wiersza.
+MAKS_BLEDOW_POD_RZAD = 10
+
 PLIK_LIG = Path(__file__).resolve().parents[3] / "data" / "af_league_ids.json"
 
 # Sezony sondowane dla każdej ligi. NIE rozstrzygamy semantyki — "2024" to
@@ -464,7 +470,7 @@ def backfill(
     istniejace = _klucze_pobrane(zebrane)
     nowe: list[dict] = []
     podsumowanie = {"pobrane": 0, "ok": 0, "bez_statystyk": 0,
-                    "pominiete": 0, "powod_stopu": "koniec"}
+                    "pominiete": 0, "blad_pobrania": 0, "powod_stopu": "koniec"}
 
     def _zrzuc() -> None:
         if not nowe:
@@ -486,10 +492,25 @@ def backfill(
                 break
 
             surowe, pozostalo = pobierz(api_key, para.af_fixture_id)
-            wiersz = _wiersz_z_odpowiedzi(para, surowe or {})
+            podsumowanie["pobrane"] += 1
+
+            if surowe is None:
+                # Zapytanie sie NIE UDALO (HTTP 429, zerwane polaczenie, timeout).
+                # NIE zapisujemy sladu: slad znaczy "sprawdzone, nie ma" i blokuje
+                # ten mecz na zawsze. Jeden zly kwadrans zatrulby dane trwale,
+                # a nastepny przebieg wygladalby na kompletny.
+                podsumowanie["blad_pobrania"] += 1
+                log.warning("Fixture %s: zapytanie nieudane — mecz zostaje"
+                            " do ponownej proby", para.af_fixture_id)
+                if podsumowanie["blad_pobrania"] >= MAKS_BLEDOW_POD_RZAD:
+                    podsumowanie["powod_stopu"] = "bledy_pobrania"
+                    break
+                continue
+
+            podsumowanie["blad_pobrania"] = 0
+            wiersz = _wiersz_z_odpowiedzi(para, surowe)
             nowe.append(wiersz)
             istniejace.add(klucz)
-            podsumowanie["pobrane"] += 1
             podsumowanie["ok" if wiersz["status"] == "ok" else "bez_statystyk"] += 1
 
             if len(nowe) % zapis_co == 0:
