@@ -33,6 +33,15 @@ ENV/
 # Wzorce czynnik→typ z historii. To jedyne paliwo warstwy RAG: własnych
 # rozliczonych predykcji z czynnikami jest na produkcji ZERO i będzie tak
 # tygodniami. Bez tego pliku `pobierz_rag_wzorce` zwraca pusty string.
+# Statystyki meczowe z API-Football: kilka tysiecy zaplaconych requestow
+# z limitu 7500/dobe. `/data/*` wyzej wycina katalog, wiec bez tych trzech linii
+# `git add` odmawia, a plik nie pojedzie ani do obrazu, ani na runnera
+# cotygodniowego odswiezania datasetu.
+!/data/hist_cache/
+/data/hist_cache/*
+!/data/hist_cache/af_stats.parquet
+!/data/hist_cache/full_dataset.parquet
+
 !/data/rag_wzorce_historyczne.json
 
 # ── Logi i pliki tymczasowe

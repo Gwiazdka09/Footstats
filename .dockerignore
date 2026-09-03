@@ -16,6 +16,10 @@ data/footstats_backtest.db
 # WYWALAL build ("not found", plik wyciety z kontekstu) — zweryfikowane 2026-07-29.
 data/hist_cache/
 !data/hist_cache/full_dataset.parquet
+# Statystyki meczowe z API-Football (strzaly celne dla lig, ktore ich nie maja
+# u football-data). Bez tego pliku `load_cached()` scala PUSTY zbior, a model
+# w tych ligach wraca do samych goli — cicho, bo `form.py` tak ma dzialac.
+!data/hist_cache/af_stats.parquet
 # Aliasy nazw drużyn — ta sama historia co parquet: bez nich nazwa ze źródła nie
 # trafia w dataset, więc mecz wypada z λ Poissona i z formy.
 !data/team_mappings.json

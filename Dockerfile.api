@@ -31,6 +31,7 @@ COPY --from=gui-build /gui/dist ./src/footstats/gui/dist
 # Wymaga negacji `!data/hist_cache/full_dataset.parquet` w .dockerignore — bez niej
 # ten COPY wywala build ("not found", plik wycięty z kontekstu).
 COPY data/hist_cache/full_dataset.parquet ./data/hist_cache/full_dataset.parquet
+COPY data/hist_cache/af_stats.parquet ./data/hist_cache/af_stats.parquet
 
 # Aliasy nazw drużyn. Bez tego pliku `normalize.py` zapisuje w kontenerze swoje
 # `_DEFAULT_MAPPINGS` i rusza dalej — czyli obraz działa, tylko nie zna nazw

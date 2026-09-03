@@ -21,6 +21,7 @@ COPY src ./src
 # bzzoiro-ml zamiast Poisson-DC (patrz core/cloud_draft.py). Plik jest .gitignore'owany
 # (force-added do repo), a .gcloudignore go NIE wyklucza → trafia do build-contextu.
 COPY data/hist_cache/full_dataset.parquet ./data/hist_cache/full_dataset.parquet
+COPY data/hist_cache/af_stats.parquet ./data/hist_cache/af_stats.parquet
 
 # Aliasy nazw drużyn — joby rozliczają mecze, więc nierozpoznana nazwa to nie
 # tylko brak predykcji, ale i kupon, którego nikt nie zamknie.

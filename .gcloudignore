@@ -19,6 +19,10 @@ logs/
 !/data/hist_cache/
 /data/hist_cache/*
 !/data/hist_cache/full_dataset.parquet
+# Statystyki meczowe z API-Football (strzaly celne dla lig, ktore ich nie maja
+# u football-data). Bez tego pliku `load_cached()` scala PUSTY zbior, a model
+# w tych ligach wraca do samych goli — cicho, bo `form.py` tak ma dzialac.
+!/data/hist_cache/af_stats.parquet
 # Aliasy nazw drużyn — `COPY` w obu Dockerfile'ach wywali build, jeśli plik nie
 # wejdzie do build-contextu (ten sam mechanizm co przy parquecie).
 !/data/team_mappings.json
