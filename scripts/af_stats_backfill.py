@@ -116,7 +116,16 @@ def main() -> None:
 
         pary, raport = dopasuj_mecze(podzbior, fixtures, juz_pobrane=juz_klucze)
         rozwazane = len(podzbior) - raport["juz_mamy"]
-        odsetek = len(pary) / rozwazane if rozwazane else 0.0
+        if rozwazane == 0:
+            # "Nic nie zostalo do pobrania" NIE moze wygladac jak "zepsuta mapa
+            # skladu". Bez tego przypadku odsetek wychodzi 0/0, czyli 0%, i liga
+            # pobrana W KOMPLECIE dostaje ODMOWE z komunikatem o zepsutych
+            # nazwach. Straznik, ktory krzyczy bez powodu, zostanie wylaczony
+            # po tygodniu i nie zlapie prawdziwej awarii.
+            print(f"\n{liga}: komplet — {raport['juz_mamy']} meczow juz w pliku")
+            continue
+
+        odsetek = len(pary) / rozwazane
         print(f"\n{liga}: {len(pary)}/{rozwazane} dopasowanych ({odsetek:.0%})  {raport}")
 
         if odsetek < PROG_DOPASOWANIA and not args.force:
