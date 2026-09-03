@@ -339,6 +339,25 @@ def _znajdz_wynik(
     ph = pending["team_home"]
     pa = pending["team_away"]
 
+    # NAJLEPSZE dopasowanie, nie pierwsze powyzej progu (zmiana 2026-09-03).
+    #
+    # Klub potrafi miec sasiada dzielacego pierwszy czlon nazwy, a `team_similarity`
+    # daje takiej parze 0.80 — czyli powyzej progu — bo strukturalnie wyglada
+    # identycznie jak legalny skrot ("Legia" ~ "Legia Warszawa"):
+    #
+    #     AGF  vs  Aarhus         = 1.00   ten sam klub
+    #     AGF  vs  Aarhus Fremad  = 0.80   INNY klub, 2. liga dunska
+    #
+    # Przy wyjsciu na pierwszym trafieniu o rozliczeniu decydowala KOLEJNOSC
+    # fixture'ow w odpowiedzi dostawcy. Roznica wynikow jest jednoznaczna, wiec
+    # wystarczy przejsc cala liste i wziac maksimum.
+    #
+    # To NIE jest obnizenie progu: kandydat ponizej `min_similarity` nadal odpada,
+    # a brak kandydatow nadal daje None. Zmienia sie wylacznie rozstrzyganie
+    # remisu miedzy kilkoma dopasowaniami — pilnuje tego
+    # `test_ponizej_progu_dalej_nie_dopasowuje`.
+    najlepszy: tuple[float, str, dict] | None = None
+
     for fix in fixtures:
         parsed = _fixture_to_result(fix, api_key)
         if parsed is None:
@@ -346,10 +365,17 @@ def _znajdz_wynik(
         fh, fa, wynik, stats = parsed
         sim_h = _similar(ph, fh)
         sim_a = _similar(pa, fa)
-        if sim_h >= min_similarity and sim_a >= min_similarity:
-            return wynik, stats
+        if sim_h < min_similarity or sim_a < min_similarity:
+            continue
+        # Slabsza strona decyduje o jakosci pary — dopasowanie jest tak dobre,
+        # jak jego gorszy koniec.
+        ocena = min(sim_h, sim_a)
+        if najlepszy is None or ocena > najlepszy[0]:
+            najlepszy = (ocena, wynik, stats)
 
-    return None
+    if najlepszy is None:
+        return None
+    return najlepszy[1], najlepszy[2]
 
 
 # Ile razy wracamy do jednego meczu, zanim uznamy go za nieodzyskiwalny.
