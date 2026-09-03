@@ -183,9 +183,13 @@ def scal_statystyki(
         )
 
     for kol in obecne:
-        scalone[kol] = pd.to_numeric(
-            scalone[kol].fillna(scalone[f"{kol}__af"]), errors="coerce",
-        )
+        # Konwersja PRZED `fillna`, nie po. Liga bez strzalow ma kolumne samych
+        # `None`, czyli dtype `object` — `fillna` na takiej robi ciche
+        # downcastowanie, ktore pandas wlasnie deprecjonuje. Po zmianie
+        # zachowania kolumna zostalaby tekstem, a model czyta ja liczbowo.
+        lewa = pd.to_numeric(scalone[kol], errors="coerce")
+        prawa = pd.to_numeric(scalone[f"{kol}__af"], errors="coerce")
+        scalone[kol] = lewa.fillna(prawa)
 
     scalone = scalone.drop(columns=[c for c in scalone.columns
                                     if c.endswith("__af") or c.startswith("_k_")])

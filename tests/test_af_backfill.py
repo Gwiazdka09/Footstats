@@ -663,3 +663,25 @@ class TestBleduPobrania:
                             sciezka=plik, zapis_co=5, budzet=100)
         assert wynik["powod_stopu"] == "koniec"
         assert wynik["ok"] == 10
+
+
+def test_zapisany_plik_ma_liczbowe_kolumny_strzalow(tmp_path) -> None:
+    """Typy w pliku musza przezyc pierwszy zapis do PUSTEGO poprzednika.
+
+    `af_stats._pusta_ramka` ma wszystkie kolumny jako `object`. Doklejenie jej
+    do swiezych danych przez `concat` psuje typy — pandas ostrzega o tym
+    `FutureWarning`, a docelowo `hst`/`ast` zapisalyby sie jako tekst. Model
+    czyta je liczbowo, wiec byloby to ciche uszkodzenie danych, za ktore
+    zaplacilismy requestami.
+    """
+    import pandas as _pd
+
+    plik = tmp_path / "af_stats.parquet"
+    ab.backfill(_pary(2), pobierz=_pobierz_ok, api_key="k",
+                sciezka=plik, zapis_co=1, budzet=100)
+
+    zapisane = af_stats.wczytaj_af_stats(plik)
+    for kol in ("hs", "as_", "hst", "ast"):
+        assert _pd.api.types.is_numeric_dtype(zapisane[kol]), (
+            f"{kol} zapisane jako {zapisane[kol].dtype}, nie liczba"
+        )

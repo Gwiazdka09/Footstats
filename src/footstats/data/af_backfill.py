@@ -475,7 +475,14 @@ def backfill(
     def _zrzuc() -> None:
         if not nowe:
             return
-        laczne = pd.concat([zebrane, pd.DataFrame(nowe)], ignore_index=True)
+        swieze = pd.DataFrame(nowe)
+        # Pusty poprzednik ma WSZYSTKIE kolumny jako `object` (taki jest schemat
+        # `af_stats._pusta_ramka`). Doklejenie go do swiezych danych psuje typy:
+        # pandas ostrzega o tym `FutureWarning`, a w przyszlej wersji `hst`/`ast`
+        # zapisalyby sie jako tekst. Model czyta te kolumny liczbowo, wiec byloby
+        # to ciche uszkodzenie pliku, za ktory zaplacilismy requestami.
+        laczne = swieze if zebrane.empty else pd.concat([zebrane, swieze],
+                                                        ignore_index=True)
         af_stats.zapisz_af_stats(laczne, sciezka)
 
     try:
