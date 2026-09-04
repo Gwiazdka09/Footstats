@@ -20,7 +20,15 @@ _REQUIRED = ("home", "away", "hg", "ag")
 # benchmark informacji), `*_max` to najlepszy kurs (po nim realnie sie stawia).
 # Model ich NIE uzywa — sluza wylacznie ocenie po przebiegu.
 _KURSY_DODATKOWE = ("odds_h_pinn", "odds_d_pinn", "odds_a_pinn",
-                    "odds_h_max", "odds_d_max", "odds_a_max")
+                    "odds_h_max", "odds_d_max", "odds_a_max",
+                    # Rynek golowy. Istnieje TYLKO w formacie sezonowym
+                    # (~22 ligi europejskie); nowy format nie ma go w ogole,
+                    # a API-Football oddaje kursy najwyzej 7 dni wstecz —
+                    # zmierzone 04.09: -3/-5/-7d maja, -10d i dalej puste.
+                    # Czyli dla 17 lig pozaeuropejskich rynek golowy jest
+                    # niemierzalny WSTECZ i bedzie taki na zawsze.
+                    "odds_over25_pinn", "odds_under25_pinn",
+                    "odds_over25_max", "odds_under25_max")
 
 
 def adapt_to_prod_schema(df: pd.DataFrame) -> pd.DataFrame:
@@ -113,6 +121,11 @@ def predict_one(g, a, hist_prod, league, odds_h, odds_d, odds_a, flags) -> dict 
         "pw": round(p_final["pw"], 1),
         "pr": round(p_final["pr"], 1),
         "pp": round(p_final["pp"], 1),
+        # Over 2.5 z SAMEGO Poissona — `ensemble_probs` dotyka wylacznie 1X2,
+        # wiec ta liczba NIE jest zmieszana z cena i nie wolno jej porownywac
+        # z `pw/pr/pp` jak rownej. To wlasnie czyni ja uzyteczna: rynek golowy
+        # ocenia sie tu wobec ceny, ktorej model nie widzial.
+        "over25": pred["over25"],
         "no_odds": no_odds,
     }
 
@@ -202,6 +215,12 @@ def run_walkforward(df, league=None, flags=None, run_tag="run",
             # pytanie "a wobec zamkniecia Pinnacle?" albo "a jakie EV po
             # najlepszej cenie?" wymaga powtorzenia calego replayu.
             **{k: row.get(k) for k in _KURSY_DODATKOWE},
+            # Rynek golowy — model i wynik faktyczny. `actual_over25` bierzemy
+            # z datasetu, a nie liczymy z `hg+ag`, zeby rekord niosl DOKLADNIE
+            # to, wobec czego mierzy sie reszta projektu (`over25` powstaje
+            # w `historical_loader` i to ono trafia do kazdego innego pomiaru).
+            "p_over25": res["over25"],
+            "actual_over25": row.get("over25"),
             "correct": correct,
             "no_odds": 1 if res["no_odds"] else 0,
         })

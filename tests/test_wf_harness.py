@@ -239,7 +239,11 @@ def _run_walkforward_ref(df, league=None, flags=None, run_tag="run",
             "odds_a": row.get("odds_a"),
             **{k: row.get(k) for k in (
                 "odds_h_pinn", "odds_d_pinn", "odds_a_pinn",
-                "odds_h_max", "odds_d_max", "odds_a_max")},
+                "odds_h_max", "odds_d_max", "odds_a_max",
+                "odds_over25_pinn", "odds_under25_pinn",
+                "odds_over25_max", "odds_under25_max")},
+            "p_over25": res["over25"],
+            "actual_over25": row.get("over25"),
             "correct": correct,
             "no_odds": 1 if res["no_odds"] else 0,
         })
@@ -380,3 +384,47 @@ def test_ensemble_dalej_uzywa_sredniej_a_nie_ostrej_ceny():
         use_bayesian=False, use_ensemble=True, use_calibration=False), verbose=False)
 
     pd.testing.assert_series_equal(bez["pw"], z_ostra["pw"])
+
+
+def test_rekord_niesie_rynek_golowy_i_wynik_faktyczny():
+    """Over 2.5 musi byc W REKORDZIE, nie liczone po przebiegu.
+
+    Bez tego kazde pytanie o rynek golowy wymaga powtorzenia calego replayu,
+    a doklejenie prawdopodobienstw joinem po (liga, data, druzyny) gubi wiersze
+    cicho i nielosowo — dokladnie ta pulapka, przez ktora rekordy dostaly juz
+    wektor 1X2 i ceny.
+    """
+    df = _hist_df_english(n_pairs=60)
+    df["odds_over25_pinn"] = 1.85
+    df["odds_under25_pinn"] = 1.95
+    df["over25"] = (df["hg"] + df["ag"] > 2.5).astype(float)
+
+    out = run_walkforward(df, league="TEST", run_tag="t", verbose=False)
+    assert len(out) > 0
+    for kol in ("p_over25", "actual_over25", "odds_over25_pinn", "odds_under25_pinn",
+                "odds_over25_max", "odds_under25_max"):
+        assert kol in out.columns, f"brak kolumny {kol}"
+
+    # Model oddaje PROCENTY 0..100, wynik faktyczny to 0/1 — pomylenie skal
+    # dalby Brier liczony na dwoch roznych jednostkach i nikt by nie zauwazyl.
+    assert out["p_over25"].between(0, 100).all()
+    assert set(out["actual_over25"].dropna().unique()) <= {0.0, 1.0}
+    assert out["p_over25"].nunique() > 1, "model oddaje stala — cos jest nie tak"
+    assert (out["odds_over25_pinn"] == 1.85).all()
+
+
+def test_over25_nie_jest_zmieszane_z_cena_1x2():
+    """`ensemble_probs` dotyka wylacznie 1X2. Gdyby kiedys objelo Over 2.5,
+    ten pomiar zaczalby porownywac cene sama ze soba — cicho i wygladajac
+    poprawnie. Ramie z ensemblem i bez musi dac IDENTYCZNE `p_over25`."""
+    df = _hist_df_english(n_pairs=60)
+    df["over25"] = (df["hg"] + df["ag"] > 2.5).astype(float)
+
+    z_ens = run_walkforward(df, league="TEST", run_tag="t", verbose=False,
+                            flags=ModelFlags(use_ensemble=True, use_calibration=False))
+    bez = run_walkforward(df, league="TEST", run_tag="t", verbose=False,
+                          flags=ModelFlags(use_ensemble=False, use_calibration=False))
+    pd.testing.assert_series_equal(z_ens["p_over25"], bez["p_over25"])
+    # Kontrola pozytywna: 1X2 MA sie roznic, inaczej test przechodzi dlatego,
+    # ze kursow w ogole nie bylo.
+    assert not z_ens["pw"].equals(bez["pw"])
