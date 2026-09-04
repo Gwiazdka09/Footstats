@@ -51,18 +51,53 @@ def test_sciezka_af_stats_w_tym_samym_katalogu_co_dataset() -> None:
     assert af_stats.SCIEZKA_AF_STATS.parent == hl.CACHE_DIR
 
 
-def test_kolumny_promowane_to_dokladnie_cztery_pola_strzalow() -> None:
-    assert af_stats.KOLUMNY_PROMOWANE == ("hs", "as_", "hst", "ast")
+# Kazda promowana kolumna MUSI miec wskazanego czytelnika w `src/`. Ta mapa jest
+# uzasadnieniem promocji, a test nizej ja WERYFIKUJE zamiast powtarzac.
+# Kolumna bez czytelnika predzej czy pozniej zostanie uzyta bez pomiaru.
+CZYTELNICY_KOLUMN = {
+    "hs":       "footstats/core/ml_features.py",
+    "as_":      "footstats/core/ml_features.py",
+    "hst":      "footstats/core/form.py",
+    "ast":      "footstats/core/form.py",
+    "xg_home":  "footstats/core/form.py",
+    "xg_away":  "footstats/core/form.py",
+}
 
 
-def test_xg_jest_w_pliku_ale_nie_wsrod_promowanych() -> None:
-    """xG zostaje w pliku na przyszłość, ale nie ma w `src/` czytelnika kolumny
-    xG z parquetu — kolumna bez czytelnika zostałaby prędzej czy później użyta
-    bez pomiaru."""
-    assert "xg_home" in af_stats.KOLUMNY_PLIKU
-    assert "xg_away" in af_stats.KOLUMNY_PLIKU
-    assert "xg_home" not in af_stats.KOLUMNY_PROMOWANE
-    assert "xg_away" not in af_stats.KOLUMNY_PROMOWANE
+def test_kazda_promowana_kolumna_ma_wskazanego_czytelnika() -> None:
+    """Dopisanie kolumny do promowanych wymusza wskazanie, kto ja czyta."""
+    assert set(af_stats.KOLUMNY_PROMOWANE) == set(CZYTELNICY_KOLUMN)
+
+
+@pytest.mark.parametrize("kolumna,plik", sorted(CZYTELNICY_KOLUMN.items()))
+def test_wskazany_czytelnik_naprawde_czyta_ta_kolumne(kolumna: str, plik: str) -> None:
+    """Weryfikacja, nie deklaracja — mapa wyzej moze sklamac, ten test nie.
+
+    Bez tego "czytelnik" bylby komentarzem, ktory przezyje usuniecie kodu.
+    """
+    from pathlib import Path as _P
+    zrodlo = _P(__file__).resolve().parents[1] / "src" / plik
+    assert zrodlo.exists(), f"wskazany czytelnik {plik} nie istnieje"
+    assert kolumna in zrodlo.read_text(encoding="utf-8"), (
+        f"{plik} nie wspomina kolumny {kolumna} — mapa CZYTELNICY_KOLUMN klamie"
+    )
+
+
+def test_xg_jest_i_w_pliku_i_wsrod_promowanych() -> None:
+    """xG promowane od 2026-09-04, bo `form.sily_ligowe` dostalo warstwe xG.
+
+    Wczesniej ten test pilnowal DOKLADNIE ODWROTNEGO stanu — i mial racje, bo
+    czytelnika nie bylo. Zasada sie nie zmienila, zmienil sie fakt.
+    """
+    for kol in ("xg_home", "xg_away"):
+        assert kol in af_stats.KOLUMNY_PLIKU
+        assert kol in af_stats.KOLUMNY_PROMOWANE
+
+
+def test_promocja_kolumny_nie_zmienia_predykcji() -> None:
+    """Waga warstwy xG startuje z zera — wlaczenie to osobna, swiadoma decyzja."""
+    from footstats.config import WAGA_XG
+    assert WAGA_XG == 0.0
 
 
 # ─────────────────────────── wczytaj_af_stats ──────────────────────────────
@@ -307,7 +342,11 @@ def test_scal_statystyki_kolumny_wynikowe_pozostaja_liczbowe() -> None:
 
     wynik = af_stats.scal_statystyki(df, af)
 
+    # Tylko kolumny, ktore ramka realnie ma — `scal_statystyki` z zasady nie
+    # tworzy nowych, wiec xG bez kolumny w `df` po prostu tu nie wystapi.
     for kol in af_stats.KOLUMNY_PROMOWANE:
+        if kol not in wynik.columns:
+            continue
         assert pd.api.types.is_numeric_dtype(wynik[kol]), f"{kol} nie jest liczbowa"
 
 

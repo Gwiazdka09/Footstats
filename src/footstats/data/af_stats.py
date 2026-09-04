@@ -23,9 +23,19 @@ tam, gdzie strzały są: Brier 0.6290 → 0.6180) oraz `hs`/`as_` (czyta
 `core/ml_features.py`). Reszta pól z odpowiedzi API — rożne, kartki, posiadanie,
 podania, faule, obrony bramkarza — nie ma w `src/` ani jednego czytelnika.
 
-xG zostaje w PLIKU, ale NIE jest promowane. `predict_match(use_xg=True)` sięga
-do cache Understata, nie do datasetu, więc kolumna xG w ramce nie miałaby dziś
-czytelnika — a kolumna bez czytelnika prędzej czy później zostanie użyta bez pomiaru.
+xG PROMOWANE od 2026-09-04. Do tego dnia nie było, i to była właściwa decyzja:
+`predict_match(use_xg=True)` sięga do cache Understata, nie do datasetu, więc
+kolumna xG nie miała w `src/` ani jednego czytelnika. Zasada się nie zmieniła —
+zmienił się fakt: `form.sily_ligowe` dostało warstwę xG (`WAGA_XG`, domyślnie 0).
+
+Kolumny xG powstają w `historical_loader.uzupelnij_schemat`, nie tutaj. Punkt
+kontraktu „żadnych nowych kolumn" zostaje nienaruszony: ten moduł DOPEŁNIA to,
+co ramka już ma. Parquet na dysku jest starszy niż xG, stąd uzupełnianie schematu
+przy odczycie zamiast pobierania całego zbioru od nowa.
+
+Mapa `kolumna → czytelnik` jest weryfikowana testem (`CZYTELNICY_KOLUMN`
+w `tests/test_af_stats.py`) — inaczej „czytelnik" byłby komentarzem, który
+przeżyje usunięcie kodu.
 
 ZGODNOŚĆ POLA, zmierzona 2026-09-03 na Eredivisie (liga mająca strzały u OBU
 źródeł): `Shots on Goal` z API-Football zgadza się z `HST` z football-data
@@ -50,7 +60,8 @@ SCIEZKA_AF_STATS = CACHE_DIR / "af_stats.parquet"
 KLUCZ = ("date", "home", "away")
 
 # Kolumny wchodzące do ramki modelu. Krótka lista jest CELOWA — patrz docstring.
-KOLUMNY_PROMOWANE: tuple[str, ...] = ("hs", "as_", "hst", "ast")
+KOLUMNY_PROMOWANE: tuple[str, ...] = ("hs", "as_", "hst", "ast",
+                                      "xg_home", "xg_away")
 
 KOLUMNY_PLIKU: tuple[str, ...] = (
     "date", "league", "home", "away",

@@ -32,6 +32,29 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 NAZWA_PELNEGO = "full_dataset.parquet"
 
+# Kolumny, ktorych parquet na dysku moze nie miec, bo powstal przed ich
+# wprowadzeniem. Dokladane przy ODCZYCIE jako puste, zeby `af_stats` mialo co
+# dopelnic — tamten modul ma w kontrakcie „zadnych nowych kolumn" i to jest
+# dobra bramka: dokladanie kolumn przy DOPELNIANIU danych zmienialoby schemat
+# w miejscu, ktorego nikt o to nie prosi. Schemat definiuje sie tutaj.
+KOLUMNY_OPCJONALNE: tuple[str, ...] = ("xg_home", "xg_away")
+
+
+def uzupelnij_schemat(df: pd.DataFrame) -> pd.DataFrame:
+    """Dokłada brakujące `KOLUMNY_OPCJONALNE` jako puste. Zwraca NOWĄ ramkę.
+
+    Liczba i kolejność wierszy bez zmian; kolumna, która już jest, zostaje
+    nietknięta. Bez tego dołożenie nowego pola wymagałoby pobrania całego
+    zbioru od nowa, a to godziny ruchu sieciowego za dwie kolumny NaN.
+    """
+    brak = [k for k in KOLUMNY_OPCJONALNE if k not in df.columns]
+    if not brak:
+        return df
+    out = df.copy()
+    for kol in brak:
+        out[kol] = pd.Series([pd.NA] * len(out), index=out.index, dtype="Float64")
+    return out
+
 
 def sciezka_pelnego() -> Path:
     """Ścieżka pełnego datasetu — jedno miejsce zamiast literału w dwóch.
@@ -931,6 +954,10 @@ def load_cached(z_af: bool = True) -> pd.DataFrame:
     # Inaczej ramiona różniłyby się DWIEMA rzeczami naraz.
     from footstats.data.rozszczepienia import scal_z_pliku
     df = scal_z_pliku(df)
+
+    # Schemat PRZED dopełnieniem z AF: `scal_statystyki` z zasady nie tworzy
+    # kolumn, tylko wypełnia istniejące. Kolejność jest tu warunkiem, nie stylem.
+    df = uzupelnij_schemat(df)
 
     if not z_af:
         return df
