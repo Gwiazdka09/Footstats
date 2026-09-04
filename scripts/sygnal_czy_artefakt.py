@@ -168,14 +168,36 @@ def badanie_1(p_otw, p_zam, p_mod, y_1h, klucz_sezonu: np.ndarray) -> None:
             wyniki.setdefault(nazwa, []).append(z)
             print(f"  {nazwa:<34}{wym:<12}{beta[1]:>+12.5f}{se[1]:>10.5f}{z:>+8.2f}")
 
-    # A3 — sufit: dokad w ogole jedzie linia wzgledem PRAWDY.
+    # A3 — SUFIT. Porownanie MUSI byc bezwymiarowe.
+    #
+    # Pierwotnie A3 mialo zestawiac wspolczynniki `b`, i to bylo bledem
+    # konstrukcji: `b` jest w jednostkach "na jednostke regresora", a regresory
+    # maja tu skrajnie rozne rozrzuty (nasz sygnal ~0.0x, wynik zero-jedynkowy
+    # ~0.5). Zestawienie surowych `b` porownywaloby dwie rozne skale i wychodzil
+    # z tego nonsens — sufit NIZSZY niz nasz wynik.
+    #
+    # Bezwymiarowe jest R^2 CZASTKOWE: ile wariancji dryfu tlumaczy regresor
+    # PONAD same kubelki ceny. Tak samo liczone dla obu, wiec porownywalne.
     print()
-    for wym, k in (("gospodarz", 0), ("gosc", 2)):
+
+    def _r2_czastkowe(regresor, k):
+        baza = _kubelki(p_otw[:, k])
         dryf = p_zam[:, k] - p_otw[:, k]
-        prawda = y_1h[:, k] - p_otw[:, k]
-        beta, se = mnk(dryf, np.column_stack([prawda, _kubelki(p_otw[:, k])]))
-        print(f"  {'A3 SUFIT: dryf wzgledem WYNIKU':<34}{wym:<12}"
-              f"{beta[1]:>+12.5f}{se[1]:>10.5f}{beta[1] / se[1]:>+8.2f}")
+        b0, _ = mnk(dryf, baza)
+        r0 = dryf - np.column_stack([np.ones(len(baza)), baza]) @ b0
+        X = np.column_stack([regresor, baza])
+        b1, _ = mnk(dryf, X)
+        r1 = dryf - np.column_stack([np.ones(len(X)), X]) @ b1
+        return 1.0 - float(r1 @ r1) / float(r0 @ r0)
+
+    print(f"  {'A3 SUFIT (R^2 czastkowe, bezwymiarowe)':<46}"
+          f"{'model':>10}{'wynik':>10}{'udzial':>9}")
+    print("  " + "-" * 75)
+    for wym, k in (("gospodarz", 0), ("gosc", 2)):
+        r_mod = _r2_czastkowe(p_mod[:, k] - p_otw[:, k], k)
+        r_praw = _r2_czastkowe(y_1h[:, k] - p_otw[:, k], k)
+        print(f"  {'  ' + wym:<46}{r_mod:>10.5f}{r_praw:>10.5f}"
+              f"{100 * r_mod / r_praw:>8.1f}%")
 
     a1 = wyniki["A1 kontrola 20 kubelkow p_otw"]
     a2b = wyniki["A2b placebo: permutacja w cenie"]
@@ -210,30 +232,53 @@ def badanie_2(d: pd.DataFrame, p_otw, p_mod) -> None:
     kz = d[list(ZAM)].to_numpy(dtype=float)
     rng = np.random.default_rng(ZIARNO)
 
+    # CLV liczone na kursach SUROWYCH miesza dwie rzeczy: ruch linii i zmiane
+    # marzy. Pinnacle zacisniete marze w miare zblizania sie meczu (overround
+    # 1.0362 na otwarciu, 1.0325 na zamknieciu), wiec surowe CLV jest UJEMNE
+    # dla kazdego typu, takze losowego — z definicji, nie z braku przewagi.
+    # Wersja bez marzy (odwrotnosci zdewigowanych prawdopodobienstw) usuwa ten
+    # wspolny skladnik i dopiero ona mierzy sam ruch linii.
+    ko_bm = 1.0 / devig(ko)
+    kz_bm = 1.0 / devig(kz)
+
     warianty = (
         ("typ modelu (argmax p_model)", p_mod.argmax(axis=1)),
         ("typ rynku (argmax ceny otwarcia)", p_otw.argmax(axis=1)),
         ("typ losowy", rng.integers(0, 3, len(d))),
     )
-    print(f"  {'wariant':<36}{'n':>8}{'CLV':>10}{'SE':>9}{'z':>8}")
-    print("  " + "-" * 72)
+    print(f"  {'wariant':<36}{'n':>8}{'CLV surowe':>12}{'z':>8}"
+          f"{'CLV bez marzy':>15}{'z':>8}")
+    print("  " + "-" * 87)
     wyniki = {}
     for nazwa, wybor in warianty:
-        r = _clv(ko, kz, np.asarray(wybor))
+        w = np.asarray(wybor)
+        r = _clv(ko, kz, w)
+        rb = _clv(ko_bm, kz_bm, w)
         wyniki[nazwa] = r
-        print(f"  {nazwa:<36}{r['n']:>8}{100 * r['clv']:>+9.3f}%"
-              f"{100 * r['se']:>8.3f}%{r['z']:>+8.2f}")
+        wyniki[nazwa + "|bm"] = rb
+        print(f"  {nazwa:<36}{r['n']:>8}{100 * r['clv']:>+11.3f}%{r['z']:>+8.2f}"
+              f"{100 * rb['clv']:>+14.3f}%{rb['z']:>+8.2f}")
 
     m = wyniki["typ modelu (argmax p_model)"]
     ref = max(wyniki["typ rynku (argmax ceny otwarcia)"]["clv"],
               wyniki["typ losowy"]["clv"])
-    print("\n  REGULA B (zamrozona przed przebiegiem):")
+    print("\n  REGULA B (zamrozona przed przebiegiem, na CLV SUROWYM):")
     if m["clv"] > 0 and m["z"] >= 2 and m["clv"] > ref:
         print("    CLV dodatnie, istotne i wyzsze od obu odniesien")
         print("    -> bijemy linie zamkniecia. Nadal NIE sa to pieniadze,")
         print("       dopoki ROI po podatku jest ujemne (-15.99%).")
     else:
-        print("    -> `b` nie przeklada sie na cene.")
+        print("    -> regula NIESPELNIONA na CLV surowym.")
+
+    mb = wyniki["typ modelu (argmax p_model)|bm"]
+    lb = wyniki["typ losowy|bm"]
+    print("\n  CLV BEZ MARZY (dopisane po zobaczeniu, ze surowe CLV jest ujemne")
+    print("  dla KAZDEGO typu — takze losowego — bo Pinnacle zaciska marze):")
+    print(f"    model {100 * mb['clv']:+.3f}% (z={mb['z']:+.2f})"
+          f"   losowy {100 * lb['clv']:+.3f}% (z={lb['z']:+.2f})"
+          f"   roznica {100 * (mb['clv'] - lb['clv']):+.3f}pp")
+    print("    Ta liczba jest wielkoscia realnej przewagi cenowej modelu.")
+    print("    Nie zastepuje reguly B — jest jej diagnoza.")
 
 
 def badanie_3(d: pd.DataFrame, y: np.ndarray, p_mod) -> None:
