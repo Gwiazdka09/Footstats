@@ -37,7 +37,17 @@ NAZWA_PELNEGO = "full_dataset.parquet"
 # dopelnic — tamten modul ma w kontrakcie „zadnych nowych kolumn" i to jest
 # dobra bramka: dokladanie kolumn przy DOPELNIANIU danych zmienialoby schemat
 # w miejscu, ktorego nikt o to nie prosi. Schemat definiuje sie tutaj.
-KOLUMNY_OPCJONALNE: tuple[str, ...] = ("xg_home", "xg_away")
+KOLUMNY_OPCJONALNE: tuple[str, ...] = (
+    "xg_home", "xg_away",
+    # Cena OSTRA (Pinnacle closing) i NAJLEPSZA (max na zamknieciu) — patrz
+    # `_wpisz_ostre_i_najlepsze`. Jedna cena nie odpowiada na dwa rozne
+    # pytania, a projekt zadaje oba: "czy mamy informacje" i "czy da sie
+    # zarobic".
+    "odds_h_pinn", "odds_d_pinn", "odds_a_pinn",
+    "odds_h_max", "odds_d_max", "odds_a_max",
+    "odds_over25_pinn", "odds_under25_pinn",
+    "odds_over25_max", "odds_under25_max",
+)
 
 
 def uzupelnij_schemat(df: pd.DataFrame) -> pd.DataFrame:
@@ -271,6 +281,57 @@ def _wpisz_kursy(
         out[cel] = pd.to_numeric(df[zrodlo], errors="coerce")
 
 
+def _wpisz_ostre_i_najlepsze(out: pd.DataFrame, df: pd.DataFrame,
+                             sezonowy: bool) -> None:
+    """Dokłada CENĘ OSTRĄ (Pinnacle closing) i NAJLEPSZĄ (max na zamknięciu).
+
+    Jedna cena nie odpowiada na dwa różne pytania, a projekt zadaje oba:
+
+      * `*_pinn` — Pinnacle closing. Najostrzejsza cena rynku. Pokonanie
+        średniej książek nie znaczy nic; pokonanie zamknięcia Pinnacle znaczy
+        wszystko. To jest właściwy benchmark każdego pomiaru przewagi.
+      * `*_max`  — najlepszy kurs na zamknięciu. Po tej cenie realnie się
+        stawia, więc EV liczone po średniej odpowiada na pytanie, którego nikt
+        nie zadaje.
+
+    `odds_h/d/a` i `odds_over25/under25` zostają nietknięte (średnia): cały
+    dotychczasowy dorobek pomiarowy liczy z nich i podmiana znaczenia
+    unieważniłaby porównania z przeszłością.
+
+    KAŻDA KOLUMNA MA DOKŁADNIE JEDNO ŹRÓDŁO, bez cofania się do wariantów
+    o innej semantyce:
+      * `PSC*` nie cofa się do `PS*` — to cena OTWARCIA, inny moment i inna
+        ostrość;
+      * `MaxC*` nie cofa się do `BbMx*` (Betbrain, sezony do 1819) — to
+        maksimum z nieokreślonej chwili, nie z zamknięcia.
+    Kolumna zmieniająca znaczenie w połowie historii psułaby każdy pomiar
+    dzielony po epoce, i to po cichu, bo liczby dalej wyglądałyby sensownie.
+    Starsze sezony zostają z NaN — to uczciwsze niż cicha podmiana.
+
+    Nowy format nie ma u źródła ŻADNYCH kursów Over/Under (sprawdzone
+    2026-09-04: 25 kolumn, wszystkie 1X2), więc tam dokładamy tylko 1X2.
+    """
+    pary: list[tuple[tuple[str, ...], tuple[str, ...]]] = [
+        (("odds_h_pinn", "odds_d_pinn", "odds_a_pinn"), ("PSCH", "PSCD", "PSCA")),
+        (("odds_h_max", "odds_d_max", "odds_a_max"), ("MaxCH", "MaxCD", "MaxCA")),
+    ]
+    if sezonowy:
+        pary += [
+            (("odds_over25_pinn", "odds_under25_pinn"), ("PC>2.5", "PC<2.5")),
+            (("odds_over25_max", "odds_under25_max"), ("MaxC>2.5", "MaxC<2.5")),
+        ]
+
+    for docelowe, zrodlowe in pary:
+        # Kolumna powstaje ZAWSZE, choćby pusta. Gdyby znikała razem z brakiem
+        # danych, `regresje_datasetu` przestałoby ją widzieć — ten strażnik
+        # pomija kolumny nieobecne po którejś stronie, więc zniknięcie `PSC*`
+        # u źródła byłoby CISZĄ zamiast alarmem. Pusta kolumna daje 100% -> 0%
+        # i alarm dostajemy.
+        for kol in docelowe:
+            out[kol] = pd.Series([pd.NA] * len(out), index=out.index, dtype="Float64")
+        _wpisz_kursy(out, df, docelowe, [zrodlowe])
+
+
 def _download_fdco_season(league_code: str, season: str) -> pd.DataFrame | None:
     url = f"{BASE_FDCO}/mmz4281/{season}/{league_code}.csv"
     raw = _get(url)
@@ -319,6 +380,8 @@ def _download_fdco_season(league_code: str, season: str) -> pd.DataFrame | None:
         ("BbAv>2.5", "BbAv<2.5"),
         ("Avg>2.5",  "Avg<2.5"),
     ])
+
+    _wpisz_ostre_i_najlepsze(out, df, sezonowy=True)
 
     out["source"] = "fdco_season"
     return out.dropna(subset=["home", "away", "hg", "ag"])
@@ -415,6 +478,8 @@ def _download_fdco_new(country_code: str) -> pd.DataFrame | None:
         ("AvgCH",  "AvgCD",  "AvgCA"),
         ("MaxCH",  "MaxCD",  "MaxCA"),
     ])
+
+    _wpisz_ostre_i_najlepsze(out, df, sezonowy=False)
 
     out["source"] = "fdco_new"
     return out.dropna(subset=["home", "away", "hg", "ag"])
@@ -759,7 +824,11 @@ def merge_xg_into_dataset(df_main: pd.DataFrame, df_xg: pd.DataFrame) -> pd.Data
 # Kolumny, których ubytek realnie zwęża pomiar — nie wszystkie, jakie są w zbiorze.
 # `odds_*` niosą ramię RYNKOWE walk-forwardu (`wf_harness.predict_one` je devigauje),
 # `hst`/`ast` wchodzą do λ przez `form.sily_ligowe` (WAGA_STRZALOW).
-_KOLUMNY_PILNOWANE = ("odds_h", "odds_d", "odds_a", "odds_over25", "hst", "ast")
+_KOLUMNY_PILNOWANE = ("odds_h", "odds_d", "odds_a", "odds_over25", "hst", "ast",
+                      # Pinnacle closing to benchmark KAZDEGO pomiaru przewagi.
+                      # Ciche zniknieciu tej kolumny u zrodla uniewaznilo by
+                      # porownania, nie dajac ani jednego objawu.
+                      "odds_h_pinn", "odds_h_max")
 
 # O ile punktów procentowych może spaść pokrycie kolumny w JEDNEJ lidze, zanim
 # uznamy to za incydent. Skala wzięta z realnych zdarzeń, nie z sufitu: jeden
