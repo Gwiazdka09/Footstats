@@ -155,10 +155,16 @@ def main() -> None:
     def _ocen(w: float, etykieta: str) -> None:
         b_w = brier_przy_wadze(m_h, r_h, y_h, w)
         d = sparowana_roznica(b_rynek, b_w)   # dodatnie = `w` lepsze od ceny
-        pj = p_jednostronne(d["z"])
+        # w=1.0 porownuje cene SAMA ZE SOBA: roznice sa zerami co do bitu, wiec
+        # SE=0 i `z` nie istnieje. To nie awaria, tylko definicja punktu
+        # odniesienia — wiersz ma sie wypisac, zeby bylo widac wartosc Briera.
+        if d["z"] is None:
+            print(f"  {etykieta:<34} Brier {float(b_w.mean()):.5f}"
+                  f"  (punkt odniesienia)")
+            return
         print(f"  {etykieta:<34} Brier {float(b_w.mean()):.5f}"
               f"  vs cena {d['roznica']:+.5f}  SE {d['se']:.5f}"
-              f"  z {d['z']:+.2f}  p {pj:.4f}")
+              f"  z {d['z']:+.2f}  p {p_jednostronne(d['z']):.4f}")
 
     _ocen(1.0, "sama cena (odniesienie)")
     _ocen(w_gwiazdka, f"w* = {w_gwiazdka} (wybrane na treningu)")
