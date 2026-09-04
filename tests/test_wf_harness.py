@@ -234,6 +234,9 @@ def _run_walkforward_ref(df, league=None, flags=None, run_tag="run",
             # implementacja tej samej petli i test porownuje ramki wiersz po
             # wierszu. Rozjazd zlapie sie natychmiast, i o to chodzi.
             "pw": res["pw"], "pr": res["pr"], "pp": res["pp"],
+            "odds_h": row.get("odds_h"),
+            "odds_d": row.get("odds_d"),
+            "odds_a": row.get("odds_a"),
             "correct": correct,
             "no_odds": 1 if res["no_odds"] else 0,
         })
@@ -281,3 +284,40 @@ def test_run_walkforward_zachowuje_dotychczasowe_kolumny():
         use_bayesian=False, use_ensemble=True, use_calibration=False), verbose=False)
     assert {"tip", "pred_tip", "pred_conf", "correct", "match_date",
             "no_odds", "actual_res", "league"}.issubset(out.columns)
+
+
+def test_run_walkforward_niesie_kurs_uzyty_do_predykcji():
+    """Porównanie z rynkiem wymaga CENY, po której rynek wycenił ten mecz.
+
+    Bez tych kolumn kurs trzeba doklejać joinem po (liga, data, gospodarz,
+    gość) już PO przebiegu. Taki join jest cichy: kilka procent wierszy, które
+    się nie dopasują, wypada z pomiaru bez śladu, a wypadają nielosowo (dziwne
+    pisownie nazw), więc porównanie modelu z rynkiem robi się na przekrzywionej
+    podpróbce. Kurs, którego użył `predict_one`, jest jedynym, o którym wiadomo,
+    że dotyczy TEGO wiersza.
+    """
+    df = _hist_df_english()
+    out = run_walkforward(df, league="TEST", flags=ModelFlags(
+        use_bayesian=False, use_ensemble=False, use_calibration=False), verbose=False)
+    assert {"odds_h", "odds_d", "odds_a"}.issubset(out.columns)
+    # _hist_df_english wpisuje 1.9/3.4/4.0 w kazdy wiersz — kurs ma dojechac
+    # nietkniety, a nie np. jako wynik devigu albo NaN po konwersji typow.
+    assert (out["odds_h"] == 1.9).all()
+    assert (out["odds_d"] == 3.4).all()
+    assert (out["odds_a"] == 4.0).all()
+
+
+def test_kurs_w_rekordzie_odtwarza_wektor_rynku():
+    """Kurs z rekordu musi dać ten sam wektor rynku co devig na wejściu.
+
+    To jest właściwość, dla której kolumny w ogóle dodajemy: `devig_1x2`
+    policzony na kursie Z REKORDU ma być tym samym rozkładem, którego użył
+    `predict_one` w środku pętli.
+    """
+    df = _hist_df_english()
+    out = run_walkforward(df, league="TEST", flags=ModelFlags(
+        use_bayesian=False, use_ensemble=False, use_calibration=False), verbose=False)
+    wiersz = out.iloc[0]
+    rynek = devig_1x2(wiersz["odds_h"], wiersz["odds_d"], wiersz["odds_a"])
+    assert rynek is not None
+    assert rynek == devig_1x2(1.9, 3.4, 4.0)

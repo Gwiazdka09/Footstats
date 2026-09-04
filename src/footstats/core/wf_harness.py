@@ -183,6 +183,14 @@ def run_walkforward(df, league=None, flags=None, run_tag="run",
             # Bez tych kolumn kazdy pomiar jakosci prawdopodobienstw wymagalby
             # powtorzenia calego replayu (~90 s na lige na ramie).
             "pw": res["pw"], "pr": res["pr"], "pp": res["pp"],
+            # Kurs, ktorego uzyl `predict_one` na TYM wierszu. Bez niego
+            # porownanie modelu z rynkiem wymaga doklejenia ceny joinem po
+            # (liga, data, gospodarz, gosc) juz po przebiegu — a taki join
+            # gubi wiersze cicho i NIELOSOWO (dziwne pisownie nazw), czyli
+            # przekrzywia dokladnie te probe, na ktorej mamy rozstrzygac.
+            "odds_h": row.get("odds_h"),
+            "odds_d": row.get("odds_d"),
+            "odds_a": row.get("odds_a"),
             "correct": correct,
             "no_odds": 1 if res["no_odds"] else 0,
         })
