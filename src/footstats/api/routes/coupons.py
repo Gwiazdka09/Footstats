@@ -4,7 +4,7 @@ import json
 import logging
 import math
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Union
 
 import footstats.config as cfg
@@ -302,22 +302,82 @@ def get_coupon_summary(days: int = 30, user_id: int = Depends(require_auth)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Statusy, przy ktorych zrodlo mowi WPROST, ze meczu juz nie ma po co typowac.
+# Lista jest blokujaca, nie dopuszczajaca: status nieznany NIE wyklucza meczu,
+# tylko oddaje decyzje zegarowi. Odwrotnie — allowlista — oprozniłaby kreator
+# w dniu, w ktorym dostawca zmieni slownik, i nikt by nie zauwazyl dlaczego.
+_STATUSY_ROZPOCZETE = frozenset({
+    "inprogress", "in_progress", "live", "playing", "halftime", "ht",
+    "finished", "ft", "ended", "aet", "pen", "afterpen",
+    "cancelled", "canceled", "postponed", "abandoned", "suspended", "awarded",
+})
+
+
+def _moment_meczu(m: dict) -> datetime | None:
+    """Poczatek meczu jako moment ZE STREFA (UTC). None gdy nie da sie odczytac.
+
+    Pole `godzina` NIE MA jednej konwencji w tym projekcie: `api_football`
+    i `football_data` dopisuja do niej " UTC", `bzzoiro` i `terminarz` oddaja
+    goly wycinek ISO. Poprzednia wersja parsowala to jednym `strptime`
+    z `"%H:%M"`, wiec wiersze z sufiksem rzucaly `ValueError` i wypadaly CICHO —
+    kreator gubil cale zrodla, a lista dalej wygladala poprawnie.
+
+    `data_full` (pelne ISO, czesto z przesunieciem strefy) jest wiarygodniejsze
+    i dlatego idzie pierwsze. Gdy zostaje sama `data`+`godzina` bez strefy,
+    przyjmujemy UTC — i to jest ZALOZENIE, nie fakt: `bzzoiro.py` tnie
+    `event_date` bez normalizacji, a jego przesuniecie nie jest w kodzie nigdzie
+    potwierdzone. Dlatego zegar NIE jest tu jedynym zabezpieczeniem i pracuje
+    razem z `_STATUSY_ROZPOCZETE`.
+    """
+    pelna = str(m.get("data_full") or "").strip()
+    data = str(m.get("data") or "").strip()
+    godzina = str(m.get("godzina") or "").strip()
+    if godzina.upper().endswith("UTC"):
+        godzina = godzina[:-3].strip()
+    godzina = godzina[-5:] if len(godzina) > 5 else godzina
+
+    try:
+        if pelna:
+            dt = datetime.fromisoformat(pelna.replace("Z", "+00:00"))
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        if data and godzina:
+            return datetime.strptime(f"{data} {godzina}", "%Y-%m-%d %H:%M").replace(
+                tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        # NIE cisza. Mecz bez czytelnej daty wypada z kreatora, a wlasnie tak
+        # znikaly cale zrodla: `strptime` dlawilo sie sufiksem " UTC", `except`
+        # polykalo blad i lista dalej wygladala poprawnie.
+        _log.warning("Nieczytelna data meczu id=%s: data_full=%r data=%r godzina=%r",
+                     m.get("id"), pelna, data, m.get("godzina"))
+    return None
+
+
+def _juz_sie_zaczal(m: dict, teraz: datetime) -> bool:
+    """Czy mecz odpadl z typowania. Status jest wazniejszy niz zegar.
+
+    Status pochodzi od dostawcy i jest stwierdzeniem faktu; godzina wymaga
+    zalozenia o strefie. Gdy oba sa dostepne, wystarczy jedno, zeby wykluczyc.
+    """
+    if str(m.get("status") or "").strip().lower().replace(" ", "") in _STATUSY_ROZPOCZETE:
+        return True
+    moment = _moment_meczu(m)
+    return moment is not None and moment <= teraz
+
+
 @router.get("/matches/today")
 @cached_response(ttl_seconds=600, vary_by=["user_id"])
 def get_matches_today(user_id: int = Depends(require_auth)):
     global _MATCHES_CACHE
     preds = _fetch_predictions()
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     cutoff = now + timedelta(hours=48)
     future = []
     for m in preds:
-        try:
-            dt = datetime.strptime(f"{m.get('data','')} {m.get('godzina','')}", "%Y-%m-%d %H:%M")
-            if now < dt <= cutoff:
-                future.append(m)
-        except (ValueError, TypeError):
+        moment = _moment_meczu(m)
+        if moment is None or moment > cutoff or _juz_sie_zaczal(m, now):
             continue
-    future.sort(key=lambda m: (m.get("data", ""), m.get("godzina", "")))
+        future.append(m)
+    future.sort(key=lambda m: _moment_meczu(m) or cutoff)
     _MATCHES_CACHE = future[:30] if future else []
     return _MATCHES_CACHE
 
@@ -329,7 +389,14 @@ def analyze_matches(req: AnalyzeRequest, user_id: int = Depends(require_auth)):
         _MATCHES_CACHE = _fetch_predictions()
     from footstats.core.match_tips import build_tips
     id_set = {str(i) for i in req.match_ids}
-    return [build_tips(m) for m in _MATCHES_CACHE if str(m.get("id")) in id_set]
+    # Filtr czasowy MUSI byc takze tutaj. `_MATCHES_CACHE` to globalna zmienna
+    # dzielona miedzy endpointami i uzytkownikami, a `/coupons/daily-proposals`
+    # wypelnia ja lista NIEFILTROWANA — wiec mecz zakonczony dalo sie
+    # zanalizowac, podajac jego id, nawet gdy `/matches/today` go nie pokazal.
+    # Zgloszone z GUI 04.09.2026.
+    teraz = datetime.now(timezone.utc)
+    return [build_tips(m) for m in _MATCHES_CACHE
+            if str(m.get("id")) in id_set and not _juz_sie_zaczal(m, teraz)]
 
 
 @router.get("/coupons/daily-proposals")

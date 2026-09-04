@@ -165,6 +165,14 @@ class BzzoiroClient:
                 "liga":    liga_str,
                 "data":    data,
                 "godzina": godzina,
+                # Pelne ISO obok pocietych kawalkow. `data`/`godzina` sa
+                # wycinkami po znakach, wiec GUBIA przesuniecie strefy, jesli
+                # zrodlo je podaje — a konsument (`/matches/today`) musial przez
+                # to zakladac UTC. Zalozenie bylo bledne co najmniej raz:
+                # 04.09.2026 kreator proponowal mecze, ktore juz sie zaczely.
+                # Nazwa `data_full` jest ta sama, ktorej uzywaja juz
+                # `api_football` i `football_data`.
+                "data_full": ev_date,
                 "status":  ev.get("status", "notstarted"),
                 "pred_ml": pred_ml,
                 "odds":    odds,
