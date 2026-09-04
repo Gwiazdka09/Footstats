@@ -124,7 +124,7 @@ def init_kalibracja_log() -> None:
             ("absencje_pewne_home", "INTEGER"), ("absencje_pewne_away", "INTEGER"),
         ):
             conn.execute(
-                f"ALTER TABLE model_log ADD COLUMN IF NOT EXISTS {_kol} {_typ}"  # nosec B608 — nazwy z krotki w kodzie
+                f"ALTER TABLE model_log ADD COLUMN IF NOT EXISTS {_kol} {_typ}"
             )
 
 
