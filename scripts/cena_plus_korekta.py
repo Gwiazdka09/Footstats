@@ -151,9 +151,16 @@ def main() -> None:
     print(f"\n  p jednostronne: A {p_jednostronne(a):.4f}"
           f"   B {p_jednostronne(b):.4f}   C {p_jednostronne(c):.4f}")
     print("\n  REGULA DECYZYJNA (zamrozona przed przebiegiem):")
-    if max(abs(a), abs(b), abs(c)) < 2:
-        print("    Wszystkie |z| < 2 -> cena jest KOMPLETNA wzgledem tego, co mamy.")
-        print("    Kierunek 'poprawiac cene' zamkniety tak samo jak 'bic cene'.")
+    if max(a, b, c) < 2:
+        # Regula byla spisana pod wynik dodatni i milczala, gdy WSZYSTKIE `z`
+        # sa ujemne — a to jest osobny stan, nie to samo co "nieistotne".
+        print("    Zadne z trzech porownan nie jest dodatnie -> cena jest")
+        print("    KOMPLETNA wzgledem tego, co mamy. Kierunek 'poprawiac cene'")
+        print("    zamkniety tak samo jak 'bic cene'.")
+        if min(a, b, c) <= -2:
+            print("    Wiecej: dolozenie modelu do ceny out-of-sample SZKODZI")
+            print("    (najmocniej w C). Model wnosi do ceny wlasny blad,")
+            print("    a uzyteczna czesc jest od niego o rzad wielkosci mniejsza.")
     else:
         if a >= 2:
             print("    A dodatnie -> model POPRAWIA cene otwarcia. Pierwszy raz,")
