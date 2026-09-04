@@ -237,6 +237,9 @@ def _run_walkforward_ref(df, league=None, flags=None, run_tag="run",
             "odds_h": row.get("odds_h"),
             "odds_d": row.get("odds_d"),
             "odds_a": row.get("odds_a"),
+            **{k: row.get(k) for k in (
+                "odds_h_pinn", "odds_d_pinn", "odds_a_pinn",
+                "odds_h_max", "odds_d_max", "odds_a_max")},
             "correct": correct,
             "no_odds": 1 if res["no_odds"] else 0,
         })
@@ -321,3 +324,59 @@ def test_kurs_w_rekordzie_odtwarza_wektor_rynku():
     rynek = devig_1x2(wiersz["odds_h"], wiersz["odds_d"], wiersz["odds_a"])
     assert rynek is not None
     assert rynek == devig_1x2(1.9, 3.4, 4.0)
+
+
+_KURSY_DODATKOWE = ("odds_h_pinn", "odds_d_pinn", "odds_a_pinn",
+                    "odds_h_max", "odds_d_max", "odds_a_max")
+
+
+def test_rekord_niesie_cene_ostra_i_najlepsza():
+    """Porównanie ze średnią książek odpowiada na złe pytanie.
+
+    `odds_h/d/a` to średnia bukmacherów. Pokonanie jej nie znaczy nic —
+    znaczenie ma zamknięcie Pinnacle (`*_pinn`), bo to najostrzejsza cena
+    rynku. A EV liczy się po `*_max`, bo po tej cenie realnie się stawia.
+    Bez tych kolumn w rekordzie każde takie pytanie wymaga powtórzenia
+    całego replayu (~2 h na sześciu rdzeniach).
+    """
+    df = _hist_df_english()
+    df["odds_h_pinn"], df["odds_d_pinn"], df["odds_a_pinn"] = 1.95, 3.45, 4.05
+    df["odds_h_max"], df["odds_d_max"], df["odds_a_max"] = 2.10, 3.70, 4.40
+
+    out = run_walkforward(df, league="TEST", flags=ModelFlags(
+        use_bayesian=False, use_ensemble=False, use_calibration=False), verbose=False)
+
+    assert set(_KURSY_DODATKOWE).issubset(out.columns)
+    assert (out["odds_h_pinn"] == 1.95).all()
+    assert (out["odds_h_max"] == 2.10).all()
+
+
+def test_brak_ostrej_ceny_nie_wywraca_przebiegu():
+    """Sezony do 1819 nie maja `MaxC*`, a trwajacy nie ma pelnego `PSC*`.
+
+    Brak kolumny to NORMALNY stan zbioru, nie awaria — rekord ma dostac None,
+    a przebieg ma isc dalej.
+    """
+    out = run_walkforward(_hist_df_english(), league="TEST", flags=ModelFlags(
+        use_bayesian=False, use_ensemble=False, use_calibration=False), verbose=False)
+    assert len(out) > 0
+    for kol in _KURSY_DODATKOWE:
+        assert out[kol].isna().all()
+
+
+def test_ensemble_dalej_uzywa_sredniej_a_nie_ostrej_ceny():
+    """Parytet z produkcja: `predict_one` blenduje ze SREDNIA, jak prod.
+
+    Dolozenie kolumn nie moze po cichu zmienic tego, co model liczy — inaczej
+    pomiar przestalby opisywac produkcje, a rekordy dalej wygladalyby dobrze.
+    """
+    df = _hist_df_english()
+    bez = run_walkforward(df, league="TEST", flags=ModelFlags(
+        use_bayesian=False, use_ensemble=True, use_calibration=False), verbose=False)
+
+    df2 = df.copy()
+    df2["odds_h_pinn"], df2["odds_d_pinn"], df2["odds_a_pinn"] = 1.10, 20.0, 20.0
+    z_ostra = run_walkforward(df2, league="TEST", flags=ModelFlags(
+        use_bayesian=False, use_ensemble=True, use_calibration=False), verbose=False)
+
+    pd.testing.assert_series_equal(bez["pw"], z_ostra["pw"])

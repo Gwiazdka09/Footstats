@@ -16,6 +16,12 @@ from footstats.core import wf_db
 _COL_MAP = {"home": "gospodarz", "away": "goscie", "hg": "gole_g", "ag": "gole_a"}
 _REQUIRED = ("home", "away", "hg", "ag")
 
+# Ceny niesione OBOK sredniej: `*_pinn` to zamkniecie Pinnacle (najostrzejszy
+# benchmark informacji), `*_max` to najlepszy kurs (po nim realnie sie stawia).
+# Model ich NIE uzywa — sluza wylacznie ocenie po przebiegu.
+_KURSY_DODATKOWE = ("odds_h_pinn", "odds_d_pinn", "odds_a_pinn",
+                    "odds_h_max", "odds_d_max", "odds_a_max")
+
 
 def adapt_to_prod_schema(df: pd.DataFrame) -> pd.DataFrame:
     """Mapuje kolumny historical_loader → schema oczekiwana przez predict_match.
@@ -191,6 +197,11 @@ def run_walkforward(df, league=None, flags=None, run_tag="run",
             "odds_h": row.get("odds_h"),
             "odds_d": row.get("odds_d"),
             "odds_a": row.get("odds_a"),
+            # Cena OSTRA i NAJLEPSZA — do modelu NIE wchodza (`predict_one`
+            # blenduje ze srednia, tak jak produkcja), ale bez nich kazde
+            # pytanie "a wobec zamkniecia Pinnacle?" albo "a jakie EV po
+            # najlepszej cenie?" wymaga powtorzenia calego replayu.
+            **{k: row.get(k) for k in _KURSY_DODATKOWE},
             "correct": correct,
             "no_odds": 1 if res["no_odds"] else 0,
         })
