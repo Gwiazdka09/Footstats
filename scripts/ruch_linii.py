@@ -75,6 +75,45 @@ REGUŁA DECYZYJNA, ZAMROŻONA:
     i wart osobnego zapisania, bo znaczy, że nasza niezgoda jest systematycznie
     odwrotna, a nie przypadkowa.
   * TEST C: ROI po podatku dodatnie przy z >= 2 → HIPOTEZA, nie zielone światło.
+
+────────────────────────  KONTROLE (`--kontrole`)  ──────────────────────────
+Dopisane 2026-09-04 PO tym, jak TEST A wyszedł dodatni (z=+10.68 / +9.88),
+a PRZED policzeniem czegokolwiek z tych kontroli.
+
+ALTERNATYWNE WYJAŚNIENIE, KTÓRE MUSI PAŚĆ, ZANIM TO BĘDZIE ZNALEZISKIEM:
+**nieaktualność ceny otwarcia, nie nasza umiejętność.** Walk-forward liczy λ ze
+WSZYSTKICH meczów przed datą meczu. Cena otwarcia powstała kilka dni wcześniej,
+czyli przed częścią tych wyników. Model może więc korelować z dryfem wyłącznie
+dlatego, że widział nowszą kolejkę niż otwarcie — a nie dlatego, że wie
+cokolwiek ponad rynek. To wyjaśnia dodatnie `b` w całości i jest a priori
+bardziej prawdopodobne niż przewaga informacyjna nad Pinnacle.
+
+KONTROLA 1 — TERCYLE ŚWIEŻOŚCI. `min_odpoczynek` (dni od poprzedniego meczu
+drużyny, która grała ostatnio bliżej) mówi, ile nowych wyników mogło dojść
+między otwarciem a zamknięciem. Mały odpoczynek = drużyna grała niedawno =
+otwarcie prawdopodobnie tego meczu nie widziało. Duży odpoczynek (przerwa
+reprezentacyjna, start sezonu) = nic nowego nie doszło.
+  * jeśli to NIEAKTUALNOŚĆ → `b` maleje z odpoczynkiem i w górnym tercylu znika;
+  * jeśli to INFORMACJA → `b` mniej więcej stałe we wszystkich tercylach.
+
+KONTROLA 2 — PODZIAŁ PO DACIE. `b` liczone osobno na meczach przed i od
+2023-01-01. Efekt realny działa w obu połowach.
+
+REGUŁA DECYZYJNA KONTROL, ZAMROŻONA:
+  * górny tercyl `b` > 0 przy z >= 2 ORAZ |b_górny| >= 0.5·|b_dolny|,
+    ORAZ obie połowy czasowe dodatnie przy z >= 2
+        → nieaktualność NIE tłumaczy efektu. Dalej nie jest to wdrożenie ani
+          pieniądze (patrz TEST B i C), ale jest to informacja, której rynek
+          w chwili otwarcia nie ma.
+  * górny tercyl |z| < 2 albo |b_górny| < 0.33·|b_dolny|
+        → NIEAKTUALNOŚĆ TŁUMACZY EFEKT. `b` z TESTU A jest artefaktem tego,
+          że model widzi świeższe dane niż cena otwarcia. Zero informacji.
+  * cokolwiek pomiędzy → nierozstrzygnięte; rozstrzyga dopiero replay
+    z historią uciętą 7 dni przed meczem.
+
+Że ta sekcja powstała po zobaczeniu wyniku, jest jej WADĄ, nie zaletą.
+Rozstrzyga wyłącznie o tym, czy TEN wynik przeżył — nie wolno nią wybrać
+innego testu ani innego progu.
 =============================================================================
 
     python scripts/ruch_linii.py --zrzut sciezka/zrzut*.parquet --otwarcia otw.parquet
@@ -244,11 +283,86 @@ def test_c(d: pd.DataFrame, y: np.ndarray, p_mod) -> None:
           " -15.01% po podatku.")
 
 
+def _b_dla(p_otw, p_zam, p_mod, maska) -> tuple[float, float, int]:
+    """Współczynnik `b` i jego `z` na podzbiorze, uśrednione po obu wymiarach."""
+    wyniki = []
+    for k in (0, 2):
+        dryf = p_zam[maska, k] - p_otw[maska, k]
+        sygnal = p_mod[maska, k] - p_otw[maska, k]
+        beta, se = mnk(dryf, np.column_stack([sygnal, p_otw[maska, k]]))
+        wyniki.append((beta[1], beta[1] / se[1] if se[1] > 0 else 0.0))
+    return (float(np.mean([w[0] for w in wyniki])),
+            float(min(w[1] for w in wyniki)), int(maska.sum()))
+
+
+def kontrole(d: pd.DataFrame, p_otw, p_zam, p_mod) -> None:
+    """Dwie kontrole z sekcji KONTROLE. `b` i `z` to gorszy z dwoch wymiarow."""
+    from cechy_darmowe import zbuduj_cechy
+    from footstats.data.historical_loader import load_cached
+
+    baza = load_cached()
+    baza["date"] = pd.to_datetime(baza["date"], errors="coerce")
+    cechy = zbuduj_cechy(baza.dropna(subset=["date"]))
+    d = d.merge(cechy[["league", "match_date", "home", "away", "min_odpoczynek"]],
+                on=["league", "match_date", "home", "away"], how="left",
+                validate="m:1")
+    odp = d["min_odpoczynek"].to_numpy(dtype=float)
+
+    print("\n" + "=" * 92)
+    print("  KONTROLA 1 — TERCYLE SWIEZOSCI. Czy `b` znika, gdy miedzy otwarciem")
+    print("  a zamknieciem NIE doszly nowe wyniki tych druzyn.")
+    print("=" * 92)
+    ok = np.isfinite(odp)
+    p33, p66 = np.percentile(odp[ok], [33.3, 66.7])
+    print(f"  progi odpoczynku: {p33:.0f} i {p66:.0f} dni")
+    print(f"  {'tercyl':<28}{'n':>8}{'b':>12}{'z (gorszy wymiar)':>20}")
+    print("  " + "-" * 68)
+    wyniki = []
+    for nazwa, m in (
+            (f"dolny (<= {p33:.0f} dni, swieze)", ok & (odp <= p33)),
+            (f"srodkowy ({p33:.0f}-{p66:.0f} dni)", ok & (odp > p33) & (odp <= p66)),
+            (f"gorny (> {p66:.0f} dni, nic nowego)", ok & (odp > p66))):
+        b, z, n = _b_dla(p_otw, p_zam, p_mod, m)
+        wyniki.append((b, z))
+        print(f"  {nazwa:<28}{n:>8}{b:>+12.5f}{z:>+20.2f}")
+
+    print("\n" + "=" * 92)
+    print("  KONTROLA 2 — PODZIAL PO DACIE")
+    print("=" * 92)
+    daty = d["match_date"].to_numpy(dtype=str)
+    czas = []
+    for nazwa, m in (("mecze < 2023-01-01", daty < "2023-01-01"),
+                     ("mecze >= 2023-01-01", daty >= "2023-01-01")):
+        b, z, n = _b_dla(p_otw, p_zam, p_mod, m)
+        czas.append(z)
+        print(f"  {nazwa:<28}{n:>8}{b:>+12.5f}{z:>+20.2f}")
+
+    b_dol, b_gor = wyniki[0][0], wyniki[2][0]
+    z_gor = wyniki[2][1]
+    udzial = abs(b_gor) / abs(b_dol) if b_dol else 0.0
+    print("\n  REGULA DECYZYJNA KONTROL (zamrozona przed przebiegiem):")
+    print(f"    |b_gorny| / |b_dolny| = {udzial:.2f}   z_gorny = {z_gor:+.2f}"
+          f"   polowy czasowe: {czas[0]:+.2f} / {czas[1]:+.2f}")
+    if b_gor > 0 and z_gor >= 2 and udzial >= 0.5 and min(czas) >= 2:
+        print("    -> NIEAKTUALNOSC NIE TLUMACZY efektu. To informacja, ktorej")
+        print("       cena otwarcia nie ma. Dalej NIE sa to pieniadze: TEST B")
+        print("       i TEST C stoja niezmienione.")
+    elif z_gor < 2 or udzial < 0.33:
+        print("    -> NIEAKTUALNOSC TLUMACZY EFEKT. `b` z TESTU A jest artefaktem")
+        print("       tego, ze model widzi swiezsze dane niz cena otwarcia.")
+        print("       Zero informacji ponad rynek.")
+    else:
+        print("    -> NIEROZSTRZYGNIETE. Rozstrzyga dopiero replay z historia")
+        print("       ucieta 7 dni przed meczem.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--zrzut", nargs="+", required=True)
     ap.add_argument("--otwarcia", required=True)
+    ap.add_argument("--kontrole", action="store_true",
+                    help="tercyle swiezosci + podzial po dacie")
     args = ap.parse_args()
 
     d = wczytaj(args.zrzut, args.otwarcia)
@@ -261,6 +375,10 @@ def main() -> None:
     y = d["actual_res"].map(WYNIK_NA_INDEKS).to_numpy(dtype=int)
     print(f"Do pomiaru: {len(y)} meczow z obiema cenami Pinnacle,"
           f" {d['league'].nunique()} lig, {d['match_date'].min()} .. {d['match_date'].max()}")
+
+    if args.kontrole:
+        kontrole(d, p_otw, p_zam, p_mod)
+        return
 
     test_a(d, p_otw, p_zam, p_mod)
     test_b(y, p_otw, p_zam, p_mod)
