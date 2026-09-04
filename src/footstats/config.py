@@ -128,6 +128,14 @@ DC_RHO     = float(os.getenv("DC_RHO", "-0.13"))
 # do samych goli bez redeploya.
 WAGA_STRZALOW = float(os.getenv("WAGA_STRZALOW", "0.7"))
 
+# Waga warstwy xG w `form.sily_ligowe`, domieszywanej PO strzalach.
+# DOMYSLNIE 0 = WYLACZONE. Wlaczenie jest zmiana warstwy predykcji i ma nastapic
+# dopiero po zmierzeniu A/B, nie przy okazji wdrozenia. Kolumny `xg_home`/
+# `xg_away` nie sa jeszcze promowane do ramki modelu (patrz `data/af_stats.py`:
+# kolumna bez czytelnika predzej czy pozniej zostanie uzyta bez pomiaru) — ten
+# kod JEST tym czytelnikiem, powstalym przed promocja i przed pomiarem.
+WAGA_XG = float(os.getenv("WAGA_XG", "0"))
+
 # ── C2 / Cel B bug 2: override REALNEGO tipu Groq argmaxem modelu ──
 # Gdy Groq wybierze 1X2 o prob modelu <15% → podmiana na argmax (konserwatywny).
 # FLIP ON 2026-07-06: walidacja zebrana (104 settled) — model argmax 60% vs Groq 48%

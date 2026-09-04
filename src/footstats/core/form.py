@@ -75,6 +75,7 @@ def sily_ligowe(
     df_liga: pd.DataFrame,
     okno: int = OKNO_LIGOWE,
     waga_strzalow: float | None = None,
+    waga_xg: float | None = None,
 ) -> tuple[dict, float, float] | None:
     """Siła każdej drużyny WOBEC LIGI: {atak_dom, atak_wyj, obrona_dom, obrona_wyj}.
 
@@ -115,19 +116,44 @@ def sily_ligowe(
         from footstats.config import WAGA_STRZALOW
         waga_strzalow = WAGA_STRZALOW
 
-    if waga_strzalow > 0 and {"hst", "ast"} <= set(df_liga.columns):
-        ze_strzalow = _tabela_ratingow(df_liga, "hst", "ast", okno)
-        if ze_strzalow:
-            tab_s = ze_strzalow[0]
-            w = waga_strzalow
-            for druzyna, wpis in tabela.items():
-                s = tab_s.get(druzyna)
-                if not s:
-                    continue  # ta drużyna nie ma strzałów — zostaje na golach
-                for klucz in ("atak_dom", "atak_wyj", "obrona_dom", "obrona_wyj"):
-                    wpis[klucz] = w * s[klucz] + (1 - w) * wpis[klucz]
+    _domieszaj(tabela, df_liga, ("hst", "ast"), waga_strzalow, okno)
+
+    if waga_xg is None:
+        from footstats.config import WAGA_XG
+        waga_xg = WAGA_XG
+
+    # xG PO strzałach, jako kolejna warstwa — nie zamiast. Pytanie brzmi „czy
+    # lepsza miara tego samego zjawiska dokłada cokolwiek ponad gorszą";
+    # podmiana odpowiadałaby na inne pytanie i mieszała dwie zmiany naraz.
+    _domieszaj(tabela, df_liga, ("xg_home", "xg_away"), waga_xg, okno)
 
     return (tabela, sr_dom, sr_wyj)
+
+
+def _domieszaj(tabela: dict, df_liga: pd.DataFrame, kolumny: tuple[str, str],
+               waga: float, okno: int) -> None:
+    """Domieszuje rating z pary kolumn do `tabela`, W MIEJSCU, per drużyna.
+
+    Jedna funkcja dla strzałów i dla xG — ta sama reguła w dwóch kopiach
+    rozjeżdża się po cichu, a tutaj rozjazd znaczyłby, że jedna z warstw miesza
+    się inaczej niż druga i nikt tego nie zobaczy w wyniku.
+
+    Drużyna nieobecna w tabeli źródłowej ZOSTAJE na tym, co miała. Pokrycie xG
+    z API-Football jest nierówne (27% w IRL, 100% w USA), więc „część drużyn
+    ligi ma, część nie" to reguła, nie wyjątek.
+    """
+    if waga <= 0 or not set(kolumny) <= set(df_liga.columns):
+        return
+    zrodlo = _tabela_ratingow(df_liga, kolumny[0], kolumny[1], okno)
+    if not zrodlo:
+        return
+    tab_z = zrodlo[0]
+    for druzyna, wpis in tabela.items():
+        s = tab_z.get(druzyna)
+        if not s:
+            continue
+        for klucz in ("atak_dom", "atak_wyj", "obrona_dom", "obrona_wyj"):
+            wpis[klucz] = waga * s[klucz] + (1 - waga) * wpis[klucz]
 
 
 def _oblicz_sile_wazona(df_mecze: pd.DataFrame) -> tuple:
