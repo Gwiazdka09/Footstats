@@ -26,6 +26,7 @@ COPY data/hist_cache/af_stats.parquet ./data/hist_cache/af_stats.parquet
 # Aliasy nazw drużyn — joby rozliczają mecze, więc nierozpoznana nazwa to nie
 # tylko brak predykcji, ale i kupon, którego nikt nie zamknie.
 COPY data/team_mappings.json ./data/team_mappings.json
+COPY data/rozszczepione_kluby.json ./data/rozszczepione_kluby.json
 
 # Kalibracja λ — joby liczą draft i predykcje wieczorne tym samym modelem
 # co API, więc muszą znać te same factory.

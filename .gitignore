@@ -25,6 +25,7 @@ ENV/
 # "Borussia Dortmund" ze swoim "Dortmund" w datasecie. Ignorowane razem z /data/
 # leżały tylko na dysku dewelopera, a produkcja startowała z domyślnej garstki.
 !/data/team_mappings.json
+!/data/rozszczepione_kluby.json
 # Kalibracja λ z tego samego powodu: bez pliku `load_calibration()` zwraca
 # neutralne (1.0, 1.0), więc cała warstwa kalibracji jest w kontenerze
 # dekoracją — a pomiary robione lokalnie opisują wtedy INNY model niż ten,

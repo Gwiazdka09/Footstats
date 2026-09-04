@@ -1,0 +1,44 @@
+{
+  "_comment": "Jeden klub pod dwiema pisowniami w datasecie football-data.co.uk. Zrodlo zmienia zapis nazwy w TRAKCIE sezonu, przez co model liczy lambda z polowy historii klubu (form.py grupuje po surowym stringu). Kluczem jest para (liga, stara) - ta sama nazwa w innej lidze zwykle znaczy inny klub.",
+  "_jak_dodawac": "Nie dopisuj recznie na oko. `rozszczepienia.wykryj_rozszczepienia()` daje kandydatow, a `test_rozszczepienia.py` wywala sie, gdy detektor widzi pare spoza tego pliku. Kazda pare OBEJRZYJ - detektor odsiewa falszywe tropy (Barnsley/Burnley, Chester/Chesterfield, Oster/Ostersunds), ale nie zna klubow.",
+  "_nie_alias": "To NIE jest to samo co `data/team_mappings.json`. Tamte aliasy dzialaja globalnie, takze w rozliczeniach i dopasowaniu meczow u dostawcow. Ten plik dotyka wylacznie ramki modelu przy `load_cached()`.",
+  "_kanoniczna_jest_nowsza": "Wygrywa pisownia z pozniejszymi meczami - to ja przysylaja dzis zrodla live. Wygrana starszej dalej gubilaby najswiezsze mecze klubu.",
+  "pary": [
+    {
+      "liga": "ARG-Copa De La Liga Profesional",
+      "stara": "Colon Santa FE",
+      "nowa": "Colon Santa Fe",
+      "dowod": "roznica wylacznie w wielkosci liter"
+    },
+    {
+      "liga": "ARG-Liga Profesional",
+      "stara": "Colon Santa FE",
+      "nowa": "Colon Santa Fe",
+      "dowod": "roznica wylacznie w wielkosci liter; przelaczenie 2022-06-15 -> 2022-06-19, luka 4 dni"
+    },
+    {
+      "liga": "NOR-Eliteserien",
+      "stara": "Ham-Kam",
+      "nowa": "HamKam",
+      "dowod": "Hamarkameratene; przelaczenie 2023-09-03 -> 2023-09-17 w sezonie 2023, luka 14 dni"
+    },
+    {
+      "liga": "POL-Ekstraklasa",
+      "stara": "Gornik Z.",
+      "nowa": "Gornik Zabrze",
+      "dowod": "przelaczenie 2023-03-17 -> 2023-03-31 w sezonie 2022/2023, luka 14 dni; 341 meczow pod stara pisownia"
+    },
+    {
+      "liga": "ROU-Superliga",
+      "stara": "Din. Bucuresti",
+      "nowa": "Dinamo Bucuresti",
+      "dowod": "przelaczenie 2026-02-21 -> 2026-03-01 w sezonie 2025/2026, luka 8 dni; 480 meczow pod stara pisownia, 20 pod nowa"
+    },
+    {
+      "liga": "ROU-Superliga",
+      "stara": "U Craiova",
+      "nowa": "Univ. Craiova",
+      "dowod": "CS Universitatea Craiova. UWAGA: w tej lidze gra TEZ `U Craiova 1948`, ktory jest INNYM klubem - zagral 6 bezposrednich z `Univ. Craiova`. `U Craiova` (2014-07..2021-02) nie zagral ani jednego meczu z zadnym z nich i przechodzi w `Univ. Craiova` 2021-02-06 -> 2021-02-14 (luka 8 dni, sezon 2020/2021), pol roku zanim 1948 wszedl do ligi."
+    }
+  ]
+}

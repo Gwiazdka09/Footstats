@@ -37,6 +37,7 @@ COPY data/hist_cache/af_stats.parquet ./data/hist_cache/af_stats.parquet
 # `_DEFAULT_MAPPINGS` i rusza dalej — czyli obraz działa, tylko nie zna nazw
 # przejrzanych ręcznie (cała Bundesliga z The Odds API) i gubi te mecze.
 COPY data/team_mappings.json ./data/team_mappings.json
+COPY data/rozszczepione_kluby.json ./data/rozszczepione_kluby.json
 
 # Kalibracja λ. Bez tego pliku `load_calibration()` zwraca neutralne (1.0, 1.0)
 # i cała warstwa kalibracji jest w kontenerze dekoracją — a pomiary robione

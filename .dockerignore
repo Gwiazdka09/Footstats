@@ -23,6 +23,7 @@ data/hist_cache/
 # Aliasy nazw drużyn — ta sama historia co parquet: bez nich nazwa ze źródła nie
 # trafia w dataset, więc mecz wypada z λ Poissona i z formy.
 !data/team_mappings.json
+!data/rozszczepione_kluby.json
 # Kalibracja λ — bez pliku kontener liczy z neutralnym (1.0, 1.0).
 !data/model_calibration.json
 # Wzorce RAG — jedyne paliwo tej warstwy, patrz komentarz w .gitignore.

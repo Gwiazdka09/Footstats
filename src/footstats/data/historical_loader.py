@@ -30,6 +30,21 @@ log = logging.getLogger(__name__)
 CACHE_DIR = Path(__file__).parents[3] / "data" / "hist_cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+NAZWA_PELNEGO = "full_dataset.parquet"
+
+
+def sciezka_pelnego() -> Path:
+    """Ścieżka pełnego datasetu — jedno miejsce zamiast literału w dwóch.
+
+    FUNKCJA, NIE STAŁA. `CACHE_DIR` jest podmieniane w testach
+    (`monkeypatch.setattr(hl, "CACHE_DIR", tmp_path)`), a stała policzona przy
+    imporcie zamraża starą wartość: testy zaczynają czytać i NADPISYWAĆ
+    produkcyjny parquet, wyglądając przy tym na zielone. Późne wiązanie jest
+    tu warunkiem, nie stylem.
+    """
+    return CACHE_DIR / NAZWA_PELNEGO
+
+
 BASE_FDCO = "https://www.football-data.co.uk"
 
 # Ile sezonów trzymamy w datasecie: trwający + 10 rozegranych do końca.
@@ -867,7 +882,7 @@ def download_all(
     # już mamy. Kolejność ma znaczenie — „zapisz, potem zaloguj ostrzeżenie"
     # to dokładnie tryb, w którym incydent JPN (patrz `regresje_datasetu`)
     # przeżył cały dzień na produkcji.
-    out_f = CACHE_DIR / "full_dataset.parquet"
+    out_f = sciezka_pelnego()
     if out_f.exists():
         try:
             poprzedni = pd.read_parquet(out_f)
@@ -906,10 +921,17 @@ def load_cached(z_af: bool = True) -> pd.DataFrame:
     `z_af=False` oddaje surowy parquet. Potrzebne wyłącznie do pomiaru A/B:
     oba ramiona muszą iść z TEGO SAMEGO pliku i różnić się dokładnie jedną rzeczą.
     """
-    f = CACHE_DIR / "full_dataset.parquet"
+    f = sciezka_pelnego()
     if not f.exists():
         raise FileNotFoundError(f"Brak cache. Uruchom najpierw download_all(). Szukałem w: {f}")
     df = pd.read_parquet(f)
+
+    # PRZED rozgałęzieniem na `z_af`: ujednolicenie pisowni nazw jest ortogonalne
+    # do statystyk z API-Football, więc oba ramiona A/B muszą je dostać tak samo.
+    # Inaczej ramiona różniłyby się DWIEMA rzeczami naraz.
+    from footstats.data.rozszczepienia import scal_z_pliku
+    df = scal_z_pliku(df)
+
     if not z_af:
         return df
 
