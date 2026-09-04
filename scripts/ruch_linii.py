@@ -97,7 +97,7 @@ import pandas as pd  # noqa: E402
 from przewaga_nad_rynkiem import brier_wieloklasowy, sparowana_roznica  # noqa: E402
 
 PODATEK = 0.12
-MIN_JOIN = 0.60          # zrzut ma 39 lig, otwarcia tylko 22 sezonowe
+MIN_JOIN = 0.90          # liczony WEWNATRZ lig majacych otwarcia
 WYNIK_NA_INDEKS = {"H": 0, "D": 1, "A": 2}
 OTW = ("PSH", "PSD", "PSA")
 ZAM = ("PSCH", "PSCD", "PSCA")
@@ -139,12 +139,21 @@ def wczytaj(wzorce: list[str], otwarcia: str) -> pd.DataFrame:
 
     df = zrzut.merge(otw, on=["league", "match_date", "home", "away"],
                      how="left", validate="m:1")
-    udane = float(df[list(OTW)].notna().all(axis=1).mean())
+
+    # Prog liczony WEWNATRZ lig, ktore w ogole maja otwarcia. Globalny odsetek
+    # mierzylby glownie to, ze zrzut ma 39 lig, a ceny otwarcia istnieja tylko
+    # w 22 sezonowych — czyli odrzucalby poprawny join za brak danych, ktorych
+    # nigdy nie bylo. Sens progu jest inny: zlapac CICHY rozjazd nazw.
+    ligi_otw = set(otw["league"].unique())
+    w_zakresie = df["league"].isin(ligi_otw)
+    udane = float(df.loc[w_zakresie, list(OTW)].notna().all(axis=1).mean())
     print(f"Zrzut {len(zrzut)} meczow ({zrzut['league'].nunique()} lig)"
-          f" | otwarcia dopasowane do {100 * udane:.1f}%")
+          f" | {len(ligi_otw)} lig ma ceny otwarcia"
+          f" | dopasowane w nich: {100 * udane:.1f}%"
+          f" ({int(w_zakresie.sum())} meczow w zakresie)")
     if udane < MIN_JOIN:
         raise SystemExit(f"Join ponizej progu {MIN_JOIN:.0%} — przerywam.")
-    return df
+    return df[w_zakresie]
 
 
 def test_a(d: pd.DataFrame, p_otw, p_zam, p_mod) -> None:
