@@ -816,6 +816,11 @@ def _policz_edge_absencji(kandydaci: list) -> None:
         rynek = k.get("market_p_over")
         if rynek is None:
             rynek = _rynek_p_over(k.get("odds"))
+        # Cena Z TAMTEJ CHWILI zostaje osobno, nie tylko w `edge`. Edge jest
+        # roznica, wiec po zaokragleniach nie odtworzy sie z niej skladnika —
+        # a bez ceny, wobec ktorej liczylismy przewage, nie da sie pozniej
+        # orzec, kto mial racje. To jest cala wartosc tego wpisu.
+        k["rynek_p_over"] = rynek
         wynik = over_edge_from_absences(lh, la, ud_h, ud_a, rynek)
         k["lambda_h_abs"] = wynik["lh"]
         k["lambda_a_abs"] = wynik["la"]

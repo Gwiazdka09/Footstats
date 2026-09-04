@@ -82,7 +82,22 @@ def init_kalibracja_log() -> None:
                 -- dwoch roznych modeli w jednej krzywej kalibracyjnej, a przez
                 -- brak pyarrow w obrazach prod (do 2026-08-07) dokladnie to
                 -- groziloby przy pierwszym cofnieciu sie do fallbacku.
-                model_source   TEXT NOT NULL DEFAULT ''
+                model_source   TEXT NOT NULL DEFAULT '',
+                -- Obserwacja team-news (`daily_phases._policz_edge_absencji`).
+                -- CELOWO NULL, gdy korekty nie liczono: zero znaczyloby
+                -- "policzone i wyszlo zero", a to dwa rozne stany. Zlanie ich
+                -- wpuscilo by mecze BEZ team-news do analizy jako "korekta nic
+                -- nie zmienila" i rozwodnilo caly sygnal.
+                -- `prob_over25` zostaje wartoscia SPRZED korekty — dopiero para
+                -- (przed, po) plus `rynek_p_over` i `over25_correct` pozwala
+                -- zapytac, KTO MIAL RACJE, gdy korekta rozjechala sie z cena.
+                p_over_abs            REAL,
+                edge_absencje         REAL,
+                rynek_p_over          REAL,
+                absencje_udzial_home  REAL,
+                absencje_udzial_away  REAL,
+                absencje_pewne_home   INTEGER,
+                absencje_pewne_away   INTEGER
             );
             CREATE INDEX IF NOT EXISTS idx_model_log_mecz
                 ON model_log (team_home, team_away, match_date);
@@ -101,6 +116,16 @@ def init_kalibracja_log() -> None:
         conn.execute("ALTER TABLE model_log ADD COLUMN IF NOT EXISTS over25_correct INTEGER")
         conn.execute("ALTER TABLE model_log ADD COLUMN IF NOT EXISTS btts_correct INTEGER")
         conn.execute("ALTER TABLE model_log ADD COLUMN IF NOT EXISTS draw_correct INTEGER")
+        # Obserwacja team-news. Ten sam powod co wyzej — tabela zyje na produkcji.
+        for _kol, _typ in (
+            ("p_over_abs", "REAL"), ("edge_absencje", "REAL"),
+            ("rynek_p_over", "REAL"),
+            ("absencje_udzial_home", "REAL"), ("absencje_udzial_away", "REAL"),
+            ("absencje_pewne_home", "INTEGER"), ("absencje_pewne_away", "INTEGER"),
+        ):
+            conn.execute(
+                f"ALTER TABLE model_log ADD COLUMN IF NOT EXISTS {_kol} {_typ}"  # nosec B608 — nazwy z krotki w kodzie
+            )
 
 
 def _argmax_1x2(pw: float, pr: float, pp: float) -> str:
@@ -147,14 +172,27 @@ def zapisz_ocene(kandydat: dict, zrodlo: str = "final") -> int | None:
             INSERT INTO model_log
                 (match_date, league, team_home, team_away,
                  prob_home, prob_draw, prob_away, prob_over25, prob_btts,
-                 lambda_h, lambda_a, model_tip, zrodlo, model_source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+                 lambda_h, lambda_a, model_tip, zrodlo, model_source,
+                 p_over_abs, edge_absencje, rynek_p_over,
+                 absencje_udzial_home, absencje_udzial_away,
+                 absencje_pewne_home, absencje_pewne_away)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?) RETURNING id
             """,
             (data, str(kandydat.get("liga") or ""), home, away,
              float(pw), float(pr), float(pp),
              kandydat.get("o25"), kandydat.get("bt"),
              kandydat.get("lambda_h"), kandydat.get("lambda_a"),
-             tip, zrodlo, str(kandydat.get("model_source") or "")),
+             tip, zrodlo, str(kandydat.get("model_source") or ""),
+             # `.get` bez domyslki: brak klucza ma zostac NULL-em, nie zerem.
+             # Zero znaczy "policzone i wyszlo zero" — inny stan niz "nie
+             # liczylismy", a zlanie ich zatrulo by kazda pozniejsza analize.
+             kandydat.get("p_over_abs"), kandydat.get("edge_absencje"),
+             kandydat.get("rynek_p_over"),
+             kandydat.get("absencje_udzial_home"),
+             kandydat.get("absencje_udzial_away"),
+             kandydat.get("absencje_pewne_home"),
+             kandydat.get("absencje_pewne_away")),
         ).fetchone()
         return row["id"] if row else None
 
