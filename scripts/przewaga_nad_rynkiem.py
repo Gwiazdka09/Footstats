@@ -193,7 +193,7 @@ def wektory_ligi(rekordy: pd.DataFrame, liga: str) -> dict | None:
     }
 
 
-def zmierz_lige(df, liga: str, od: str) -> dict | None:
+def zmierz_lige(df, liga: str, od: str, zrzut: list | None = None) -> dict | None:
     from footstats.core.wf_harness import ModelFlags, run_walkforward
 
     flagi = ModelFlags(use_bayesian=False, use_ensemble=False, use_calibration=False)
@@ -205,6 +205,12 @@ def zmierz_lige(df, liga: str, od: str) -> dict | None:
     w = wektory_ligi(rek, liga)
     if w is None:
         return None
+
+    if zrzut is not None:
+        # Surowe wektory, nie podsumowania. Replay 39 lig to ~2 godziny; bez
+        # tego pliku kazde pytanie "a przy innej wadze?" kosztuje tyle samo
+        # jeszcze raz, a to jest DOKLADNIE to pytanie, ktore chcemy zadawac.
+        zrzut.append(rek.assign(league=liga))
 
     b_model = brier_wieloklasowy(w["model"], w["y"])
     b_rynek = brier_wieloklasowy(w["rynek"], w["y"])
@@ -254,6 +260,9 @@ def main() -> None:
     p.add_argument("--od", default=OKNO_OD)
     p.add_argument("--ligi", default=None, help="po przecinku; domyslnie wszystkie")
     p.add_argument("--wynik", default=None, help="sciezka JSON z pelnym wynikiem")
+    p.add_argument("--zrzut", default=None,
+                   help="parquet z wektorami PER MECZ (model, kurs, wynik) — "
+                        "bez niego kazde pytanie o inna wage to kolejny pelny replay")
     p.add_argument("--scal", nargs="+", default=None,
                    help="zamiast liczyc: wczytaj te JSON-y i wypisz raport zbiorczy")
     args = p.parse_args()
@@ -278,10 +287,11 @@ def main() -> None:
             else sorted(df["league"].unique()))
 
     wyniki = []
+    zrzuty: list | None = [] if args.zrzut else None
     for i, liga in enumerate(ligi, 1):
         print(f"[{i}/{len(ligi)}] {liga} ...", flush=True)
         try:
-            w = zmierz_lige(df, liga, args.od)
+            w = zmierz_lige(df, liga, args.od, zrzut=zrzuty)
         except (ValueError, KeyError) as e:
             print(f"    POMINIETA: {e}", flush=True)
             continue
@@ -296,6 +306,10 @@ def main() -> None:
 
     if not wyniki:
         raise SystemExit("Zero lig w wyniku.")
+
+    if args.zrzut and zrzuty:
+        pd.concat(zrzuty, ignore_index=True).to_parquet(args.zrzut, index=False)
+        print(f"\nZrzut wektorow: {args.zrzut}")
 
     if args.wynik:
         Path(args.wynik).write_text(
