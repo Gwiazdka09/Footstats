@@ -78,6 +78,35 @@ REGUŁA DECYZYJNA, ZAMROŻONA:
 
 CZEGO TEN POMIAR NIE ZMIENIA. Werdyktu „model nie bije rynku". Nawet wszystkie
 pięć cech dodatnich w ramieniu `model` zamyka ułamek luki −0.018..−0.052.
+
+──────────────────────  REPLIKACJA (`--replikacja`)  ────────────────────────
+Dopisana 2026-09-04 PO pierwszym przebiegu, PRZED policzeniem czegokolwiek
+z tych dwóch kontroli. Powód jest wprost z reguły powyżej: `min_odpoczynek`
+wyszedł dodatni na obu źródłach i przeżył korektę Šidáka na zamknięciu Pinnacle
+(z=+2.82, p=0.0119), a reguła mówi wtedy „replikacja, NIE wdrożenie". Poniżej
+jest to, co ma tę replikację rozstrzygnąć — spisane, zanim ją uruchomiono.
+
+Że ta sekcja powstała po zobaczeniu pierwszego wyniku, jest jej WADĄ, nie
+zaletą, i dlatego rozstrzyga tylko o tym, czy pierwszy wynik przeżył. Nie wolno
+jej użyć do wyboru innej cechy ani innego progu.
+
+DWIE KONTROLE, obie na cechach, które zapaliły się w pierwszym przebiegu:
+
+  A. ODWRÓCONY PODZIAŁ. Współczynniki uczone na meczach OD 2023-01-01, oceniane
+     na wcześniejszych. Efekt realny musi działać w obie strony; efekt będący
+     jednym szczęśliwym podziałem — nie musi. Te same dane, inne role, więc to
+     kontrola stabilności, nie niezależna próba, i tak ją opisujemy.
+
+  B. ROZBICIE NA LIGI na pierwotnym holdoucie. Efekt szeroki rozkłada się na
+     wiele lig; efekt z jednej ligi to ta sama pułapka co 52 podzbiory z 14.08.
+     Ligi poniżej 200 meczów holdoutu pomijane — ich pojedyncze `z` to szum.
+
+REGUŁA DECYZYJNA REPLIKACJI, ZAMROŻONA:
+  * odwrócony podział z >= 2  ORAZ  >= 60% lig z różnicą dodatnią
+        → efekt przeżył. Dalej NIE jest to wdrożenie: wielkość efektu
+          (~0.0001 log-loss) jest o dwa rzędy mniejsza niż luka do ceny.
+  * cokolwiek innego → traktujemy jak szum, który przeżył jeden podział.
+    Nie raportujemy tego jako znaleziska.
 =============================================================================
 
     python scripts/cechy_darmowe.py --zrzut sciezka/zrzut*.parquet
@@ -253,7 +282,8 @@ def rozklad_zrodla(df: pd.DataFrame, zrodlo: str) -> np.ndarray:
     return inv / inv.sum(axis=1, keepdims=True)
 
 
-def zmierz(dane: pd.DataFrame, zrodlo: str, cecha: str) -> dict | None:
+def zmierz(dane: pd.DataFrame, zrodlo: str, cecha: str,
+           odwroc: bool = False, per_liga: bool = False) -> dict | None:
     p = rozklad_zrodla(dane, zrodlo)
     ok = np.isfinite(p).all(axis=1) & np.isfinite(dane[cecha].to_numpy(dtype=float))
     d = dane[ok].reset_index(drop=True)
@@ -268,6 +298,8 @@ def zmierz(dane: pd.DataFrame, zrodlo: str, cecha: str) -> dict | None:
     x = d[cecha].to_numpy(dtype=float)
 
     tren = (d["match_date"] < PODZIAL).to_numpy()
+    if odwroc:
+        tren = ~tren                 # replikacja: uczymy sie na pozniejszych
     hold = ~tren
     if tren.sum() < 2000 or hold.sum() < 2000:
         return None
@@ -284,17 +316,31 @@ def zmierz(dane: pd.DataFrame, zrodlo: str, cecha: str) -> dict | None:
     p_r = przewiduj(W_r, rozsz[hold])
     yh = y[hold]
 
-    ll = sparowana_roznica(log_loss(p_b, yh), log_loss(p_r, yh))
+    ll_b, ll_r = log_loss(p_b, yh), log_loss(p_r, yh)
+    ll = sparowana_roznica(ll_b, ll_r)
     br = sparowana_roznica(brier(p_b, yh), brier(p_r, yh))
-    return {"cecha": cecha, "zrodlo": zrodlo, "n_tren": int(tren.sum()),
-            "n_hold": int(hold.sum()), "logloss": ll, "brier": br,
-            "wsp": [float(W_r[0, -1]), float(W_r[1, -1])]}
+    wynik = {"cecha": cecha, "zrodlo": zrodlo, "n_tren": int(tren.sum()),
+             "n_hold": int(hold.sum()), "logloss": ll, "brier": br,
+             "wsp": [float(W_r[0, -1]), float(W_r[1, -1])]}
+    if per_liga:
+        ligi = d["league"].to_numpy()[hold]
+        rozbicie = []
+        for liga in sorted(set(ligi)):
+            m = ligi == liga
+            if m.sum() < 200:
+                continue
+            rozbicie.append({"liga": liga, "n": int(m.sum()),
+                             **sparowana_roznica(ll_b[m], ll_r[m])})
+        wynik["per_liga"] = rozbicie
+    return wynik
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--zrzut", nargs="+", required=True)
+    ap.add_argument("--replikacja", default=None,
+                    help="cechy po przecinku — odwrocony podzial + rozbicie na ligi")
     args = ap.parse_args()
 
     from footstats.core.testy_przewagi import korekta_sidaka
@@ -318,6 +364,10 @@ def main() -> None:
         # przekrzywia dokladnie te probe, na ktorej mamy rozstrzygac.
         raise SystemExit(f"Join ponizej progu {MIN_JOIN:.0%} — przerywam.")
 
+    if args.replikacja:
+        replikacja(dane, [c.strip() for c in args.replikacja.split(",")])
+        return
+
     wyniki = []
     for zrodlo in ("model", "pinn"):
         for cecha in CECHY:
@@ -331,6 +381,45 @@ def main() -> None:
                   f" z={w['logloss']['z']:+.2f}", flush=True)
 
     raport(wyniki, korekta_sidaka)
+
+
+def replikacja(dane: pd.DataFrame, cechy: list[str]) -> None:
+    """Dwie kontrole z sekcji REPLIKACJA. Nie wybiera cech — dostaje je z CLI."""
+    print("\n" + "=" * 96)
+    print("  REPLIKACJA — czy pierwszy wynik przezyl. Regula zamrozona w docstringu.")
+    print("=" * 96)
+    for cecha in cechy:
+        for zrodlo in ("model", "pinn"):
+            print(f"\n  {zrodlo}/{cecha}")
+            odw = zmierz(dane, zrodlo, cecha, odwroc=True)
+            if odw is None:
+                print("    odwrocony podzial: za malo danych")
+                continue
+            ll = odw["logloss"]
+            print(f"    A. ODWROCONY PODZIAL (ucz >= {PODZIAL}, oceniaj wczesniej)")
+            print(f"       n={odw['n_hold']}  logloss {ll['roznica']:+.6f}"
+                  f"  SE {ll['se']:.6f}  z {ll['z']:+.2f}")
+
+            pl = zmierz(dane, zrodlo, cecha, per_liga=True)
+            if pl is None or not pl.get("per_liga"):
+                continue
+            czesci = pl["per_liga"]
+            dod = [c for c in czesci if (c["roznica"] or 0) > 0]
+            print("    B. ROZBICIE NA LIGI (holdout pierwotny, >=200 meczow)")
+            print(f"       lig: {len(czesci)}   z roznica dodatnia: {len(dod)}"
+                  f"  ({100 * len(dod) / len(czesci):.0f}%)")
+            naj = sorted(czesci, key=lambda c: -(c["roznica"] or 0))[:3]
+            for c in naj:
+                print(f"         {c['liga']:<26} n={c['n']:<6}"
+                      f" {c['roznica']:+.6f}  z {(c['z'] or 0):+.2f}")
+
+            udzial = len(dod) / len(czesci)
+            przeszlo = (ll["z"] or 0) >= 2 and udzial >= 0.60
+            print(f"    WERDYKT: {'PRZEZYL' if przeszlo else 'NIE PRZEZYL'}"
+                  f"  (odwrocony z={ll['z']:+.2f}, lig dodatnich {100 * udzial:.0f}%)")
+            if not przeszlo:
+                print("       -> szum, ktory przezyl jeden podzial."
+                      " Nie raportujemy jako znaleziska.")
 
 
 def raport(wyniki: list[dict], korekta_sidaka) -> None:
