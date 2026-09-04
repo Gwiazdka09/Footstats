@@ -78,6 +78,19 @@ REGUŁA DECYZYJNA, ZAMROŻONA
   wtedy: holdout po dacie (trening do 2023-12-31, walidacja 2024-01-01+),
   pre-rejestrowany osobno, zanim zobaczymy jego wynik.
 
+ANEKS DO REJESTRACJI, 2026-09-04 po pierwszym przebiegu
+------------------------------------------------------
+Pierwszy przebieg policzyl `mix` przy DOMYSLNEJ wadze `ensemble._DEFAULT_WEIGHTS`
+(70% modelu / 30% rynku), bo lokalnie `ENSEMBLE_MARKET_WEIGHT` nie jest
+ustawiony. Produkcja moze jechac na 0.70 (30% modelu / 70% rynku) — wartosc
+z `.env.example`, wg notatki z 14.08 wdrozona i na API, i na jobach.
+
+Dlatego raport liczy T2 przy OBU tych wagach. To NIE jest przeszukiwanie
+parametru: obie wartosci istnialy w konfiguracji tego systemu na dlugo przed
+tym pomiarem, zadna nie zostala wybrana po zobaczeniu wyniku, i raportowane sa
+zawsze obie — nie ta lepsza. Waga wybrana Z TYCH danych bylaby dopasowaniem
+i wymagalaby wlasnego holdoutu; tego tu nie robimy.
+
 Okno oceny: 2016-08-01+. `fdco_season` zaczyna się w 2016, `fdco_new` w 2012 —
 bez wspólnego okna porównanie GRUP mieszałoby efekt ligi z efektem epoki.
 Historia do liczenia λ zostaje PEŁNA (run_walkforward filtruje tylko mecze
@@ -105,6 +118,11 @@ import pandas as pd  # noqa: E402
 OKNO_OD = "2016-08-01"
 MIN_MECZOW = 100          # liga poniżej tego nie wchodzi do raportu — SE bez sensu
 WYNIK_NA_INDEKS = {"H": 0, "D": 1, "A": 2}
+
+# Wagi RYNKU w mieszance. Obie pochodza z konfiguracji projektu, nie z tego
+# pomiaru: 0.30 to `ensemble._DEFAULT_WEIGHTS` (kod), 0.70 to wartosc
+# z `.env.example` wdrozona 14.08. Raportujemy zawsze obie.
+WAGI_RYNKU: tuple[float, ...] = (0.30, 0.70)
 
 
 def brier_wieloklasowy(p: np.ndarray, y_idx: np.ndarray) -> np.ndarray:
@@ -146,7 +164,8 @@ def wektory_ligi(rekordy: pd.DataFrame, liga: str) -> dict | None:
     if df.empty:
         return None
 
-    model, rynek, mix, wyniki = [], [], [], []
+    model, rynek, wyniki = [], [], []
+    miksy: dict[float, list] = {w: [] for w in WAGI_RYNKU}
     for _, r in df.iterrows():
         p_rynek = devig_1x2(r["odds_h"], r["odds_d"], r["odds_a"])
         if p_rynek is None:
@@ -155,10 +174,12 @@ def wektory_ligi(rekordy: pd.DataFrame, liga: str) -> dict | None:
             # przypadkiem cała liga.
             continue
         p_model = {"pw": r["pw"], "pr": r["pr"], "pp": r["pp"]}
-        p_mix = ensemble_probs(p_model, p_rynek, liga=liga)
         model.append([p_model["pw"], p_model["pr"], p_model["pp"]])
         rynek.append([p_rynek["pw"], p_rynek["pr"], p_rynek["pp"]])
-        mix.append([p_mix["pw"], p_mix["pr"], p_mix["pp"]])
+        for w in WAGI_RYNKU:
+            m = ensemble_probs(p_model, p_rynek,
+                               wagi={"poisson": 1.0 - w, "bzzoiro": w})
+            miksy[w].append([m["pw"], m["pr"], m["pp"]])
         wyniki.append(WYNIK_NA_INDEKS[r["actual_res"]])
 
     if not wyniki:
@@ -166,7 +187,7 @@ def wektory_ligi(rekordy: pd.DataFrame, liga: str) -> dict | None:
     return {
         "model": np.array(model) / 100.0,
         "rynek": np.array(rynek) / 100.0,
-        "mix": np.array(mix) / 100.0,
+        "miksy": {w: np.array(v) / 100.0 for w, v in miksy.items()},
         "y": np.array(wyniki),
         "bez_ceny": len(df) - len(wyniki),
     }
@@ -187,26 +208,32 @@ def zmierz_lige(df, liga: str, od: str) -> dict | None:
 
     b_model = brier_wieloklasowy(w["model"], w["y"])
     b_rynek = brier_wieloklasowy(w["rynek"], w["y"])
-    b_mix = brier_wieloklasowy(w["mix"], w["y"])
 
-    return {
+    out = {
         "liga": liga,
         "n": len(w["y"]),
         "bez_ceny": w["bez_ceny"],
         "brier_model": float(b_model.mean()),
         "brier_rynek": float(b_rynek.mean()),
-        "brier_mix": float(b_mix.mean()),
         # T1/T2 dodatnie = przewaga nad rynkiem (rynek ma WYZSZY Brier, czyli gorszy)
         "T1": sparowana_roznica(b_rynek, b_model),
-        "T2": sparowana_roznica(b_rynek, b_mix),
-        # Suma i suma kwadratow roznic per mecz. Z tej trojki (n, suma, suma
-        # kwadratow) srednia i wariancja POLACZONEJ proby odtwarzaja sie
-        # DOKLADNIE, wiec hipoteze grupowa mozna policzyc po scaleniu shardow
-        # bez przenoszenia 100k liczb przez plik.
-        "d_n": int(len(b_rynek)),
-        "d_sum": float((b_rynek - b_mix).sum()),
-        "d_sumsq": float(((b_rynek - b_mix) ** 2).sum()),
+        "miksy": {},
     }
+    for waga, wektor in w["miksy"].items():
+        b_mix = brier_wieloklasowy(wektor, w["y"])
+        d = b_rynek - b_mix
+        out["miksy"][str(waga)] = {
+            "brier_mix": float(b_mix.mean()),
+            "T2": sparowana_roznica(b_rynek, b_mix),
+            # Suma i suma kwadratow roznic per mecz. Z trojki (n, suma, suma
+            # kwadratow) srednia i wariancja POLACZONEJ proby odtwarzaja sie
+            # DOKLADNIE, wiec hipoteze grupowa mozna policzyc po scaleniu
+            # shardow bez przenoszenia 100k liczb przez plik.
+            "d_n": int(len(d)),
+            "d_sum": float(d.sum()),
+            "d_sumsq": float((d ** 2).sum()),
+        }
+    return out
 
 
 def _polacz(czesci: list[dict]) -> tuple[int, float, float] | None:
@@ -263,8 +290,9 @@ def main() -> None:
             continue
         w["grupa"] = zrodlo.get(liga, "?")
         wyniki.append(w)
-        print(f"    n={w['n']}  T2={w['T2']['roznica']:+.5f}"
-              f"  z={w['T2']['z']:.2f}", flush=True)
+        opis = "  ".join(f"T2@{waga}={m['T2']['roznica']:+.5f}(z={m['T2']['z']:.1f})"
+                         for waga, m in w["miksy"].items())
+        print(f"    n={w['n']}  T1={w['T1']['roznica']:+.5f}  {opis}", flush=True)
 
     if not wyniki:
         raise SystemExit("Zero lig w wyniku.")
@@ -279,51 +307,69 @@ def main() -> None:
 
 
 def raport(wyniki: list[dict], od: str, korekta_sidaka) -> None:
-    """Tabela lig + hipoteza grupowa.
+    """Tabela lig + hipoteza grupowa, dla KAZDEJ wagi rynku osobno.
 
     Wspolna dla przebiegu jednoprocesowego i dla `--scal`, zeby scalanie
     shardow nie liczylo niczego innym kodem niz przebieg pojedynczy.
     """
     ile = len(wyniki)
-    print("\n" + "=" * 104)
+    wagi = sorted(wyniki[0]["miksy"], key=float)
+
+    print("\n" + "=" * 112)
     print(f"  PRZEWAGA NAD RYNKIEM — Brier wieloklasowy, sparowany. Okno od {od}.")
-    print("  T1 = rynek - model (model sam)   |   T2 = rynek - mix (model PONAD cene)")
-    print("  Dodatnie = model lepszy. p po korekcie Sidaka na", ile, "lig.")
-    print("=" * 104)
-    print(f"{'liga':<32}{'grupa':<13}{'n':>6}{'Brier rynek':>13}"
-          f"{'T1':>10}{'T2':>10}{'SE':>9}{'z':>7}{'p_kor':>9}")
-    print("-" * 104)
-    for w in sorted(wyniki, key=lambda x: -(x["T2"]["z"] or -99)):
-        t2 = w["T2"]
-        pk = korekta_sidaka(p_jednostronne(t2["z"]), ile) if t2["z"] is not None else None
-        print(f"{w['liga']:<32}{w['grupa']:<13}{w['n']:>6}{w['brier_rynek']:>13.4f}"
-              f"{w['T1']['roznica']:>+10.4f}{t2['roznica']:>+10.4f}"
-              f"{t2['se']:>9.4f}{t2['z']:>7.2f}"
-              f"{(f'{pk:.4f}' if pk is not None else '-'):>9}")
-    print("-" * 104)
+    print("  T1 = rynek - model (model sam, bez ceny)")
+    print("  T2@w = rynek - mix, gdzie w = WAGA RYNKU w mieszance"
+          " (0.3 = domyslna w kodzie, 0.7 = z .env)")
+    print("  Dodatnie = model lepszy od samej ceny. p po korekcie Sidaka na",
+          ile, "lig.")
+    print("=" * 112)
+
+    naglowek = f"{'liga':<32}{'grupa':<13}{'n':>6}{'Brier rynek':>12}{'T1':>10}"
+    for w in wagi:
+        naglowek += f"{'T2@' + w:>11}{'z':>7}{'p_kor':>8}"
+    print(naglowek)
+    print("-" * 112)
+
+    glowna = wagi[0]
+    for rek in sorted(wyniki, key=lambda x: -(x["miksy"][glowna]["T2"]["z"] or -99)):
+        wiersz = (f"{rek['liga']:<32}{rek['grupa']:<13}{rek['n']:>6}"
+                  f"{rek['brier_rynek']:>12.4f}{rek['T1']['roznica']:>+10.4f}")
+        for w in wagi:
+            t2 = rek["miksy"][w]["T2"]
+            pk = (korekta_sidaka(p_jednostronne(t2["z"]), ile)
+                  if t2["z"] is not None else None)
+            wiersz += (f"{t2['roznica']:>+11.4f}{t2['z']:>7.2f}"
+                       f"{(f'{pk:.4f}' if pk is not None else '-'):>8}")
+        print(wiersz)
+    print("-" * 112)
 
     print("\nHIPOTEZA GLOWNA (jedno porownanie, pre-rejestrowane):")
     print("  srednie T2 w `fdco_new` (nigdy niemierzone) > srednie T2 w `fdco_season`")
-    grupy: dict[str, tuple[int, float, float] | None] = {}
-    for g in ("fdco_new", "fdco_season"):
-        czesci = [w for w in wyniki if w["grupa"] == g]
-        grupy[g] = _polacz(czesci) if czesci else None
-        if grupy[g]:
-            n, sr, se = grupy[g]  # type: ignore[misc]
-            print(f"  {g:<14} n={n:>6}  T2={sr:+.5f}  SE={se:.5f}  z={sr/se:+.2f}"
-                  f"  (lig: {len(czesci)})")
+    for w in wagi:
+        print(f"\n--- waga rynku {w} ---")
+        grupy: dict[str, tuple[int, float, float] | None] = {}
+        for g in ("fdco_new", "fdco_season"):
+            czesci = [rek["miksy"][w] for rek in wyniki if rek["grupa"] == g]
+            grupy[g] = _polacz(czesci) if czesci else None
+            if grupy[g]:
+                n, sr, se = grupy[g]  # type: ignore[misc]
+                ile_lig = sum(1 for rek in wyniki if rek["grupa"] == g)
+                print(f"  {g:<14} n={n:>6}  T2={sr:+.5f}  SE={se:.5f}"
+                      f"  z={sr/se:+.2f}  (lig: {ile_lig})")
+        a, b = grupy.get("fdco_new"), grupy.get("fdco_season")
+        if a and b:
+            # Dwie ROZLACZNE proby meczow — tu SE niesparowane jest wlasciwe.
+            se = float(np.sqrt(a[2] ** 2 + b[2] ** 2))
+            roz = a[1] - b[1]
+            if se > 0:
+                z = roz / se
+                print(f"  ROZNICA GRUP: {roz:+.5f}  SE={se:.5f}"
+                      f"  z={z:+.2f}  p={p_jednostronne(z):.4f}")
 
-    a, b = grupy.get("fdco_new"), grupy.get("fdco_season")
-    if a and b:
-        # Dwie ROZLACZNE proby meczow — tu SE niesparowane jest wlasciwe.
-        se = float(np.sqrt(a[2] ** 2 + b[2] ** 2))
-        roz = a[1] - b[1]
-        z = roz / se if se > 0 else None
-        print(f"\n  ROZNICA GRUP: {roz:+.5f}  SE={se:.5f}"
-              f"  z={z:+.2f}  p={p_jednostronne(z):.4f}" if z is not None else "")
-        print("\n  REGULA DECYZYJNA (zamrozona przed przebiegiem):")
-        print("    p_kor >= 0.05 we WSZYSTKICH ligach -> pytanie o edge ZAMKNIETE,")
-        print("    zadnych podzbiorow. Inaczej: holdout po dacie, pre-rejestrowany osobno.")
+    print("\nREGULA DECYZYJNA (zamrozona przed przebiegiem):")
+    print("    p_kor >= 0.05 we WSZYSTKICH ligach i przy OBU wagach -> pytanie")
+    print("    o edge ZAMKNIETE, zadnych podzbiorow. Inaczej: holdout po dacie,")
+    print("    pre-rejestrowany osobno.")
 
 
 if __name__ == "__main__":
