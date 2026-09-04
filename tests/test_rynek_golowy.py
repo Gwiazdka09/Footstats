@@ -139,3 +139,48 @@ def test_ev_placi_podatek_od_stawki():
     assert ev is not None
     assert ev["roi"] == pytest.approx(0.0, abs=3.0)
     assert ev["roi_po"] == pytest.approx(ev["roi"] - 12.0, abs=1e-6)
+
+
+def test_kurs_niedodatni_wypada_z_proby():
+    """W zrzucie SA kursy 0.0 — pierwszy przebieg wywalil sie na dzieleniu.
+
+    Kurs <= 1.0 nie jest cena, tylko dziura w danych. Zostawiony daje
+    nieskonczonosc w odwrotnosci i zatruwa cala kolumne prawdopodobienstw,
+    a w EV wchodzi jako zaklad o dowolnie wysokiej wartosci oczekiwanej.
+    """
+    p = np.full(1200, 0.55)
+    ramka = _ramka(1200, p, p)
+    ramka.loc[:99, "odds_over25_pinn"] = 0.0
+    ramka.loc[100:199, "odds_h"] = 1.0
+
+    w = zmierz_lige(ramka)
+    assert w is not None
+    assert w["n"] == 1000, "wiersze z kursem <= 1.0 nie zostaly odsiane"
+    assert np.isfinite(w["T_gole"]["roznica"])
+    assert np.isfinite(w["deficyt_gole"])
+
+
+def test_kurs_niedodatni_nie_wchodzi_do_EV():
+    """Kurs 0.5 przy p=0.55 ma EV UJEMNE, wiec sam prog EV>0 by go odsial
+    i test niczego by nie dowiodl. Dlatego zle kursy dostaja tu wartosc,
+    ktora BY weszla do stawki, gdyby guard ich nie zlapal."""
+    p = np.full(1200, 0.55)
+    ramka = _ramka(1200, p, p)
+    ramka["odds_over25_max"] = 3.0          # EV = 0.55*3-1 = +0.65 -> obstawiamy
+    ramka.loc[:299, "odds_over25_max"] = 0.0    # dziura: 1/0 = nieskonczonosc
+    ramka.loc[300:399, "odds_under25_max"] = 1.0
+
+    ev = ev_najlepsza_cena(ramka)
+    assert ev is not None
+    assert ev["n"] == 800, "wiersze z kursem <= 1.0 weszly do stawki"
+    assert np.isfinite(ev["roi"]) and np.isfinite(ev["roi_po"])
+
+
+def test_bez_kursu_niedodatniego_guard_nic_nie_usuwa():
+    """Kontrola: guard nie moze odsiewac zdrowych wierszy."""
+    p = np.full(1200, 0.55)
+    ramka = _ramka(1200, p, p)
+    ramka["odds_over25_max"] = 3.0
+    ev = ev_najlepsza_cena(ramka)
+    assert ev is not None
+    assert ev["n"] == 1200

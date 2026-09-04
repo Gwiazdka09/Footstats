@@ -130,12 +130,22 @@ def niepewnosc_wieloklasowa(y: np.ndarray, k: int = 3) -> float:
     return float((czest * (1 - czest)).sum())
 
 
+def _fmt(z: float | None, szer: int) -> str:
+    """`z` w kolumnie o stałej szerokości; None (SE=0) jako `n/d`."""
+    return (f"{z:+.2f}" if z is not None else "n/d").rjust(szer)
+
+
 def zmierz_lige(d: pd.DataFrame) -> dict | None:
     """Rynek golowy i 1X2 NA TYCH SAMYCH MECZACH jednej ligi."""
+    # Kurs <= 1.0 nie jest cena, tylko dziura w danych: odwrotnosc wychodzi
+    # nieskonczona i zatruwa CALA kolumne prawdopodobienstw. `devig_1x2`
+    # w produkcji ma dokladnie ten sam warunek — tu byl go poczatkowo brak.
+    kursy = ["odds_h", "odds_d", "odds_a", *KOL_PINN]
     ok = (d[list(KOL_PINN)].notna().all(axis=1)
           & d["p_over25"].notna() & d["actual_over25"].notna()
           & d["actual_res"].isin(WYNIK_NA_INDEKS)
-          & d[["odds_h", "odds_d", "odds_a"]].notna().all(axis=1))
+          & d[kursy].notna().all(axis=1)
+          & (d[kursy] > 1.0).all(axis=1))
     d = d[ok]
     if len(d) < MIN_MECZOW:
         return None
@@ -190,7 +200,11 @@ def polacz(czesci: list[dict], pre: str) -> tuple[int, float, float] | None:
 
 def ev_najlepsza_cena(df: pd.DataFrame) -> dict | None:
     """Płasko 1 jednostka na każdą stronę o EV > 0, po najlepszym kursie."""
+    # Ten sam guard co wyzej. Kurs <= 1.0 dawalby EV rosnace bez ograniczenia
+    # i zakład wchodzilby do stawki ZAWSZE — czyli dziura w danych ladowalaby
+    # prosto w ROI, jako zysk.
     ok = (df[list(KOL_MAX)].notna().all(axis=1)
+          & (df[list(KOL_MAX)] > 1.0).all(axis=1)
           & df["p_over25"].notna() & df["actual_over25"].notna())
     d = df[ok]
     if len(d) < MIN_MECZOW:
@@ -253,10 +267,15 @@ def raport(wyniki: list[dict], df: pd.DataFrame, korekta_sidaka) -> None:
     for w in sorted(wyniki, key=lambda x: -(x["T_gole"]["z"] or -99)):
         g, m = w["T_gole"], w["T_1x2"]
         pk = korekta_sidaka(p_jednostronne(g["z"]), ile) if g["z"] else None
+        # `z` jest None, gdy SE wyszlo zerowe. To nie awaria, ale nie da sie
+        # tego sformatowac liczbowo i przy pierwszym przebiegu wywalilo caly
+        # raport PO policzeniu wszystkiego.
+        zg = _fmt(g["z"], 7)
+        zm = _fmt(m["z"], 8)
+        pkt = f"{pk:.4f}" if pk is not None else "-"
         print(f"{w['liga']:<24}{w['n']:>7}{100*w['czestosc_over']:>6.1f}%"
-              f"{g['roznica']:>+11.5f}{g['se']:>9.5f}{g['z']:>+7.2f}"
-              f"{(f'{pk:.4f}' if pk is not None else '-'):>8}"
-              f"{m['roznica']:>+11.5f}{m['z']:>+8.2f}"
+              f"{g['roznica']:>+11.5f}{g['se']:>9.5f}{zg}{pkt:>8}"
+              f"{m['roznica']:>+11.5f}{zm}"
               f"{100*w['deficyt_gole']:>+7.1f}%{100*w['deficyt_1x2']:>+7.1f}%")
     print("-" * 108)
 
