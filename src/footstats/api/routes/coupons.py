@@ -701,6 +701,45 @@ def _rozliczone_sql() -> str:
     return ",".join(f"'{s}'" for s in _STATUSY_ROZLICZONE)
 
 
+def _zaslepki(wartosci: tuple[str, ...]) -> str:
+    """Same znaki zapytania, tyle ile wartosci. Wartosci ida parametrami."""
+    return ",".join("?" for _ in wartosci)
+
+
+# Zapytania trzymane jako SZABLONY, a skladane jednym `.format()`, zeby dalo sie
+# przy nim postawic `# nosec`. Bandit kotwiczy B608 na linii OTWIERAJACEJ
+# f-stringa, a tam — w srodku potrojnego cudzyslowu — komentarz Pythona nie ma
+# gdzie stanac i ladowal wprost w SQL (`unrecognized token: "#"`).
+#
+# Do SQL trafiaja wylacznie znaki zapytania i nasze wlasne stale statusow;
+# zadna wartosc od uzytkownika nie jest tu interpolowana.
+_SZABLON_RANKINGU = """
+    SELECT u.id as user_id, u.username,
+           COUNT(*) as total,
+           SUM(CASE WHEN c.status IN ('WON','WIN') THEN 1 ELSE 0 END) as wins,
+           SUM(COALESCE(c.stake_pln, 0)) as staked,
+           SUM(COALESCE(c.payout_pln, 0)) as payout,
+           SUM(CASE WHEN c.shared THEN 1 ELSE 0 END) as do_wgladu
+    FROM coupons c
+    JOIN users u ON u.id = c.user_id
+    WHERE u.leaderboard_opt_in = TRUE
+      AND u.username NOT IN ({konta})
+      AND c.status IN ({statusy})
+"""
+
+_SZABLON_OCZEKUJACYCH = """
+    SELECT c.id, c.created_at, c.total_odds, c.stake_pln,
+           c.legs_json, c.match_date_first, u.username
+      FROM coupons c
+      JOIN users u ON u.id = c.user_id
+     WHERE c.shared = TRUE
+       AND c.status NOT IN ({statusy}, 'VOID')
+       AND u.username NOT IN ({konta})
+     ORDER BY c.created_at DESC
+     LIMIT 20
+"""
+
+
 @router.get("/leaderboard")
 @cached_response(ttl_seconds=1800, vary_by=["sort", "days"])
 def get_leaderboard(min_coupons: int = 2, limit: int = 20, sort: str = "win_rate", days: int = 0):
@@ -732,20 +771,8 @@ def get_leaderboard(min_coupons: int = 2, limit: int = 20, sort: str = "win_rate
         # Zgoda przeniesiona na `users.leaderboard_opt_in`, a `c.shared`
         # decyduje juz TYLKO o tym, ktore pojedyncze kupony inni ogladaja
         # (patrz `get_user_shared_coupons` nizej).
-        zaslepki = ",".join("?" for _ in _KONTA_NIE_TYPERZY)
-        query = f"""
-            SELECT u.id as user_id, u.username,
-                   COUNT(*) as total,
-                   SUM(CASE WHEN c.status IN ('WON','WIN') THEN 1 ELSE 0 END) as wins,
-                   SUM(COALESCE(c.stake_pln, 0)) as staked,
-                   SUM(COALESCE(c.payout_pln, 0)) as payout,
-                   SUM(CASE WHEN c.shared THEN 1 ELSE 0 END) as do_wgladu
-            FROM coupons c
-            JOIN users u ON u.id = c.user_id
-            WHERE u.leaderboard_opt_in = TRUE
-              AND u.username NOT IN ({zaslepki})
-              AND c.status IN ({_rozliczone_sql()})
-        """  # nosec B608 — `zaslepki` to same znaki zapytania, wartosci ida parametrami
+        query = _SZABLON_RANKINGU.format(  # nosec B608 — patrz komentarz przy szablonie
+            konta=_zaslepki(_KONTA_NIE_TYPERZY), statusy=_rozliczone_sql())
         params: list = list(_KONTA_NIE_TYPERZY)
         if days > 0:
             cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
@@ -802,21 +829,11 @@ def get_pending_shared():
     Ranking celowo ich NIE liczy: wynik nierozstrzygnięty nie jest wynikiem.
     Ta lista pokazuje je obok rankingu, nie w nim.
     """
-    zaslepki = ",".join("?" for _ in _KONTA_NIE_TYPERZY)
+    zapytanie = _SZABLON_OCZEKUJACYCH.format(  # nosec B608 — patrz komentarz przy szablonie
+        konta=_zaslepki(_KONTA_NIE_TYPERZY), statusy=_rozliczone_sql())
     try:
         with _connect() as conn:
-            rows = conn.execute(
-                f"""SELECT c.id, c.created_at, c.total_odds, c.stake_pln,
-                           c.legs_json, c.match_date_first, u.username
-                      FROM coupons c
-                      JOIN users u ON u.id = c.user_id
-                     WHERE c.shared = TRUE
-                       AND c.status NOT IN ({_rozliczone_sql()}, 'VOID')
-                       AND u.username NOT IN ({zaslepki})
-                     ORDER BY c.created_at DESC
-                     LIMIT 20""",  # nosec B608 — same znaki zapytania
-                tuple(_KONTA_NIE_TYPERZY),
-            ).fetchall()
+            rows = conn.execute(zapytanie, tuple(_KONTA_NIE_TYPERZY)).fetchall()
         return [dict(r) for r in rows]
     except psycopg2.Error as e:
         _log.error("get_pending_shared error: %s", e, exc_info=True)
