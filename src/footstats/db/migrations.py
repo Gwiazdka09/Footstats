@@ -220,6 +220,7 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     " ON odds_snapshots (sport_key, snapshot_date)",
                 ],
             ),
+            *_MIGRACJE_LEADERBOARD,
         ]
     else:  # postgresql
         return [
@@ -422,7 +423,33 @@ def _get_migrations_for_dialect(dialect: Literal["sqlite", "postgresql"]) -> lis
                     " ON odds_snapshots (sport_key, snapshot_date)",
                 ],
             ),
+            *_MIGRACJE_LEADERBOARD,
         ]
+
+
+# Zgoda na ranking, ODDZIELONA od udostepniania pojedynczych kuponow.
+#
+# Do 04.09.2026 win rate, ROI i zysk liczyly sie WYLACZNIE z kuponow oznaczonych
+# `shared`, czyli z podzbioru wybieranego przez samego ocenianego. Udostepniasz
+# trafione, chowasz pudla i masz 100% skutecznosci — metryka sterowana selekcja
+# nie mierzy niczego. Ten sam mechanizm, przez ktory 14.08 padlo 52 podzbiory,
+# tylko wbudowany w produkt jako funkcja.
+#
+# Rozdzielenie: `users.leaderboard_opt_in` to ZGODA na bycie w rankingu, a wynik
+# liczy sie wtedy ze WSZYSTKICH rozliczonych kuponow. `coupons.shared` przestaje
+# sterowac liczbami i steruje tylko tym, ktore pojedyncze kupony inni ogladaja.
+#
+# DEFAULT FALSE takze dla tych, ktorzy juz cos udostepnili. Klikniecie
+# „udostepnij" na jednym kuponie NIE jest zgoda na opublikowanie calej historii,
+# w tym kuponow, ktorych swiadomie nie pokazali. Zgoda musi byc odrebna.
+_MIGRACJE_LEADERBOARD: list[tuple[int, str, list[str]]] = [
+    (
+        17,
+        "add_leaderboard_opt_in_to_users",
+        ["ALTER TABLE users ADD COLUMN leaderboard_opt_in BOOLEAN NOT NULL"
+         " DEFAULT FALSE"],
+    ),
+]
 
 
 def _ensure_migrations_table(conn, dialect: Literal["sqlite", "postgresql"]) -> None:

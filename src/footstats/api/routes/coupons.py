@@ -680,11 +680,30 @@ def share_coupon(coupon_id: int, req: ShareRequest, user_id: int = Depends(requi
 
 
 _LEADERBOARD_SORT_FIELDS = {"win_rate": "win_rate", "roi": "roi", "profit": "profit_pln"}
+_STATUSY_ROZLICZONE = ("WON", "WIN", "LOST", "LOSE")
+# Automat, nie typer. 30 kuponow dziennie zalalyby kazdego czlowieka, a konto
+# System nie jest niczyim wynikiem — decyzja produktowa z 04.09.2026.
+_KONTA_NIE_TYPERZY = ("System",)
+# Ponizej tylu rozliczonych kuponow wiersz dostaje znacznik `malo_danych`.
+# Bez niego 100% skutecznosci z dwoch kuponow wyglada jak mistrzostwo.
+MALO_DANYCH_PONIZEJ = 5
+
+
+def _rozliczone_sql() -> str:
+    """Lista statusow rozliczonych jako fragment SQL, z JEDNEGO zrodla.
+
+    Wpisana recznie w kilku zapytaniach rozjechalaby sie po cichu — to
+    charakterystyczny ksztalt bledu w tym repo (ta sama regula w kilku kopiach).
+    Wartosci sa nasze, nie uzytkownika, wiec nie ida parametrami: inaczej ta
+    sama lista musialaby byc doklejana do `params` w kazdym wywolaniu i wracamy
+    do tego samego problemu.
+    """
+    return ",".join(f"'{s}'" for s in _STATUSY_ROZLICZONE)
 
 
 @router.get("/leaderboard")
 @cached_response(ttl_seconds=1800, vary_by=["sort", "days"])
-def get_leaderboard(min_coupons: int = 3, limit: int = 20, sort: str = "win_rate", days: int = 0):
+def get_leaderboard(min_coupons: int = 2, limit: int = 20, sort: str = "win_rate", days: int = 0):
     """Ranking typerów wg wybranej metryki na udostępnionych (shared=TRUE), rozliczonych
     (WON/WIN/LOST/LOSE) kuponach.
 
@@ -703,17 +722,31 @@ def get_leaderboard(min_coupons: int = 3, limit: int = 20, sort: str = "win_rate
             detail=f"Nieznany sort '{sort}'. Dozwolone: {', '.join(sorted(_LEADERBOARD_SORT_FIELDS))}",
         )
     try:
-        query = """
+        # Metryki liczone ze WSZYSTKICH rozliczonych kuponow uzytkownika, nie
+        # z podzbioru `shared`. Do 04.09.2026 bylo odwrotnie i oznaczalo to,
+        # ze oceniany sam wybiera, co wchodzi do jego statystyki: udostepniasz
+        # trafione, chowasz pudla, masz 100% skutecznosci. Metryka sterowana
+        # selekcja nie mierzy niczego — ten sam mechanizm, przez ktory 14.08
+        # padlo 52 podzbiory.
+        #
+        # Zgoda przeniesiona na `users.leaderboard_opt_in`, a `c.shared`
+        # decyduje juz TYLKO o tym, ktore pojedyncze kupony inni ogladaja
+        # (patrz `get_user_shared_coupons` nizej).
+        zaslepki = ",".join("?" for _ in _KONTA_NIE_TYPERZY)
+        query = f"""
             SELECT u.id as user_id, u.username,
                    COUNT(*) as total,
                    SUM(CASE WHEN c.status IN ('WON','WIN') THEN 1 ELSE 0 END) as wins,
                    SUM(COALESCE(c.stake_pln, 0)) as staked,
-                   SUM(COALESCE(c.payout_pln, 0)) as payout
+                   SUM(COALESCE(c.payout_pln, 0)) as payout,
+                   SUM(CASE WHEN c.shared THEN 1 ELSE 0 END) as do_wgladu
             FROM coupons c
             JOIN users u ON u.id = c.user_id
-            WHERE c.shared = TRUE AND c.status IN ('WON','WIN','LOST','LOSE')
-        """
-        params: list = []
+            WHERE u.leaderboard_opt_in = TRUE
+              AND u.username NOT IN ({zaslepki})
+              AND c.status IN ({_rozliczone_sql()})
+        """  # nosec B608 — `zaslepki` to same znaki zapytania, wartosci ida parametrami
+        params: list = list(_KONTA_NIE_TYPERZY)
         if days > 0:
             cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
             query += " AND c.created_at >= ?"
@@ -741,6 +774,11 @@ def get_leaderboard(min_coupons: int = 3, limit: int = 20, sort: str = "win_rate
                 "payout": round(payout, 2),
                 "profit_pln": round(profit_pln, 2),
                 "roi": round(profit_pln / staked * 100, 1) if staked else 0.0,
+                # Ile z tych kuponow mozna KLIKNAC i obejrzec. Metryki licza sie
+                # ze wszystkich, ale podglad tylko z udostepnionych — wiec ta
+                # liczba mowi, ile z wyniku da sie zweryfikowac samemu.
+                "do_wgladu": int(r["do_wgladu"] or 0),
+                "malo_danych": total < MALO_DANYCH_PONIZEJ,
             })
 
         sort_field = _LEADERBOARD_SORT_FIELDS[sort]
@@ -748,6 +786,61 @@ def get_leaderboard(min_coupons: int = 3, limit: int = 20, sort: str = "win_rate
         return result[:limit]
     except psycopg2.Error as e:
         _log.error("get_leaderboard error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/leaderboard/pending")
+@cached_response(ttl_seconds=120)
+def get_pending_shared():
+    """Świeżo udostępnione kupony, jeszcze nierozliczone.
+
+    Bez tego udostępnienie nie robi z perspektywy użytkownika NIC: ranking
+    liczy tylko rozliczone, więc kupon czeka tygodniami niewidoczny. Zmierzone
+    na produkcji 04.09.2026 — trzy z czterech udostępnionych kuponów ludzi
+    miały status ACTIVE i nie pojawiały się nigdzie.
+
+    Ranking celowo ich NIE liczy: wynik nierozstrzygnięty nie jest wynikiem.
+    Ta lista pokazuje je obok rankingu, nie w nim.
+    """
+    zaslepki = ",".join("?" for _ in _KONTA_NIE_TYPERZY)
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                f"""SELECT c.id, c.created_at, c.total_odds, c.stake_pln,
+                           c.legs_json, c.match_date_first, u.username
+                      FROM coupons c
+                      JOIN users u ON u.id = c.user_id
+                     WHERE c.shared = TRUE
+                       AND c.status NOT IN ({_rozliczone_sql()}, 'VOID')
+                       AND u.username NOT IN ({zaslepki})
+                     ORDER BY c.created_at DESC
+                     LIMIT 20""",  # nosec B608 — same znaki zapytania
+                tuple(_KONTA_NIE_TYPERZY),
+            ).fetchall()
+        return [dict(r) for r in rows]
+    except psycopg2.Error as e:
+        _log.error("get_pending_shared error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/me/leaderboard")
+def set_leaderboard_opt_in(req: ShareRequest, user_id: int = Depends(require_auth)):
+    """Zgoda na obecność w rankingu typerów.
+
+    ODDZIELNA od udostępniania pojedynczych kuponów i taka musi zostać:
+    wejście do rankingu oznacza, że liczą się WSZYSTKIE rozliczone kupony,
+    także te, których użytkownik świadomie nie pokazał. Kliknięcie „udostępnij"
+    na jednym kuponie nie jest na to zgodą.
+    """
+    try:
+        with _connect() as conn:
+            conn.execute("UPDATE users SET leaderboard_opt_in = ? WHERE id = ?",
+                         (req.shared, user_id))
+        from footstats.core.response_cache import clear_response_cache
+        clear_response_cache()
+        return {"ok": True, "leaderboard_opt_in": req.shared}
+    except psycopg2.Error as e:
+        _log.error("set_leaderboard_opt_in error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

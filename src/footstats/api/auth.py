@@ -641,6 +641,9 @@ class MeResponse(BaseModel):
     email: Optional[str] = None
     is_admin: bool
     telegram_chat_id: Optional[str] = None
+    # Zgoda na obecnosc w rankingu typerow. Bez niej GUI nie wie, w ktorym
+    # stanie jest przelacznik, i musialoby zgadywac przy kazdym otwarciu.
+    leaderboard_opt_in: bool = False
 
 
 @router.get("/auth/me", response_model=MeResponse)
@@ -648,7 +651,8 @@ def get_me(user_id: int = Depends(require_auth)) -> MeResponse:
     from footstats.utils.db import connect
     with connect() as conn:
         row = conn.execute(
-            "SELECT id, username, email, is_admin, telegram_chat_id"
+            "SELECT id, username, email, is_admin, telegram_chat_id,"
+            " leaderboard_opt_in"
             " FROM users WHERE id = ? AND is_active = TRUE",
             (user_id,),
         ).fetchone()

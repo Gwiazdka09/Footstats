@@ -18,6 +18,15 @@ const DAYS_OPTIONS = [
 // Zysk PLN (papierowy bankroll) ze znakiem: "+10.00" / "-8.00".
 const formatSigned = (value) => `${value >= 0 ? '+' : ''}${(value ?? 0).toFixed(2)}`;
 
+// "2 kupony" / "5 kuponów" — bez tego znacznik "mało danych" brzmi jak
+// automat tłumaczony z angielskiego.
+const odmianaKupony = (n) => {
+  const setki = n % 100;
+  if (setki >= 12 && setki <= 14) return 'kuponów';
+  const dziesiatki = n % 10;
+  return dziesiatki >= 2 && dziesiatki <= 4 ? 'kupony' : 'kuponów';
+};
+
 // Przycisk sortu/filtra: kolory inline (nie Tailwind-klasy) — index.css ma
 // niewarstwowe `button { color: inherit; background: transparent }`, ktore bije
 // warstwowe (@layer utilities) klasy Tailwind na <button> — patrz
@@ -45,6 +54,34 @@ const LeaderboardView = ({ apiFetch }) => {
   const [selected, setSelected] = useState(null);
   const [sharedCoupons, setSharedCoupons] = useState([]);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [pending, setPending] = useState([]);
+  const [optIn, setOptIn] = useState(null);
+  const [savingOptIn, setSavingOptIn] = useState(false);
+
+  useEffect(() => {
+    apiFetch('/leaderboard/pending').then(setPending).catch(() => setPending([]));
+    apiFetch('/auth/me')
+      .then(me => setOptIn(!!me.leaderboard_opt_in))
+      .catch(() => setOptIn(null));
+  }, []);
+
+  const toggleOptIn = async () => {
+    if (savingOptIn || optIn === null) return;
+    setSavingOptIn(true);
+    try {
+      await apiFetch('/me/leaderboard', {
+        method: 'PATCH',
+        body: JSON.stringify({ shared: !optIn }),
+      });
+      setOptIn(v => !v);
+      const dane = await apiFetch(`/leaderboard?sort=${sort}&days=${days}`);
+      setLeaders(dane);
+    } catch (err) {
+      console.error('Błąd zmiany zgody na ranking:', err);
+    } finally {
+      setSavingOptIn(false);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -87,12 +124,38 @@ const LeaderboardView = ({ apiFetch }) => {
           <Trophy size={20} style={{ color: 'var(--accent-primary)' }} /> Najlepsi typerzy
         </h1>
         <p style={{ color: 'var(--text-muted)' }}>
-          Ranking typerów na udostępnionych kuponach. Kliknij typera, by zobaczyć jego kupony.
+          Wynik liczy się ze <strong>wszystkich</strong> rozliczonych kuponów typera — nie tylko
+          z tych, które pokazał. Kliknij typera, by zobaczyć jego udostępnione kupony.
         </p>
         <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
           Kwoty PLN to papierowy bankroll — nie są prawdziwymi pieniędzmi.
         </p>
       </div>
+
+      {optIn !== null && (
+        <div className="glass-card p-4 mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="font-bold text-sm">Chcę być na liście typerów</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              Wejście na listę pokazuje innym Twój wynik ze wszystkich rozliczonych kuponów,
+              także tych nieudostępnionych. Same kupony pozostają widoczne tylko te,
+              które sam udostępnisz.
+            </p>
+          </div>
+          <button
+            onClick={toggleOptIn}
+            disabled={savingOptIn}
+            className="text-xs font-bold px-4 py-2 rounded-lg transition-colors shrink-0"
+            style={optIn
+              ? { color: 'var(--accent-primary)',
+                  background: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)' }
+              : { color: 'var(--text-muted)',
+                  background: 'color-mix(in srgb, var(--text-muted) 10%, transparent)' }}
+          >
+            {optIn ? 'Jestem na liście' : 'Dołącz do listy'}
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-6 mb-8">
         <div className="flex items-center gap-2">
@@ -120,7 +183,11 @@ const LeaderboardView = ({ apiFetch }) => {
       {leaders.length === 0 ? (
         <div className="glass-card text-center py-20 px-12 flex flex-col items-center gap-4" style={{ color: 'var(--text-muted)' }}>
           <Trophy size={40} />
-          <p>Brak danych — nikt jeszcze nie udostępnił kuponów.</p>
+          <p>Nikt nie jest jeszcze na liście.</p>
+          <p className="text-xs max-w-md">
+            Żeby się tu pojawić, trzeba dołączyć do listy powyżej i mieć co najmniej dwa
+            rozliczone kupony. Nierozstrzygnięte nie liczą się do wyniku — czekają niżej.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 mb-10">
@@ -144,7 +211,14 @@ const LeaderboardView = ({ apiFetch }) => {
                   >
                     #{i + 1}
                   </div>
-                  <p className="font-bold text-lg">{l.username}</p>
+                  <div>
+                    <p className="font-bold text-lg">{l.username}</p>
+                    {l.malo_danych && (
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        mało danych — {l.total} {odmianaKupony(l.total)}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-8 text-center">
                   <div>
@@ -167,6 +241,33 @@ const LeaderboardView = ({ apiFetch }) => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold mb-2">Świeżo udostępnione</h2>
+          <p className="text-xs mb-6" style={{ color: 'var(--text-muted)' }}>
+            Kupony czekające na rozstrzygnięcie. Do rankingu wejdą dopiero po rozliczeniu —
+            wynik nierozstrzygnięty nie jest wynikiem.
+          </p>
+          <div className="grid grid-cols-1 gap-4">
+            {pending.map(c => (
+              <div key={c.id} className="glass-card p-4 flex items-center justify-between gap-4">
+                <p className="font-bold">{c.username}</p>
+                <div className="flex gap-6 text-sm text-right">
+                  <div>
+                    <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Kurs</p>
+                    <p className="font-bold">{c.total_odds ? Number(c.total_odds).toFixed(2) : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Stawka</p>
+                    <p className="font-bold">{c.stake_pln ?? '—'} PLN</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

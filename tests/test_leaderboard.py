@@ -62,7 +62,8 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL
+    password_hash TEXT NOT NULL,
+    leaderboard_opt_in BOOLEAN NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS coupons (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,7 +77,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     payout_pln       REAL,
     roi_pct          REAL,
     user_id          INTEGER DEFAULT 1,
-    shared           BOOLEAN NOT NULL DEFAULT 0
+    shared           BOOLEAN NOT NULL DEFAULT 0,
+    match_date_first TEXT
 )
 """
 
@@ -101,9 +103,11 @@ def tmp_db(tmp_path, monkeypatch):
     clear_response_cache()
 
 
-def _insert_user(db_path: str, username: str) -> int:
+def _insert_user(db_path: str, username: str, opt_in: bool = True) -> int:
     conn = sqlite3.connect(db_path)
-    cur = conn.execute("INSERT INTO users (username, password_hash) VALUES (?, 'x')", (username,))
+    cur = conn.execute(
+        "INSERT INTO users (username, password_hash, leaderboard_opt_in)"
+        " VALUES (?, 'x', ?)", (username, 1 if opt_in else 0))
     conn.commit()
     uid = cur.lastrowid
     conn.close()
@@ -215,30 +219,151 @@ def test_days_odcina_stare_kupony(tmp_db):
 
 
 def test_min_coupons_respektowane(tmp_db):
+    """Prog domyslny obnizony 3 -> 2 (decyzja z 04.09): na calej produkcji byl
+    JEDEN rozliczony udostepniony kupon czlowieka, wiec przy 3 lista stalaby
+    pusta tygodniami. Do 1 nie schodzimy — jeden trafiony kupon dawalby 100%."""
     uid = _insert_user(tmp_db, "malokuponow")
     _insert_coupon(tmp_db, uid, "WON", 10.0, 20.0)
     _insert_coupon(tmp_db, uid, "LOST", 10.0, 0.0)
 
-    # Domyślne min_coupons=3 — user z 2 kuponami nie kwalifikuje się.
-    result_default = _leaderboard()
-    assert all(r["username"] != "malokuponow" for r in result_default)
-
-    # Obniżony próg — user się kwalifikuje.
-    result_low = _leaderboard(min_coupons=2)
-    assert any(r["username"] == "malokuponow" for r in result_low)
+    assert any(r["username"] == "malokuponow" for r in _leaderboard())
+    assert all(r["username"] != "malokuponow" for r in _leaderboard(min_coupons=3))
 
 
-def test_nieudostepnione_kupony_pominiete(tmp_db):
-    uid = _insert_user(tmp_db, "prywatny")
-    _insert_coupon(tmp_db, uid, "WON", 10.0, 20.0, shared=False)
-    _insert_coupon(tmp_db, uid, "WON", 10.0, 20.0, shared=False)
+def test_metryki_licza_sie_ze_WSZYSTKICH_rozliczonych_nie_z_udostepnionych(tmp_db):
+    """ODWROCENIE semantyki, decyzja z 04.09.2026.
+
+    Do tego dnia win rate, ROI i zysk liczyly sie wylacznie z kuponow
+    oznaczonych `shared` — czyli z podzbioru wybieranego przez samego
+    ocenianego. Udostepniasz trafione, chowasz pudla, masz 100% skutecznosci.
+    Metryka sterowana selekcja nie mierzy niczego; to ten sam mechanizm, przez
+    ktory 14.08 padlo 52 podzbiory, tylko wbudowany w produkt jako funkcja.
+
+    Teraz `shared` NIE wplywa na liczby. Ten test pilnuje wlasnie tego:
+    dwa trafione udostepnione i dwa przegrane ukryte daja 50%, nie 100%.
+    """
+    uid = _insert_user(tmp_db, "sprytny")
+    _insert_coupon(tmp_db, uid, "WON", 10.0, 20.0, shared=True)
+    _insert_coupon(tmp_db, uid, "WON", 10.0, 20.0, shared=True)
+    _insert_coupon(tmp_db, uid, "LOST", 10.0, 0.0, shared=False)
     _insert_coupon(tmp_db, uid, "LOST", 10.0, 0.0, shared=False)
 
-    result = _leaderboard(min_coupons=1)
-    assert all(r["username"] != "prywatny" for r in result)
+    wiersz = next(r for r in _leaderboard() if r["username"] == "sprytny")
+    assert wiersz["total"] == 4, "ukryte pudla wypadly ze statystyki"
+    assert wiersz["win_rate"] == 50.0
+    assert wiersz["do_wgladu"] == 2, "licznik kuponow do obejrzenia sie nie zgadza"
+
+
+def test_bez_zgody_uzytkownik_nie_jest_w_rankingu(tmp_db):
+    """Wejscie do rankingu publikuje WSZYSTKIE rozliczone kupony, takze te
+    swiadomie nieudostepnione. Klikniecie 'udostepnij' na jednym kuponie NIE
+    jest na to zgoda, wiec zgoda jest osobna i domyslnie wylaczona."""
+    cichy = _insert_user(tmp_db, "cichy", opt_in=False)
+    glosny = _insert_user(tmp_db, "glosny", opt_in=True)
+    for uid in (cichy, glosny):
+        _insert_coupon(tmp_db, uid, "WON", 10.0, 20.0)
+        _insert_coupon(tmp_db, uid, "LOST", 10.0, 0.0)
+
+    nazwy = {r["username"] for r in _leaderboard()}
+    assert nazwy == {"glosny"}
 
 
 def test_nieznany_sort_zwraca_400(tmp_db):
     with pytest.raises(HTTPException) as exc:
         _leaderboard(sort="losowy_smiec")
     assert exc.value.status_code == 400
+
+
+# ───────────── konto System, kupony oczekujace, prog "malo danych" ──────────
+#
+# Zmierzone na produkcji 2026-09-04: 10 uzytkownikow, 10 udostepnionych kuponow.
+# Lista byla mimo to pusta, bo wszystkie 6 kuponow konta System tkwi w DRAFT,
+# a jedyny rozliczony udostepniony kupon czlowieka nie dobijal do progu 3.
+# Kupony ACTIVE — te, ktore ludzie WLASNIE udostepnili — byly ignorowane
+# calkowicie, wiec klikniecie „udostepnij" nie robilo z ich perspektywy NIC.
+
+def test_System_nie_wchodzi_na_liste_typerow(tmp_db):
+    """System to automat, nie typer. Decyzja produktowa z 04.09: ranking jest
+    wylacznie ludzki. Bez tego 30 kuponow dziennie zalewa kazdego czlowieka."""
+    sys_id = _insert_user(tmp_db, "System")
+    czlowiek = _insert_user(tmp_db, "Ala")
+    for _ in range(5):
+        _insert_coupon(tmp_db, sys_id, "WON", 10.0, 20.0)
+    for _ in range(2):
+        _insert_coupon(tmp_db, czlowiek, "WON", 10.0, 20.0)
+
+    wynik = _leaderboard()
+    nazwy = {w["username"] for w in wynik}
+    assert "System" not in nazwy, "automat trafil na liste typerow"
+    assert "Ala" in nazwy
+
+
+def test_prog_domyslny_to_dwa_kupony(tmp_db):
+    """Przy progu 3 lista stala pusta tygodniami — na calej produkcji byl
+    JEDEN rozliczony udostepniony kupon czlowieka."""
+    uid = _insert_user(tmp_db, "Ola")
+    _insert_coupon(tmp_db, uid, "WON", 10.0, 20.0)
+    _insert_coupon(tmp_db, uid, "LOST", 10.0, 0.0)
+    assert [w["username"] for w in _leaderboard()] == ["Ola"]
+
+
+def test_jeden_kupon_to_wciaz_za_malo(tmp_db):
+    """Prog 2, nie 1: pojedynczy trafiony kupon dawalby 100% skutecznosci."""
+    uid = _insert_user(tmp_db, "Jeden")
+    _insert_coupon(tmp_db, uid, "WON", 10.0, 20.0)
+    assert _leaderboard() == []
+
+
+def test_wiersz_niesie_znacznik_malo_danych(tmp_db):
+    """Uzytkownik ma widziec, ze 100% skutecznosci stoi na dwoch kuponach.
+    Bez tego lista klamie dokladnie tak, jak reszta projektu klamalaby bez SE."""
+    chudy = _insert_user(tmp_db, "Chudy")
+    gruby = _insert_user(tmp_db, "Gruby")
+    for _ in range(2):
+        _insert_coupon(tmp_db, chudy, "WON", 10.0, 20.0)
+    for _ in range(6):
+        _insert_coupon(tmp_db, gruby, "WON", 10.0, 20.0)
+
+    wg = {w["username"]: w for w in _leaderboard()}
+    assert wg["Chudy"]["malo_danych"] is True
+    assert wg["Gruby"]["malo_danych"] is False
+
+
+# ─────────────────────── swiezo udostepnione (oczekujace) ───────────────────
+
+from footstats.api.routes.coupons import get_pending_shared  # noqa: E402
+
+_oczekujace = get_pending_shared.__wrapped__
+
+
+def test_oczekujace_pokazuja_udostepniony_kupon_ktory_jeszcze_trwa(tmp_db):
+    """Sedno zgloszenia. Na produkcji 04.09 trzy z czterech udostepnionych
+    kuponow ludzi mialy status ACTIVE i NIE pojawialy sie nigdzie — z ich
+    perspektywy klikniecie 'udostepnij' nie robilo nic."""
+    uid = _insert_user(tmp_db, "Patryk")
+    _insert_coupon(tmp_db, uid, "ACTIVE", 100.0, 0.0, shared=True)
+
+    wynik = _oczekujace()
+    assert [w["username"] for w in wynik] == ["Patryk"]
+
+
+def test_oczekujace_pomijaja_rozliczone_i_nieudostepnione(tmp_db):
+    """Rozliczone naleza do rankingu, nie do tej listy. Nieudostepnione nie
+    naleza nigdzie — uzytkownik ich nie pokazal."""
+    uid = _insert_user(tmp_db, "Ala")
+    _insert_coupon(tmp_db, uid, "WON", 10.0, 20.0, shared=True)
+    _insert_coupon(tmp_db, uid, "ACTIVE", 10.0, 0.0, shared=False)
+    _insert_coupon(tmp_db, uid, "VOID", 10.0, 10.0, shared=True)
+    assert _oczekujace() == []
+
+
+def test_oczekujace_pomijaja_konto_System(tmp_db):
+    """Szesc kuponow System tkwi na produkcji w DRAFT od zawsze. Bez tego
+    filtra zalalyby liste oczekujacych i wypchnely z niej ludzi."""
+    sys_id = _insert_user(tmp_db, "System")
+    czlowiek = _insert_user(tmp_db, "Ola")
+    for _ in range(6):
+        _insert_coupon(tmp_db, sys_id, "DRAFT", 10.0, 0.0, shared=True)
+    _insert_coupon(tmp_db, czlowiek, "ACTIVE", 10.0, 0.0, shared=True)
+
+    assert [w["username"] for w in _oczekujace()] == ["Ola"]
