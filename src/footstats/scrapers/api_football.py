@@ -117,7 +117,7 @@ class APIFootball:
             return False, str(e)
 
     def _get(self, endpoint: str, params: dict = None,
-             force_network: bool = False) -> dict | None:
+             force_network: bool = False, bez_cache: bool = False) -> dict | None:
         """
         Pobiera dane z API-Football z pelna strategia oszczedzania:
           1. Sprawdz disk cache (TTL 24h) – bez zadnego requesta
@@ -127,12 +127,27 @@ class APIFootball:
              b. Wyslij request, zrejestruj w budzecie
              c. Zapisz na dysk (porownaj z starym przed nadpisaniem)
         force_network=True: pomija cache i pobiera swiezo (uzywa requesta).
+
+        bez_cache=True: pomija cache CALKOWICIE — ani odczytu, ani zapisu.
+        Disk cache to JEDEN plik JSON, wiec kazde zapytanie czyta go i parsuje
+        w calosci, a po odpowiedzi zapisuje w calosci (do tego drugi odczyt na
+        `stare`). Przy pierwotnym uzyciu — `/players/topscorers`, jedno zapytanie
+        na lige — to bez znaczenia. Backfill pelnych skladow robi ~34 zapytania
+        na lige, czyli okolo 550, a plik urosl do 30 MB: okolo 33 GB dysku na
+        przebieg, przy koszcie rosnacym KWADRATOWO wraz z cache. Zmierzone
+        07.09.2026: pobieranie zwolnilo do ~7 minut na lige, i szlo to na dysk,
+        nie na siec.
+
+        Uzywac TYLKO tam, gdzie odpowiedz i tak laduje we wlasnym magazynie
+        (`/players` -> `player_stats` w SQLite) — cache trzymalby wtedy te same
+        dane drugi raz. Budzet i bramka `apisports_gate` dzialaja normalnie:
+        pominiecie dotyczy dysku, nie ochrony konta.
         """
         cache_key = f"af:{endpoint}:{params}"
 
         # 1. Disk cache – zawsze proba. PRZED bramka: cache to nasze wlasne dane,
         # a nie ruch do dostawcy, wiec zamknieta bramka nie ma powodu go odcinac.
-        if not force_network:
+        if not force_network and not bez_cache:
             cached = _af_cache_get(cache_key)
             if cached is not None:
                 return cached
@@ -203,9 +218,10 @@ class APIFootball:
                     )
                     return None
 
-                # Sprawdz stare dane przed zapisem
-                stare = _af_load_disk_cache().get(cache_key, {}).get("data")
-                _af_cache_set(cache_key, data, stare)
+                if not bez_cache:
+                    # Sprawdz stare dane przed zapisem
+                    stare = _af_load_disk_cache().get(cache_key, {}).get("data")
+                    _af_cache_set(cache_key, data, stare)
                 console.print(
                     f"[dim]AF req uzyto: {bud['uzyto']+1}/{AF_BUDGET_DAILY} "
                     f"| pozostalo ~{pozostalo-1}[/dim]"

@@ -132,6 +132,11 @@ def fetch_league_squad(
         payload = _klient._get(
             "/players",
             params={"league": league_api_id, "season": season, "page": strona},
+            # Odpowiedź i tak ląduje w `player_stats`, więc disk cache trzymałby
+            # te same dane drugi raz — i to bardzo drogo: jeden plik JSON,
+            # czytany i zapisywany W CAŁOŚCI przy każdym żądaniu, urósł do 30 MB.
+            # Przy ~550 stronach backfillu to ~33 GB dysku i ~7 minut na ligę.
+            bez_cache=True,
         )
         if strona == 1 and not (payload or {}).get("response"):
             # Pusta PIERWSZA strona = liga nie ma danych na ten sezon. Dalsze
