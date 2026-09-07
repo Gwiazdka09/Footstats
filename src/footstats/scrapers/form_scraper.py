@@ -174,7 +174,9 @@ def find_team_id(team_name: str, page=None) -> Optional[int]:
 
     own_session = page is None
     if own_session:
-        if not PLAYWRIGHT_OK:
+        # Wlasna sesja = wlasna przegladarka, wiec i tu wylacznik musi obowiazywac.
+        # Gdy `page` przychodzi z zewnatrz, blokade sprawdzil juz wolajacy.
+        if not PLAYWRIGHT_OK or sofascore_zablokowany():
             return None
         sess = _sofa_session()
         if sess is None:
@@ -220,8 +222,12 @@ def get_form_sofascore(team_id: int, team_name: str, page=None) -> dict:
 
     own_session = page is None
     if own_session:
+        # Jak w `find_team_id`: wlasna sesja to wlasna przegladarka, wiec
+        # wylacznik obowiazuje. Przekazany `page` znaczy, ze wolajacy juz sprawdzil.
         if not PLAYWRIGHT_OK:
             return _empty_form(team_name, "brak playwright")
+        if sofascore_zablokowany():
+            return _empty_form(team_name, "sofascore zablokowany")
         sess = _sofa_session()
         if sess is None:
             return _empty_form(team_name, "błąd sesji")
@@ -508,32 +514,42 @@ def pobierz_forme_meczu(team_home: str, team_away: str) -> dict:
             "h2h": [],
         }
 
-    sess = _sofa_session()
-    if sess is None:
-        return {
-            "home": _empty_form(team_home, "błąd sesji"),
-            "away": _empty_form(team_away, "błąd sesji"),
-            "h2h": [],
-        }
-    p, browser, page = sess
-
     home_data = _empty_form(team_home, "brak")
     away_data = _empty_form(team_away, "brak")
 
-    try:
-        # Gospodarz
-        tid_h = find_team_id(team_home, page)
-        if tid_h:
-            home_data = get_form_sofascore(tid_h, team_home, page)
+    # Wyłącznik z 30.08 trafił wtedy WYŁĄCZNIE do `pobierz_forme` (jedna drużyna),
+    # a potok dzienny woła tę funkcję (`daily_phases:175`, `analyzer_helpers:93`).
+    # Przez to blokada nic tu nie dawała: log jobu z 07.09 pokazuje 8 razy HTTP 403
+    # dla 4 meczów i 39.7 s spalone w KROKU 2. Przez 14 dni to 146 zapytań, 146
+    # blokad, zero sukcesów — i od 30 do 63 s dłuższy przebieg każdego dnia.
+    if not sofascore_zablokowany():
+        sess = _sofa_session()
+        if sess is None:
+            return {
+                "home": _empty_form(team_home, "błąd sesji"),
+                "away": _empty_form(team_away, "błąd sesji"),
+                "h2h": [],
+            }
+        p, browser, page = sess
 
-        # Gość
-        tid_a = find_team_id(team_away, page)
-        if tid_a:
-            away_data = get_form_sofascore(tid_a, team_away, page)
+        try:
+            # Gospodarz
+            tid_h = find_team_id(team_home, page)
+            if tid_h:
+                home_data = get_form_sofascore(tid_h, team_home, page)
 
-    finally:
-        browser.close()
-        p.stop()
+            # Gość — tylko jeśli gospodarz nie trafił właśnie na blokadę.
+            # `find_team_id` z podanym `page` nie sprawdza wyłącznika (robi to
+            # wołający), więc bez tego warunku każdy mecz kosztowałby dwa pewne 403
+            # zamiast jednego.
+            if not sofascore_zablokowany():
+                tid_a = find_team_id(team_away, page)
+                if tid_a:
+                    away_data = get_form_sofascore(tid_a, team_away, page)
+
+        finally:
+            browser.close()
+            p.stop()
 
     # FlashScore fallback jeśli potrzeba
     if not home_data.get("form"):
