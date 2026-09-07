@@ -104,8 +104,28 @@ wyglądałaby na kontrolę i nią nie była.
 (rollback), a dla ręcznego przebiegu CI może w ogóle nie być. Furtka jest jawna
 i zawężona — pilnuje tego `test_reczne_wdrozenie_omija_bramke_swiadomie`.
 
-**Pierwsza realna weryfikacja bramki nastąpi przy najbliższym pushu na `main`.**
-Testy sprawdzają kształt YAML-a, nie zachowanie GitHuba.
+### Zweryfikowane na żywym przebiegu
+
+Pierwszy push po zmianie (`64346c975`, 07.09 17:59 UTC) przeszedł całą ścieżkę:
+
+```
+CI                          completed/success   8 min
+CD — Deploy to Cloud Run    krok 3 "Bramka — CI dla tego commita musi byc
+                            zielone"  ->  completed/success
+```
+
+Przy okazji zmierzone, że CI kończy się w **7-9 minut** na ośmiu ostatnich
+przebiegach, więc budżet 20 minut ma zapas, a nie jest ciasny.
+
+**Sprostowanie.** Dopisując `actions: read` napisałem, że bez tego uprawnienia
+bramka wstrzymałaby każde wdrożenie. To było błędne: przebieg `64346c975` miał
+blok `permissions` jeszcze **bez** niego i bramka przeszła — repozytorium jest
+publiczne, a metadane Actions czyta się wtedy bez osobnego zakresu. Uprawnienie
+zostaje, bo po przełączeniu repo na prywatne stałoby się wymagane, a wtedy
+brakowałoby go dokładnie tam, gdzie nikt nie szuka.
+
+Czego **nie** zweryfikowałem: że bramka zatrzymuje wdrożenie przy czerwonym CI.
+Wymagałoby to celowego czerwonego commita na `main`.
 
 ## 5. RAG semantyczny — sprostowanie
 

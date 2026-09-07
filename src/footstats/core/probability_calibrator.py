@@ -147,6 +147,19 @@ def maybe_refit_calibration(threshold: int = 30) -> bool:
     gate `CALIBRATION_ENABLED` zostaje pod kontrolą usera (włączy `=1` gdy krzywa zdrowa:
     monotoniczna, dość próbek). Refit tylko utrzymuje krzywą świeżą na ten moment.
     Graceful: błąd DB/sklearn → log WARNING, return False (nie blokuje pipeline).
+
+    W KONTENERZE TEN ZAPIS PRZEPADA, i widać to w logach produkcji. `calibration.json`
+    NIE jest shipowany w obrazie (inaczej niż `model_calibration.json`, to inny plik
+    i inny mechanizm), a system plików Cloud Run jest ulotny — więc każdy wieczorny
+    przebieg startuje od zera i log 06.09 pokazuje to wprost:
+
+        Auto-refit kalibracji: 79 settled, było n_train=0 → refit (+79)
+
+    `n_train=0` przy 79 rozliczonych znaczy „poprzedniego dopasowania nie ma".
+    Nie naprawiamy tego zapisem do bazy, bo pomiar z 27.08 (n=424) mówi, że
+    dopasowanie kalibratora POGARSZA out-of-sample NLL — trwały plik utrwaliłby
+    coś, czego i tak nie chcemy włączyć. Ta uwaga istnieje po to, żeby linii
+    „auto-refit wykonany" nie czytać jako dowodu, że krzywa gdzieś żyje.
     """
     try:
         settled = _count_settled_predictions()

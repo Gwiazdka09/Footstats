@@ -94,12 +94,20 @@ def test_reczne_wdrozenie_omija_bramke_swiadomie(plik):
 
 @pytest.mark.parametrize("plik", CD)
 def test_job_ma_uprawnienie_do_czytania_actions(plik):
-    """`gh run list` pyta o przebiegi Actions — bez `actions: read` pada.
+    """`gh run list` pyta o przebiegi Actions, wiec `actions: read` ma byc jawne.
 
-    A gdy pada, bramka widzi pustke nie do odroznienia od „CI jeszcze nie
-    ruszylo", czeka 20 minut i wstrzymuje KAZDE wdrozenie. Zabezpieczenie
-    stalo by sie wtedy awaria. Blad byl w pierwszej wersji tej bramki: blok
-    `permissions` mial tylko `contents: read` i `id-token: write`.
+    SPROSTOWANIE do pierwszej wersji tego testu. Napisalem, ze bez tego
+    uprawnienia bramka wstrzymalaby KAZDE wdrozenie — i to bylo bledne.
+    Pierwszy realny przebieg (`64346c975`, 07.09) mial blok `permissions`
+    jeszcze bez `actions: read` i bramka **przeszla**: repozytorium jest
+    publiczne, a metadane Actions da sie wtedy czytac bez osobnego zakresu.
+
+    Wymaganie zostaje mimo to, bo jest jednym warunkiem od bycia prawdziwym:
+    po przelaczeniu repo na prywatne `gh run list` zaczyna wymagac `actions:
+    read`, a wtedy bramka widzi pustke nie do odroznienia od „CI jeszcze nie
+    ruszylo", czeka 20 minut i wstrzymuje wdrozenie. Zabezpieczenie stalo by
+    sie wtedy awaria — i to jest awaria, ktorej nikt nie szuka w blokach
+    uprawnien.
     """
     uprawnienia = _pierwszy_job(plik).get("permissions", {})
     assert uprawnienia.get("actions") == "read", (
