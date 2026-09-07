@@ -288,6 +288,47 @@ def _fetch_closing_odds(api_key: str, fixture_id: int) -> float | None:
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
 
+def _kurs_zamkniecia_nogi(
+    typ: str, home: str, away: str, data: str,
+    api_key: str, fixtures: list[dict] | None,
+) -> float | None:
+    """Kurs zamknięcia ZDARZENIA, na które postawiła ta noga. None gdy brak.
+
+    Kolejność źródeł jest odwrotna niż do 2026-09-07, i to celowo. Darmowe CSV
+    football-data notuje 1X2 **i** Over/Under 2.5, więc pokrywa wszystkie typy,
+    które da się porównać; `_fetch_closing_odds` pyta API-Football o `bet=1`
+    (Match Winner) i oddaje wyłącznie stronę gospodarza. Wołanie go dla `2` albo
+    `Over 2.5` powtarzałoby dokładnie ten błąd, który ta zmiana usuwa — tyle że
+    w drugim źródle. Oba mierzą wobec Pinnacle, więc wyniki zostają porównywalne.
+
+    Typ bez odpowiednika w CSV (BTTS, podwójna szansa, inna linia, kombinacja
+    BetBuildera — 24% rozliczonych nóg) zostaje BEZ CLV. Podstawienie „bliskiej"
+    ceny dałoby przewagę wziętą z różnicy zdarzeń, nie z jakości typu.
+    """
+    from footstats.scrapers import closing_odds as _co
+
+    try:
+        kursy = _co.kursy_zamkniecia(home, away, data)
+        kurs = _co.kurs_dla_typu(kursy, typ)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        # CLV to telemetria — rozliczenie kuponu jest ważniejsze i musi trwać.
+        log.warning("CLV dla %s vs %s: zrodlo kursow zamkniecia padlo (%s: %s)",
+                    home, away, type(e).__name__, e)
+        return None
+    if kurs:
+        log.debug("CLV %s vs %s [%s] = %.2f (%s)", home, away, typ, kurs,
+                  (kursy or {}).get("zrodlo", "football-data"))
+        return kurs
+
+    # API-Football tylko dla gospodarza — to jedyny wynik, jaki `bet=1` zwraca.
+    if " ".join(str(typ or "").split()).upper() != "1" or not fixtures:
+        return None
+    fix_id = _find_fixture_id(home, away, fixtures)
+    if not fix_id:
+        return None
+    return _fetch_closing_odds(api_key, fix_id)
+
+
 def _send_telegram_summary(summary: dict, date_str: str) -> None:
     try:
         from footstats.utils.telegram_notify import send_message
@@ -376,6 +417,12 @@ def run_evening_agent(date_str: str | None = None) -> dict:
 
     summary: dict = {"checked": 0, "won": 0, "lost": 0, "partial": 0, "active": 0}
     nowe_wyniki = 0
+    # Licznik, nie flaga: CLV jest telemetrią, więc nie przerywa przebiegu, gdy
+    # źródło milczy — a bez tej liczby zero wygląda identycznie jak brak meczów.
+    # Dokładnie tak przeżył bug `if pred_id:`: joby kończyły exit=0 przez całą
+    # historię projektu, a `clv_closing_odds` było NULL w 295 na 295 wierszy.
+    nowe_clv = 0
+    nog_rozliczonych = 0
 
     for kupon in active_coupons:
         legs = get_coupon_legs(kupon["id"])
@@ -396,6 +443,7 @@ def run_evening_agent(date_str: str | None = None) -> dict:
 
             correct = oblicz_tip_correct(ai_tip, wynik)
             nogi_statusy.append("WIN" if correct == 1 else ("LOSS" if correct == 0 else "VOID"))
+            nog_rozliczonych += 1
 
             # Zapisz per-leg wynik
             updated_legs[leg_idx]["result"] = wynik
@@ -404,6 +452,18 @@ def run_evening_agent(date_str: str | None = None) -> dict:
             )
             nowe_wyniki += 1
 
+            # CLV liczy się dla KAŻDEJ nogi, nie tylko tej z `prediction_id`.
+            # Do 2026-09-07 cały ten blok stał pod `if pred_id:`, a tego klucza
+            # nikt nigdy nie zapisywał (0 na 82 nogi w 60 rozliczonych kuponach)
+            # — stąd `clv_closing_odds IS NULL` dla wszystkich 295 predykcji.
+            # Samo dopisanie klucza by nie wystarczyło: `system_paper` tworzy
+            # 429 z 439 rozliczonych kuponów i w ogóle nie dotyka `predictions`.
+            closing = _kurs_zamkniecia_nogi(
+                ai_tip, home, away, str(leg.get("data") or date_str), api_key, fixtures)
+            if closing:
+                updated_legs[leg_idx]["clv_closing"] = closing
+                nowe_clv += 1
+
             pred_id = leg.get("prediction_id")
             if pred_id:
                 try:
@@ -411,33 +471,12 @@ def run_evening_agent(date_str: str | None = None) -> dict:
                 except (ValueError, KeyError) as e:
                     console.print(f"[yellow]Warning: Could not update prediction {pred_id}: {e}[/yellow]")
 
-                try:
-                    from footstats.core.clv_tracker import record_closing_odds
-                    closing = None
-                    fix_id = _find_fixture_id(home, away, fixtures)
-                    if fix_id:
-                        closing = _fetch_closing_odds(api_key, fix_id)
-
-                    # Fallback: football-data.co.uk. Ten CSV i tak jest pobierany przez
-                    # FootballDataSource (cache 6h) i ma kolumny closing Pinnacle —
-                    # czyli kurs zamknięcia za darmo, bez zużywania budżetu AF (100/dzień)
-                    # i również dla meczów, których AF już nie zwraca w liście dnia.
-                    # Bierzemy kurs GOSPODARZA, żeby zachować semantykę
-                    # `_fetch_closing_odds` i nie zepsuć porównywalności istniejących CLV.
-                    if not closing:
-                        from footstats.scrapers.closing_odds import kursy_zamkniecia
-                        kursy = kursy_zamkniecia(home, away, str(leg.get("data") or date_str))
-                        if kursy:
-                            closing = kursy.get("home")
-                            if closing:
-                                log.info(
-                                    "CLV dla %s vs %s z football-data.co.uk (%s), nie z AF",
-                                    home, away, kursy.get("zrodlo"),
-                                )
-                    if closing:
+                if closing:
+                    try:
+                        from footstats.core.clv_tracker import record_closing_odds
                         record_closing_odds(pred_id, closing)
-                except (ImportError, ValueError, KeyError, OSError) as e:
-                    log.debug("CLV dla %s vs %s nieustalone: %s", home, away, e)
+                    except (ImportError, ValueError, KeyError, OSError) as e:
+                        log.debug("CLV dla predykcji %s nieustalone: %s", pred_id, e)
 
         # Zapisz per-leg wyniki do DB
         _save_coupon_legs(kupon["id"], updated_legs)
@@ -478,6 +517,19 @@ def run_evening_agent(date_str: str | None = None) -> dict:
             summary["active"] += 1
 
         summary["checked"] += 1
+
+    summary["clv_nowe"] = nowe_clv
+    summary["nogi_rozliczone"] = nog_rozliczonych
+    if nog_rozliczonych:
+        console.print(f"[dim]CLV: {nowe_clv}/{nog_rozliczonych} rozliczonych nog"
+                      f" ma kurs zamkniecia[/dim]")
+        if not nowe_clv:
+            # Zero przy niezerowej liczbie nog = zrodlo padlo albo wszystkie typy
+            # sa niemapowalne. Jedno i drugie znaczy, ze CLV przestalo powstawac,
+            # a to jest jedyny pomiar "czy bijemy linie zamkniecia".
+            log.warning("CLV: zadna z %d rozliczonych nog nie dostala kursu"
+                        " zamkniecia — sprawdz football-data.co.uk i slownik typow",
+                        nog_rozliczonych)
 
     # Wyświetl tabelę
     _print_summary_table(summary)

@@ -20,6 +20,7 @@ UWAGA: to football-data.co.uk (CSV), NIE football-data.org (API) — inne serwis
 from __future__ import annotations
 
 import csv
+import functools
 import io
 import logging
 
@@ -55,8 +56,21 @@ def _sezon_z_daty(data_iso: str) -> str:
     return f"{start % 100:02d}{(start + 1) % 100:02d}"
 
 
+@functools.lru_cache(maxsize=64)
 def _csv_ligi(kod_ligi: str, sezon: str) -> str | None:
-    """CSV ligi (reużywa pobierania i cache 6h z FootballDataSource). None przy błędzie."""
+    """CSV ligi (reużywa pobierania i cache 6h z FootballDataSource). None przy błędzie.
+
+    Pamięć procesu jest tu konieczna, bo cache PLIKOWY zapisuje wyłącznie udane
+    pobranie — porażka nie zostawia śladu i każde kolejne wywołanie znów wychodzi
+    do sieci. Od 2026-09-07 `evening_agent` liczy CLV dla każdej rozliczonej nogi,
+    a `kursy_zamkniecia` iteruje 13 lig, więc przy martwym źródle byłoby to
+    13 × liczba_nóg zapytań z timeoutem 15 s każde. Zmierzone tego dnia (cała
+    witryna football-data.co.uk oddawała HTTP 503): 11.9 s pierwsze wywołanie,
+    7.5 s drugie. Rozliczanie kuponów nie może wisieć na telemetrii CLV.
+
+    Joby są krótkotrwałe (jeden przebieg = jeden proces), więc „raz na proces"
+    znaczy tu „raz na przebieg" i nic nie przeżywa do następnego dnia.
+    """
     try:
         return FootballDataSource()._pobierz_csv(kod_ligi, sezon)
     except (OSError, ValueError, KeyError) as e:
@@ -149,3 +163,47 @@ def _pasuje(z_csv: str, nasze: str) -> bool:
     if not z_csv or not nasze:
         return False
     return z_csv == nasze or nasze.startswith(z_csv) or z_csv.startswith(nasze)
+
+
+# Typ zakładu → klucz w słowniku z `kursy_zamkniecia`. Mapa jest CELOWO wąska:
+# CSV notuje 1X2 i jedną linię Over/Under (2.5), więc wszystko poza tym musi
+# zostać bez CLV zamiast dostać cudzy kurs.
+_TYP_NA_KURS = {
+    "1": "home",
+    "X": "draw",
+    "2": "away",
+    "OVER 2.5": "over_2_5",
+    "UNDER 2.5": "under_2_5",
+}
+
+
+def kurs_dla_typu(kursy: dict | None, typ: str | None) -> float | None:
+    """Kurs zamknięcia ZDARZENIA, na które postawiliśmy. None gdy nieporównywalne.
+
+    Do 2026-09-07 `evening_agent` brał do CLV zawsze `kursy["home"]`, niezależnie
+    od typu nogi. Przy rozkładzie typów w 531 rozliczonych nogach (Over 2.5 — 159,
+    Under 2.5 — 139, `1` — 83, BTTS — 62, `2` — 22, podwójne szanse — 22) oznacza
+    to, że 76% CLV liczyłoby się z ceny innego zdarzenia, a reszta i tak nie ma
+    w CSV odpowiednika. Kod bronił tego zgodnością z istniejącymi CLV — a tych
+    było zero, bo `pred_id` nigdy nie trafiał do nogi.
+
+    Nie ma tu żadnego podstawiania „blisko": `Over 1.5` nie dostaje ceny `2.5`,
+    bo to inne zdarzenie i CLV wyszłoby dodatnie z samej różnicy linii.
+    """
+    if not kursy or not typ:
+        return None
+    # Podwójne spacje z ręcznych wpisów ("Over  2.5") łamałyby dopasowanie.
+    klucz = _TYP_NA_KURS.get(" ".join(str(typ).split()).upper())
+    if not klucz:
+        return None
+    try:
+        kurs = float(kursy.get(klucz) or 0.0)
+    except (TypeError, ValueError) as e:
+        # Kurs, który jest w słowniku, ale nie jest liczbą, to zepsuty wiersz
+        # źródła — nie ten sam stan co „CSV nie zna tego meczu", więc mówi.
+        log.warning("closing_odds: kurs %r dla typu %r nie jest liczba (%s)",
+                    kursy.get(klucz), typ, type(e).__name__)
+        return None
+    # Kurs <= 1.0 nie istnieje na rynku; `calculate_clv` i tak by go odrzucił,
+    # ale wtedy odrzucenie wyglądałoby jak brak danych zamiast jak zły wiersz.
+    return kurs if kurs > 1.0 else None

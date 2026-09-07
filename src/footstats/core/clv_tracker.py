@@ -15,6 +15,7 @@ Użycie:
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta
 
@@ -180,6 +181,82 @@ def get_clv_report(
     liga_stats.sort(key=lambda x: x["clv_avg"], reverse=True)
 
     return {"overall": overall, "per_liga": liga_stats}
+
+
+def raport_clv_z_kuponow(kupony, min_probek: int = 5) -> dict:
+    """CLV liczone z NÓG kuponów — jedyna ścieżka, która obejmuje paper-trading.
+
+    `get_clv_report` wyżej czyta `predictions`, a ta tabela ma 291 wierszy wobec
+    439 rozliczonych kuponów i pokrywa wyłącznie typy przepuszczone przez LLM-a.
+    Główne źródło danych, `system_paper.build_single_leg_coupons` (429 z tych
+    kuponów), nie dotyka `predictions` w ogóle — bierze typ prosto z modelu.
+    Raport oparty tylko na tamtej tabeli mierzyłby ułamek ruchu i wyglądałby
+    przy tym kompletnie.
+
+    `kupony`: wiersze z `coupons` (dict albo sqlite3.Row) z `legs_json`. Nogi
+    dostają `clv_closing` w `evening_agent` przy rozliczaniu.
+
+    Grupujemy po TYPIE, nie po lidze: 1X2 i Over/Under to różne rynki o różnej
+    marży, więc jedna średnia je miesza. `overall` liczy się z wszystkich nóg
+    naraz (średnia ważona), nie ze średnich kubełków — kubełek z jedną nogą nie
+    może ważyć tyle co kubełek ze setką.
+    """
+    clvs: list[float] = []
+    per_typ: dict[str, list[float]] = {}
+    # Zbiorczo, nie per wiersz: przy zepsutym zapisie byłyby to setki linii,
+    # a szum niszczy alarmy tak samo skutecznie jak cisza.
+    zepsute_nogi = 0
+
+    for kupon in kupony:
+        surowe = kupon["legs_json"] if "legs_json" in _klucze(kupon) else None
+        try:
+            nogi = json.loads(surowe or "[]")
+        except (ValueError, TypeError):
+            # Pojedynczy zepsuty wiersz nie może wyciszyć całego raportu.
+            _log.warning("[CLV] pomijam kupon z nieczytelnym legs_json")
+            continue
+        for noga in nogi:
+            try:
+                bet = float(noga.get("odds") or 0.0)
+                zamkniecie = float(noga.get("clv_closing") or 0.0)
+            except (TypeError, ValueError) as e:
+                zepsute_nogi += 1
+                if zepsute_nogi == 1:
+                    _log.debug("[CLV] noga z nieliczbowym kursem (%s: %s)",
+                               type(e).__name__, e)
+                continue
+            clv = calculate_clv(bet, zamkniecie)
+            if clv is None:
+                continue
+            clvs.append(clv)
+            per_typ.setdefault(str(noga.get("tip") or "?"), []).append(clv)
+
+    if zepsute_nogi:
+        # Cicha strata próby przekłada się wprost na przesunięty CLV, a raport
+        # bez tej liczby wygląda identycznie jak raport z kompletu danych.
+        _log.warning("[CLV] %d nog pominietych — kurs wziecia albo zamkniecia"
+                     " nie jest liczba", zepsute_nogi)
+
+    if not clvs:
+        return {"overall": None, "per_typ": []}
+
+    def _staty(vals: list[float]) -> dict:
+        return {"n": len(vals),
+                "clv_avg": round(sum(vals) / len(vals), 2),
+                "positive_pct": round(sum(1 for v in vals if v > 0) / len(vals) * 100, 1)}
+
+    typy = [{"typ": t, **_staty(v)} for t, v in per_typ.items() if len(v) >= min_probek]
+    typy.sort(key=lambda x: x["clv_avg"], reverse=True)
+    return {"overall": _staty(clvs), "per_typ": typy}
+
+
+def _klucze(wiersz) -> set:
+    """Nazwy kolumn wiersza. `dict` i `sqlite3.Row` maja oba `.keys()`.
+
+    Potrzebne, bo `"legs_json" in row` na `sqlite3.Row` iteruje WARTOSCI, nie
+    nazwy kolumn — czyli odpowiada na inne pytanie i po cichu daje False.
+    """
+    return set(wiersz.keys()) if hasattr(wiersz, "keys") else set()
 
 
 def batch_record_closing_odds(records: list[dict]) -> int:

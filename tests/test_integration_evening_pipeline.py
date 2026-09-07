@@ -450,6 +450,10 @@ class TestRunEveningAgentIntegration:
             patch("footstats.evening_agent.init_db"),
             patch("footstats.evening_agent._save_coupon_legs"),
             patch("footstats.evening_agent._send_telegram_summary"),
+            # CLV siega do football-data.co.uk dla KAZDEJ rozliczonej nogi
+            # (od 07.09 nie stoi juz pod `if pred_id:`). Te testy sprawdzaja
+            # rozliczanie, nie CLV — bez tej atrapy biją po sieci.
+            patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None),
             patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
         ):
             from footstats.evening_agent import run_evening_agent
@@ -497,6 +501,10 @@ class TestRunEveningAgentIntegration:
             patch("footstats.evening_agent.init_db"),
             patch("footstats.evening_agent._save_coupon_legs"),
             patch("footstats.evening_agent._send_telegram_summary"),
+            # CLV siega do football-data.co.uk dla KAZDEJ rozliczonej nogi
+            # (od 07.09 nie stoi juz pod `if pred_id:`). Te testy sprawdzaja
+            # rozliczanie, nie CLV — bez tej atrapy biją po sieci.
+            patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None),
             patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
         ):
             from footstats.evening_agent import run_evening_agent
@@ -531,6 +539,10 @@ class TestRunEveningAgentIntegration:
             patch("footstats.evening_agent.init_db"),
             patch("footstats.evening_agent._save_coupon_legs"),
             patch("footstats.evening_agent._send_telegram_summary"),
+            # CLV siega do football-data.co.uk dla KAZDEJ rozliczonej nogi
+            # (od 07.09 nie stoi juz pod `if pred_id:`). Te testy sprawdzaja
+            # rozliczanie, nie CLV — bez tej atrapy biją po sieci.
+            patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None),
             patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
         ):
             from footstats.evening_agent import run_evening_agent
@@ -560,6 +572,10 @@ class TestRunEveningAgentIntegration:
             patch("footstats.evening_agent.init_db"),
             patch("footstats.evening_agent.get_active_coupons", return_value=[]),
             patch("footstats.evening_agent._send_telegram_summary"),
+            # CLV siega do football-data.co.uk dla KAZDEJ rozliczonej nogi
+            # (od 07.09 nie stoi juz pod `if pred_id:`). Te testy sprawdzaja
+            # rozliczanie, nie CLV — bez tej atrapy biją po sieci.
+            patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None),
             patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
         ):
             from footstats.evening_agent import run_evening_agent
