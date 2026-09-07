@@ -1,4 +1,36 @@
-"""RAG Embeddings: sentence-transformers + PostgreSQL BYTEA storage for semantic lesson retrieval."""
+"""RAG Embeddings: sentence-transformers + PostgreSQL BYTEA storage for semantic lesson retrieval.
+
+NIE JEST WLACZONE NA PRODUKCJI — i to jest decyzja, nie awaria.
+
+`sentence-transformers` swiadomie NIE trafia do obrazow (`requirements-jobs.lock`
+go nie ma): ciagnie torch, czyli gigabajty warstwy i zimny start Cloud Run, dla
+~150 krotkich lekcji. Decyzja z 2026-08-09, uzasadnienie stoi rowniez przy
+`except ImportError` w `ai/rag.retrieve_relevant_lessons`. Skutkiem jest linia
+w logu kazdego przebiegu:
+
+    [RAG] sentence-transformers not installed. Install via: pip install sentence-transformers
+
+`retrieve_relevant_lessons` oddaje wtedy pusta liste, a `ai/analyzer.py` schodzi
+na `pobierz_ostatnie_wnioski(3)` — trzy najnowsze lekcje chronologicznie. Petla
+zwrotna DZIALA, brakuje jej wylacznie wyszukiwania semantycznego.
+
+STAN TABELI (pomiar 2026-09-07): `ai_feedback` ma 156 wierszy, a
+`ai_feedback_embeddings` — 7. Te siedem to pozostalosc po recznym
+`backfill_embeddings` sprzed decyzji; nic w potoku ich nie dopisuje, bo
+`backfill_embeddings` wola sie wylacznie z `__main__` tego pliku.
+
+GDYBY WRACAC DO TEMATU. Zastrzezenie dotyczylo torcha, nie samego pomyslu, a
+`scikit-learn` JEST juz w `requirements-jobs.lock` (1.9.0) — TF-IDF liczony
+w pamieci nad 156 lekcjami kosztowalby zero megabajtow obrazu. Wtedy jednak
+NIE wolno tych wektorow zapisywac do tabeli: slownik TF-IDF zalezy od korpusu,
+wiec wektor sprzed dolozenia lekcji przestaje byc porownywalny z nowym.
+
+Wieksze ograniczenie lezy gdzie indziej i trzeba je naprawic PIERWSZE:
+`analyzer.py` buduje zapytanie jako `f"Liga: {ligi} | Markety: {markety}"` —
+same nazwy lig i etykiety kuponow, bez druzyn i bez typu. Lekcje to eseje
+o konkretnych meczach, wiec przy takim zapytaniu kazde wyszukiwanie, semantyczne
+czy nie, dopasowuje glownie nazwe ligi. Sam embedder tego nie naprawi.
+"""
 
 import logging
 import numpy as np

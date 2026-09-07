@@ -17,6 +17,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # BRAMKA CI. `cd.yml` i `ci.yml` to osobne workflow na tym samym triggerze,
+      # a GitHub Actions nie ma jak wyrazic `needs:` miedzy workflow. Do 2026-09-07
+      # znaczylo to, ze czerwona suita wdrazala sie dokladnie tak samo jak zielona.
+      # Dlatego pytamy o wynik CI dla TEGO SHA i czekamy, az bedzie znany.
+      #
+      # `workflow_dispatch` omija bramke swiadomie: reczne wdrozenie to furtka
+      # awaryjna (np. rollback), a dla recznego przebiegu przebiegu CI moze
+      # w ogole nie byc.
+      - name: Bramka — CI dla tego commita musi byc zielone
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          for _ in $(seq 1 60); do
+            stan=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI \
+                     --commit "$GITHUB_SHA" --limit 1 \
+                     --json status,conclusion \
+                     --jq '.[0] | "\(.status) \(.conclusion)"' 2>/dev/null || echo "")
+            case "$stan" in
+              "completed success")
+                echo "CI zielone dla $GITHUB_SHA"; exit 0 ;;
+              completed*)
+                echo "::error::CI dla $GITHUB_SHA zakonczone jako: $stan — wdrozenie wstrzymane"
+                exit 1 ;;
+              "")
+                echo "Brak przebiegu CI dla $GITHUB_SHA — czekam" ;;
+              *)
+                echo "CI w toku ($stan) — czekam" ;;
+            esac
+            sleep 20
+          done
+          echo "::error::CI nie skonczylo sie w 20 minut — wdrozenie wstrzymane"
+          exit 1
+
+
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:

@@ -40,7 +40,10 @@ Ja = orchestrator. Workflow feature: subagent-driven-development (planner→code
 ## Tech Stack
 - Backend: FastAPI, Playwright (Scraping), Groq SDK (Llama 3.1 8B).
 - Frontend: Streamlit, vis-network (Brain Graph).
-- Logic: Poisson, Kelly Criterion, RAG Feedback Loop.
+- Logic: Poisson, Kelly Criterion, RAG Feedback Loop (pętla zwrotna działa
+  chronologicznie — wyszukiwanie **semantyczne** jest świadomie wyłączone na
+  produkcji, bo `sentence-transformers` ciągnie torch; szczegóły i warunki
+  powrotu w nagłówku `ai/rag_embeddings.py`).
 
 ## Design System (GUI - React/Tailwind v4)
 Tokens in `src/footstats/gui/src/index.css` `:root` — reuse these, don't invent new colors.
