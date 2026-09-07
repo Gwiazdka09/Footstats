@@ -60,6 +60,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # `gh run list` w bramce CI pyta o przebiegi Actions. Bez tego
+      # uprawnienia wywolanie pada, bramka widzi pustke i po 20 minutach
+      # wstrzymuje KAZDE wdrozenie — czyli sama sie staje awaria.
+      actions: read
 
     steps:
       - uses: actions/checkout@v4

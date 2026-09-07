@@ -93,6 +93,20 @@ def test_reczne_wdrozenie_omija_bramke_swiadomie(plik):
 
 
 @pytest.mark.parametrize("plik", CD)
+def test_job_ma_uprawnienie_do_czytania_actions(plik):
+    """`gh run list` pyta o przebiegi Actions — bez `actions: read` pada.
+
+    A gdy pada, bramka widzi pustke nie do odroznienia od „CI jeszcze nie
+    ruszylo", czeka 20 minut i wstrzymuje KAZDE wdrozenie. Zabezpieczenie
+    stalo by sie wtedy awaria. Blad byl w pierwszej wersji tej bramki: blok
+    `permissions` mial tylko `contents: read` i `id-token: write`.
+    """
+    uprawnienia = _pierwszy_job(plik).get("permissions", {})
+    assert uprawnienia.get("actions") == "read", (
+        f"{plik}: bramka wola `gh run list` bez uprawnienia `actions: read`")
+
+
+@pytest.mark.parametrize("plik", CD)
 def test_bramka_ma_skonczony_czas_oczekiwania(plik):
     """Bez limitu zawieszone CI trzymaloby runnera do timeoutu GitHuba (6 h)."""
     tresc = _bramka(plik)["run"]
