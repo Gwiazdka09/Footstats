@@ -1,4 +1,4 @@
-# Team news — kanał był martwy na trzech poziomach naraz, 2026-09-07
+# Team news — kanał był martwy na czterech poziomach naraz, 2026-09-07
 
 Nie pomiar, tylko śledztwo. Punkt wyjścia: team news miały być pierwszym **nowym**
 źródłem informacji (wszystko inne mierzone do tej pory to informacja publiczna,
@@ -19,11 +19,11 @@ Zero na 1078. Przy czym wszystko po drodze wyglądało zdrowo:
 * flaga `=1` na `footstats-api`, `footstats-final` i `footstats-evening`;
 * FotMob odpowiada 200 i oddaje **121 meczów** na dzisiaj;
 * dla drużyn z naszego słownika dopasowanie nazw działa **dokładnie**;
-* **74%** wierszy `model_log` to mecze grane tego samego dnia, więc horyzont
-  też nie jest wąskim gardłem;
+* **74%** wierszy `model_log` to mecze grane tego samego dnia — więc nawet
+  blokada horyzontu (niżej) nie tłumaczy pełnego zera;
 * przebiegi jobów kończą się `EXECUTION_SUCCEEDED`.
 
-## Trzy niezależne blokady
+## Cztery niezależne blokady
 
 ### 1. Dziennik zapisuje się PRZED policzeniem pól
 
@@ -93,12 +93,31 @@ w ręku. **Fix:** zapis przeniesiony nad bramkę.
   padła baza **i** nie ma zrzutu — czyli gdy korekta λ faktycznie umiera.
   Szum niszczy alarmy tak samo skutecznie jak cisza.
 
-## Czego to NIE naprawia
+## Czwarta blokada, domknięta tego samego dnia
 
-`_wzbogac_team_news` pobiera listę FotMoba **wyłącznie na dziś**
-(`_date.today()`), a kandydaci są z okna 72h. Przy 74% meczów granych tego
-samego dnia to nie jest główna strata, ale jedna czwarta kandydatów pozostaje
-poza zasięgiem. Osobna zmiana, osobny pomiar.
+`_wzbogac_team_news` pobierało listę FotMoba **wyłącznie na dziś**
+(`_date.today()`), a kandydaci są z okna 72h — log jobu mówi wprost
+„Bzzoiro: 28 kandydatow w oknie 72h". Mecz jutrzejszy nie ma prawa pojawić się
+na dzisiejszej liście.
+
+Zmierzone na żywym źródle 07.09:
+
+```
+2026-09-07: 122 meczow u zrodla, 16 w naszych ligach   <- do 07.09 TYLKO TEN DZIEN
+2026-09-08: 161 meczow u zrodla, 24 w naszych ligach
+2026-09-09: 134 meczow u zrodla, 19 w naszych ligach
+2026-09-10:  87 meczow u zrodla,  6 w naszych ligach
+```
+
+**16 wobec 65** — czterokrotnie większy zasięg za trzy dodatkowe zapytania
+o listę dnia (szczegóły meczów i tak pobierane są tylko dla dopasowanych par).
+
+Data ma tu jeszcze drugie znaczenie: `fotmob.parsuj_mecz` dostaje ją jako datę
+meczu, więc pobieranie wszystkiego pod dzisiejszą datą **stemplowało mecze
+jutrzejsze dniem dzisiejszym**.
+
+`MAX_DNI_TEAM_NEWS = 4` ogranicza koszt: jeden kandydat ze śmieciową datą
+w 2031 nie może wygenerować setek zapytań.
 
 ## Jak to sprawdzić po wdrożeniu
 

@@ -180,10 +180,11 @@ SELECT COUNT(*) FROM model_log WHERE p_over_abs IS NOT NULL;           -- > 0
 Trzecia liczba jest testem tego, czy `data/player_stats.json` dojechał do obrazu:
 jeśli zostanie zerem przy dwóch pierwszych niezerowych — zrzut nie doszedł.
 
-- [ ] **Zostało nienaprawione:** `_wzbogac_team_news` pobiera listę FotMoba tylko
-  na DZIŚ (`_date.today()`), a kandydaci są z okna 72h. Przy 74% meczów granych
-  tego samego dnia to nie jest główna strata, ale ~1/4 kandydatów jest poza
-  zasięgiem. Osobna zmiana, osobny pomiar.
+- [x] ~~`_wzbogac_team_news` pobiera listę FotMoba tylko na DZIŚ~~ ✅ **naprawione
+  tego samego dnia.** Zapytanie leci teraz na każdy dzień, w którym gra choć jeden
+  kandydat (`_daty_kandydatow`, limit `MAX_DNI_TEAM_NEWS=4`). Zmierzone na żywym
+  źródle: **16 meczów w naszych ligach dziś wobec 65 w oknie czterech dni** —
+  czterokrotny zasięg za trzy dodatkowe zapytania o listę dnia.
 - [ ] **Odświeżanie zrzutu:** `scripts/eksport_player_stats.py` przed budową obrazu,
   kiedy `player_stats` było niedawno aktualizowane. Zrzut się starzeje —
   `team_goal_shares_recent` sięga tylko `lookback` sezonów wstecz.

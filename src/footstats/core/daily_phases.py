@@ -658,6 +658,11 @@ def _dopasuj_luzno(idx: dict, gospodarz: str, goscie: str) -> dict | None:
 
 FLAGA_TEAM_NEWS = "FOOTSTATS_TEAM_NEWS"
 
+# Ile roznych DNI pytamy FotMoba w jednym przebiegu. Kandydaci sa z okna
+# 72h, wiec realnie sa to trzy-cztery daty; limit chroni przed kandydatem
+# ze smieciowa data, ktory sam wygenerowalby setki zapytan.
+MAX_DNI_TEAM_NEWS = 4
+
 # FlashScore chodzi przez Playwrighta — jedna przegladarka na mecz. Limit istnieje
 # od 30.08, razem z odblokowaniem tej sciezki: wczesniej byla zabezpieczona za
 # martwym API-Football i realnie nie odpalala sie wcale, wiec koszt nie istnial.
@@ -679,6 +684,44 @@ def _pobierz_team_news(data: str, pary: list[tuple[str, str]]) -> list:
     """
     from footstats.scrapers.teamnews.fotmob import FotMobTeamNews
     return FotMobTeamNews().fetch_dla(data, pary)
+
+
+def _daty_kandydatow(kandydaci: list) -> list[str]:
+    """Dni, w które realnie grają kandydaci — posortowane, bez powtórzeń.
+
+    `daily_agent` pracuje w oknie 72h („Bzzoiro: 28 kandydatow w oknie 72h"),
+    a do 07.09.2026 team news pobierały się WYŁĄCZNIE na dzień bieżący. Mecz
+    jutrzejszy nie ma prawa pojawić się na dzisiejszej liście FotMoba, więc
+    około jednej czwartej kandydatów nie miało szans dostać ani składu, ani
+    absencji, ani sędziego.
+
+    Data ma tu drugie znaczenie: `fotmob.parsuj_mecz` dostaje ją jako datę
+    meczu, więc pobieranie wszystkiego pod dzisiejszą datą stemplowało mecze
+    jutrzejsze dniem dzisiejszym.
+
+    Ograniczone do `MAX_DNI_TEAM_NEWS`, licząc od najbliższego: jeden kandydat
+    ze śmieciową datą w 2031 nie może wygenerować setek zapytań.
+    """
+    from datetime import date as _date
+
+    dni = set()
+    bez_daty = 0
+    for k in kandydaci:
+        surowa = str(k.get("data") or "").strip()[:10]
+        try:
+            dni.add(_date.fromisoformat(surowa).isoformat())
+        except ValueError as e:
+            # Zbiorczo, nie per kandydat: przy rozjechanym formacie źródła
+            # byłaby to linia na każdy mecz, a szum niszczy alarmy tak samo
+            # skutecznie jak cisza. Pierwszy przypadek idzie na DEBUG z treścią,
+            # bo bez niej nie wiadomo, CO źródło przysłało zamiast daty.
+            bez_daty += 1
+            if bez_daty == 1:
+                log.debug("team-news: nieczytelna data kandydata (%s)", e)
+    if bez_daty:
+        log.warning("team-news: %d z %d kandydatow bez czytelnej daty — ich dzien "
+                    "nie zostanie odpytany", bez_daty, len(kandydaci))
+    return sorted(dni)[:MAX_DNI_TEAM_NEWS] or [_date.today().isoformat()]
 
 
 def _dopasuj_team_news(idx: dict, gospodarz: str, goscie: str):
@@ -860,12 +903,16 @@ def _wzbogac_team_news(kandydaci: list) -> None:
     if not kandydaci:
         return
 
-    from datetime import date as _date
-
     from footstats.utils.normalize import normalize_team_name
 
     pary = [(k.get("gospodarz") or "", k.get("goscie") or "") for k in kandydaci]
-    dane = _pobierz_team_news(_date.today().isoformat(), pary)
+    # Jedno zapytanie na KAŻDY dzień, w którym gra choć jeden kandydat — patrz
+    # `_daty_kandydatow`. Do 07.09.2026 leciało tylko na dziś, więc mecze
+    # jutrzejsze i pojutrzejsze były dla FotMoba niewidoczne.
+    dni = _daty_kandydatow(kandydaci)
+    dane = []
+    for dzien in dni:
+        dane += _pobierz_team_news(dzien, pary)
     if not dane:
         # PODNIESIONE Z DEBUG NA WARNING 07.09.2026. Poprzedni komentarz mówił
         # „powód zgłosił już adapter, na ERROR" — ale adapter krzyczy WYŁĄCZNIE
