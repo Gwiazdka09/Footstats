@@ -76,14 +76,43 @@ def main() -> None:
     if not dane:
         raise SystemExit("player_stats puste — zrzut bylby gorszy niz jego brak.")
 
-    sezony = sorted({int(w["season"]) for w in dane})
     druzyny = len({w["team_norm"] for w in dane})
     Path(args.wyjscie).write_text(
         json.dumps(dane, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     rozmiar = Path(args.wyjscie).stat().st_size / 1024
     print(f"Zapisane: {args.wyjscie}")
-    print(f"  {len(dane)} graczy z golami, {druzyny} druzyn, sezony {sezony}")
+    print(f"  {len(dane)} graczy z golami, {druzyny} druzyn")
     print(f"  rozmiar {rozmiar:.0f} KB")
+    _raport_kompletnosci(dane)
+
+
+def _raport_kompletnosci(dane: list[dict]) -> None:
+    """Ile drużyn per sezon ma skład NA TYLE pełny, żeby `goal_share` coś znaczył.
+
+    NIE filtruje — regułę trzyma `player_db.MIN_SKLAD`, jedno miejsce. Tutaj jest
+    tylko widoczność, bo bez niej zrzut wygląda tak samo bogato niezależnie od
+    tego, czy niesie pełne składy, czy resztkę z `/players/topscorers`
+    (20 nazwisk na całą ligę → 1-2 na drużynę). Do 2026-09-07 ta różnica była
+    niewidoczna, a `goal_share` liczony na jednym nazwisku dawał mu 100% ataku.
+    """
+    from footstats.core.player_db import MIN_SKLAD
+
+    licznik: dict[tuple[str, int], int] = {}
+    for w in dane:
+        klucz = (str(w["team_norm"]), int(w["season"]))
+        licznik[klucz] = licznik.get(klucz, 0) + 1
+
+    per_sezon: dict[int, list[int]] = {}
+    for (_, sezon), n in licznik.items():
+        per_sezon.setdefault(sezon, []).append(n)
+
+    print(f"\n  Kompletnosc skladow (prog uzytecznosci: {MIN_SKLAD} nazwisk):")
+    for sezon in sorted(per_sezon):
+        v = sorted(per_sezon[sezon])
+        pelne = sum(1 for x in v if x >= MIN_SKLAD)
+        mediana = v[len(v) // 2]
+        print(f"    {sezon}: {len(v):>4} druzyn, mediana {mediana:>3} nazwisk,"
+              f" {pelne:>4} uzytecznych ({100 * pelne / len(v):.0f}%)")
 
 
 if __name__ == "__main__":

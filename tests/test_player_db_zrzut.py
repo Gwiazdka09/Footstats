@@ -92,11 +92,15 @@ def test_zrzut_respektuje_sezon(tmp_path, monkeypatch):
 
 
 def test_recent_cofa_sie_po_sezonach_takze_w_zrzucie(tmp_path, monkeypatch):
+    # Pelny sklad, nie jedno nazwisko: `MIN_SKLAD` odrzuca sezony, w ktorych
+    # mianownik `goal_share` jest zbyt cienki, zeby cokolwiek znaczyc.
     monkeypatch.setattr(pdb, "SCIEZKA_ZRZUTU", _zrzut(tmp_path, [
-        {"name": "Stary", "team_norm": "legia", "season": 2024, "goals": 9}]))
+        {"name": f"Stary {i}", "team_norm": "legia", "season": 2024, "goals": 9}
+        for i in range(pdb.MIN_SKLAD)]))
     out = pdb.team_goal_shares_recent("Legia", 2026, lookback=2,
                                       db_path=_pusta_baza(tmp_path))
-    assert out == {"Stary": 1.0}
+    assert len(out) == pdb.MIN_SKLAD
+    assert out["Stary 0"] == pytest.approx(1 / pdb.MIN_SKLAD)
 
 
 def test_zepsuty_zrzut_nie_wysadza_pipeline(tmp_path, monkeypatch):
@@ -112,6 +116,12 @@ def test_zrzut_produkcyjny_istnieje_i_ma_biezacy_sezon():
     Zrzut z samymi starymi sezonami przechodzi wszystkie testy powyzej i jest
     bezuzyteczny na produkcji, bo `team_goal_shares_recent` cofa sie tylko
     o `lookback` sezonow.
+
+    OBECNOSC SEZONU TO ZA MALO, i to jest lekcja z 2026-09-07. Zrzut mial wtedy
+    komplet sezonow 2024-2026 i przechodzil ten test, a mimo to 62% druzyn
+    z realnego ruchu dostawalo zmyslony udzial: sezon 2026 skladal sie z resztki
+    `/players/topscorers` (1-4 nazwiska na druzyne), wiec jeden zawodnik
+    dostawal 100% ataku. Dlatego liczymy druzyny, ktore realnie PRZECHODZA prog.
     """
     from footstats.core.daily_phases import _current_season
 
@@ -121,5 +131,16 @@ def test_zrzut_produkcyjny_istnieje_i_ma_biezacy_sezon():
     assert len(dane) > 500
     sezony = {int(w["season"]) for w in dane}
     biezacy = _current_season()
-    assert sezony & {biezacy, biezacy - 1, biezacy - 2}, (
+    okno = {biezacy, biezacy - 1, biezacy - 2}
+    assert sezony & okno, (
         f"zrzut ma sezony {sorted(sezony)}, a biezacy to {biezacy} — odswiez go")
+
+    strzelcy: dict[tuple[str, int], int] = {}
+    for w in dane:
+        if int(w["season"]) in okno and int(w["goals"] or 0) > 0:
+            klucz = (str(w["team_norm"]), int(w["season"]))
+            strzelcy[klucz] = strzelcy.get(klucz, 0) + 1
+    uzyteczne = sum(1 for n in strzelcy.values() if n >= pdb.MIN_SKLAD)
+    assert uzyteczne >= 50, (
+        f"w oknie {sorted(okno)} tylko {uzyteczne} sezonow-druzyn ma co najmniej"
+        f" {pdb.MIN_SKLAD} strzelcow — zrzut jest resztka z topscorers, nie skladem")

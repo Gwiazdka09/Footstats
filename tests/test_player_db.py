@@ -1,7 +1,14 @@
 """
 test_player_db.py — Faza 1: baza graczy + goal_share (udział w golach drużyny).
 Football logic: utrata topowego strzelca (share 0.4) boli mocniej niż rezerwowy (0.02).
-Denominator = suma goli zapisanych graczy drużyny (topscorers ≈ większość goli zespołu).
+Denominator = suma goli zapisanych graczy drużyny.
+
+UWAGA na rozmiar atrapy. Do 2026-09-07 nagłówek mówił „topscorers ≈ większość
+goli zespołu" i na tym stała trzyosobowa atrapa poniżej. Pomiar produkcji obalił
+to założenie: `/players/topscorers` API-Football oddaje 20 nazwisk na CAŁĄ ligę,
+czyli 1-4 na drużynę, a `goal_share` liczony na takim mianowniku dawał jednemu
+zawodnikowi 100% ataku. `player_db.MIN_SKLAD` odrzuca teraz takie sezony, więc
+testy ścieżki `_recent` muszą karmić PEŁNY skład — patrz `_pelny`.
 """
 from footstats.core import player_db
 
@@ -15,6 +22,20 @@ def _rows(season=2025):
         {"name": "Alvarez", "team": "Manchester City", "league": "PL", "season": season,
          "goals": 5, "assists": 3, "minutes": 900},
     ]
+
+
+def _pelny(season=2025, team="Manchester City"):
+    """`_rows` + rezerwowi strzelcy, żeby sezon przeszedł próg `MIN_SKLAD`."""
+    rows = [dict(r, team=team) for r in _rows(season)]
+    rows += [
+        {"name": f"Rezerwowy {i}", "team": team, "league": "PL", "season": season,
+         "goals": 1, "assists": 0, "minutes": 300}
+        for i in range(player_db.MIN_SKLAD - len(rows))
+    ]
+    return rows
+
+
+_SUMA_PELNA = 30 + (player_db.MIN_SKLAD - 3)  # 20+5+5 gwiazd + po 1 golu rezerwowych
 
 
 def test_upsert_and_goal_shares(tmp_path):
@@ -108,10 +129,10 @@ def test_migration_adds_columns_to_old_table(tmp_path):
 
 def test_recent_walks_back_to_season_with_data(tmp_path):
     db = tmp_path / "t.db"
-    player_db.upsert_players(_rows(2024), db_path=db)  # dane tylko 2024
+    player_db.upsert_players(_pelny(2024), db_path=db)  # dane tylko 2024
     # zapytanie o 2026 (pusty) → walk-back 2025(pusty)→2024(dane)
     shares = player_db.team_goal_shares_recent("Manchester City", 2026, lookback=2, db_path=db)
-    assert abs(shares["Haaland"] - 20 / 30) < 1e-6
+    assert abs(shares["Haaland"] - 20 / _SUMA_PELNA) < 1e-6
 
 
 def test_recent_lookback_zero_only_current(tmp_path):
@@ -122,12 +143,12 @@ def test_recent_lookback_zero_only_current(tmp_path):
 
 def test_recent_returns_first_season_with_data(tmp_path):
     db = tmp_path / "t.db"
-    player_db.upsert_players(_rows(2026), db_path=db)  # dane bieżące
+    player_db.upsert_players(_pelny(2026), db_path=db)  # PEŁNE dane bieżące
     player_db.upsert_players(
         [{"name": "Old", "team": "Manchester City", "league": "PL", "season": 2024,
           "goals": 9, "assists": 0, "minutes": 900}], db_path=db)
     shares = player_db.team_goal_shares_recent("Manchester City", 2026, lookback=2, db_path=db)
-    assert "Old" not in shares          # bieżący sezon ma dane → nie schodzi niżej
+    assert "Old" not in shares          # bieżący sezon ma pełny skład → nie schodzi niżej
     assert "Haaland" in shares
 
 

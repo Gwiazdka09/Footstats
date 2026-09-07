@@ -39,6 +39,28 @@ from footstats.utils.normalize import normalize_team_name
 # ulotnosc zamiast ja pokazac. Odswiezanie: `scripts/eksport_player_stats.py`.
 SCIEZKA_ZRZUTU = Path(DB_PATH).parent / "player_stats.json"
 
+# Ile nazwisk musi miec sezon druzyny, zeby jego `goal_share` cokolwiek znaczyl.
+#
+# `team_goal_shares` dzieli gole przez sume gracz ZAPISANYCH, wiec mianownik jest
+# tak dobry jak kompletnosc tabeli. Przy jednym wpisie ten jeden gracz dostaje
+# 100% ataku druzyny i jego absencja kasuje model.
+#
+# Prog liczy STRZELCOW, nie kadre: `team_goal_shares` odrzuca graczy bez goli,
+# wiec to ta liczba tworzy mianownik i to ja trzeba mierzyc.
+#
+# Pomiar `data/player_stats.json` z 2026-09-07 (strzelcy na druzyne):
+#
+#     sezon  druzyn  min  p25  mediana  p75  max
+#      2024     212    1    1        2   13   29     zrodlo mieszane
+#      2025      95    9   13       15   17   30     pelne sklady (Understat)
+#      2026      53    1    1        1    2    4     /players/topscorers
+#
+# `/players/topscorers` API-Football oddaje 20 nazwisk na CALA lige, wiec na
+# druzyne wypada 1-4. Pelny sklad daje minimum 9. Luka 4 ↔ 9 jest pusta, wiec
+# prog 8 przepuszcza 95 sezonow-druzyn z 95 prawdziwych i zatrzymuje 53 z 53
+# smieciowych. Wyzej zaczyna kosztowac: 12 gubi 12 prawdziwych, 16 gubi 58.
+MIN_SKLAD = 8
+
 
 @functools.lru_cache(maxsize=1)
 def _zrzut_goli() -> dict:
@@ -292,13 +314,24 @@ def team_goal_shares_recent(
     team: str, season: int, lookback: int = 2, db_path: Path | str = DB_PATH
 ) -> dict[str, float]:
     """
-    goal_shares dla drużyny z najświeższego dostępnego sezonu: próbuje `season`,
-    potem season-1 ... season-lookback. Zwraca pierwszy niepusty (off-season /
-    przerwa międzysezonowa → używa poprzedniej kampanii). {} gdy brak w oknie.
+    goal_shares dla drużyny z najświeższego PEŁNEGO sezonu: próbuje `season`,
+    potem season-1 ... season-lookback. Zwraca pierwszy skład o co najmniej
+    `MIN_SKLAD` nazwiskach. {} gdy w całym oknie są same resztki.
+
+    Do 2026-09-07 warunkiem było „pierwszy NIEPUSTY", i to był cichy błąd:
+    jeden gracz w tabeli wystarczał, żeby sezon uznać za dobry, a `goal_share`
+    dzieli przez sumę graczy zapisanych — więc ten jeden dostawał 100% ataku.
+    Docstring `core/absencje.py` opisywał ochronę przed dokładnie tym skokiem
+    („udział jednego strzelca wyszedłby 0,4 […] i takiego skoku nie ma") jako
+    już działającą. Nie działała: produkcja czyta sezon bieżący, a ten na starcie
+    kampanii jest w bazie cienki (2026: 60 drużyn na 61 miało poniżej 8 nazwisk).
+
+    Pusty wynik jest tu wynikiem POPRAWNYM: `absence_attack_factor` bez udziałów
+    schodzi na płaską korektę, a zmyślony udział przesuwa λ w złą stronę.
     """
     for s in range(int(season), int(season) - lookback - 1, -1):
         shares = team_goal_shares(team, s, db_path=db_path)
-        if shares:
+        if len(shares) >= MIN_SKLAD:
             return shares
     return {}
 
