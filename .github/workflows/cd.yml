@@ -15,7 +15,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # BRAMKA CI. `cd.yml` i `ci.yml` to osobne workflow na tym samym triggerze,
       # a GitHub Actions nie ma jak wyrazic `needs:` miedzy workflow. Do 2026-09-07
