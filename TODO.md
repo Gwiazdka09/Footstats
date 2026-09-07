@@ -167,18 +167,37 @@ Pilnuje tego `tests/test_strony_prawne.py` (20 testów) — sprawdza stan, nie b
 
 ## 🔴 DO SPRAWDZENIA PO NAJBLIŻSZYM PRZEBIEGU (07.09.2026)
 
-Kanał team-news był martwy na **trzech poziomach naraz** — naprawione w `01ae305f7`,
-szczegóły w `docs/pomiary/team_news_martwy_kanal_2026-09-07.md`. Po pierwszym
-`footstats-final` po deployu:
+### ✅ Team-news ODŻYŁ — potwierdzone 07.09 po przebiegu 09:00 UTC
 
-```sql
-SELECT COUNT(*) FROM model_log WHERE absencje_pewne_home IS NOT NULL;  -- > 0
-SELECT COUNT(*) FROM model_log WHERE rynek_p_over IS NOT NULL;         -- > 0
-SELECT COUNT(*) FROM model_log WHERE p_over_abs IS NOT NULL;           -- > 0
+```
+dzien=2026-09-07  wierszy=48  cena=2  p_abs=1  edge=1  abs_h=4
+dzien=2026-09-06  wierszy=28  cena=0  p_abs=0  edge=0  abs_h=0
 ```
 
-Trzecia liczba jest testem tego, czy `data/player_stats.json` dojechał do obrazu:
-jeśli zostanie zerem przy dwóch pierwszych niezerowych — zrzut nie doszedł.
+Pierwsze niezerowe wiersze w historii (było 0 na 1078). Log jobu:
+`team-news: 4/4 kandydatow wzbogaconych (1 predicted, 3 lastStarting11)`.
+`p_over_abs` niezerowe = zrzut `player_stats.json` **dojechał do obrazu**.
+
+Wąskie gardło przesunęło się dalej: `udzialy absencji 3/24 dopasowane
+w player_db` — znamy nazwisko nieobecnego, nie znamy jego wagi. Patrz niżej.
+
+### 🔴 DO SPRAWDZENIA PO PRZEBIEGU 08.09
+
+Cztery naprawy z 07.09 wieczorem czekają na pierwszy realny przebieg:
+
+- [ ] **CLV** — `scripts/clv_raport.py` po wieczornym rozliczeniu. Zero nóg
+  z kursem zamknięcia znaczy, że **football-data.co.uk nadal oddaje 503**
+  (cała witryna była padnięta 07.09), a nie że nie mamy przewagi. Log jobu
+  powie wprost: `CLV: N/M rozliczonych nog ma kurs zamkniecia`.
+- [ ] **SofaScore** — w logu `footstats-final` ma być **co najwyżej 1** wpis
+  `HTTP 403` zamiast 8, a KROK 2 ma trwać sekundy zamiast 30-63 s.
+- [ ] **Bramka CI→CD** — pierwszy push po `21141dcb6` ma się wdrożyć normalnie.
+  Gdyby CD stanęło na kroku „Bramka", sprawdzić uprawnienie `actions: read`
+  i nazwę workflow `CI` w `gh run list`.
+- [ ] **`goal_share`** — po `a70b215b1` żadna drużyna nie ma dostawać udziału
+  100%. Zmierzone przed poprawką: 65 z 105 drużyn (62%) miało zmyślony udział.
+
+### Zamknięte
 
 - [x] ~~`_wzbogac_team_news` pobiera listę FotMoba tylko na DZIŚ~~ ✅ **naprawione
   tego samego dnia.** Zapytanie leci teraz na każdy dzień, w którym gra choć jeden
@@ -190,6 +209,36 @@ jeśli zostanie zerem przy dwóch pierwszych niezerowych — zrzut nie doszedł.
   `team_goal_shares_recent` sięga tylko `lookback` sezonów wstecz.
 - [ ] `scripts/sklady_pomiar.py` odmawia analizy poniżej 500 rozliczonych wierszy.
   Przy ~30 kandydatach dziennie to około dwóch miesięcy zbierania.
+
+### 🔴 SKŁADY: nie ma czym odświeżyć sezonu 2026 (blokada team-news)
+
+To jest teraz wąskie gardło kanału, który właśnie ożył: **3 z 24 absencji**
+dostają wagę, reszta jest znana z nazwiska i nic nie waży.
+
+Strzelcy na drużynę w `data/player_stats.json` (pomiar 07.09):
+
+```
+sezon  druzyn  min  p25  mediana  p75  max
+ 2024     212    1    1        2   13   29    zrodlo mieszane
+ 2025      95    9   13       15   17   30    pelne sklady (Understat)
+ 2026      53    1    1        1    2    4    /players/topscorers
+```
+
+Oba znane źródła odpadają:
+
+- **API-Football `/players/topscorers`** — działa, ale oddaje 20 nazwisk na CAŁĄ
+  ligę, czyli 1-4 na drużynę. To dokładnie ten mianownik, przez który
+  `goal_share` wychodził 100% (naprawione progiem `MIN_SKLAD`, `a70b215b1`).
+  Dolanie tego do 2026 nie pomoże — doda śmiecia.
+- **Understat** — źródło pełnych składów 2025 — **jest martwe**:
+  `GET understat.com/league/EPL/2026` oddaje HTTP 200 i 4684 bajty bez
+  `playersData`. To samo na 2025, więc padło już po zebraniu obecnych danych.
+
+Do rozważenia: `/players?league=&season=` w API-Football (pełne kadry, ale
+paginacja i budżet), albo składy z FotMoba — i tak go już scrapujemy po
+team-news, a `performance.seasonGoals` tam jest. Ostrzeżenie z `absencje.py`
+zostaje w mocy: gole z bieżącego sezonu na starcie kampanii to szum, więc
+FotMob nadaje się na **kadrę**, nie na wagi.
 
 ---
 
