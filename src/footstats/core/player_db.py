@@ -61,6 +61,27 @@ SCIEZKA_ZRZUTU = Path(DB_PATH).parent / "player_stats.json"
 # smieciowych. Wyzej zaczyna kosztowac: 12 gubi 12 prawdziwych, 16 gubi 58.
 MIN_SKLAD = 8
 
+# Ktore braki bazy juz zglosilismy w TYM procesie.
+#
+# `data/footstats_backtest.db` jest wykluczony z obrazow, wiec w kontenerze tych
+# tabel nie ma i NIE BEDZIE — to warunek staly na caly czas zycia procesu, nie
+# zdarzenie. Bez tego zbioru `footstats-api` produkowal 69 ostrzezen o
+# `player_stats` i 42 o `team_stats` w ciagu GODZINY (pomiar 2026-09-07). Szum
+# niszczy alarmy tak samo skutecznie jak cisza; ta sama lekcja co przy jobie tego
+# samego dnia rano (105 wpisow w jednym przebiegu).
+#
+# Klucz jest per TABELA, nie per druzyna: brak `player_stats` i brak `team_stats`
+# to dwie rozne rzeczy i wyciszenie jednej nie moze wyciszyc drugiej.
+_ostrzezenia_o_bazie: set[str] = set()
+
+
+def _zglos_brak_raz(tabela: str, komunikat: str, *args) -> None:
+    """Ostrzega o braku tabeli RAZ na proces. Kolejne odczyty milcza."""
+    if tabela in _ostrzezenia_o_bazie:
+        return
+    _ostrzezenia_o_bazie.add(tabela)
+    log.warning(komunikat, *args)
+
 
 @functools.lru_cache(maxsize=1)
 def _zrzut_goli() -> dict:
@@ -264,14 +285,25 @@ def team_goal_shares(
         # zamrozone liczby ze zrzutu i nikt by nie zauwazyl, ze jest pusta.
         gole = dict(_zrzut_goli().get((tn, int(season)), {}))
         if not gole:
-            # Baza padla I zrzutu nie ma — dopiero TERAZ korekta lambda za
-            # kontuzje naprawde przestaje dzialac, i dopiero teraz jest o czym
-            # krzyczec. Do 07.09.2026 to ostrzezenie leciało przy KAZDYM
-            # odczycie w kontenerze: 105 razy w jednym przebiegu, czyli szum,
-            # ktory zabija alarmy tak samo skutecznie jak cisza.
-            log.warning("player_db: nie moge odczytac goli %s/%s (%s: %s)"
-                        " i nie ma zrzutu — goal_share = 0, korekta lambda za"
-                        " kontuzje NIE zadziala", team, season, type(e).__name__, e)
+            # Baza padla, a zrzut nie zna tej pary druzyna/sezon — dopiero TERAZ
+            # korekta lambda za kontuzje naprawde przestaje dzialac.
+            #
+            # RAZ NA PROCES. W kontenerze baza nie istnieje i nie zacznie, wiec
+            # ten warunek jest staly: `footstats-api` produkowal 69 takich linii
+            # w ciagu godziny, a job 105 w jednym przebiegu.
+            #
+            # Komunikat mowil wczesniej „i nie ma zrzutu" — i to bylo NIEPRAWDA.
+            # Zrzut jest w obrazie i dziala; po prostu nie zna kazdej druzyny
+            # (Ekstraklasa) ani sezonu 2026 (nie ma go czym odswiezyc, patrz
+            # `MIN_SKLAD` wyzej). „Puste wyjscie" i „brak zrodla" to dwa rozne
+            # stany i mylenie ich juz raz dalo w tym projekcie falszywa diagnoze.
+            _zglos_brak_raz(
+                "player_stats",
+                "player_db: baza niedostepna (%s) A zrzut nie zna tej druzyny/sezonu"
+                " (pierwszy przypadek: %s/%s) — dla takich par goal_share = 0"
+                " i korekta lambda za kontuzje NIE zadziala. Kolejne przypadki"
+                " juz nie beda logowane.",
+                type(e).__name__, team, season)
             return {}
         log.debug("player_db: baza niedostepna dla %s/%s (%s) — uzywam zrzutu",
                   team, season, type(e).__name__)
@@ -406,8 +438,19 @@ def get_team_stats(
                 (tn, int(season)),
             ).fetchone()
     except sqlite3.Error as e:
-        log.warning("player_db: nie moge odczytac statystyk %s/%s (%s: %s) —"
-                    " mecz pojdzie bez nich", team, season, type(e).__name__, e)
+        # RAZ NA PROCES, i to jest brak lagodniejszy niz wyglada: `team_stats`
+        # ma 48 wierszy, wszystkie `league='WC'`, sezon 2026 — powstala na kadry
+        # mistrzostw swiata. Dla meczu klubowego jej brak jest NORMALNY, wiec
+        # ostrzeganie przy kazdej druzynie bylo podwojnie mylace: 42 linie na
+        # godzine na `footstats-api` (pomiar 07.09) o czyms, co i tak nie mialo
+        # tam nic do powiedzenia.
+        _zglos_brak_raz(
+            "team_stats",
+            "player_db: `team_stats` niedostepna (%s, pierwszy przypadek: %s/%s)"
+            " — mecze pojda bez statystyk kadr. Tabela dotyczy reprezentacji"
+            " (MS 2026); dla klubow jej brak nic nie zmienia. Kolejne przypadki"
+            " juz nie beda logowane.",
+            type(e).__name__, team, season)
         return None
     return dict(row) if row else None
 

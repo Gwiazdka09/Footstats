@@ -232,6 +232,23 @@ def reset_bramki_apisports():
 
 
 @pytest.fixture(autouse=True)
+def reset_ostrzezen_o_bazie():
+    """Czysci `player_db._ostrzezenia_o_bazie` przed KAZDYM testem.
+
+    Od 2026-09-07 brak `player_stats`/`team_stats` zglaszany jest RAZ na proces
+    (w kontenerze to warunek staly, a 111 ostrzezen na godzine na `footstats-api`
+    zabijalo alarmy szumem). Zbior zyje w module, wiec bez tego resetu test
+    sprawdzajacy glosnosc awarii przechodzilby albo nie w zaleznosci od tego, czy
+    wczesniejszy test juz to ostrzezenie zuzyl — czyli klasyczna zaleznosc od
+    kolejnosci, ktora ujawnia sie dopiero na CI.
+    """
+    from footstats.core import player_db
+    player_db._ostrzezenia_o_bazie.clear()
+    yield
+    player_db._ostrzezenia_o_bazie.clear()
+
+
+@pytest.fixture(autouse=True)
 def reset_rate_limiter():
     """Reset slowapi in-memory limiter before each test to prevent cross-test contamination."""
     try:

@@ -178,12 +178,19 @@ def test_awaria_bazy_przy_skladzie_jest_glosna(caplog, monkeypatch):
 
 
 def test_awaria_bazy_przy_statystykach_jest_glosna(caplog, monkeypatch):
+    """Awaria ma byc glosna — ale RAZ na proces, nie przy kazdym odczycie.
+
+    Tresc komunikatu zmieniona 07.09 razem z wyciszeniem powtorek: w kontenerze
+    brak `team_stats` to warunek staly, a `footstats-api` produkowal przez to
+    42 identyczne linie na godzine. Asercja pyta wiec o SENS (ze mecze pojda bez
+    tych statystyk), nie o dawne brzmienie.
+    """
     _baza_padnie(monkeypatch)
 
     with caplog.at_level(logging.WARNING):
         assert pdb.get_team_stats("Arsenal", 2026) is None
 
-    assert "bez nich" in caplog.text
+    assert "team_stats" in caplog.text and "bez statystyk" in caplog.text
 
 
 def test_konwertery_pol_opcjonalnych_milcza(caplog):
