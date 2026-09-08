@@ -157,6 +157,45 @@ druzyn ze skladem: 25, bez: 13
 **31% wobec 12.5%** — dwuipółkrotnie, na prawdziwych absencjach z FotMoba, a nie
 na ręcznie dobranej próbce. To jest liczba do cytowania.
 
+### Co siedzi w tych 40% „drużyna znana, brak gracza"
+
+Rozbite tego samego dnia, n=57:
+
+```
+JEST w kadrze, ale 0 goli:   20  (35%)
+NIE MA w kadrze:             37  (65%)
+```
+
+Przykłady z drugiej grupy mówią, o co chodzi:
+
+```
+Aston Villa: Leon Goretzka          Borussia Dortmund: Giannis Konstantelias
+Aston Villa: Johan Manzambi         FC Porto: Victor Froholdt
+```
+
+To **letnie transfery 2026**. Ich zeszłosezonowe gole siedzą w bazie pod
+POPRZEDNIM klubem (Goretzka — Bayern, Konstantelias — PAOK, Froholdt —
+Kopenhaga), a `team_goal_shares` pyta o obecny.
+
+**To nie jest błąd do naprawienia jednym `JOIN`-em.** `goal_share` jest z
+definicji względny wobec drużyny: napastnik, który strzelił 20% goli Freiburga,
+nie jest automatycznie 20% ataku Aston Villi. Wzięcie udziału ze starego klubu
+podstawiłoby liczbę, która wygląda na zmierzoną, a nie jest — dokładnie ten
+rodzaj cichego fałszu, który ten projekt zbiera od tygodnia.
+
+Możliwe kierunki, wszystkie do osobnego rozstrzygnięcia:
+
+* wagę z poprzedniego klubu **przeskalować** stosunkiem sił ofensywnych obu
+  drużyn (mierzalne, ale to nowy model, nie odczyt);
+* użyć jej wyłącznie jako **klasyfikacji** (napastnik/rezerwowy) zamiast liczby;
+* zostawić jak jest i przyjąć, że transfery są chwilowo bez wagi — w połowie
+  sezonu problem sam maleje.
+
+Pozostałe 35% to zawodnicy Z zerem goli (bramkarze, obrońcy). Ich strata ataku
+naprawdę wynosi ~0, więc `nietrafione` jest tu etykietą mylącą — nie „nie wiem",
+tylko „wiem, że zero". Rozdzielenie tych dwóch stanów poprawiłoby METRYKĘ
+zdrowia kanału; na λ nie wpłynie, bo obie ścieżki dają ten sam mnożnik 1.0.
+
 Osiem niedopasowanych to w większości bramkarze i obrońcy z zerem goli, więc
 poprawnie nie mają udziału w ATAKU. `udzialy_absencji` wkłada ich do
 `nietrafione` („nie wiem"), a nie do udziałów jako zero — konserwatywnie, ale

@@ -242,9 +242,30 @@ szum, przed którym ostrzega `absencje.py`.
 klubów dała 16/24 (67%), ale to GÓRNA GRANICA — produkcja widzi 57 lig, więc
 uczciwa liczba padnie dopiero z logu.
 
-**Zostaje otwarte:** sezon 2026 dalej ma tylko reprezentacje (0 użytecznych
-drużyn). Nie szkodzi — `MIN_SKLAD` cofa do pełnego 2025, i tak jest właściwe
-źródło wag. Odświeżyć 2026 dopiero, gdy sezon się rozegra (~luty).
+**ZMIERZONE NA ŻYWO 08.09** (161 meczów z FotMoba, 144 absencje):
+
+```
+z waga (dopasowane):          44  (31%)      bylo 3/24 = 12.5%
+druzyna znana, brak gracza:   57  (40%)
+brak skladu druzyny:          43  (30%)
+```
+
+**Zostaje otwarte — trzy rzeczy, w kolejności wielkości:**
+
+1. **Letnie transfery bez wagi (65% z tych 40%).** Goretzka w Aston Villi,
+   Konstantelias w Dortmundzie, Froholdt w Porto — ich zeszłosezonowe gole są
+   pod POPRZEDNIM klubem. NIE naprawiać tego zwykłym podstawieniem: `goal_share`
+   jest względny wobec drużyny, więc 20% goli Freiburga to nie 20% ataku Aston
+   Villi. Kierunki w `docs/pomiary/pelne_sklady_2026-09-07.md`.
+2. **Zerowi strzelcy liczeni jako „nie wiem" (35% z tych 40%).** Bramkarz bez
+   goli ma stratę ataku ~0, a nie nieznaną. Rozdzielenie poprawi METRYKĘ, nie λ
+   (obie ścieżki dają mnożnik 1.0).
+3. **30% drużyn wciąż bez składu** — ligi spoza tych 31. Kolejne dokładać do
+   `_LIGI_SKLADOW` po SPRAWDZENIU id w `/leagues?search=`.
+
+Sezon 2026 dalej ma tylko reprezentacje (0 użytecznych drużyn). Nie szkodzi —
+`MIN_SKLAD` cofa do pełnego 2025, i tak jest właściwe źródło wag. Odświeżyć
+2026, gdy sezon się rozegra (~luty).
 
 ---
 
