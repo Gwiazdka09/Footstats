@@ -51,6 +51,16 @@ AI_PREFER_LOCAL = os.getenv("AI_PREFER_LOCAL", "0").strip() in ("1", "true", "Tr
 # Działa niezależnie od wybranego GROQ_MODEL.
 _REASONING_HINTS = ("gpt-oss", "deepseek-r1", "-r1", "qwen3", "o1", "o3",
                     "reasoning", "think", "compound")
+# 8000 to NIE jest zgadywanka — POTWIERDZONE naglowkiem odpowiedzi Groqa
+# 2026-09-08 dla `openai/gpt-oss-120b` na tym koncie:
+#
+#     x-ratelimit-limit-tokens: 8000
+#     x-ratelimit-limit-requests: 1000
+#
+# Sprawdzone, bo logi produkcji pokazywaly scinanie wyjscia ("Budzet TPM:
+# wejscie 4146 tok zjada limit 8000") i trzeba bylo wiedziec, czy dlawimy sie
+# sami, czy to realny limit. Realny. Przy zmianie modelu albo planu limit sie
+# zmieni — sprawdzac tym samym naglowkiem, nie pamiecia.
 AI_TPM_LIMIT     = int(os.getenv("AI_TPM_LIMIT", "8000"))
 AI_REASONING_FACTOR = float(os.getenv("AI_REASONING_FACTOR", "2.5"))
 

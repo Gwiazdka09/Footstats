@@ -141,11 +141,21 @@ udzialy        max 9-25% zamiast 100%
 ```
 
 Dopasowanie absencji na próbie 10 dużych klubów, nazwiska pisane pełnie jak
-w FotMobie: **16/24 (67%)** wobec produkcyjnego `3/24`.
+w FotMobie: **16/24 (67%)** wobec produkcyjnego `3/24`. To była **górna
+granica**, nie prognoza — próba to najlepiej pokryta część.
 
-**To jest górna granica, nie prognoza.** Próba to duże kluby europejskie, czyli
-najlepiej pokryta część; produkcja widzi 57 lig. Uczciwa liczba do porównania
-padnie dopiero z logu po wdrożeniu — patrz TODO.
+### Pomiar na ŻYWYM źródle, 08.09 — 161 meczów, 144 absencje
+
+```
+z waga (dopasowane):          44  (31%)      bylo 3/24 = 12.5%
+druzyna znana, brak gracza:   57  (40%)
+brak skladu druzyny:          43  (30%)
+
+druzyn ze skladem: 25, bez: 13
+```
+
+**31% wobec 12.5%** — dwuipółkrotnie, na prawdziwych absencjach z FotMoba, a nie
+na ręcznie dobranej próbce. To jest liczba do cytowania.
 
 Osiem niedopasowanych to w większości bramkarze i obrońcy z zerem goli, więc
 poprawnie nie mają udziału w ATAKU. `udzialy_absencji` wkłada ich do
