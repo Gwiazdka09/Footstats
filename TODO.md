@@ -347,6 +347,35 @@ Działalność nierejestrowana obejmuje też sprzedaż — **nie trzeba zakłada
 - [x] **L3 — ZROBIONE 24.08.** §7 nie ogranicza już odpowiedzialności do „opłat z ostatnich 30 dni” (przy darmowym = do zera). Zamiast tego zasady ogólne prawa polskiego plus klauzula, że nic w regulaminie nie ogranicza praw konsumenta z przepisów bezwzględnie obowiązujących. Dopisany też punkt mówiący wprost, że **model nie wykazuje przewagi nad kursami bukmacherskimi** — to samo, co mierzymy, powiedziane użytkownikowi.
 - [x] **L4 — BYŁO BŁĘDNE, już zrobione.** Pierwotny wpis powstał z przejrzenia samego `admin_users.py`. W rzeczywistości istnieje `DELETE /api/auth/me` (anonimizuje username, kasuje e-mail, losuje hash hasła, `is_active = FALSE`; kupony i predykcje zostają dla rozliczeń pod zanonimizowanym userem), wystawione w GUI jako „Potwierdzam — usuń konto” w `SettingsView.jsx`. Publiczna rejestracja `POST /auth/register` oraz reset hasła też działają, a regulamin i polityka są linkowane ze stopki i z CookieConsent.
 
+## 🟠 AKUMULATORY MNOŻĄ UJEMNĄ PRZEWAGĘ — decyzja do podjęcia (08.09)
+
+Kupony AKO: **0 wygranych na 8 rozliczonych**, ROI −100% na 212 PLN papierowych.
+Wciąż powstają — 5 sztuk 04.09.
+
+To nie jest pech. Arytmetyka z naszego własnego ROI singla (**−10.3%** na 429
+rozliczonych, średni kurs 1.62):
+
+```
+2 nogi  -19.5%      5 nog  -41.9%
+3 nogi  -27.8%     10 nog  -66.3%
+```
+
+Obserwacja 0/8 zgadza się z tym rozkładem, nie z wariancją. Akumulator nie
+„daje szansę na dużą wygraną" — mnoży ujemną przewagę przez liczbę nóg.
+Kupon #17 miał **10 nóg przy kursie 122.8**.
+
+Trzy możliwe decyzje, wszystkie są Twoje, nie moje:
+
+1. **Przestać je tworzyć.** Najprostsze; nie tracimy nic mierzalnego.
+2. **Ograniczyć do 2-3 nóg.** −19.5% zamiast −66%, ale dalej ujemne.
+3. **Zostawić świadomie jako rozrywkę** i przestać liczyć do statystyk ROI.
+
+Póki nie ma decyzji, zostaje jak jest — to paper trading, więc kosztuje dane,
+nie pieniądze. Ale przy każdej rozmowie o ROI trzeba pamiętać, że te −100%
+siedzą w tabeli obok singli.
+
+---
+
 ## ⚪ OPCJONALNE
 
 - [ ] **Scrapery — ocena per-stabilność/anti-bot:** Soccer24 (klon FlashScore, skip), Meczyki/LiveScore (anti-bot), Transfermarkt (squad/value nie wyniki). 4 źródła już wpięte (AF/football-data.co.uk/FlashScore/TheSportsDB).
