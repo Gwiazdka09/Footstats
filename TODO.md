@@ -191,9 +191,18 @@ Cztery naprawy z 07.09 wieczorem czekają na pierwszy realny przebieg:
   powie wprost: `CLV: N/M rozliczonych nog ma kurs zamkniecia`.
 - [ ] **SofaScore** — w logu `footstats-final` ma być **co najwyżej 1** wpis
   `HTTP 403` zamiast 8, a KROK 2 ma trwać sekundy zamiast 30-63 s.
-- [ ] **Bramka CI→CD** — pierwszy push po `21141dcb6` ma się wdrożyć normalnie.
-  Gdyby CD stanęło na kroku „Bramka", sprawdzić uprawnienie `actions: read`
-  i nazwę workflow `CI` w `gh run list`.
+- [x] ~~**Bramka CI→CD**~~ ✅ **zweryfikowana na żywym przebiegu** (`64346c975`,
+  07.09): krok „Bramka" `completed/success`, build ruszył dalej. CI kończy się
+  w 7-9 min, budżet 20 min ma zapas. NIE sprawdzone: czy zatrzymuje przy
+  czerwonym CI — wymagałoby celowego czerwonego commita na `main`.
+  **Efekt uboczny do obserwacji:** kilka pushów pod rząd serializuje się
+  (`cd-jobs` ma `concurrency` bez `cancel-in-progress`, a każdy CD czeka na
+  swoje CI). Kolejka się drenuje, ale wdrożenie ostatniego commita potrafi
+  zająć godzinę.
+- [ ] **Absencje z wagą** — log ma powiedzieć `udzialy absencji N/M dopasowane`
+  z N/M wyraźnie powyżej `3/24`. Pomiar na żywym FotMobie z 08.09 (161 meczów,
+  144 absencje) dał **31%** — to jest liczba do porównania.
+  Wdrożone w `0d1a24fbf` (joby, digest `9c76fdb0`, 08.09 11:53).
 - [ ] **`goal_share`** — po `a70b215b1` żadna drużyna nie ma dostawać udziału
   100%. Zmierzone przed poprawką: 65 z 105 drużyn (62%) miało zmyślony udział.
 
