@@ -26,21 +26,33 @@ from __future__ import annotations
 import logging
 
 from footstats.scrapers.teamnews.base import klucz_gracza as _klucz
+from footstats.scrapers.teamnews.base import klucz_skrocony as _klucz_skrocony
 
 log = logging.getLogger(__name__)
 
 _MIN_CZLONOW = 2   # "Pedro" trafiłoby w dowolnego Pedro w lidze
 
 
-def _dopasuj(klucz: str, klucze_bazy: dict[str, float]) -> float | None:
+def _dopasuj(klucz: str, klucze_bazy: dict[str, float],
+             skroty_bazy: dict[str, list[float]] | None = None) -> float | None:
     """
     Udział gracza albo None.
 
-    Dwie reguły, obie zachowawcze. Dokładna równość po normalizacji, a gdy jej
-    nie ma — prefiks, bo baza bywa pełniejsza od źródła ("Kylian Mbappe-Lottin"
-    vs "Kylian Mbappe"). Prefiks wymaga co najmniej dwóch członów i MUSI być
-    jednoznaczny: dwóch kandydatów oznacza odrzucenie, bo przypisanie cudzego
-    udziału jest gorsze niż brak udziału.
+    Trzy reguły, wszystkie zachowawcze i w tej kolejności:
+
+    1. Dokładna równość po normalizacji.
+    2. Prefiks, bo baza bywa pełniejsza od źródła ("Kylian Mbappe-Lottin" vs
+       "Kylian Mbappe").
+    3. Inicjał + nazwisko, bo źródła piszą imiona inaczej: API-Football oddaje
+       "H. Ekitike", FotMob "Hugo Ekitike". Skrót nie jest prefiksem pełnego
+       imienia, więc reguły 1 i 2 ich nie łączą — a to 66% nazwisk w bazie
+       (16 093 z 24 417, pomiar 07.09.2026) i realna przyczyna produkcyjnego
+       „udzialy absencji 3/24 dopasowane".
+
+    Reguły 2 i 3 wymagają co najmniej dwóch członów i MUSZĄ być jednoznaczne:
+    dwóch kandydatów oznacza odrzucenie, bo przypisanie cudzego udziału jest
+    gorsze niż brak udziału. Przy udziale 20% i capie 0.35 pomyłka przesuwa λ
+    o kilkanaście procent w złą stronę.
     """
     if klucz in klucze_bazy:
         return klucze_bazy[klucz]
@@ -53,6 +65,14 @@ def _dopasuj(klucz: str, klucze_bazy: dict[str, float]) -> float | None:
     if len(trafienia) > 1:
         log.debug("absencje: %r pasuje do %d wpisow — odrzucam jako niejednoznaczne",
                   klucz, len(trafienia))
+        return None
+
+    kandydaci = (skroty_bazy or {}).get(_klucz_skrocony(klucz), [])
+    if len(kandydaci) == 1:
+        return kandydaci[0]
+    if len(kandydaci) > 1:
+        log.debug("absencje: skrot %r pasuje do %d wpisow — odrzucam",
+                  _klucz_skrocony(klucz), len(kandydaci))
     return None
 
 
@@ -71,13 +91,18 @@ def udzialy_absencji(
         return [], [n for n in nazwiska if (n or "").strip()]
 
     klucze_bazy = {_klucz(n): v for n, v in goal_shares.items()}
+    # Indeks po inicjale i nazwisku — LISTA, nie wartosc, bo jednoznacznosci
+    # pilnuje `_dopasuj`, a bez policzenia kandydatow nie da sie jej sprawdzic.
+    skroty_bazy: dict[str, list[float]] = {}
+    for n, v in goal_shares.items():
+        skroty_bazy.setdefault(_klucz_skrocony(n), []).append(v)
 
     udzialy: list[float] = []
     nietrafione: list[str] = []
     for nazwisko in nazwiska:
         if not (nazwisko or "").strip():
             continue
-        udzial = _dopasuj(_klucz(nazwisko), klucze_bazy)
+        udzial = _dopasuj(_klucz(nazwisko), klucze_bazy, skroty_bazy)
         if udzial is None:
             nietrafione.append(nazwisko)
         else:

@@ -78,6 +78,77 @@ League" to również Mjanma (588), „Ligue 2" również Algieria (187) i Tunezj
 **cichy** — statystyki z innych rozgrywek weszłyby w drużyny, których nie
 dotyczą.
 
+## Backfill zablokował się na własnym cache
+
+31 lig × ~34 strony to ~1100 zapytań. Po sześciu ligach pobieranie zwolniło do
+**7 minut na ligę** — i czas szedł na **dysk**, nie na sieć.
+
+Disk cache API-Football to JEDEN plik JSON. Każde zapytanie czyta go i parsuje
+w całości, po odpowiedzi czyta drugi raz (żeby porównać ze starym) i zapisuje
+w całości. Plik urósł do **30 MB**, więc jedno zapytanie kosztowało ~90 MB I/O,
+a koszt rósł kwadratowo. Dla pierwotnego użycia (`/players/topscorers`, jedno
+zapytanie na ligę) to było bez znaczenia.
+
+```
+z cache:   ~34 zapytania / 7 minut   =  0.08 req/s
+bez cache:  57 zapytan / 75 sekund   =  0.76 req/s     10x
+```
+
+`bez_cache=True` pomija cache, ale **nie** ochronę konta: budżet i bramka
+`apisports_gate` działają normalnie.
+
+## Drugi problem: 66% nazwisk było w formie skróconej
+
+Po backfillu sanity pokazał to wprost:
+
+```
+Liverpool     'Hugo Ekitike', 'H. Ekitike', 'Cody Gakpo', 'C. Gakpo', ...
+Real Madrid   'Kylian Mbappe-Lottin', 'Kylian Mbappé', 'J. Bellingham', ...
+```
+
+**16 093 z 24 417 nazwisk (66%)** to forma `H. Ekitike` — tak oddaje je
+API-Football. FotMob, źródło absencji, pisze pełne imię. To rodzi dwie osobne
+szkody:
+
+1. **Mianownik podwojony.** Ten sam człowiek jako dwa wiersze, a `goal_share`
+   dzieli przez sumę graczy zapisanych. Bayern wychodził z 38 nazwiskami przy
+   kadrze ~30.
+2. **Absencje się nie dopasowują.** `absencje._dopasuj` znało dwie reguły:
+   równość i prefiks. Skrót **nie jest** prefiksem pełnego imienia, więc żadna
+   ich nie łączy. To jest prawdziwa przyczyna produkcyjnego
+   `udzialy absencji 3/24 dopasowane` — sam backfill by jej nie naprawił,
+   dokładał tylko więcej nazwisk w formie, która i tak nie pasuje.
+
+Naprawa to jeden klucz w jednym miejscu: `klucz_skrocony` (inicjał + nazwisko,
+obok `klucz_gracza` w `teamnews/base.py`), użyty po obu stronach.
+
+* **`absencje._dopasuj`** dostaje trzecią regułę, po równości i prefiksie.
+  Zachowawczą jak tamte: minimum dwa człony i **jednoznaczność** — dwóch
+  kandydatów oznacza odrzucenie, bo cudzy udział jest gorszy niż brak udziału.
+* **`player_db._scal_duplikaty`** scala wiersze, ale tylko gdy jedna pisownia
+  jest SKRÓTEM drugiej i pełna wersja jest dokładnie jedna. „Moussa Diallo"
+  i „Mamadou Diallo" zostają osobno — żaden nie jest skrótem, to mogą być dwie
+  różne osoby. Zostaje pełna pisownia (lepiej pasuje do FotMoba), a gole to
+  **maksimum, nie suma**: źródła mogą pokrywać różne rozgrywki.
+
 ## Wynik
 
-(uzupełniane po przebiegu — patrz sekcja niżej)
+```
+zrzut         2913 -> 10175 graczy,  252 -> 692 druzyny,  212 KB -> 716 KB
+sezon 2025     83 -> 516 uzytecznych druzyn (>= 8 strzelcow), mediana 14
+pokrycie       8.6% -> 38% druzyn z realnego ruchu (model_log, 14 dni)
+udzialy        max 9-25% zamiast 100%
+```
+
+Dopasowanie absencji na próbie 10 dużych klubów, nazwiska pisane pełnie jak
+w FotMobie: **16/24 (67%)** wobec produkcyjnego `3/24`.
+
+**To jest górna granica, nie prognoza.** Próba to duże kluby europejskie, czyli
+najlepiej pokryta część; produkcja widzi 57 lig. Uczciwa liczba do porównania
+padnie dopiero z logu po wdrożeniu — patrz TODO.
+
+Osiem niedopasowanych to w większości bramkarze i obrońcy z zerem goli, więc
+poprawnie nie mają udziału w ATAKU. `udzialy_absencji` wkłada ich do
+`nietrafione` („nie wiem"), a nie do udziałów jako zero — konserwatywnie, ale
+dla zawodnika, który JEST w składzie z zerem goli, wiemy więcej niż „nie wiem".
+Do rozważenia osobno; dzisiejsza zmiana tego nie rusza.

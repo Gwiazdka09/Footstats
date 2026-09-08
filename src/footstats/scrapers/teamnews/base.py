@@ -25,6 +25,39 @@ def klucz_gracza(nazwisko: str) -> str:
     bez_znakow = "".join(c for c in bez_znakow if not unicodedata.combining(c))
     return " ".join(bez_znakow.casefold().split())
 
+
+def klucz_skrocony(nazwisko: str) -> str:
+    """`klucz_gracza`, ale imie zredukowane do inicjalu: "h ekitike".
+
+    PO CO. Zrodla pisza nazwiska inaczej i to rozbija dopasowanie absencji.
+    Pomiar `player_stats` z 2026-09-07: 16 093 z 24 417 nazwisk sezonu 2025
+    (66%) jest w formie skroconej, bo tak oddaje je API-Football. FotMob —
+    zrodlo absencji — pisze pelne imie:
+
+        baza:   "H. Ekitike"      klucz_gracza -> "h. ekitike"
+        FotMob: "Hugo Ekitike"    klucz_gracza -> "hugo ekitike"
+
+    Skrot NIE jest prefiksem pelnego imienia, wiec ani rownosc, ani regula
+    prefiksowa w `absencje._dopasuj` ich nie lacza. Stad ten klucz — symetryczny,
+    wiec dziala niezaleznie od tego, ktore zrodlo skraca.
+
+    Skracamy WYLACZNIE pierwszy czlon. "Virgil van Dijk" -> "v van dijk":
+    nazwisko dwuczlonowe zostaje w calosci, inaczej "van Dijk" i "van Persie"
+    zlalyby sie w jedno.
+
+    Nazwisko jednoczlonowe ("Rodri") zwracamy bez zmian — nie ma czego skracac,
+    a `absencje._MIN_CZLONOW` i tak nie dopuszcza go do regul rozmytych.
+
+    To NIE jest identyfikator gracza. Dwoch "M. Diallo" w jednej kadrze da ten
+    sam klucz i dlatego wolajacy musi wymagac JEDNOZNACZNOSCI — przypisanie
+    cudzego udzialu jest gorsze niz brak udzialu.
+    """
+    czlony = klucz_gracza(nazwisko).split()
+    if len(czlony) < 2:
+        return czlony[0] if czlony else ""
+    inicjal = czlony[0].rstrip(".")[:1]
+    return " ".join([inicjal, *czlony[1:]])
+
 # Wartości `expectedReturn`, które znaczą "może zagra". Zbiór, nie pojedyncza
 # stała, bo źródło używa też innych wariantów pisowni.
 _NIEPEWNE = frozenset({"doubtful", "questionable", "50/50"})

@@ -210,35 +210,41 @@ Cztery naprawy z 07.09 wieczorem czekają na pierwszy realny przebieg:
 - [ ] `scripts/sklady_pomiar.py` odmawia analizy poniżej 500 rozliczonych wierszy.
   Przy ~30 kandydatach dziennie to około dwóch miesięcy zbierania.
 
-### 🔴 SKŁADY: nie ma czym odświeżyć sezonu 2026 (blokada team-news)
+### ✅ SKŁADY: zrobione 07.09 wieczorem — pełne kadry z `/players`
 
-To jest teraz wąskie gardło kanału, który właśnie ożył: **3 z 24 absencji**
-dostają wagę, reszta jest znana z nazwiska i nic nie waży.
-
-Strzelcy na drużynę w `data/player_stats.json` (pomiar 07.09):
+Było wąskim gardłem (`3/24` absencji z wagą). Rozwiązane, szczegóły
+w `docs/pomiary/pelne_sklady_2026-09-07.md`.
 
 ```
-sezon  druzyn  min  p25  mediana  p75  max
- 2024     212    1    1        2   13   29    zrodlo mieszane
- 2025      95    9   13       15   17   30    pelne sklady (Understat)
- 2026      53    1    1        1    2    4    /players/topscorers
+zrzut        2913 -> 10175 graczy,  252 -> 692 druzyny,  212 KB -> 716 KB
+sezon 2025     83 -> 516 uzytecznych druzyn (>= 8 strzelcow)
+pokrycie      8.6% -> 38% druzyn z realnego ruchu (model_log, 14 dni)
 ```
 
-Oba znane źródła odpadają:
+Trzy rzeczy, które trzeba było naprawić po drodze:
 
-- **API-Football `/players/topscorers`** — działa, ale oddaje 20 nazwisk na CAŁĄ
-  ligę, czyli 1-4 na drużynę. To dokładnie ten mianownik, przez który
-  `goal_share` wychodził 100% (naprawione progiem `MIN_SKLAD`, `a70b215b1`).
-  Dolanie tego do 2026 nie pomoże — doda śmiecia.
-- **Understat** — źródło pełnych składów 2025 — **jest martwe**:
-  `GET understat.com/league/EPL/2026` oddaje HTTP 200 i 4684 bajty bez
-  `playersData`. To samo na 2025, więc padło już po zebraniu obecnych danych.
+1. **`/players/topscorers` -> `/players`** (paginacja, ~34 strony/liga). Nie
+   odrzucamy graczy z zerem goli — kompletność tabeli JEST mianownikiem.
+2. **Cache API-Football blokował backfill.** Jeden plik JSON, 30 MB, czytany
+   i zapisywany w całości przy każdym zapytaniu. `bez_cache=True` dla `/players`
+   dało **10× przyspieszenie** (0.08 -> 0.76 req/s).
+3. **66% nazwisk było skróconych** (`H. Ekitike` z API-Football vs `Hugo
+   Ekitiké` z FotMoba). To była PRAWDZIWA przyczyna `3/24` — sam backfill by jej
+   nie naprawił. `klucz_skrocony` + trzecia reguła w `absencje._dopasuj`
+   + scalanie duplikatów w `player_db`.
 
-Do rozważenia: `/players?league=&season=` w API-Football (pełne kadry, ale
-paginacja i budżet), albo składy z FotMoba — i tak go już scrapujemy po
-team-news, a `performance.seasonGoals` tam jest. Ostrzeżenie z `absencje.py`
-zostaje w mocy: gole z bieżącego sezonu na starcie kampanii to szum, więc
-FotMob nadaje się na **kadrę**, nie na wagi.
+**FotMob sprawdzony i odrzucony:** parametr `season` jest ignorowany, oddaje
+tylko sezon bieżący (Liverpool: 29 osób, **6 goli łącznie**) — dokładnie ten
+szum, przed którym ostrzega `absencje.py`.
+
+**Do sprawdzenia po najbliższym przebiegu:** log ma powiedzieć
+`udzialy absencji N/M dopasowane` z N wyraźnie większym niż 3. Próba 10 dużych
+klubów dała 16/24 (67%), ale to GÓRNA GRANICA — produkcja widzi 57 lig, więc
+uczciwa liczba padnie dopiero z logu.
+
+**Zostaje otwarte:** sezon 2026 dalej ma tylko reprezentacje (0 użytecznych
+drużyn). Nie szkodzi — `MIN_SKLAD` cofa do pełnego 2025, i tak jest właściwe
+źródło wag. Odświeżyć 2026 dopiero, gdy sezon się rozegra (~luty).
 
 ---
 

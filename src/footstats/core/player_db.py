@@ -21,6 +21,7 @@ from pathlib import Path
 from footstats.config import DB_PATH
 
 log = logging.getLogger(__name__)
+from footstats.scrapers.teamnews.base import klucz_skrocony
 from footstats.utils.normalize import normalize_team_name
 
 # Zamrozony zrzut goli, shipowany W OBRAZIE jak `team_mappings.json`.
@@ -310,10 +311,51 @@ def team_goal_shares(
 
     if not gole:
         return {}
+    gole = _scal_duplikaty(gole)
     total = sum(gole.values())
     if total <= 0:
         return {}
     return {n: g / total for n, g in gole.items()}
+
+
+def _czy_skrot(nazwa: str) -> bool:
+    """Czy pierwszy człon to sam inicjał ("H. Ekitike", "V. van Dijk")."""
+    czlony = (nazwa or "").split()
+    return len(czlony) >= 2 and len(czlony[0].rstrip(".")) == 1
+
+
+def _scal_duplikaty(gole: dict[str, int]) -> dict[str, int]:
+    """Ten sam zawodnik w dwóch pisowniach → jeden wpis.
+
+    `player_stats` kluczuje wiersz po `(name, team_norm, season)`, a źródła piszą
+    nazwiska inaczej: API-Football oddaje „H. Ekitike", Understat oddawał „Hugo
+    Ekitike". To ten sam człowiek dwa razy, a `goal_share` dzieli przez sumę
+    graczy zapisanych — więc duplikat wchodzi do MIANOWNIKA dwukrotnie i zaniża
+    udziały wszystkich. Po backfillu 07.09.2026 sanity pokazywał Bayern z 38
+    nazwiskami przy kadrze około 30.
+
+    Reguła jest CELOWO wąska: scalamy tylko wtedy, gdy jedna pisownia jest
+    SKRÓTEM drugiej i pełna wersja jest DOKŁADNIE JEDNA. „Moussa Diallo"
+    i „Mamadou Diallo" zostają osobno, bo żaden nie jest skrótem — to mogą być
+    dwie różne osoby, a scalenie ich byłoby cichym błędem w danych.
+
+    Zostaje pełna pisownia, bo to ona dopasowuje się do FotMoba (źródło absencji
+    skrótów nie używa). Gole to MAKSIMUM, nie suma: źródła mogą pokrywać różne
+    rozgrywki, a suma podwoiłaby dorobek zawodnika.
+    """
+    grupy: dict[str, list[str]] = {}
+    for nazwa in gole:
+        grupy.setdefault(klucz_skrocony(nazwa), []).append(nazwa)
+
+    scalone: dict[str, int] = {}
+    for nazwy in grupy.values():
+        pelne = [n for n in nazwy if not _czy_skrot(n)]
+        if len(nazwy) == 1 or len(pelne) != 1:
+            for n in nazwy:
+                scalone[n] = gole[n]
+            continue
+        scalone[pelne[0]] = max(gole[n] for n in nazwy)
+    return scalone
 
 
 def get_team_players(

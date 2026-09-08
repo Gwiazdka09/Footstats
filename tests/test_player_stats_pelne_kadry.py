@@ -115,7 +115,9 @@ class _Klient:
         self.strony = strony
         self.zapytania = []
 
-    def _get(self, sciezka, params=None):
+    # `**kwargs` bo `fetch_league_squad` przekazuje tez `bez_cache=True`
+    # (disk cache API-Football to plik 30 MB przepisywany przy kazdym zapytaniu).
+    def _get(self, sciezka, params=None, **kwargs):
         self.zapytania.append(dict(params or {}))
         nr = (params or {}).get("page", 1)
         return self.strony.get(nr)
