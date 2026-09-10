@@ -37,18 +37,28 @@ import pytest
 from footstats.core.poisson import _kanoniczne_nazwy
 from footstats.utils.normalize import normalize_team_name
 
-_SWIEZE = [
-    "Stoke", "Norwich", "Leverkusen", "Union Berlin", "Mainz", "Paderborn",
-    "Sociedad", "Sociedad B", "M'gladbach", "Bristol City", "Bristol Rvs",
-    "Independiente", "FC Tokyo", "West Brom", "Benfica",
-]
+_SWIEZE = {
+    "Stoke": "ENG-Championship", "Norwich": "ENG-Championship",
+    "West Brom": "ENG-Championship", "Cambridge": "ENG-League Two",
+    "Bristol City": "ENG-Championship", "Bristol Rvs": "ENG-League Two",
+    "Leverkusen": "GER-Bundesliga", "Union Berlin": "GER-Bundesliga",
+    "Mainz": "GER-Bundesliga", "Paderborn": "GER-2. Bundesliga",
+    "M'gladbach": "GER-Bundesliga",
+    "Sociedad": "ESP-La Liga", "Sociedad B": "ESP-Segunda Division",
+    # Racing Club de Avellaneda. Racing Santander ma w football-data zapis
+    # "Santander" — "Real Racing Club" NIE MOZE trafic tutaj.
+    "Racing Club": "ARG-Liga Profesional",
+    "Independiente": "ARG-Liga Profesional", "FC Tokyo": "JPN-J1 League",
+    "Benfica": "POR-Primeira Liga",
+}
 
 
 def _df() -> pd.DataFrame:
     """Kazda druzyna gra raz u siebie; `Oldtown` ma historie sprzed lat."""
-    wiersze = [{"gospodarz": n, "goscie": "Rywal", "data": pd.Timestamp("2026-08-30")}
-               for n in _SWIEZE]
-    wiersze.append({"gospodarz": "Oldtown", "goscie": "Rywal",
+    wiersze = [{"gospodarz": n, "goscie": "Rywal", "league": liga,
+                "data": pd.Timestamp("2026-08-30")}
+               for n, liga in _SWIEZE.items()]
+    wiersze.append({"gospodarz": "Oldtown", "goscie": "Rywal", "league": "ENG-League Two",
                     "data": pd.Timestamp("2020-01-01")})
     return pd.DataFrame(wiersze)
 
@@ -107,6 +117,28 @@ def test_zadnego_zgadywania_po_podzbiorze_slow():
     """Independiente del Valle (Ekwador) to NIE Independiente (Argentyna)."""
     assert _mapuj("Independiente del Valle") == "Independiente del Valle"
     assert _mapuj("Tokyo Verdy") == "Tokyo Verdy"
+
+
+def test_slowo_szum_wymaga_kraju_ligi():
+    """`real` to hiszpanska konwencja nazw. Zlapane na pomiarze 10.09:
+    "Real Racing Club" (Santander) trafial w Racing Club z Argentyny."""
+    assert _mapuj("Real Racing Club") == "Real Racing Club"
+    assert _mapuj("Real Sociedad") == "Sociedad"
+
+
+def test_slowo_szum_bez_kolumny_ligi_nie_dziala():
+    df = _df().drop(columns=["league"])
+    assert _kanoniczne_nazwy(df, "Real Sociedad", "Rywal")[0] == "Real Sociedad"
+    # reguly bez slowa-szumu dalej dzialaja
+    assert _kanoniczne_nazwy(df, "Stoke City", "Rywal")[0] == "Stoke"
+
+
+def test_cambridge_to_dwa_kluby_choc_dataset_zna_jeden():
+    """Zlapane na pomiarze 10.09: Cambridge City (poza ligami) trafial
+    w "Cambridge", czyli Cambridge United. Dataset nie wie o drugim klubie,
+    wiec `_BAZY_WIELOZNACZNE` z danych go nie wylapie."""
+    assert _mapuj("Cambridge City") == "Cambridge City"
+    assert _mapuj("Cambridge United") == "Cambridge"
 
 
 def test_stara_historia_nie_jest_trafieniem():

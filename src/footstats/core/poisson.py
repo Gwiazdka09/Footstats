@@ -186,10 +186,13 @@ def _kanoniczne_nazwy(df_mecze: pd.DataFrame, g: str, a: str) -> tuple[str, str]
         if klucz in mapa:
             return mapa[klucz]
         swieze = _swieze_nazwy(df_mecze)
-        for zapasowy in _klucze_zapasowe(klucz):
+        for zapasowy, kraj in _klucze_zapasowe(klucz):
             trafienie = mapa.get(zapasowy)
-            if trafienie is not None and trafienie in swieze:
-                return trafienie
+            if trafienie is None or trafienie not in swieze:
+                continue
+            if kraj and kraj not in _kraje_nazwy(df_mecze).get(trafienie, ()):
+                continue
+            return trafienie
         return nazwa
 
     return _jedna(g), _jedna(a)
@@ -207,14 +210,29 @@ def _kanoniczne_nazwy(df_mecze: pd.DataFrame, g: str, a: str) -> tuple[str, str]
 # Każda reguła jest deterministyczna — żadnego podobieństwa nazw, bo to ono
 # myliło Wisłę Kraków z Wisłą Płock.
 
-# Słowa, które w pełnej nazwie klubu są ozdobnikiem, a skrót ich nie pisze.
-# Wyłącznie takie, które NIE odróżniają dwóch klubów: "Real Madrid" ma w danych
-# własny wpis i trafia dokładnym kluczem, zanim ta lista w ogóle zadziała.
-_SZUM_NAZW = frozenset({"bayer", "borussia", "real", "kaa", "krc", "aif", "fsv"})
+# Słowa, które w pełnej nazwie klubu są ozdobnikiem, a skrót ich nie pisze —
+# razem z krajem, którego to konwencja. "Real Madrid" ma w danych własny wpis
+# i trafia dokładnym kluczem, zanim ta lista w ogóle zadziała.
+#
+# KRAJ JEST WARUNKIEM, nie ozdobą. Pierwszy pomiar 10.09 bez niego: "Real Racing
+# Club" (Santander) trafiał w "Racing Club" z Argentyny — ta sama nazwa po
+# zdjęciu `real`, inny kontynent, a świeżość historii niczego nie odsiewa.
+_SZUM_NAZW: dict[str, str] = {
+    "real": "ESP", "bayer": "GER", "borussia": "GER", "fsv": "GER",
+    "kaa": "BEL", "krc": "BEL", "aif": "SWE",
+}
+
+# Bazy, które w rzeczywistości noszą dwa kluby, choć dataset zna jeden.
+# `normalize._BAZY_WIELOZNACZNE` liczy się z DANYCH, więc tego nie widzi:
+# "Cambridge" w football-data to Cambridge United, a Cambridge City (poza
+# ligami, gra w Pucharze Anglii) trafiał w niego regułą członu tożsamości.
+_BAZY_WIELOZNACZNE_POZA_DANYMI = frozenset({"cambridge"})
 
 # Skróty, których żadna reguła nie wyprowadzi — cel musi istnieć w datasecie.
 _ALIASY_HISTORII: dict[str, str] = {
     "west bromwich albion": "west brom",
+    "cambridge united": "cambridge",
+    "real racing club": "santander",
 }
 
 # Historia starsza niż to okno to λ innej drużyny: klub po spadku poza zasięg
@@ -247,29 +265,69 @@ def _swieze_nazwy(df_mecze: pd.DataFrame) -> frozenset:
     return swieze
 
 
-def _klucze_zapasowe(klucz: str) -> list[str]:
-    """Kolejne klucze tej samej nazwy, od najbliższego oryginałowi."""
+_ATR_KRAJE = "_footstats_kraje_nazw"
+
+
+def _kraje_nazwy(df_mecze: pd.DataFrame) -> dict[str, frozenset]:
+    """Nazwa z historii → kody krajów lig, w których grała ("ESP-La Liga" → "ESP").
+
+    Bez kolumny `league` słownik jest pusty, więc reguła słów-szumu nie trafia
+    niczego (fail-closed). Pozostałe reguły kraju nie potrzebują.
+    """
+    kraje = df_mecze.attrs.get(_ATR_KRAJE)
+    if kraje is not None:
+        return kraje
+    zebrane: dict[str, set] = {}
+    if "league" in df_mecze.columns:
+        for kolumna in ("gospodarz", "goscie"):
+            pary = df_mecze[[kolumna, "league"]].dropna().drop_duplicates()
+            for nazwa, liga in pary.itertuples(index=False):
+                zebrane.setdefault(str(nazwa).strip(), set()).add(str(liga).split("-", 1)[0])
+    kraje = {n: frozenset(k) for n, k in zebrane.items()}
+    df_mecze.attrs[_ATR_KRAJE] = kraje
+    return kraje
+
+
+def _klucze_zapasowe(klucz: str) -> list[tuple[str, str | None]]:
+    """Kolejne klucze tej samej nazwy, od najbliższego oryginałowi.
+
+    Drugi element to kraj, którego liga MUSI się zgadzać z trafieniem — ustawiony
+    tylko wtedy, gdy klucz powstał przez zdjęcie słowa-szumu.
+    """
     from footstats.utils.normalize import (
         _BAZY_WIELOZNACZNE, _czlony_rozrozniajace, normalize_team_name,
     )
 
-    kandydaci = [_ALIASY_HISTORII.get(klucz, "")]
     bez_cyfr = normalize_team_name(" ".join(t for t in klucz.split() if not t.isdigit()))
+    szum = [t for t in bez_cyfr.split() if t in _SZUM_NAZW]
+    kraj = _SZUM_NAZW[szum[0]] if len(szum) == 1 else None
     bez_szumu = normalize_team_name(" ".join(t for t in bez_cyfr.split() if t not in _SZUM_NAZW))
-    for wariant in (bez_cyfr, bez_szumu):
-        kandydaci.append(wariant)
+
+    kandydaci: list[tuple[str, str | None]] = [(_ALIASY_HISTORII.get(klucz, ""), None)]
+    for wariant, wymagany in ((bez_cyfr, None), (bez_szumu, kraj)):
+        # Dwa różne słowa-szum naraz nie wskazują jednego kraju — bez klucza.
+        if wariant == bez_szumu and wariant != bez_cyfr and kraj is None:
+            continue
+        kandydaci.append((wariant, wymagany))
         tokeny = wariant.split()
-        czlony = _czlony_rozrozniajace(set(tokeny))
-        if not czlony:
+        if not _czlony_rozrozniajace(set(tokeny)):
             continue
         # Człon tożsamości, którego skrót nie pisze: "Stoke City" -> "stoke".
         # Ta sama reguła, której ufają rozliczenia w `team_similarity`, z tym
         # samym wyjątkiem — baza wieloznaczna (Bristol City / Bristol Rovers)
         # nie mówi, o który klub chodzi.
         rdzen = " ".join(t for t in tokeny if not _czlony_rozrozniajace({t}))
-        if len(rdzen) >= 4 and rdzen not in _BAZY_WIELOZNACZNE:
-            kandydaci.append(rdzen)
-    return [k for k in dict.fromkeys(kandydaci) if k and k != klucz]
+        if (len(rdzen) >= 4 and rdzen not in _BAZY_WIELOZNACZNE
+                and rdzen not in _BAZY_WIELOZNACZNE_POZA_DANYMI):
+            kandydaci.append((rdzen, wymagany))
+
+    widziane: set[str] = set()
+    wynik: list[tuple[str, str | None]] = []
+    for k, w in kandydaci:
+        if k and k != klucz and k not in widziane:
+            widziane.add(k)
+            wynik.append((k, w))
+    return wynik
 
 
 def predict_match(
