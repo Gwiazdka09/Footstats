@@ -181,7 +181,8 @@ def test_delete_account_flow(client):
 
     resp = client.post(
         "/api/auth/register",
-        json={"username": uname, "email": email, "password": "securepass123"},
+        json={"username": uname, "email": email, "password": "securepass123",
+              "birth_ym": "1990-05"},
     )
     assert resp.status_code == 201
     token = resp.json()["access_token"]

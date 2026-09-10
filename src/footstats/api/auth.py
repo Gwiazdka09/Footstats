@@ -23,6 +23,7 @@ from jwt import PyJWTError
 from pydantic import BaseModel, field_validator
 
 from footstats.api.limiter import limiter
+from footstats.api.walidacja_konta import sprawdz_login, sprawdz_miesiac_urodzenia
 
 _ALGORITHM = "HS256"
 _EXPIRE_HOURS = 24
@@ -42,14 +43,20 @@ class RegisterRequest(BaseModel):
     username: str
     email: str
     password: str
+    # Miesiąc i rok urodzenia ('RRRR-MM') — weryfikacja 18+ bez zbierania dnia.
+    birth_ym: str
+    # Zgoda na ranking typerów. Domyślnie NIE — musi być świadomym wyborem.
+    leaderboard_opt_in: bool = False
 
     @field_validator("username")
     @classmethod
     def username_valid(cls, v: str) -> str:
-        v = v.strip()
-        if len(v) < 3:
-            raise ValueError("Login musi mieć min. 3 znaki")
-        return v
+        return sprawdz_login(v)
+
+    @field_validator("birth_ym")
+    @classmethod
+    def birth_ym_valid(cls, v: str) -> str:
+        return sprawdz_miesiac_urodzenia(v)
 
     @field_validator("email")
     @classmethod
@@ -281,10 +288,11 @@ def register(request: Request, req: RegisterRequest) -> TokenResponse:
     try:
         with connect() as conn:
             row = conn.execute(
-                "INSERT INTO users (username, email, password_hash, is_admin, is_active)"
-                " VALUES (?, ?, ?, FALSE, TRUE)"
+                "INSERT INTO users (username, email, password_hash, is_admin, is_active,"
+                " birth_ym, leaderboard_opt_in)"
+                " VALUES (?, ?, ?, FALSE, TRUE, ?, ?)"
                 " RETURNING id, username",
-                (req.username, req.email, hashed),
+                (req.username, req.email, hashed, req.birth_ym, req.leaderboard_opt_in),
             ).fetchone()
     except psycopg2.errors.UniqueViolation:
         raise HTTPException(status_code=409, detail="Login lub e-mail jest już zajęty")
@@ -629,7 +637,8 @@ def delete_account(req: DeleteAccountRequest, user_id: int = Depends(require_aut
     anon_hash = bcrypt.hashpw(os.urandom(32), bcrypt.gensalt()).decode()
     with connect() as conn:
         conn.execute(
-            "UPDATE users SET username = ?, email = NULL, password_hash = ?, is_active = FALSE WHERE id = ?",
+            "UPDATE users SET username = ?, email = NULL, birth_ym = NULL, password_hash = ?,"
+            " is_active = FALSE WHERE id = ?",
             (f"deleted_user_{user_id}", anon_hash, user_id),
         )
     return {"ok": True, "message": "Konto usunięte"}
@@ -644,6 +653,8 @@ class MeResponse(BaseModel):
     # Zgoda na obecnosc w rankingu typerow. Bez niej GUI nie wie, w ktorym
     # stanie jest przelacznik, i musialoby zgadywac przy kazdym otwarciu.
     leaderboard_opt_in: bool = False
+    # None = konto sprzed 10.09.2026 bez podanego wieku → GUI prosi o uzupełnienie.
+    birth_ym: Optional[str] = None
 
 
 @router.get("/auth/me", response_model=MeResponse)
@@ -652,13 +663,42 @@ def get_me(user_id: int = Depends(require_auth)) -> MeResponse:
     with connect() as conn:
         row = conn.execute(
             "SELECT id, username, email, is_admin, telegram_chat_id,"
-            " leaderboard_opt_in"
+            " leaderboard_opt_in, birth_ym"
             " FROM users WHERE id = ? AND is_active = TRUE",
             (user_id,),
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
     return MeResponse(**dict(row))
+
+
+class BirthRequest(BaseModel):
+    birth_ym: str
+
+    @field_validator("birth_ym")
+    @classmethod
+    def birth_ym_valid(cls, v: str) -> str:
+        return sprawdz_miesiac_urodzenia(v)
+
+
+@router.post("/auth/birth", status_code=status.HTTP_200_OK)
+def set_birth(req: BirthRequest, user_id: int = Depends(require_auth)) -> dict:
+    """Uzupełnienie miesiąca/roku urodzenia przez konta sprzed 10.09.2026.
+
+    Wpis niepełnoletni odpada już na walidatorze (422) i NIE trafia do bazy.
+    Raz zapisanej daty nie da się nadpisać — inaczej wystarczyłoby próbować
+    kolejnych lat, aż ranking czy inne funkcje przestaną blokować.
+    """
+    from footstats.utils.db import connect
+
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE users SET birth_ym = ? WHERE id = ? AND birth_ym IS NULL",
+            (req.birth_ym, user_id),
+        )
+    if cur.rowcount == 0:
+        raise HTTPException(status_code=409, detail="Data urodzenia jest już zapisana")
+    return {"ok": True, "birth_ym": req.birth_ym}
 
 
 _TELEGRAM_ID_RE = re.compile(r"^-?\d{1,20}$")
@@ -733,10 +773,7 @@ class ChangeUsernameRequest(BaseModel):
     @field_validator("new_username")
     @classmethod
     def new_username_valid(cls, v: str) -> str:
-        v = v.strip()
-        if len(v) < 3:
-            raise ValueError("Login musi mieć min. 3 znaki")
-        return v
+        return sprawdz_login(v)
 
 
 @router.post("/auth/change-username", response_model=TokenResponse)
@@ -746,7 +783,8 @@ def change_username(req: ChangeUsernameRequest, user_id: int = Depends(require_a
 
     with connect() as conn:
         row = conn.execute(
-            "SELECT password_hash, is_admin FROM users WHERE id = ? AND is_active = TRUE", (user_id,)
+            "SELECT password_hash, is_admin, COALESCE(token_version, 0) AS token_version"
+            " FROM users WHERE id = ? AND is_active = TRUE", (user_id,)
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
@@ -757,4 +795,8 @@ def change_username(req: ChangeUsernameRequest, user_id: int = Depends(require_a
             conn.execute("UPDATE users SET username = ? WHERE id = ?", (req.new_username, user_id))
     except psycopg2.errors.UniqueViolation:
         raise HTTPException(status_code=409, detail=f"Login '{req.new_username}' jest już zajęty")
-    return TokenResponse(access_token=_make_token(req.new_username, user_id, bool(row["is_admin"])))
+    # Token MUSI nieść bieżącą wersję sesji: po zmianie hasła token_version > 0,
+    # a token z tv=0 odpadłby na `_sprawdz_wersje` przy następnym żądaniu.
+    return TokenResponse(access_token=_make_token(
+        req.new_username, user_id, bool(row["is_admin"]),
+        int(dict(row).get("token_version") or 0)))

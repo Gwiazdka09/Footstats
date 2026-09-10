@@ -183,6 +183,7 @@ def test_rejestracja_gdy_bankroll_state_pada_loguje_i_konto_powstaje(
                 "username": "nowyuser",
                 "email": "nowy@example.com",
                 "password": _HASLO_REJESTRACJI,
+                "birth_ym": "1990-05",
             },
         )
 
@@ -217,6 +218,7 @@ def test_rejestracja_gdy_mail_powitalny_pada_loguje_i_konto_powstaje(
                 "username": "ktos",
                 "email": "ktos@example.com",
                 "password": _HASLO_REJESTRACJI,
+                "birth_ym": "1990-05",
             },
         )
 
@@ -244,6 +246,7 @@ def test_rejestracja_zdrowa_sciezka_bez_ostrzezen(monkeypatch, klient_rejestracj
                 "username": "zdrowy",
                 "email": "zdrowy@example.com",
                 "password": _HASLO_REJESTRACJI,
+                "birth_ym": "1990-05",
             },
         )
 

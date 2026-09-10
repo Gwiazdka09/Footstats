@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
 
 from footstats.api.auth import require_admin
+from footstats.api.walidacja_konta import sprawdz_login
 
 _log = logging.getLogger(__name__)
 
@@ -24,10 +25,7 @@ class CreateUserRequest(BaseModel):
     @field_validator("username")
     @classmethod
     def username_valid(cls, v: str) -> str:
-        v = v.strip()
-        if len(v) < 3:
-            raise ValueError("Username min. 3 znaki")
-        return v
+        return sprawdz_login(v)
 
     @field_validator("password")
     @classmethod

@@ -449,6 +449,14 @@ _MIGRACJE_LEADERBOARD: list[tuple[int, str, list[str]]] = [
         ["ALTER TABLE users ADD COLUMN leaderboard_opt_in BOOLEAN NOT NULL"
          " DEFAULT FALSE"],
     ),
+    # Miesiąc i rok urodzenia ('RRRR-MM') — weryfikacja 18+ (decyzja 10.09.2026).
+    # Bez dnia: minimalizacja danych z RODO. NULL = konto sprzed tej zmiany,
+    # GUI prosi o uzupełnienie przy każdym logowaniu.
+    (
+        18,
+        "add_birth_ym_to_users",
+        ["ALTER TABLE users ADD COLUMN birth_ym TEXT"],
+    ),
 ]
 
 
