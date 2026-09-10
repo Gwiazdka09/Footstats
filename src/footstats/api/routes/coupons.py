@@ -402,11 +402,19 @@ def analyze_matches(req: AnalyzeRequest, user_id: int = Depends(require_auth)):
 @router.get("/coupons/daily-proposals")
 @cached_response(ttl_seconds=600, vary_by=["user_id"])
 def get_daily_proposals(user_id: int = Depends(require_auth)):
-    """Codzienne propozycje kuponów wg ryzyka: low/medium/high."""
+    """Codzienne propozycje kuponów wg ryzyka: low/medium/high.
+
+    Przy wyłączonej fladze (domyślnie od 10.09) trzy PUSTE koszyki, nie 404 —
+    Dashboard i stary /preview oczekują tego kształtu i same chowają sekcję.
+    """
+    from footstats.core.risk_proposals import build_daily_proposals
+    from footstats.core.system_coupons import propozycje_ryzyka_wlaczone
+
+    if not propozycje_ryzyka_wlaczone():
+        return build_daily_proposals([])
     global _MATCHES_CACHE
     if not _MATCHES_CACHE:
         _MATCHES_CACHE = _fetch_predictions()
-    from footstats.core.risk_proposals import build_daily_proposals
     return build_daily_proposals(_MATCHES_CACHE)
 
 
@@ -553,7 +561,25 @@ def manual_coupon(req: ManualCouponRequest, user_id: int = Depends(require_auth)
     update_coupon_status(coupon_id, STATUS_ACTIVE)
     from footstats.core.response_cache import clear_response_cache
     clear_response_cache()
-    return {"ok": True, "coupon_id": coupon_id, "total_odds": total_odds, "status": STATUS_ACTIVE}
+    from footstats.core.rynki_dziennika import czy_rozliczalny
+    return {
+        "ok": True, "coupon_id": coupon_id, "total_odds": total_odds, "status": STATUS_ACTIVE,
+        # Nogi, których automat NIE rozliczy (typ spoza `oblicz_tip_correct`).
+        # Człowiek ma to wiedzieć przy zapisie, a nie z alarmu po tygodniu.
+        "do_recznego_rozliczenia": [
+            i for i, leg in enumerate(req.legs) if not czy_rozliczalny(leg.tip)
+        ],
+    }
+
+
+@router.get("/coupon/markets")
+def coupon_markets(user_id: int = Depends(require_auth)) -> list:
+    """Rynki formularza dziennika — dokładnie te, które automat umie rozliczyć.
+
+    Jedno źródło: `core/rynki_dziennika.RYNKI`. Front nie trzyma własnej kopii.
+    """
+    from footstats.core.rynki_dziennika import lista_rynkow
+    return lista_rynkow()
 
 
 def _empty_signal() -> dict:

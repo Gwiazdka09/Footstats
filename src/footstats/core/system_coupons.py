@@ -17,6 +17,23 @@ from footstats.utils.db import connect as _connect
 _log = logging.getLogger(__name__)
 
 
+def propozycje_ryzyka_wlaczone() -> bool:
+    """Czy wystawiamy propozycje dnia risk_low/medium/high (env `SYSTEM_RISK_COUPONS`).
+
+    DOMYŚLNIE WYŁĄCZONE od 2026-09-10 — decyzja produktowa: produktem jest dziennik
+    kuponów ludzi, nie nasze typy. Propozycje były akumulatorami 4-6 nóg po kursach
+    ~3.5 / ~23 / ~90, a przy ROI singla -10.3% ich oczekiwana strata to ok. -40%.
+    Pokazywane ludziom jako "Propozycje dnia" kłóciły się też z `wypuszczenie-pl.md`.
+
+    Jedna flaga dla WSZYSTKICH miejsc, w których propozycje powstają albo są
+    pokazywane (cloud_draft, daily_agent, GET /coupons/daily-proposals). Czytana
+    przy każdym wywołaniu — flip bez redeploya.
+    """
+    import os
+
+    return os.getenv("SYSTEM_RISK_COUPONS", "").strip().lower() in ("1", "true")
+
+
 def na_ksztalt_pred_ml(wyniki: list[dict]) -> list[dict]:
     """Mecze z `quick_picks` w kształcie, którego oczekuje `build_tips`.
 

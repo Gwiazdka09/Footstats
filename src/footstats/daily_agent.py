@@ -958,7 +958,10 @@ def main():
     log.info(f"Checkpoint saved: {batch_id} ({len(wyniki)} predictions)")
 
     # Krok 1a: Propozycje dnia konta 'System' (low/medium/high, shared) — raz dziennie (faza draft)
-    if args.faza == "draft" and not args.dry_run:
+    # Ta sama flaga co w cloud_draft i w GET /coupons/daily-proposals (decyzja 10.09).
+    from footstats.core.system_coupons import propozycje_ryzyka_wlaczone
+
+    if args.faza == "draft" and not args.dry_run and propozycje_ryzyka_wlaczone():
         try:
             from footstats.scrapers.bzzoiro import BzzoiroClient, ENV_BZZOIRO
             from footstats.core.system_coupons import generate_system_coupons

@@ -95,6 +95,9 @@ def test_cloud_draft_tworzy_propozycje_ryzyka(monkeypatch):
     import footstats.core.system_coupons as sc
     import footstats.core.system_paper as sp
 
+    # Od 10.09 propozycje sa domyslnie WYLACZONE (test_propozycje_ryzyka_wylaczone).
+    # Ten test sprawdza sciezke WLACZONA, wiec wlacza ja jawnie.
+    monkeypatch.setenv("SYSTEM_RISK_COUPONS", "1")
     widziane = {}
     monkeypatch.setattr(sp, "build_single_leg_coupons", lambda w: 1)
     monkeypatch.setattr(sc, "generate_system_coupons",
@@ -118,6 +121,7 @@ def test_awaria_propozycji_nie_zabija_paper_tradingu(monkeypatch):
     import footstats.core.system_coupons as sc
     import footstats.core.system_paper as sp
 
+    monkeypatch.setenv("SYSTEM_RISK_COUPONS", "1")  # sciezka wlaczona, patrz wyzej
     monkeypatch.setattr(sp, "build_single_leg_coupons", lambda w: 3)
 
     def _wybuch(*a, **k):

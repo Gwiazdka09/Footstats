@@ -138,6 +138,18 @@ def test_manual_coupon_total_odds_to_iloczyn(tmp_db):
     assert res["total_odds"] == pytest.approx(3.0)
 
 
+def test_manual_coupon_mowi_ktore_nogi_rozliczysz_sam(tmp_db):
+    """Typ spoza `oblicz_tip_correct` zostaje ACTIVE na zawsze — człowiek ma
+    to wiedzieć PRZY ZAPISIE, nie z alarmu po tygodniu (decyzja 10.09)."""
+    req = ManualCouponRequest(
+        legs=[_leg(tip="1"), _leg(home="Ajax", away="PSV", tip="rzuty rożne powyżej 3.5"),
+              _leg(home="Roma", away="Lazio", tip="Over 2.5")],
+        stake_pln=10.0,
+    )
+    res = manual_coupon(req, user_id=1)
+    assert res["do_recznego_rozliczenia"] == [1]
+
+
 def test_manual_coupon_bez_bookmakera_jest_opcjonalny(tmp_db):
     req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0)
     res = manual_coupon(req, user_id=1)

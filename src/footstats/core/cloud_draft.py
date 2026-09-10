@@ -94,6 +94,13 @@ def _zapisz_kupony_system(wyniki: list[dict]) -> tuple[int, int]:
     created = build_single_leg_coupons(wyniki)
 
     risk_created = 0
+    from footstats.core.system_coupons import propozycje_ryzyka_wlaczone
+
+    if not propozycje_ryzyka_wlaczone():
+        # Decyzja 10.09: produktem jest dziennik ludzi, nie nasze akumulatory.
+        # Paper trading singli wyżej zostaje — to pomiar modelu.
+        log.info("Propozycje ryzyka (risk_*) wylaczone flaga SYSTEM_RISK_COUPONS")
+        return created, risk_created
     try:
         from footstats.core.system_coupons import (
             generate_system_coupons, na_ksztalt_pred_ml,
