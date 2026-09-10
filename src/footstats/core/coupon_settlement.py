@@ -901,14 +901,24 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                 else:
                     wynik = None
 
+                # Niepewna noga NIE przerywa już pętli (do 10.09 było `break`):
+                # kolejna noga może być przegrana, a przegrana przesądza kupon.
                 if not wynik:
                     unresolved = True
-                    break
+                    continue
                 correct = oblicz_tip_correct(leg.get("tip", ""), wynik)
                 if correct is None:
                     unresolved = True
-                    break
+                    continue
                 leg_results.append(correct)
+                if correct == 0:
+                    # Przegrana noga rozlicza kupon od razu — ta sama reguła co
+                    # `any_leg_lost` w `settle_active_coupons` dla kuponów z kreatora.
+                    # Do 10.09 dziennik czekał na wszystkie nogi, więc akumulator
+                    # z przegraną i nogą "Inny" wisiał ACTIVE, aż zamknął go człowiek.
+                    break
+
+            przegrana = any(c == 0 for c in leg_results)
 
             # Guard (defense-in-depth, analogicznie do settle_active_coupons ~L322):
             # kupon bez nóg (legs_json="[]") NIE może "wygrać" przez all([])==True.
@@ -917,7 +927,7 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
             if not leg_results:
                 unresolved = True
 
-            if unresolved:
+            if unresolved and not przegrana:
                 stats["skipped"] += 1
                 # `skipped` sam w sobie nie odroznia "poczekamy do jutra" od
                 # "nie doczekamy sie nigdy" — a to druga sytuacja wymaga czlowieka.

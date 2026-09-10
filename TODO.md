@@ -190,8 +190,16 @@ awarii przy zielonych testach) — decyzje użytkownika:
 - [ ] **Rozliczanie kuponów ręcznych automatem — bez dowodu na żywo.** Wszystkie
   7 kuponów `manual` w historii rozliczono ręcznie. Po pierwszym kuponie
   z listy rynków sprawdzić log `cron_settle_manual` (06:30).
+- [x] **Przegrana noga rozlicza kupon ręczny od razu** (10.09) — dziennik był
+  all-legs-or-nothing i przerywał pętlę na pierwszej niepewnej nodze, więc
+  akumulator z przegraną i nogą „Inny” wisiał ACTIVE. Kupony z kreatora robiły
+  to od dawna (`any_leg_lost`) — jedna reguła, dwa zachowania.
 - [ ] **Akumulatory ludzi w statystykach** — nie mieszać ich ROI ze statystykami
-  modelu; sprawdzić, czy konta 266-268 (kupon 29 nóg @6854) to ludzie czy testy.
+  modelu. Konta 266-268 (kupony z kreatora 04.09, jeden na 29 nóg @6854) to
+  REALNI ludzie (Gmail, rejestracja 04.09 po południu) — dane są prawdziwe.
+- [ ] ⚠️ **DECYZJA USERA: konto #268** — nazwa kończy się na „2009” (możliwy
+  niepełnoletni) i jest wulgarna. Regulamin: „Z Serwisu mogą korzystać wyłącznie
+  osoby, które ukończyły 18 lat”. Nic nie zrobione — to decyzja właściciela.
 
 ## 🟠 POKRYCIE POISSONA — 10.09 (nasz model liczył 28% ocen)
 

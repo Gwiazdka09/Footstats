@@ -275,6 +275,64 @@ def test_kupon_bez_nog_nie_settluje(tmp_db, monkeypatch):
     assert stats["skipped"] >= 1
 
 
+def test_przegrana_noga_rozlicza_kupon_mimo_nogi_niepewnej(tmp_db, monkeypatch):
+    """Przegrana noga przesądza kupon — czekanie na drugą niczego nie zmieni.
+
+    Do 10.09 dziennik był all-legs-or-nothing i przerywał pętlę na pierwszej
+    niepewnej nodze: akumulator z jedną przegraną nogą wisiał ACTIVE, dopóki
+    użytkownik nie zamknął go ręcznie. Kupony z kreatora (`settle_active_coupons`)
+    od dawna rozliczają przegraną od razu (`any_leg_lost`) — jedna reguła,
+    dwa zachowania.
+    """
+    def _fake_link_leg(home, away, date, day_tolerance=1):
+        if home == "Legia":
+            return LinkResult(True, "exact", _prediction("0-2"), "Dopasowano")
+        return LinkResult(False, "none", None, "Brak dopasowania")
+
+    monkeypatch.setattr(match_linker, "link_leg", _fake_link_leg)
+    cid = _insert_coupon(tmp_db, [
+        {"home": "Wisła", "away": "Cracovia", "tip": "1"},   # niepewna, PIERWSZA
+        {"home": "Legia", "away": "Lech", "tip": "1"},       # przegrana (0-2)
+    ])
+
+    stats = settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    row = _row(tmp_db, cid)
+    assert row["status"] == "LOST"
+    assert (row["payout_pln"] or 0.0) == 0.0
+    assert stats["settled"] == 1
+
+
+def test_przegrana_noga_rozlicza_kupon_z_noga_inny(tmp_db, monkeypatch):
+    """Noga "Inny — rozliczę sam" (rzuty rożne) nie blokuje przegranej reszty."""
+    _mock_link_leg_single(
+        monkeypatch, LinkResult(True, "exact", _prediction("0-2"), "Dopasowano")
+    )
+    cid = _insert_coupon(tmp_db, [
+        {"home": "Legia", "away": "Lech", "tip": "rzuty rożne powyżej 8.5"},
+        {"home": "Legia", "away": "Lech", "tip": "1"},
+    ])
+
+    settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(tmp_db, cid)["status"] == "LOST"
+
+
+def test_wygrana_noga_z_niepewna_dalej_czeka(tmp_db, monkeypatch):
+    """Kontrola negatywna: WYGRANA noga niczego nie przesądza."""
+    _mock_link_leg_single(
+        monkeypatch, LinkResult(True, "exact", _prediction("2-0"), "Dopasowano")
+    )
+    cid = _insert_coupon(tmp_db, [
+        {"home": "Legia", "away": "Lech", "tip": "1"},
+        {"home": "Legia", "away": "Lech", "tip": "rzuty rożne powyżej 8.5"},
+    ])
+
+    settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(tmp_db, cid)["status"] == "ACTIVE"
+
+
 def test_tip_nieparsowalny_zostaje_active(tmp_db, monkeypatch):
     _mock_link_leg_single(
         monkeypatch, LinkResult(True, "exact", _prediction("2-0"), "Dopasowano")
