@@ -14,6 +14,10 @@ Lang: PL. Context: Soccer predictions (Poisson + RAG + LLM).
 - Style: PEP8, Type hints, PL comments/logs.
 - Pieniądze / regulamin / teksty marketingowe → najpierw `.claude/rules/wypuszczenie-pl.md`
   (zakaz afiliacji i obietnic skuteczności, limity działalności nierejestrowanej, braki L1-L4).
+- **MODEL ZAMROŻONY (decyzja 2026-09-10).** Żadnych nowych funkcji modelu (cechy, ramiona,
+  korekty λ, źródła predykcji). Wolno: naprawy błędów, pomiary, monitoring. Produktem jest
+  dziennik kuponów ludzi — nasze typy nie pokazują się w GUI poza kreatorem „Stwórz Kupon”.
+  Nowa kontrola poprawności = alarm końcowy w `core/alarmy_jakosci`, nie kolejny test jednostkowy.
 
 ## Subagent team (.claude/agents/)
 Ja = orchestrator. Workflow feature: subagent-driven-development (planner→coder→reviewer, 2-stage review, branch+TDD+commit per task).

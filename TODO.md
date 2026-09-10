@@ -165,6 +165,34 @@ formalne i niezawodność.
 
 Pilnuje tego `tests/test_strony_prawne.py` (20 testów) — sprawdza stan, nie brzmienie.
 
+## 🧊 DECYZJA 10.09 — ZAMROŻENIE MODELU, PRODUKT = DZIENNIK
+
+Po uczciwej ocenie projektu (model nie bije rynku, 39/39 lig; seria cichych
+awarii przy zielonych testach) — decyzje użytkownika:
+
+- **Zamrożone nowe funkcje modelu.** Żadnych nowych cech, ramion, korekt λ,
+  źródeł do predykcji. Dozwolone: naprawy błędów, pomiary, monitoring.
+  Model liczy dalej w tle (paper trading, CLV, kalibracja) — tylko do pomiarów.
+- **Alarmy końcowe zamiast kolejnych testów jednostkowych** — zrobione:
+  `core/alarmy_jakosci` w `pipeline-health` (Poisson <20%, λ pusta, team-news
+  martwy 72h, CLV zero). Pierwszy odczyt prod: Poisson 6/36 = 17% (przebieg
+  sprzed naprawy nazw) — sprawdzić 11.09, czy po naprawie nie zapala się.
+  Dzień z samymi ligami spoza datasetu może przebić próg — obserwować.
+- **Nasze predykcje znikają z GUI dla ludzi:**
+  - [x] „Propozycje dnia” (akumulatory risk_*) — flaga `SYSTEM_RISK_COUPONS`
+    domyślnie OFF we wszystkich trzech miejscach, sekcja usunięta z Dashboardu;
+  - [x] podpowiedź „Nasz typ @%” w formularzu kuponu — usunięta;
+  - [x] „Analizy meczów” — tylko admin;
+  - „Stwórz Kupon” (kreator) ZOSTAJE dla ludzi bez zmian — decyzja użytkownika.
+- **Formularz kuponu: lista rynków + „Inny — rozliczę sam”** — lista z
+  `GET /coupon/markets` (jedno źródło z rozliczeniem), odpowiedź zapisu mówi,
+  które nogi trzeba rozliczyć ręcznie.
+- [ ] **Rozliczanie kuponów ręcznych automatem — bez dowodu na żywo.** Wszystkie
+  7 kuponów `manual` w historii rozliczono ręcznie. Po pierwszym kuponie
+  z listy rynków sprawdzić log `cron_settle_manual` (06:30).
+- [ ] **Akumulatory ludzi w statystykach** — nie mieszać ich ROI ze statystykami
+  modelu; sprawdzić, czy konta 266-268 (kupon 29 nóg @6854) to ludzie czy testy.
+
 ## 🟠 POKRYCIE POISSONA — 10.09 (nasz model liczył 28% ocen)
 
 Log jobu: `Poisson policzyl 6 z 36 meczow (16%) — reszta poszla na fallback

@@ -1,13 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { Sparkles, X, PlusCircle, Trash2 } from 'lucide-react';
+import { X, PlusCircle, Trash2 } from 'lucide-react';
 
-const EMPTY_LEG = { home: '', away: '', tip: '', odds: '' };
+// `rynek` to wartość z listy `GET /coupon/markets` albo INNY; przy INNY typ
+// pochodzi z `tipInny`. Do backendu idzie zawsze jedno pole `tip`.
+const INNY = '__inny__';
+const EMPTY_LEG = { home: '', away: '', rynek: '', tipInny: '', odds: '' };
 const BOOKMAKERS = ['STS', 'Fortuna', 'Superbet', 'Betclic', 'Fuksiarz', 'Bzzoiro'];
-const PREVIEW_DEBOUNCE_MS = 400;
+
+const tipNogi = (leg) => (leg.rynek === INNY ? leg.tipInny.trim() : leg.rynek);
+
+// Rynki pogrupowane do <optgroup>, w kolejności z backendu.
+const pogrupuj = (rynki) => rynki.reduce((acc, r) => {
+  const grupa = acc.find(g => g.nazwa === r.grupa);
+  if (grupa) grupa.rynki.push(r);
+  else acc.push({ nazwa: r.grupa, rynki: [r] });
+  return acc;
+}, []);
 
 // Dziennik kuponów (J4b): formularz ręcznego wpisu kuponu obstawionego u innego
 // bukmachera. Walidacja klienta jest lustrem walidacji backendu (_validate_manual_coupon),
 // żeby błąd 400 był wyjątkiem, nie regułą.
+//
+// Od 10.09 typ wybiera się z listy rynków, które automat umie rozliczyć — lista
+// przychodzi z backendu (jedno źródło z rozliczeniem). "Inny" zostaje dla rzutów
+// rożnych, strzelców itp.: taka noga czeka na ręczne rozliczenie w Historii.
+// Podgląd "Nasz typ" usunięty tego samego dnia — produktem jest dziennik, nie nasze typy.
 const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
   const [legs, setLegs] = useState([{ ...EMPTY_LEG }]);
   const [stakePln, setStakePln] = useState('');
@@ -15,31 +32,15 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
   const [matchDate, setMatchDate] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  // J6 (Etap B): podgląd naszego sygnału (typ/pewność/prob) — index-aligned z `legs`.
-  const [signals, setSignals] = useState([]);
+  const [grupyRynkow, setGrupyRynkow] = useState([]);
 
-  // Podgląd sygnału: debounce po każdej zmianie nóg/daty, tylko gdy przynajmniej
-  // jedna noga ma wypełnione home+away. Błąd sieci/API → cicho (brak sygnału),
-  // nie blokuje ani nie psuje formularza (nie dotyka `error`/submitu).
+  // Bez listy formularz dalej działa — zostaje samo "Inny", a błąd pobrania
+  // widać w komunikacie zamiast pustej listy wyboru.
   useEffect(() => {
-    const majaczaCosWypelnione = legs.some(l => l.home.trim() && l.away.trim());
-    if (!majaczaCosWypelnione) {
-      setSignals([]);
-      return undefined;
-    }
-    const timer = setTimeout(() => {
-      apiFetch('/coupon/preview-signal', {
-        method: 'POST',
-        body: JSON.stringify({
-          legs: legs.map(l => ({ home: l.home.trim(), away: l.away.trim(), tip: l.tip.trim() })),
-          match_date: matchDate || null,
-        }),
-      })
-        .then(setSignals)
-        .catch(() => setSignals([]));
-    }, PREVIEW_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [legs, matchDate, apiFetch]);
+    apiFetch('/coupon/markets')
+      .then(r => setGrupyRynkow(pogrupuj(r)))
+      .catch(() => setError('Nie udało się pobrać listy rynków — wpisz typ jako "Inny".'));
+  }, [apiFetch]);
 
   const addLeg = () => setLegs(prev => [...prev, { ...EMPTY_LEG }]);
 
@@ -56,7 +57,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
   const validateClient = () => {
     if (legs.length === 0) return 'Kupon musi mieć co najmniej jedną nogę';
     for (const leg of legs) {
-      if (!leg.home.trim() || !leg.away.trim() || !leg.tip.trim()) {
+      if (!leg.home.trim() || !leg.away.trim() || !tipNogi(leg)) {
         return 'Uzupełnij gospodarza, gościa i typ dla każdej nogi';
       }
       const odds = parseFloat(leg.odds);
@@ -83,7 +84,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
         method: 'POST',
         body: JSON.stringify({
           legs: legs.map(l => ({
-            home: l.home.trim(), away: l.away.trim(), tip: l.tip.trim(), odds: parseFloat(l.odds),
+            home: l.home.trim(), away: l.away.trim(), tip: tipNogi(l), odds: parseFloat(l.odds),
           })),
           stake_pln: parseFloat(stakePln),
           bookmaker: bookmaker.trim() || null,
@@ -121,7 +122,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
           {legs.map((leg, i) => (
             <div
               key={i}
-              className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_100px_auto] gap-3 items-center bg-white/[0.02] border border-white/5 rounded-xl p-4"
+              className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.6fr_84px_auto] gap-3 items-center bg-white/[0.02] border border-white/5 rounded-xl p-4"
             >
               <input
                 type="text"
@@ -140,24 +141,35 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
                 className="min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
               />
               <div className="min-w-0 flex flex-col gap-1">
-                <input
-                  type="text"
-                  placeholder="Typ (np. 1)"
-                  value={leg.tip}
-                  onChange={(e) => updateLeg(i, 'tip', e.target.value)}
-                  maxLength={120}
+                <select
+                  aria-label="Typ"
+                  value={leg.rynek}
+                  onChange={(e) => updateLeg(i, 'rynek', e.target.value)}
                   className="min-w-0 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-                {signals[i]?.matched && (
-                  <div
-                    className="flex items-center gap-1 text-xs px-1"
-                    style={{ color: signals[i].agrees === true ? 'var(--accent-primary)' : signals[i].agrees === false ? 'var(--accent-secondary)' : 'var(--text-muted)' }}
-                  >
-                    <Sparkles size={16} />
-                    <span>
-                      Nasz typ: <strong>{signals[i].our_tip}</strong> @{signals[i].our_confidence_pct}%
-                    </span>
-                  </div>
+                >
+                  <option value="">Wybierz typ…</option>
+                  {grupyRynkow.map(g => (
+                    <optgroup key={g.nazwa} label={g.nazwa}>
+                      {g.rynki.map(r => <option key={r.wartosc} value={r.wartosc}>{r.etykieta}</option>)}
+                    </optgroup>
+                  ))}
+                  <option value={INNY}>Inny — rozliczę sam</option>
+                </select>
+                {leg.rynek === INNY && (
+                  <>
+                    <input
+                      type="text"
+                      aria-label="Opis typu"
+                      placeholder="np. rzuty rożne powyżej 8.5"
+                      value={leg.tipInny}
+                      onChange={(e) => updateLeg(i, 'tipInny', e.target.value)}
+                      maxLength={120}
+                      className="min-w-0 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                    <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+                      Tę nogę rozliczysz sam w Historii.
+                    </p>
+                  </>
                 )}
               </div>
               <input

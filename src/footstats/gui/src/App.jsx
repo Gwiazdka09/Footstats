@@ -35,7 +35,8 @@ const App = () => {
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { key: 'wizard', label: 'Stwórz Kupon', icon: <PlusCircle size={20} /> },
-    { key: 'analizy', label: 'Analizy meczów', icon: <Swords size={20} /> },
+    // "Analizy meczów" to nasze predykcje — od 10.09 tylko dla admina (pomiar).
+    ...(isAdmin ? [{ key: 'analizy', label: 'Analizy meczów', icon: <Swords size={20} /> }] : []),
     { key: 'terminarz', label: 'Terminarz', icon: <CalendarDays size={20} /> },
     { key: 'history', label: 'Historia', icon: <History size={20} /> },
     { key: 'stats', label: 'Statystyki', icon: <BarChart3 size={20} /> },
@@ -236,9 +237,7 @@ const App = () => {
                 coupons={coupons}
                 calibration={calibration}
                 isAdmin={isAdmin}
-                apiFetch={apiFetch}
                 onSeeAll={() => setView('history')}
-                onCopyProposal={(p) => { setProposalToCopy(p); setView('wizard'); }}
               />
             )}
             {view === 'wizard' && (
@@ -275,7 +274,7 @@ const App = () => {
                 onSave={() => fetchData()}
               />
             )}
-            {view === 'analizy' && (
+            {view === 'analizy' && isAdmin && (
               <MatchAnalysisView key="analizy" apiFetch={apiFetch} />
             )}
             {view === 'leaderboard' && (

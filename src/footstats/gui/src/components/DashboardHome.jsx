@@ -1,64 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Wallet, TrendingUp, CheckCircle2, Clock, ChevronRight, Target
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getLeagueFlag } from '../lib/leagues';
 import { StatCard, CouponCard } from './ui';
 
-const RISK_LABELS = {
-  low: { title: 'Niskie ryzyko', border: 'border-emerald-500/20', text: 'text-emerald-400' },
-  medium: { title: 'Średnie ryzyko', border: 'border-amber-500/20', text: 'text-amber-400' },
-  high: { title: 'Wysokie ryzyko', border: 'border-rose-500/20', text: 'text-rose-400' },
-};
-
-const DailyProposals = ({ apiFetch, onCopyProposal }) => {
-  const [proposals, setProposals] = useState(null);
-
-  useEffect(() => {
-    apiFetch('/coupons/daily-proposals').then(setProposals).catch(() => setProposals(null));
-  }, []);
-
-  if (!proposals) return null;
-  const tiers = ['low', 'medium', 'high'].filter(t => proposals[t]?.legs?.length > 0);
-  if (tiers.length === 0) return null;
-
-  return (
-    <section className="mb-16">
-      <h2 className="text-2xl font-bold mb-10">Propozycje dnia</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {tiers.map(tier => {
-          const { title, border, text } = RISK_LABELS[tier];
-          const p = proposals[tier];
-          return (
-            <div key={tier} className={`glass-card p-7 ${border} flex flex-col`}>
-              <div className="flex justify-between items-center mb-5">
-                <span className={`text-xs font-bold uppercase tracking-widest ${text}`}>{title}</span>
-                <span className="text-xs text-slate-500">@{p.total_odds?.toFixed(2)}</span>
-              </div>
-              <div className="space-y-3 flex-1">
-                {p.legs.map((leg, i) => (
-                  <div key={i} className="text-base rounded-xl px-4 py-3 bg-white/[0.02] border border-white/5">
-                    <p className="font-semibold">{getLeagueFlag(leg.liga)} {leg.home} - {leg.away}</p>
-                    <p className="text-slate-500 text-sm mt-1">Typ: <span className="text-slate-300 font-bold">{leg.label}</span> @{leg.odds}</p>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => onCopyProposal?.(p)}
-                className="w-full mt-5 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold text-sm transition-colors"
-              >
-                Skopiuj kupon
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-};
-
-const DashboardHome = ({ user, status, coupons, calibration, isAdmin, apiFetch, onSeeAll, onCopyProposal }) => (
+// "Propozycje dnia" (akumulatory risk_low/medium/high z przyciskiem "Skopiuj
+// kupon") usunięte 10.09 — produktem jest dziennik kuponów ludzi, nie nasze
+// typy. Backend i tak oddaje puste koszyki (flaga SYSTEM_RISK_COUPONS).
+const DashboardHome = ({ user, status, coupons, calibration, isAdmin, onSeeAll }) => (
   <motion.div
     initial={{ opacity: 0, x: 20 }}
     animate={{ opacity: 1, x: 0 }}
@@ -148,11 +98,9 @@ const DashboardHome = ({ user, status, coupons, calibration, isAdmin, apiFetch, 
       </section>
     )}
 
-    <DailyProposals apiFetch={apiFetch} onCopyProposal={onCopyProposal} />
-
     <section>
       <div className="flex justify-between items-center mb-10">
-        <h2 className="text-2xl font-bold">Aktywne Predykcje</h2>
+        <h2 className="text-2xl font-bold">Aktywne kupony</h2>
         <button onClick={onSeeAll} className="btn-see-all">
           Zobacz pełną historię <ChevronRight size={16} />
         </button>
