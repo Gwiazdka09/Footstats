@@ -26,3 +26,7 @@ Execute exactly ONE task given to you. The full task text and context are provid
 
 ## Reporting
 End with a status line: **DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED**, the test pass counts, the commit SHA, and any concerns. Your final message is the only data the orchestrator receives — be concrete. If a test needed investigation, report the exact behavior found; never weaken assertions to make a test pass.
+
+Before the status line, add two short sections:
+- **Uwagi dla recenzenta** — what you are NOT sure about: assumptions you made, places where the spec was ambiguous, behavior you changed beyond the test, code paths you did not exercise. "Brak" only if genuinely none.
+- **Pewność** — `wysoka / średnia / niska` plus one sentence why. Green tests on a path production never takes are *niska*, not *wysoka* — say which entry point production actually uses and whether your test goes through it.

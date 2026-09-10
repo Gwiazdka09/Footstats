@@ -263,7 +263,18 @@ def blend_dixon_coles(
     Gdy DC zwroci None (za malo danych) -> p_model bez zmian (graceful, = baseline).
     Klucze spoza {pw,pr,pp} (np. bt/o25) NIE sa modyfikowane.
     Renormalizacja pw/pr/pp do 100 (zdarzenia rozlaczne i wyczerpujace).
+
+    Nazwy tlumaczy `poisson._kanoniczne_nazwy` — TA SAMA funkcja, ktorej uzywa
+    classic `predict_match`. Do 2026-09-10 szly tu surowe nazwy z Bzzoiro,
+    a `_compute_ratings` porownuje je dokladnie z historia: "Manchester United"
+    nie trafial w "Man United", wiec ramie DC po cichu oddawalo `p_model`, choc
+    classic dla tej samej pary liczyl. Walk-forward podaje nazwy wprost z datasetu,
+    wiec waga `W_BAYESIAN` byla strojona na modelu, ktorego produkcja nie miala.
     """
+    if isinstance(df, pd.DataFrame) and {"gospodarz", "goscie"} <= set(df.columns):
+        from footstats.core.poisson import _kanoniczne_nazwy
+
+        g, a = _kanoniczne_nazwy(df, g, a)
     bay = predict_match_bayesian(g, a, df)
     if not bay:
         return p_model

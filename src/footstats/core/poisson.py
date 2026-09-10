@@ -181,10 +181,95 @@ def _kanoniczne_nazwy(df_mecze: pd.DataFrame, g: str, a: str) -> tuple[str, str]
                     mapa.setdefault(normalize_team_name(nazwa), nazwa)
         df_mecze.attrs[_ATR_MAPA] = mapa
 
-    return (
-        mapa.get(normalize_team_name(g), g),
-        mapa.get(normalize_team_name(a), a),
+    def _jedna(nazwa: str) -> str:
+        klucz = normalize_team_name(nazwa)
+        if klucz in mapa:
+            return mapa[klucz]
+        swieze = _swieze_nazwy(df_mecze)
+        for zapasowy in _klucze_zapasowe(klucz):
+            trafienie = mapa.get(zapasowy)
+            if trafienie is not None and trafienie in swieze:
+                return trafienie
+        return nazwa
+
+    return _jedna(g), _jedna(a)
+
+
+# ── Reguły zapasowe dopasowania do historii ─────────────────────────────────
+#
+# Do 2026-09-10 `_kanoniczne_nazwy` znało tylko DOKŁADNY klucz. Bzzoiro pisze
+# pełne nazwy ("Bayer 04 Leverkusen", "Stoke City"), football-data skróty
+# ("Leverkusen", "Stoke"), więc 499 z 887 nazw z `model_log` nie trafiało
+# w historię i Poisson liczył 26% ocen. Reszta szła na fallback Bzzoiro-ML.
+#
+# Reguły są CELOWO tutaj, nie w `utils/normalize`: tamte aliasy działają też
+# w rozliczeniach i w kluczach `player_db` (patrz `data/rozszczepienia.py`).
+# Każda reguła jest deterministyczna — żadnego podobieństwa nazw, bo to ono
+# myliło Wisłę Kraków z Wisłą Płock.
+
+# Słowa, które w pełnej nazwie klubu są ozdobnikiem, a skrót ich nie pisze.
+# Wyłącznie takie, które NIE odróżniają dwóch klubów: "Real Madrid" ma w danych
+# własny wpis i trafia dokładnym kluczem, zanim ta lista w ogóle zadziała.
+_SZUM_NAZW = frozenset({"bayer", "borussia", "real", "kaa", "krc", "aif", "fsv"})
+
+# Skróty, których żadna reguła nie wyprowadzi — cel musi istnieć w datasecie.
+_ALIASY_HISTORII: dict[str, str] = {
+    "west bromwich albion": "west brom",
+}
+
+# Historia starsza niż to okno to λ innej drużyny: klub po spadku poza zasięg
+# danych albo po zmianie nazwy. Dotyczy wyłącznie trafień zapasowych.
+_MAX_WIEK_HISTORII = pd.Timedelta(days=400)
+_ATR_SWIEZE = "_footstats_swieze_nazwy"
+
+
+def _swieze_nazwy(df_mecze: pd.DataFrame) -> frozenset:
+    """Nazwy z historii, które grały w ostatnim `_MAX_WIEK_HISTORII`.
+
+    Bez kolumny `data` nie da się tego sprawdzić, więc zbiór jest pusty i reguły
+    zapasowe nie trafiają niczego (fail-closed). Dokładny klucz działa dalej.
+    """
+    swieze = df_mecze.attrs.get(_ATR_SWIEZE)
+    if swieze is not None:
+        return swieze
+    if "data" not in df_mecze.columns or df_mecze.empty:
+        swieze = frozenset()
+    else:
+        daty = pd.to_datetime(df_mecze["data"], errors="coerce")
+        granica = daty.max() - _MAX_WIEK_HISTORII
+        ostatnie = df_mecze[daty >= granica]
+        swieze = frozenset(
+            str(n).strip()
+            for kolumna in ("gospodarz", "goscie")
+            for n in ostatnie[kolumna].dropna().unique()
+        )
+    df_mecze.attrs[_ATR_SWIEZE] = swieze
+    return swieze
+
+
+def _klucze_zapasowe(klucz: str) -> list[str]:
+    """Kolejne klucze tej samej nazwy, od najbliższego oryginałowi."""
+    from footstats.utils.normalize import (
+        _BAZY_WIELOZNACZNE, _czlony_rozrozniajace, normalize_team_name,
     )
+
+    kandydaci = [_ALIASY_HISTORII.get(klucz, "")]
+    bez_cyfr = normalize_team_name(" ".join(t for t in klucz.split() if not t.isdigit()))
+    bez_szumu = normalize_team_name(" ".join(t for t in bez_cyfr.split() if t not in _SZUM_NAZW))
+    for wariant in (bez_cyfr, bez_szumu):
+        kandydaci.append(wariant)
+        tokeny = wariant.split()
+        czlony = _czlony_rozrozniajace(set(tokeny))
+        if not czlony:
+            continue
+        # Człon tożsamości, którego skrót nie pisze: "Stoke City" -> "stoke".
+        # Ta sama reguła, której ufają rozliczenia w `team_similarity`, z tym
+        # samym wyjątkiem — baza wieloznaczna (Bristol City / Bristol Rovers)
+        # nie mówi, o który klub chodzi.
+        rdzen = " ".join(t for t in tokeny if not _czlony_rozrozniajace({t}))
+        if len(rdzen) >= 4 and rdzen not in _BAZY_WIELOZNACZNE:
+            kandydaci.append(rdzen)
+    return [k for k in dict.fromkeys(kandydaci) if k and k != klucz]
 
 
 def predict_match(
