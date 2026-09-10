@@ -201,6 +201,31 @@ awarii przy zielonych testach) — decyzje użytkownika:
   niepełnoletni) i jest wulgarna. Regulamin: „Z Serwisu mogą korzystać wyłącznie
   osoby, które ukończyły 18 lat”. Nic nie zrobione — to decyzja właściciela.
 
+## 🔨 W TOKU (10.09 wieczór) — decyzje usera, kod jeszcze NIE ruszony
+
+1. **Rejestracja:** wymagany MIESIĄC + ROK urodzenia (bez dnia), odrzucenie <18
+   (ten sam miesiąc 18 lat temu = odrzucenie, bo dnia nie znamy). Kolumna
+   `public.users.birth_ym TEXT` (migracja 18, wzorzec `_MIGRACJE_LEADERBOARD`;
+   UWAGA: `information_schema` bez filtra schematu miesza `auth.users` Supabase).
+   **Istniejące konta:** prośba o miesiąc/rok przy KAŻDYM logowaniu, dopóki nie
+   wpiszą (modal w App.jsx + endpoint zapisu; `MeResponse` dostaje pole).
+   Wpis <18 → nie zapisujemy, komunikat; bez automatycznej dezaktywacji.
+   Polityka prywatności §2/§3: dopisać miesiąc/rok urodzenia (weryfikacja 18+).
+2. **Sprawdzanie nazw:** JEDNA walidacja loginu (długość, znaki, wulgaryzmy
+   PL/EN z normalizacją leet, nazwy zastrzeżone admin/system/footstats) w TRZECH
+   miejscach: `RegisterRequest`, `ChangeUsernameRequest`, admin `CreateUserRequest`
+   (dziś wszystkie trzy mają tylko „min. 3 znaki”, każda osobno). Konto #268
+   zostaje — user zna osobę (20 lat).
+3. **Ranking:** przyczyna pustej listy = 0/11 zgód (`leaderboard_opt_in`), nie
+   błąd. Checkbox „Pokaż mnie w rankingu” przy rejestracji (domyślnie OFF) +
+   wyraźny baner „Dołącz” w zakładce.
+4. **„Analizy meczów” → statystyki drużyn dla WSZYSTKICH:** usunąć pasek 1X2,
+   Over/BTTS (Bzzoiro-ML) i przycisk „Analiza AI”; wyciąć `model`/`odds`
+   z odpowiedzi `/analyses/matches`; usunąć `/analyses/llm`. Testy:
+   `test_analyses_route.py`, `test_analyses_endpoint.py`.
+5. **Ustawienia:** usunąć „Algorytm & Ryzyko” i „Powiadomienia Telegram”,
+   nagłówek „Ustawienia Bota” → „Ustawienia konta”. Bankroll i kafelki ZOSTAJĄ.
+
 ## 🟠 POKRYCIE POISSONA — 10.09 (nasz model liczył 28% ocen)
 
 Log jobu: `Poisson policzyl 6 z 36 meczow (16%) — reszta poszla na fallback
