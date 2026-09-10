@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { API_BASE } from '../lib/api';
+import BirthMonthYear, { birthYm } from './BirthMonthYear';
 
 const LoginView = ({ setToken, setUser }) => {
   const [mode, setMode] = useState('login'); // 'login' | 'register' | 'forgot' | 'reset'
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [birthMonth, setBirthMonth] = useState('');
+  const [birthYear, setBirthYear] = useState('');
+  const [rankingOptIn, setRankingOptIn] = useState(false);
   const [resetToken, setResetToken] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -26,7 +30,8 @@ const LoginView = ({ setToken, setUser }) => {
     try {
       const data = await response.json();
       if (typeof data.detail === 'string') return data.detail;
-      if (Array.isArray(data.detail)) return data.detail.map(d => d.msg).join(', ');
+      // Pydantic dokleja „Value error, ” przed komunikat walidatora.
+      if (Array.isArray(data.detail)) return data.detail.map(d => d.msg.replace(/^Value error, /, '')).join(', ');
     } catch {
       // brak JSON w odpowiedzi — użyj domyślnego komunikatu
     }
@@ -62,7 +67,10 @@ const LoginView = ({ setToken, setUser }) => {
         return;
       }
       const isRegister = mode === 'register';
-      const response = await post(`/auth/${isRegister ? 'register' : 'login'}`, isRegister ? { username, email, password } : { username, password });
+      const body = isRegister
+        ? { username, email, password, birth_ym: birthYm(birthMonth, birthYear), leaderboard_opt_in: rankingOptIn }
+        : { username, password };
+      const response = await post(`/auth/${isRegister ? 'register' : 'login'}`, body);
       if (!response.ok) {
         // Rozróżnij błąd serwera od złych danych — inaczej 5xx/limit maskuje się
         // jako "Błędne dane logowania" i myli użytkownika (audyt 2026-07-27).
@@ -157,6 +165,31 @@ const LoginView = ({ setToken, setUser }) => {
                 required
               />
             </div>
+          )}
+          {mode === 'register' && (
+            <>
+              <BirthMonthYear
+                month={birthMonth}
+                year={birthYear}
+                onMonth={setBirthMonth}
+                onYear={setBirthYear}
+                idPrefix="rejestracja"
+              />
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rankingOptIn}
+                  onChange={(e) => setRankingOptIn(e.target.checked)}
+                  className="mt-1 accent-indigo-500"
+                />
+                <span className="text-sm">
+                  Pokaż mnie w rankingu „Najlepsi typerzy”
+                  <span className="block text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    Inni zobaczą Twój wynik ze wszystkich rozliczonych kuponów. Możesz to zmienić w każdej chwili.
+                  </span>
+                </span>
+              </label>
+            </>
           )}
           {error && <p className="text-rose-400 text-sm">{error}</p>}
           {notice && <p className="text-emerald-400 text-sm">{notice}</p>}

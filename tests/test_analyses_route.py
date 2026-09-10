@@ -23,8 +23,21 @@ def test_build_cards_filtruje_wazne(monkeypatch):
     assert len(cards) == 1                       # tylko World Cup, Botola odpada
     c = cards[0]
     assert c["home"] == "France" and c["host"] == "France"
-    assert c["model"]["pw"] == 56
     assert abs(c["home_stats"]["gf_pg"] - 10 / 3) < 0.01
+
+
+def test_karta_bez_predykcji_i_kursow(monkeypatch):
+    """Decyzja 10.09: zakładka to statystyki drużyn — event niesie `pred_ml`
+    i `odds`, ale do odpowiedzi nie może trafić żadne z nich."""
+    monkeypatch.setattr(analyses, "get_team_stats", lambda t, s: None)
+    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda t, s: {})
+
+    [c] = analyses._build_cards(_EVENTS)
+
+    assert "model" not in c and "odds" not in c
+    tekst = repr(c)
+    for klucz in ("prob_", "'pw'", "'o25'", "'bt'"):
+        assert klucz not in tekst, f"w karcie zostało pole predykcji: {klucz}"
 
 
 def test_wazna_liga():
@@ -32,12 +45,6 @@ def test_wazna_liga():
     assert analyses._wazna("World Cup 2026") is True
     assert analyses._wazna("PKO BP Ekstraklasa") is True
     assert analyses._wazna("Botola Pro") is False
-
-
-def test_norm():
-    assert analyses._norm(56) == 56       # już %
-    assert analyses._norm(0.56) == 56.0   # 0-1 → %
-    assert analyses._norm(None) is None
 
 
 # ── J2: typy zlapaly realny przypadek, nie kosmetyke ────────────────────────

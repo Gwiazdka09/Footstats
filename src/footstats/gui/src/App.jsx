@@ -16,6 +16,7 @@ import TerminarzView from './components/TerminarzView';
 import SettingsView from './components/SettingsView';
 import AdminPanelView from './components/AdminPanelView';
 import MatchAnalysisView from './components/MatchAnalysisView';
+import BirthPrompt from './components/BirthPrompt';
 
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('fs_token'));
@@ -30,13 +31,16 @@ const App = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [proposalToCopy, setProposalToCopy] = useState(null);
+  // Konto bez miesiąca/roku urodzenia (sprzed 10.09.2026) → prośba po każdym
+  // logowaniu. „Później” chowa ją tylko w tej sesji (stan w pamięci).
+  const [needsBirth, setNeedsBirth] = useState(false);
   const isAdmin = !!(token && decodeJwtPayload(token)?.adm);
 
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { key: 'wizard', label: 'Stwórz Kupon', icon: <PlusCircle size={20} /> },
-    // "Analizy meczów" to nasze predykcje — od 10.09 tylko dla admina (pomiar).
-    ...(isAdmin ? [{ key: 'analizy', label: 'Analizy meczów', icon: <Swords size={20} /> }] : []),
+    // "Analizy meczów" = statystyki drużyn (bez naszych predykcji) — dla wszystkich.
+    { key: 'analizy', label: 'Analizy meczów', icon: <Swords size={20} /> },
     { key: 'terminarz', label: 'Terminarz', icon: <CalendarDays size={20} /> },
     { key: 'history', label: 'Historia', icon: <History size={20} /> },
     { key: 'stats', label: 'Statystyki', icon: <BarChart3 size={20} /> },
@@ -83,7 +87,11 @@ const App = () => {
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({ detail: "Błąd serwera" }));
-      throw new Error(err.detail || "Coś poszło nie tak");
+      // 422 z Pydantic to lista — bez tego komunikat walidatora ginął jako "[object Object]".
+      const detail = Array.isArray(err.detail)
+        ? err.detail.map(d => String(d.msg || '').replace(/^Value error, /, '')).join(', ')
+        : err.detail;
+      throw new Error(detail || "Coś poszło nie tak");
     }
 
     return response.json();
@@ -120,6 +128,13 @@ const App = () => {
     } else {
       setLoading(false);
     }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) { setNeedsBirth(false); return; }
+    apiFetch('/auth/me')
+      .then(me => setNeedsBirth(!me.birth_ym))
+      .catch(() => setNeedsBirth(false));
   }, [token]);
 
   // Link resetu hasła (z maila) musi dotrzeć do LoginView nawet gdy w localStorage jest
@@ -274,7 +289,7 @@ const App = () => {
                 onSave={() => fetchData()}
               />
             )}
-            {view === 'analizy' && isAdmin && (
+            {view === 'analizy' && (
               <MatchAnalysisView key="analizy" apiFetch={apiFetch} />
             )}
             {view === 'leaderboard' && (
@@ -300,6 +315,13 @@ const App = () => {
           <a href={legalUrl('polityka-prywatnosci')} target="_blank" rel="noreferrer" className="underline hover:text-[var(--text-main)]">Polityka prywatności</a>
         </footer>
       </div>
+      {needsBirth && (
+        <BirthPrompt
+          apiFetch={apiFetch}
+          onDone={() => setNeedsBirth(false)}
+          onLater={() => setNeedsBirth(false)}
+        />
+      )}
     </div>
   );
 };

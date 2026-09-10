@@ -201,7 +201,25 @@ awarii przy zielonych testach) — decyzje użytkownika:
   niepełnoletni) i jest wulgarna. Regulamin: „Z Serwisu mogą korzystać wyłącznie
   osoby, które ukończyły 18 lat”. Nic nie zrobione — to decyzja właściciela.
 
-## 🔨 W TOKU (10.09 wieczór) — decyzje usera, kod jeszcze NIE ruszony
+## ✅ ZROBIONE (10/11.09 noc) — konto, ranking, analizy, ustawienia
+
+Kod + testy (pełna suita 6691 passed) + Playwright (desktop/mobile, 0 błędów
+konsoli). **Nie wdrożone na prod w chwili zapisu** — sprawdzić CD + migrację 18.
+- `api/walidacja_konta.py`: JEDNA walidacja loginu (3–24 znaki, litery/cyfry/_.-,
+  wulgaryzmy PL/EN z leet i zwijaniem liter, zastrzeżone admin*/moderator*/
+  *footstats*/root/system/deleted_user*; wyjątki Scunthorpe, badminton, Slutsk)
+  w rejestracji, zmianie loginu i koncie od admina.
+- Migracja 18 `users.birth_ym`; rejestracja wymaga RRRR-MM (ten sam miesiąc
+  18 lat temu = odmowa); `POST /auth/birth` (tylko gdy NULL, <18 → 422 bez
+  zapisu); modal „Potwierdź wiek” po każdym logowaniu, „Później” do następnego.
+  Usunięcie konta kasuje też `birth_ym`. Polityka §2/§3 (+ ranking = zgoda).
+- Przy okazji: `change-username` wydawał token z `tv=0` → po wcześniejszej
+  zmianie hasła user wylatywał zaraz po zmianie loginu. Naprawione.
+- Ranking: checkbox przy rejestracji (domyślnie OFF) + baner „Dołącz”.
+- Analizy dla wszystkich, bez 1X2/Over/BTTS/kursów; `/analyses/llm` usunięty.
+- Ustawienia: bez „Algorytm & Ryzyko” i Telegrama, nagłówek „Ustawienia konta”.
+
+Plan źródłowy (dla historii):
 
 1. **Rejestracja:** wymagany MIESIĄC + ROK urodzenia (bez dnia), odrzucenie <18
    (ten sam miesiąc 18 lat temu = odrzucenie, bo dnia nie znamy). Kolumna

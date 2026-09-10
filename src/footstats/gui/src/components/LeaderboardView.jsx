@@ -132,27 +132,43 @@ const LeaderboardView = ({ apiFetch }) => {
         </p>
       </div>
 
-      {optIn !== null && (
-        <div className="glass-card p-4 mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="font-bold text-sm">Chcę być na liście typerów</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-              Wejście na listę pokazuje innym Twój wynik ze wszystkich rozliczonych kuponów,
-              także tych nieudostępnionych. Same kupony pozostają widoczne tylko te,
-              które sam udostępnisz.
+      {/* Ranking był pusty, bo zgodę dało 0 z 11 kont — przełącznik ginął w tle.
+          Bez zgody: wyraźny baner z głównym przyciskiem. Ze zgodą: cichy wiersz do wypisania. */}
+      {optIn === false && (
+        <div
+          className="glass-card p-6 mb-8 flex flex-wrap items-center justify-between gap-4"
+          style={{ border: '1px solid color-mix(in srgb, var(--accent-primary) 45%, transparent)' }}
+        >
+          <div className="max-w-xl">
+            <p className="font-bold text-lg">Dołącz do rankingu</p>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+              Lista pokazuje wynik ze wszystkich rozliczonych kuponów typera, także tych
+              nieudostępnionych. Same kupony widać tylko te, które sam udostępnisz.
+              Możesz się wypisać w każdej chwili.
             </p>
           </div>
           <button
             onClick={toggleOptIn}
             disabled={savingOptIn}
-            className="text-xs font-bold px-4 py-2 rounded-lg transition-colors shrink-0"
-            style={optIn
-              ? { color: 'var(--accent-primary)',
-                  background: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)' }
-              : { color: 'var(--text-muted)',
-                  background: 'color-mix(in srgb, var(--text-muted) 10%, transparent)' }}
+            className="btn-primary px-6 py-3 text-sm shrink-0 disabled:opacity-50"
           >
-            {optIn ? 'Jestem na liście' : 'Dołącz do listy'}
+            {savingOptIn ? 'Zapisywanie...' : 'Dołącz'}
+          </button>
+        </div>
+      )}
+      {optIn === true && (
+        <div className="glass-card p-4 mb-8 flex flex-wrap items-center justify-between gap-4">
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Jesteś na liście typerów.
+          </p>
+          <button
+            onClick={toggleOptIn}
+            disabled={savingOptIn}
+            className="text-xs font-bold px-4 py-2 rounded-lg transition-colors shrink-0"
+            style={{ color: 'var(--text-muted)',
+                     background: 'color-mix(in srgb, var(--text-muted) 10%, transparent)' }}
+          >
+            Wypisz mnie
           </button>
         </div>
       )}

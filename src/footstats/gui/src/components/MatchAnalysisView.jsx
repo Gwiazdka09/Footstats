@@ -1,26 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Swords, Sparkles, Shield, Target, Activity, Loader2 } from 'lucide-react';
+import { Swords, Shield, Target } from 'lucide-react';
 
-// Pasek 1X2 (indigo dom / muted remis / pink wyjazd) — jedno accent-pairing
-function ProbBar({ pw, pr, pp }) {
-  const seg = [
-    { v: pw, c: 'var(--accent-primary)', l: '1' },
-    { v: pr, c: 'var(--text-muted)', l: 'X' },
-    { v: pp, c: 'var(--accent-secondary)', l: '2' },
-  ];
-  return (
-    <div>
-      <div className="flex h-2 rounded-full overflow-hidden">
-        {seg.map((s, i) => (
-          <div key={i} style={{ width: `${s.v || 0}%`, background: s.c }} />
-        ))}
-      </div>
-      <div className="flex justify-between mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-        {seg.map((s, i) => <span key={i}>{s.l} {s.v != null ? `${Math.round(s.v)}%` : '—'}</span>)}
-      </div>
-    </div>
-  );
-}
+// 10.09: sama statystyka drużyn — bez paska 1X2, Over/BTTS i „Analizy AI”
+// (nasze typy nie pokazują się w GUI poza kreatorem „Stwórz Kupon”).
 
 function TeamCol({ stats, align }) {
   return (
@@ -67,26 +49,7 @@ function Injuries({ list, align }) {
   );
 }
 
-function MatchCard({ card, apiFetch }) {
-  const [ai, setAi] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const m = card.model || {};
-
-  // apiFetch (App.jsx) dokłada Bearer token — endpointy analiz wymagają auth (BP-01/T2)
-  const analizuj = async () => {
-    setLoading(true);
-    try {
-      const d = await apiFetch('/analyses/llm', {
-        method: 'POST', body: JSON.stringify(card),
-      });
-      setAi(d.analysis || d.error || 'Brak analizy');
-    } catch (e) {
-      setAi(e.message || 'Błąd połączenia');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+function MatchCard({ card }) {
   return (
     <div className="glass-card p-5">
       <div className="flex items-center justify-between mb-1">
@@ -106,13 +69,6 @@ function MatchCard({ card, apiFetch }) {
         <TeamCol stats={card.away_stats} align="right" />
       </div>
 
-      <ProbBar pw={m.pw} pr={m.pr} pp={m.pp} />
-
-      <div className="flex gap-4 mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-        <span className="inline-flex items-center gap-1"><Activity size={16} />Over 2.5: {m.o25 != null ? `${Math.round(m.o25)}%` : '—'}</span>
-        <span>BTTS: {m.bt != null ? `${Math.round(m.bt)}%` : '—'}</span>
-      </div>
-
       {(card.top_scorers_home?.length > 0 || card.top_scorers_away?.length > 0) && (
         <div className="grid grid-cols-2 gap-3 mt-1">
           <TopScorers list={card.top_scorers_home} align="left" />
@@ -125,16 +81,6 @@ function MatchCard({ card, apiFetch }) {
           <Injuries list={card.injuries_home} align="left" />
           <Injuries list={card.injuries_away} align="right" />
         </div>
-      )}
-
-      {ai ? (
-        <p className="text-sm mt-4 leading-relaxed" style={{ color: 'var(--text-main)' }}>{ai}</p>
-      ) : (
-        <button className="btn-primary mt-4 inline-flex items-center gap-2 text-sm"
-          onClick={analizuj} disabled={loading}>
-          {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-          {loading ? 'Analizuję…' : 'Analiza AI'}
-        </button>
       )}
     </div>
   );
@@ -155,7 +101,11 @@ export default function MatchAnalysisView({ apiFetch }) {
     <div>
       <h2 className="brand text-2xl mb-1" style={{ color: 'var(--text-main)' }}>Analizy meczów</h2>
       <p className="mb-6" style={{ color: 'var(--text-muted)' }}>
-        Najważniejsze mecze — gole/mecz, kontuzje, model i analiza AI.
+        Najważniejsze mecze tygodnia — gole zdobyte i stracone na mecz, strzelcy, kontuzje.
+      </p>
+      <p className="mb-6 -mt-4 text-xs inline-flex items-center gap-3" style={{ color: 'var(--text-muted)' }}>
+        <span className="inline-flex items-center gap-1"><Target size={16} /> gole zdobyte / mecz</span>
+        <span className="inline-flex items-center gap-1"><Shield size={16} /> gole stracone / mecz</span>
       </p>
 
       {err && <div className="glass-card p-4 mb-4" style={{ color: 'var(--accent-secondary)' }}>{err}</div>}
@@ -165,7 +115,7 @@ export default function MatchAnalysisView({ apiFetch }) {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {cards?.map((c, i) => <MatchCard key={i} card={c} apiFetch={apiFetch} />)}
+        {cards?.map((c, i) => <MatchCard key={i} card={c} />)}
       </div>
     </div>
   );

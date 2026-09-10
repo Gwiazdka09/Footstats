@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Wallet, TrendingUp, Trash2, Info, User } from 'lucide-react';
+import { Wallet, TrendingUp, Trash2, Info, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ConfigInput } from './ui';
 
-const SettingsView = ({ config, status, apiFetch, onSave, user, isAdmin, onAccountUpdate, onLogout }) => {
-  const [form, setForm] = useState(config || {});
-  const [msg, setMsg] = useState('');
-  const [loading, setLoading] = useState(false);
-
+// 10.09: bez „Algorytm & Ryzyko” (progi naszych typów — nasze typy zniknęły
+// z GUI) i bez Telegrama (powiadomienia o NASZYCH kuponach). Zostaje konto.
+const SettingsView = ({ status, apiFetch, onSave, user, isAdmin, onAccountUpdate, onLogout }) => {
   const [bankroll, setBankroll] = useState(status?.bankroll ?? '');
   const [bankrollMsg, setBankrollMsg] = useState('');
   const [bankrollLoading, setBankrollLoading] = useState(false);
@@ -66,30 +64,6 @@ const SettingsView = ({ config, status, apiFetch, onSave, user, isAdmin, onAccou
     }
   };
 
-  // FAZA 15.6: per-user Telegram chat_id
-  const [telegramChatId, setTelegramChatId] = useState('');
-  const [telegramMsg, setTelegramMsg] = useState('');
-  const [telegramLoading, setTelegramLoading] = useState(false);
-
-  useEffect(() => { if (me?.telegram_chat_id) setTelegramChatId(me.telegram_chat_id); }, [me]);
-
-  const handleSaveTelegram = async () => {
-    setTelegramLoading(true);
-    setTelegramMsg('');
-    try {
-      await apiFetch('/auth/telegram', {
-        method: 'POST',
-        body: JSON.stringify({ chat_id: telegramChatId }),
-      });
-      setMe(m => ({ ...m, telegram_chat_id: telegramChatId || null }));
-      setTelegramMsg(telegramChatId ? 'Telegram chat ID zapisany!' : 'Telegram odłączony.');
-    } catch (err) {
-      setTelegramMsg('Błąd: ' + err.message);
-    } finally {
-      setTelegramLoading(false);
-    }
-  };
-
   // RODO: samodzielne usunięcie konta (DELETE /api/auth/me)
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
@@ -109,22 +83,6 @@ const SettingsView = ({ config, status, apiFetch, onSave, user, isAdmin, onAccou
       setDeleteMsg('Błąd: ' + err.message);
     } finally {
       setDeleteLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    setLoading(true);
-    try {
-      await apiFetch('/settings', {
-        method: 'POST',
-        body: JSON.stringify(form)
-      });
-      setMsg('Ustawienia zapisane pomyślnie!');
-      onSave();
-    } catch (err) {
-      setMsg('Błąd: ' + err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -152,42 +110,11 @@ const SettingsView = ({ config, status, apiFetch, onSave, user, isAdmin, onAccou
       exit={{ opacity: 0, y: -20 }}
     >
       <div className="mb-12">
-        <h1 className="text-4xl font-bold mb-2">Ustawienia Bota</h1>
-        <p className="text-slate-400">Konfiguracja parametrów bota dla Twojego konta.</p>
+        <h1 className="text-4xl font-bold mb-2">Ustawienia konta</h1>
+        <p className="text-slate-400">Login, hasło, bankroll i usunięcie konta.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
        <div className="space-y-8">
-        <div className="glass-card p-8">
-          <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white"><Settings size={18} /> Algorytm & Ryzyko</h3>
-          <div className="space-y-6">
-            <ConfigInput
-              label="Próg Pewniaczka (%)"
-              value={form.pewniaczek_prog}
-              onChange={v => setForm({...form, pewniaczek_prog: parseFloat(v)})}
-              tooltip="Mecze z pewnością AI powyżej tego progu są oznaczane jako 'Pewniaki' — najwyższa kategoria zaufania w typach."
-            />
-            <ConfigInput
-              label="Próg Kandydatów (%)"
-              value={form.kandydat_prog}
-              onChange={v => setForm({...form, kandydat_prog: parseFloat(v)})}
-              tooltip="Minimalna pewność AI, by mecz pojawił się jako kandydat do analizy w kreatorze kuponów."
-            />
-            <ConfigInput
-              label="Fractional Kelly (f/x)"
-              value={form.kelly_fraction}
-              onChange={v => setForm({...form, kelly_fraction: parseInt(v)})}
-              tooltip="Część kryterium Kelly'ego do liczenia rekomendowanej stawki (np. 4 = 1/4 Kelly'ego). Niższa wartość = mniejsze rekomendowane stawki."
-            />
-            <button
-              onClick={handleSave}
-              disabled={loading}
-              className="btn-primary w-full mt-4"
-            >
-              {loading ? "Zapisywanie..." : "Zapisz ustawienia"}
-            </button>
-            {msg && <p className="text-sm text-center text-indigo-400">{msg}</p>}
-          </div>
-        </div>
         <div className="glass-card p-8">
           <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">
             <Wallet size={18} /> Edycja Bankrolla
@@ -299,28 +226,6 @@ const SettingsView = ({ config, status, apiFetch, onSave, user, isAdmin, onAccou
                 </button>
                 {passwordMsg && <p className="text-sm text-center text-indigo-400">{passwordMsg}</p>}
               </div>
-            </div>
-          </div>
-
-          <div className="mt-8 pt-8 border-t border-white/5">
-            <h4 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-2">Powiadomienia Telegram</h4>
-            <p className="text-xs text-[var(--text-muted)] mb-4">
-              Podaj swój chat ID (od @userinfobot), aby otrzymywać powiadomienia o kuponach na Telegram.
-            </p>
-            <div className="space-y-3 max-w-md">
-              <ConfigInput
-                label="Telegram chat ID"
-                value={telegramChatId}
-                onChange={setTelegramChatId}
-              />
-              <button
-                onClick={handleSaveTelegram}
-                disabled={telegramLoading}
-                className="btn-primary"
-              >
-                {telegramLoading ? "Zapisywanie..." : "Zapisz Telegram"}
-              </button>
-              {telegramMsg && <p className="text-sm text-indigo-400">{telegramMsg}</p>}
             </div>
           </div>
 
