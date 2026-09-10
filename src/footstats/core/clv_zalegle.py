@@ -103,6 +103,9 @@ def uzupelnij_clv_zaleglych(
         try:
             start = date.fromisoformat(str(kupon.get("match_date_first") or "")[:10])
         except ValueError:
+            # Bez daty nie ma okna do przeszukania — kupon zostaje, jaki był.
+            log.debug("CLV zalegle: kupon %s bez poprawnej daty (%r)",
+                      kupon.get("id"), kupon.get("match_date_first"))
             continue
 
         nogi = [dict(n) for n in kupon.get("nogi") or []]
