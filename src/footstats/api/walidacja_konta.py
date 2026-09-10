@@ -29,7 +29,7 @@ _LEET = str.maketrans({"0": "o", "3": "e", "4": "a", "5": "s", "7": "t",
                        "8": "b", "@": "a", "$": "s", "!": "i"})
 
 # Rdzenie po normalizacji (bez ogonków, bez powtórzonych liter).
-_WULGARYZMY = (
+_WULGARYZMY: tuple[str, ...] = (
     # PL
     "kurw", "chuj", "huj", "pierdol", "spierd", "pizd", "jeba", "jebi", "jebn",
     "zjeb", "pojeb", "dziwk", "szmat", "cwel", "kutas", "cipk",
@@ -38,12 +38,12 @@ _WULGARYZMY = (
     "hitler", "porn",
 )
 # Słowa, które zawierają rdzeń, a są niewinne — wycinane przed sprawdzeniem.
-_WYJATKI = ("scunthorpe",)
+_WYJATKI: tuple[str, ...] = ("scunthorpe",)
 
 _ZASTRZEZONE_DOKLADNIE = frozenset({"root", "system", "support", "wsparcie", "pomoc",
                                     "null", "undefined", "anonim"})
-_ZASTRZEZONE_PREFIKSY = ("admin", "moderator", "deleteduser")
-_ZASTRZEZONE_WEWNATRZ = ("footstats",)
+_ZASTRZEZONE_PREFIKSY: tuple[str, ...] = ("admin", "moderator", "deleteduser")
+_ZASTRZEZONE_WEWNATRZ: tuple[str, ...] = ("footstats",)
 
 KOMUNIKAT_NIEPELNOLETNI = "Serwis jest wyłącznie dla osób, które ukończyły 18 lat."
 _ROK_MIN = 1900
