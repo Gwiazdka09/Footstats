@@ -531,6 +531,18 @@ def run_evening_agent(date_str: str | None = None) -> dict:
                         " zamkniecia — sprawdz football-data.co.uk i slownik typow",
                         nog_rozliczonych)
 
+    # Nogi z POPRZEDNICH dni. CSV football-data dopisuje mecze z opoznieniem,
+    # wiec w dniu meczu Over/Under nie dostawal kursu nigdy (0 z 68 nog od 06.09),
+    # a "1" tylko przez fallback API-Football. Szczegoly w `core/clv_zalegle`.
+    try:
+        from footstats.core.clv_zalegle import uzupelnij_clv_zaleglych
+        uzup, spr = uzupelnij_clv_zaleglych(dt.strptime(date_str, "%Y-%m-%d").date())
+        summary["clv_zalegle"] = uzup
+        console.print(f"[dim]CLV zalegle: {uzup}/{spr} nog z poprzednich dni"
+                      f" dostalo kurs zamkniecia[/dim]")
+    except (OSError, ValueError, KeyError, RuntimeError, ImportError) as e:
+        log.warning("CLV zalegle pominiete: %s: %s", type(e).__name__, e)
+
     # Wyświetl tabelę
     _print_summary_table(summary)
 

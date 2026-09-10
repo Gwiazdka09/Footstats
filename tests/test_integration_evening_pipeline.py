@@ -454,6 +454,8 @@ class TestRunEveningAgentIntegration:
             # (od 07.09 nie stoi juz pod `if pred_id:`). Te testy sprawdzaja
             # rozliczanie, nie CLV — bez tej atrapy biją po sieci.
             patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None),
+            # Zalegle CLV czyta baze i CSV football-data — tu tez atrapa.
+            patch("footstats.core.clv_zalegle.uzupelnij_clv_zaleglych", return_value=(0, 0)),
             patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
         ):
             from footstats.evening_agent import run_evening_agent
@@ -505,6 +507,8 @@ class TestRunEveningAgentIntegration:
             # (od 07.09 nie stoi juz pod `if pred_id:`). Te testy sprawdzaja
             # rozliczanie, nie CLV — bez tej atrapy biją po sieci.
             patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None),
+            # Zalegle CLV czyta baze i CSV football-data — tu tez atrapa.
+            patch("footstats.core.clv_zalegle.uzupelnij_clv_zaleglych", return_value=(0, 0)),
             patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
         ):
             from footstats.evening_agent import run_evening_agent
@@ -543,6 +547,8 @@ class TestRunEveningAgentIntegration:
             # (od 07.09 nie stoi juz pod `if pred_id:`). Te testy sprawdzaja
             # rozliczanie, nie CLV — bez tej atrapy biją po sieci.
             patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None),
+            # Zalegle CLV czyta baze i CSV football-data — tu tez atrapa.
+            patch("footstats.core.clv_zalegle.uzupelnij_clv_zaleglych", return_value=(0, 0)),
             patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
         ):
             from footstats.evening_agent import run_evening_agent
@@ -576,6 +582,8 @@ class TestRunEveningAgentIntegration:
             # (od 07.09 nie stoi juz pod `if pred_id:`). Te testy sprawdzaja
             # rozliczanie, nie CLV — bez tej atrapy biją po sieci.
             patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None),
+            # Zalegle CLV czyta baze i CSV football-data — tu tez atrapa.
+            patch("footstats.core.clv_zalegle.uzupelnij_clv_zaleglych", return_value=(0, 0)),
             patch("footstats.utils.telegram_notify.check_and_alert_agent_down"),
         ):
             from footstats.evening_agent import run_evening_agent

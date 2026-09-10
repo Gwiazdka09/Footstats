@@ -250,6 +250,7 @@ def test_run_evening_agent_marks_coupon_won(sample_fixture_psg_lyon):
     with patch("footstats.evening_agent._fetch_results_today",
                return_value=[sample_fixture_psg_lyon]), \
          patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None), \
+         patch("footstats.core.clv_zalegle.uzupelnij_clv_zaleglych", return_value=(0, 0)), \
          patch("footstats.evening_agent._send_telegram_summary"), \
          patch.dict("os.environ", {"APISPORTS_KEY": "test_key"}):
         summary = run_evening_agent("2026-04-09")
@@ -268,6 +269,7 @@ def test_run_evening_agent_marks_coupon_lost(sample_fixture_psg_lyon):
     with patch("footstats.evening_agent._fetch_results_today",
                return_value=[sample_fixture_psg_lyon]), \
          patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None), \
+         patch("footstats.core.clv_zalegle.uzupelnij_clv_zaleglych", return_value=(0, 0)), \
          patch("footstats.evening_agent._send_telegram_summary"), \
          patch.dict("os.environ", {"APISPORTS_KEY": "test_key"}):
         summary = run_evening_agent("2026-04-09")
@@ -284,6 +286,7 @@ def test_run_evening_agent_pending_when_no_result():
 
     with patch("footstats.evening_agent._fetch_results_today", return_value=[]), \
          patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None), \
+         patch("footstats.core.clv_zalegle.uzupelnij_clv_zaleglych", return_value=(0, 0)), \
          patch("footstats.evening_agent._send_telegram_summary"), \
          patch.dict("os.environ", {"APISPORTS_KEY": "test_key"}):
         summary = run_evening_agent("2026-04-09")
@@ -311,6 +314,7 @@ def test_run_evening_agent_triggers_auto_trainer():
 
     with patch("footstats.evening_agent._fetch_results_today", return_value=fixtures), \
          patch("footstats.evening_agent._kurs_zamkniecia_nogi", return_value=None), \
+         patch("footstats.core.clv_zalegle.uzupelnij_clv_zaleglych", return_value=(0, 0)), \
          patch("footstats.evening_agent._send_telegram_summary"), \
          patch("subprocess.Popen") as mock_popen, \
          patch.dict("os.environ", {"APISPORTS_KEY": "test_key"}):

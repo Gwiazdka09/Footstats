@@ -177,6 +177,11 @@ _TYP_NA_KURS = {
 }
 
 
+def typ_ma_kurs_zamkniecia(typ: str | None) -> bool:
+    """Czy CSV w ogóle notuje cenę tego zdarzenia — bez wychodzenia do sieci."""
+    return " ".join(str(typ or "").split()).upper() in _TYP_NA_KURS
+
+
 def kurs_dla_typu(kursy: dict | None, typ: str | None) -> float | None:
     """Kurs zamknięcia ZDARZENIA, na które postawiliśmy. None gdy nieporównywalne.
 
