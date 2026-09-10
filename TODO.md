@@ -165,6 +165,46 @@ formalne i niezawodność.
 
 Pilnuje tego `tests/test_strony_prawne.py` (20 testów) — sprawdza stan, nie brzmienie.
 
+## 🟠 POKRYCIE POISSONA — 10.09 (nasz model liczył 28% ocen)
+
+Log jobu: `Poisson policzyl 6 z 36 meczow (16%) — reszta poszla na fallback
+Bzzoiro-ML. Powody: predict_match: brak wyniku: 30`. Na 1231 parach z `model_log`
+(od 01.08) classic Poisson liczył **347 (28,2%)**. Dwie przyczyny:
+
+- [x] **Pisownia, nie brak danych** — naprawione 10.09. „Bayer 04 Leverkusen”,
+  „Stoke City”, „Real Sociedad” nie trafiały w „Leverkusen”, „Stoke”,
+  „Sociedad” z datasetu (499 z 887 nazw bez mapowania). Reguły zapasowe
+  w `poisson._kanoniczne_nazwy` (cyfry, słowa-szum, człon tożsamości, świeżość
+  historii), CELOWO nie w `utils/normalize`. **Pokrycie 28,2% → 41,8%**
+  (347 → 514 z 1231 par; Championship 6→35/37, League Two 7→32/32).
+  Przegląd 70 nowych mapowań złapał dwa błędne (Real Racing Club → Racing
+  z Argentyny, Cambridge City → Cambridge United) — poprawione przed
+  wdrożeniem. Szczegóły: `docs/pomiary/nazwy_poissona_2026-09-10.md`.
+  Do sprawdzenia w logu final: `Poisson policzyl N z M meczow` wyraźnie
+  powyżej 16-36% z 08-10.09.
+- [x] **Ramię Dixon-Coles dostawało surowe nazwy** — naprawione 10.09.
+  `blend_dixon_coles` → `_compute_ratings` porównuje `df["gospodarz"] == g`
+  dokładnie, więc „Manchester United” nie trafiał w „Man United”, choć classic
+  dla tej pary liczył. Walk-forward (gdzie strojono `W_BAYESIAN`) podaje nazwy
+  wprost z datasetu — produkcja miała inny model niż zmierzony. Zmierzone:
+  na 514 parach z classic ramię DC działało na **141 (27%)**, po poprawce na
+  **514 (100%)**. Zmienia 1X2 na ~370 parach — do obserwacji w kalibracji
+  `model_log` (ECE, obciążenie 1X2) po kilkudziesięciu rozliczonych.
+- [ ] **Ligi, których w datasecie NIE MA** (40 lig, żadnej z poniższych) —
+  ocen z `model_log` od 01.08: K League 1 (41), Brasileirão Serie B (40),
+  Saudi Pro League (38), Liga Portugal 2 (32), Categoría Primera A (20), Parva
+  Liga (12). Razem ~180 z 1231 (15%). Wymaga backfillu meczów (same gole
+  wystarczą) z API-Football + przebudowy datasetu i obrazu — `af_backfill.py`
+  robi dziś tylko statystyki do ISTNIEJĄCYCH meczów. Osobny projekt.
+- [ ] **Fortress / H2H / zmęczenie też dostają surowe nazwy** (`quick_picks`
+  woła `fortress_sys.analiza(g)` itd., a te robią `df["gospodarz"] == g`).
+  Przy niedopasowaniu zwracają NEUTRALNE mnożniki (sprawdzone w kodzie), więc
+  λ jest poprawna, tylko bez tych korekt. Poprawka = przetłumaczyć `g, a`
+  przez `poisson._kanoniczne_nazwy` przed tymi wywołaniami. NIE zrobione
+  10.09 świadomie: to włączyłoby korekty (Patent +10%, Twierdza, Zemsta),
+  których wpływu live nikt nie mierzył — najpierw sprawdzić, czy walk-forward
+  je w ogóle liczy.
+
 ## 🔴 DO SPRAWDZENIA PO NAJBLIŻSZYM PRZEBIEGU (07.09.2026)
 
 ### ✅ Team-news ODŻYŁ — potwierdzone 07.09 po przebiegu 09:00 UTC
@@ -181,16 +221,30 @@ Pierwsze niezerowe wiersze w historii (było 0 na 1078). Log jobu:
 Wąskie gardło przesunęło się dalej: `udzialy absencji 3/24 dopasowane
 w player_db` — znamy nazwisko nieobecnego, nie znamy jego wagi. Patrz niżej.
 
-### 🔴 DO SPRAWDZENIA PO PRZEBIEGU 08.09
+### ✅ SPRAWDZONE 10.09 na przebiegach 07-10.09
 
-Cztery naprawy z 07.09 wieczorem czekają na pierwszy realny przebieg:
+Cztery naprawy z 07.09 wieczorem — wszystkie potwierdzone na produkcji:
 
-- [ ] **CLV** — `scripts/clv_raport.py` po wieczornym rozliczeniu. Zero nóg
-  z kursem zamknięcia znaczy, że **football-data.co.uk nadal oddaje 503**
-  (cała witryna była padnięta 07.09), a nie że nie mamy przewagi. Log jobu
-  powie wprost: `CLV: N/M rozliczonych nog ma kurs zamkniecia`.
-- [ ] **SofaScore** — w logu `footstats-final` ma być **co najwyżej 1** wpis
-  `HTTP 403` zamiast 8, a KROK 2 ma trwać sekundy zamiast 30-63 s.
+- [x] **CLV ŻYJE** — pierwsze kursy zamknięcia w historii projektu (było 0/295).
+  Log evening: `CLV: 1/21` (07.09), `5/32` (08.09), `2/17` (09.09); w bazie
+  8 nóg z `clv_closing` od 07.09. Średnie CLV +0,7% przy **n=8 — zero
+  wniosków**. Pokrycie ~11%, bo football-data ma zamknięcia tylko dla lig
+  europejskich (MLS, J1, K League poza zasięgiem). Wszystkie 8 to typ „1”.
+  **Over/Under: 0 z 68 nóg** — naprawione 10.09 (`41cf0a711`). Przyczyna to
+  CZAS: evening pyta CSV w dniu meczu, a football-data dopisuje mecze po kilku
+  dniach; „1” ratował fallback API-Football. Nowy krok `core/clv_zalegle`
+  wraca do nóg z 7 dni. Pomiar: kurs jest już w CSV dla **55 z 214** nóg bez
+  CLV (wobec 5 w dniu meczu). Do sprawdzenia w logu evening 10.09+:
+  `CLV zalegle: N/M nog z poprzednich dni dostalo kurs zamkniecia`.
+- [x] **SofaScore** — dokładnie **1** wpis `HTTP 403` na przebieg (było 8).
+  KROK 2 dalej trwa 10-55 s, ale to już NIE strata: po zablokowaniu SofaScore
+  forma idzie z FlashScore i **działa** (sprawdzone lokalnie: Benfica
+  WWWWW 17 s, Moreirense LLWLD 6,7 s, Kyoto 6,2 s). Koszt = własna przeglądarka
+  Playwright na KAŻDĄ drużynę — do rozważenia jedna sesja na mecz (~30 s/dzień).
+- [x] **Absencje z wagą** — `udzialy absencji 7/26 dopasowane` (09.09) = **27%**
+  wobec `3/24` = 12,5%. Zgodne z pomiarem na żywym FotMobie (31%).
+- [x] **`goal_share`** — największy udział absencji od 08.09 to **20,4%**
+  (Inter Miami), potem 16,2% i 8,3%. Żadnego 100%.
 - [x] ~~**Bramka CI→CD**~~ ✅ **zweryfikowana na żywym przebiegu** (`64346c975`,
   07.09): krok „Bramka" `completed/success`, build ruszył dalej. CI kończy się
   w 7-9 min, budżet 20 min ma zapas. NIE sprawdzone: czy zatrzymuje przy
@@ -199,12 +253,6 @@ Cztery naprawy z 07.09 wieczorem czekają na pierwszy realny przebieg:
   (`cd-jobs` ma `concurrency` bez `cancel-in-progress`, a każdy CD czeka na
   swoje CI). Kolejka się drenuje, ale wdrożenie ostatniego commita potrafi
   zająć godzinę.
-- [ ] **Absencje z wagą** — log ma powiedzieć `udzialy absencji N/M dopasowane`
-  z N/M wyraźnie powyżej `3/24`. Pomiar na żywym FotMobie z 08.09 (161 meczów,
-  144 absencje) dał **31%** — to jest liczba do porównania.
-  Wdrożone w `0d1a24fbf` (joby, digest `9c76fdb0`, 08.09 11:53).
-- [ ] **`goal_share`** — po `a70b215b1` żadna drużyna nie ma dostawać udziału
-  100%. Zmierzone przed poprawką: 65 z 105 drużyn (62%) miało zmyślony udział.
 
 ### Zamknięte
 
