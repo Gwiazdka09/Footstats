@@ -182,7 +182,11 @@ def zapisz_ocene(kandydat: dict, zrodlo: str = "final") -> int | None:
             (data, str(kandydat.get("liga") or ""), home, away,
              float(pw), float(pr), float(pp),
              kandydat.get("o25"), kandydat.get("bt"),
-             kandydat.get("lambda_h"), kandydat.get("lambda_a"),
+             # `lambda_h` ustawia dopiero KROK 2 — po tym zapisie — wiec do 10.09
+             # kolumna byla pusta w 100% historii. Jawna `lambda_h` (Poisson kadr
+             # z `national_lambda`) wygrywa; inaczej λ ramienia Poissona z quick_picks.
+             kandydat.get("lambda_h") or kandydat.get("lambda_poisson_h"),
+             kandydat.get("lambda_a") or kandydat.get("lambda_poisson_a"),
              tip, zrodlo, str(kandydat.get("model_source") or ""),
              # `.get` bez domyslki: brak klucza ma zostac NULL-em, nie zerem.
              # Zero znaczy "policzone i wyszlo zero" — inny stan niz "nie

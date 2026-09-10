@@ -294,6 +294,9 @@ def szybkie_pewniaczki_2dni(
         # dla bloku try, więc RAG dostawał pusty pred → factors='[]' na każdej predykcji.
         _heur_g = None
         _heur_a = None
+        # λ ramienia Poissona do `model_log` — patrz komentarz przy `lambda_poisson_h`.
+        _lam_g = None
+        _lam_a = None
         if df_mecze is not None:
             try:
                 from footstats.core.poisson import predict_match
@@ -318,6 +321,8 @@ def szybkie_pewniaczki_2dni(
                     # wygladal na czysty, choc 90% stawki liczyl fallback.
                     _poisson_powody["predict_match: brak wyniku"] += 1
                 if _pred_p:
+                    _lam_g = _pred_p.get("lambda_g")
+                    _lam_a = _pred_p.get("lambda_a")
                     _p_pois = {"pw": _pred_p["p_wygrana"], "pr": _pred_p["p_remis"],
                                "pp": _pred_p["p_przegrana"], "bt": _pred_p["btts"],
                                "o25": _pred_p["over25"]}
@@ -412,6 +417,13 @@ def szybkie_pewniaczki_2dni(
             # model". Per mecz, nie globalnie: Poisson potrafi odpasc na
             # pojedynczej parze bez historii, a reszta stawki liczy sie normalnie.
             "model_source": "poisson-dc" if poisson_blend else "bzzoiro-ml",
+            # λ ramienia Poissona PRZED blendem DC i ensemble — do `model_log`,
+            # ktory do 10.09 mial `lambda_h` puste w 1231 z 1231 wierszy. Osobny
+            # klucz, NIE `lambda_h`: to pole `daily_phases` bierze za baze korekty
+            # absencji, a λ jednego ramienia to inna liczba niz λ odtworzona
+            # z koncowych prawdopodobienstw. Bzzoiro λ nie ma → None, nie zero.
+            "lambda_poisson_h": _lam_g if poisson_blend else None,
+            "lambda_poisson_a": _lam_a if poisson_blend else None,
             "wynik_g":    wg,
             "wynik_a":    wa,
             "odds":         odds,
