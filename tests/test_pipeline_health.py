@@ -78,6 +78,12 @@ class _Conn:
             if self.wiek_h is None:
                 return _Kursor({"ostatnia": None})
             return _Kursor({"ostatnia": datetime.now() - timedelta(hours=self.wiek_h)})
+        # Kontrola jakości (`core/alarmy_jakosci`, od 10.09) pyta `model_log`.
+        # Te testy dotyczą trzech wymiarów ilościowych — dziennik pusty, więc
+        # jakość nie ma czego zgłosić. Bez tej gałęzi atrapa oddawałaby `n`
+        # zaległości jako liczbę ocen i dokładała fałszywy powód "Poisson".
+        if "model_log" in plaski:
+            return _Kursor({})
         return _Kursor({"n": self.zaleglosci})
 
     def commit(self):

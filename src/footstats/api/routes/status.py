@@ -147,6 +147,7 @@ def pipeline_health(
     wiek_h: float | None = None
     nierozliczone = 0
     wiek_kuponu_dni: int | None = None
+    jakosc: dict = {}
 
     try:
         with _connect() as conn:
@@ -230,6 +231,15 @@ def pipeline_health(
                     f"brak nowego kuponu System {ile} (próg {PROG_STALE_DNI} dni)"
                     " — draft mógł paść, choć predykcje dalej przybywają"
                 )
+
+            # CZWARTY WYMIAR, 10.09: JAKOŚĆ, nie tylko ilość. Trzy wymiary wyżej
+            # świeciły zielono, kiedy Poisson liczył 28% ocen, λ w dzienniku była
+            # pusta w 100% wierszy, a CLV nie powstało ani razu. Szczegóły i progi
+            # w `core/alarmy_jakosci`. Te same powody, ten sam jeden alarm.
+            from footstats.core.alarmy_jakosci import sprawdz_jakosc
+
+            powody_jakosci, jakosc = sprawdz_jakosc(conn)
+            powody.extend(powody_jakosci)
     except Exception as e:  # noqa: BLE001 — monitor milczący przy własnej awarii
         # jest gorszy niż jego brak: sygnalizujemy problem zamiast zwracać 500,
         # bo 500 uruchamia retry Schedulera i zapętla alarm.
@@ -258,6 +268,9 @@ def pipeline_health(
         # Liczba w odpowiedzi, nie tylko w alarmie — inaczej nie da się śledzić
         # trendu ani sprawdzić stanu bez czekania, aż coś się zepsuje.
         "wiek_kuponu_dni": wiek_kuponu_dni,
+        # Metryki jakości ZAWSZE w odpowiedzi, także przy zdrowym stanie — trend
+        # pokrycia Poissona czy CLV ma być widać, zanim spadnie pod próg.
+        "jakosc": jakosc,
         "apisports": _stan_af(),
         "powody": powody,
         "alarm_wyslany": alarm_wyslany,
