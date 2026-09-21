@@ -211,6 +211,45 @@ from footstats.core.daily_phases import (
 
 # ── Krok 3: Groq AI ───────────────────────────────────────────────────────────
 
+_KLUCZE_KUPONOW = ("kupon_a", "kupon_b", "kupon_c", "kupon_d")
+
+
+def _bez_kuponow_none(dane: dict) -> dict:
+    """Klucz `kupon_*` z wartoscia None zamienia na pusty slownik.
+
+    W dniu bez typow (Groq nic nie oddal albo nic nie przeszlo filtrow) klucz
+    ISTNIEJE z wartoscia None, wiec `dane.get(klucz, {})` oddaje None, a nie
+    domyslny slownik — default dziala wylacznie przy BRAKU klucza.
+
+    Naprawianie tego u KONSUMENTOW zawiodlo dwa razy: 2026-07-09 crash
+    `final-9hkn2` zalatano w jednym wejsciu z czterech, a 2026-09-21
+    `footstats-final-hxg5f` padl w drugim. Po zalataniu czterech ten sam blad
+    przeskoczyl do PIATEGO (`kp = dane.get(kkey, {})`, `.get` linijke nizej).
+    Dlatego normalizujemy RAZ, przy zrodle danych.
+    """
+    for klucz in _KLUCZE_KUPONOW:
+        if dane.get(klucz) is None:
+            dane[klucz] = {}
+    return dane
+
+
+def _opisy_kuponow(dane: dict) -> list[str]:
+    """Krotkie opisy kuponow do powiadomienia (puste, gdy dzien bez typow).
+
+    Wyciagniete z `main`, zeby dalo sie to przetestowac bez odpalania calego
+    przebiegu — dokladnie ta linia wywrocila `footstats-final-776mz`.
+    """
+    opisy = []
+    for lbl, kkey in [("A", "kupon_a"), ("B", "kupon_b"), ("C", "kupon_c"), ("D", "kupon_d")]:
+        kp = dane.get(kkey) or {}
+        if kp.get("zdarzenia"):
+            opisy.append(
+                f"{lbl}: @{kp.get('kurs_laczny', 0):.2f}"
+                f" ({kp.get('szansa_wygranej_pct', '?')}%)"
+            )
+    return opisy
+
+
 def _analizuj_groq(
     wyniki: list,
     cel_wygrana_a: float | None = None,
@@ -227,18 +266,18 @@ def _analizuj_groq(
         log.error("[Agent] Brak GROQ_API_KEY — warstwa opisowa pominieta,"
                   " typy powstaja z samego modelu.")
         console.print("[red]Brak GROQ_API_KEY — typy z samego modelu.[/red]")
-        return typy_awaryjne_z_modelu(wyniki, zapisz=False)
+        return _bez_kuponow_none(typy_awaryjne_z_modelu(wyniki, zapisz=False))
     console.print("[dim]Groq: analizuję i buduję kupony...[/dim]")
     try:
         # A2/A3: `zapisz_predykcje=False` — zapis idzie dopiero po KROKU 4.
-        return ai_analiza_pewniaczki(
+        return _bez_kuponow_none(ai_analiza_pewniaczki(
             wyniki,
             pobierz_forme=False,
             cel_wygrana_a=cel_wygrana_a,
             cel_wygrana_b=cel_wygrana_b,
             stawka=stawka,
             zapisz_predykcje=False,
-        )
+        ))
     except (RuntimeError, OSError, ValueError) as e:
         # Brak warstwy AI degraduje przebieg, ale go NIE zabija. Kroki przed tym
         # miejscem już się wykonały i zapisały: rozliczenie wyników, analiza
@@ -257,7 +296,7 @@ def _analizuj_groq(
         # A1: "degraduje do czesci modelowej" bylo dotad tylko opisem — zwracany
         # pusty slownik oznaczal ZERO zapisanych typow. Teraz czesc modelowa
         # faktycznie zostaje.
-        return typy_awaryjne_z_modelu(wyniki, zapisz=False)
+        return _bez_kuponow_none(typy_awaryjne_z_modelu(wyniki, zapisz=False))
 
 
 # ── Krok 4: Weryfikacja halucynacji ──────────────────────────────────────────
@@ -1257,11 +1296,7 @@ def main():
         sciezka_txt = None
 
     # Powiadomienie Windows (pomijamy w dry-run)
-    kupony_info = []
-    for lbl, kkey in [("A", "kupon_a"), ("B", "kupon_b"), ("C", "kupon_c"), ("D", "kupon_d")]:
-        kp = dane.get(kkey, {})
-        if kp.get("zdarzenia"):
-            kupony_info.append(f"{lbl}: @{kp.get('kurs_laczny', 0):.2f} ({kp.get('szansa_wygranej_pct', '?')}%)")
+    kupony_info = _opisy_kuponow(dane)
     if not args.dry_run and sciezka_txt:
         notif_tekst = (
             " | ".join(kupony_info) + f"\n{sciezka_txt.name}"

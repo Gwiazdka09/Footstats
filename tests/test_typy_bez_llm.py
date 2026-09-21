@@ -318,7 +318,12 @@ def test_awaria_groqa_bez_kursow_nie_zapisuje_nic(bez_zapisu_do_bazy, monkeypatc
 
     dane = da._analizuj_groq([_mecz(odds={})])
 
-    assert dane == {}
+    # Od 2026-09-21 `_analizuj_groq` normalizuje klucze kuponow (None -> {}),
+    # bo None wywracalo potok u konsumentow. Znaczenie bez zmian: ZERO typow —
+    # sprawdzamy je wprost, zamiast porownywac ksztalt slownika.
+    assert not dane.get("top3")
+    assert all(not (dane.get(k) or {}).get("zdarzenia")
+               for k in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"))
     assert bez_zapisu_do_bazy == []
 
 

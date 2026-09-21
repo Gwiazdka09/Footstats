@@ -84,3 +84,62 @@ def test_zadne_wejscie_nie_uzywa_domyslnego_slownika_w_get() -> None:
         "kupon bywa None, wiec default `.get(k, {})` NIE zadziala — uzyj"
         f" `(dane.get(k) or {{}})`. Kruche wejscia: {winowajcy}"
     )
+
+
+# ── Naprawa u ZRODLA, nie w kolejnym wejsciu ────────────────────────────────
+#
+# Po zalataniu czterech wejsc crash przeskoczyl do PIATEGO (daily_agent.py:1263,
+# `kp = dane.get(kkey, {})` a `.get` linijke nizej — inna postac, wiec straznik
+# regexem jej nie widzial). Lapanie kolejnych kopii to gonienie krolika:
+# `dane` ma wychodzic z `_analizuj_groq` bez wartosci None pod kupon_*.
+
+def test_analizuj_groq_normalizuje_kupon_none(monkeypatch) -> None:
+    """Zrodlo danych nie moze oddawac None pod kluczem kuponu."""
+    import footstats.ai.analyzer as analyzer
+    import footstats.daily_agent as da
+
+    monkeypatch.setattr(analyzer, "ai_groq_dostepny", lambda: True)
+    monkeypatch.setattr(
+        analyzer, "ai_analiza_pewniaczki",
+        lambda *a, **k: {"kupon_a": None, "kupon_b": None, "top3": []},
+    )
+
+    dane = da._analizuj_groq([])
+
+    assert dane["kupon_a"] == {}
+    assert dane["kupon_b"] == {}
+
+
+def test_analizuj_groq_normalizuje_takze_sciezke_awaryjna(monkeypatch) -> None:
+    """Bez klucza Groqa typy powstaja z samego modelu — ta sama gwarancja."""
+    import footstats.ai.analyzer as analyzer
+    import footstats.daily_agent as da
+
+    monkeypatch.setattr(analyzer, "ai_groq_dostepny", lambda: False)
+    monkeypatch.setattr(
+        analyzer, "typy_awaryjne_z_modelu",
+        lambda *a, **k: {"kupon_a": None, "top3": []},
+    )
+
+    assert da._analizuj_groq([])["kupon_a"] == {}
+
+
+def test_opisy_kuponow_przezywaja_dzien_bez_typow() -> None:
+    """Blok z linii 1263 wyciagniety z `main`, zeby dalo sie go przetestowac."""
+    from footstats.daily_agent import _opisy_kuponow
+
+    assert _opisy_kuponow(dict(_PUSTY_DZIEN)) == []
+
+
+def test_opisy_kuponow_opisuja_kupon_gdy_jest() -> None:
+    """Kontrola pozytywna — normalizacja nie moze zjesc prawdziwego kuponu."""
+    from footstats.daily_agent import _opisy_kuponow
+
+    dane = dict(_PUSTY_DZIEN)
+    dane["kupon_a"] = {"zdarzenia": [{"mecz": "A vs B"}], "kurs_laczny": 2.5,
+                       "szansa_wygranej_pct": 40}
+
+    opisy = _opisy_kuponow(dane)
+
+    assert len(opisy) == 1
+    assert "2.50" in opisy[0] and "40" in opisy[0]
