@@ -19,6 +19,16 @@ import pytest
 from footstats import daily_agent
 
 
+
+def _bez_typow(dane: dict) -> bool:
+    """Czy wynik nie niesie ZADNEGO typu — niezaleznie od ksztaltu slownika."""
+    if dane.get("top3"):
+        return False
+    return all(
+        not (dane.get(k) or {}).get("zdarzenia")
+        for k in ("kupon_a", "kupon_b", "kupon_c", "kupon_d")
+    )
+
 def test_brak_ai_nie_wyrzuca_wyjatku_do_gory(monkeypatch):
     """SEDNO: `RuntimeError` z warstwy AI ma sie zatrzymac tutaj."""
     def _brak_ai(*a, **kw):
@@ -29,7 +39,9 @@ def test_brak_ai_nie_wyrzuca_wyjatku_do_gory(monkeypatch):
 
     wynik = daily_agent._analizuj_groq([{"gospodarz": "Legia", "goscie": "Lech"}])
 
-    assert wynik == {}, "brak AI ma dac pusty wynik, nie wyjatek"
+    # Od 2026-09-21 `_analizuj_groq` normalizuje klucze kuponow (None -> {}),
+    # bo None wywracal potok u konsumentow — znaczenie bez zmian: ZERO typow.
+    assert _bez_typow(wynik), "brak AI ma dac pusty wynik, nie wyjatek"
 
 
 def test_awaria_ai_jest_zglaszana_glosno(monkeypatch, caplog):
@@ -66,4 +78,4 @@ def test_inne_awarie_warstwy_ai_tez_degraduja(monkeypatch, wyjatek):
     monkeypatch.setattr("footstats.ai.analyzer.ai_analiza_pewniaczki", _wybuch)
     monkeypatch.setattr("footstats.ai.analyzer.ai_groq_dostepny", lambda: True)
 
-    assert daily_agent._analizuj_groq([{"gospodarz": "Legia"}]) == {}
+    assert _bez_typow(daily_agent._analizuj_groq([{"gospodarz": "Legia"}]))
