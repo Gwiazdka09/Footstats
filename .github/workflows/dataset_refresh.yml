@@ -92,13 +92,36 @@ jobs:
           BRANCH=chore/dataset-refresh
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # `actions/checkout` pobiera TYLKO galaz uruchomienia, wiec gdy PR
+          # z poprzedniego tygodnia wisi niezmergowany, `origin/$BRANCH` nie
+          # istnieje lokalnie i `--force-with-lease` odrzuca push jako
+          # "stale info" — tak padl run z 2026-09-21, JESZCZE PRZED proba
+          # otwarcia PR-a (galaz zostala z commitem z 14.09). Dociagamy ref,
+          # zeby lease mial punkt odniesienia; brak galezi zdalnie to nie blad.
+          git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" || true
+
           git checkout -B "$BRANCH"
           git add "$PLIK"
           git commit -m "chore(dane): cotygodniowe odswiezenie full_dataset.parquet"
           git push --force-with-lease origin "$BRANCH"
 
           # Gdy PR z poprzedniego tygodnia wisi niezmergowany, push wystarczy.
-          if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+          #
+          # `gh` potrafi paść z powodu niewidocznego w gołym "exit code 1":
+          # przy wylaczonym "Allow GitHub Actions to create and approve pull
+          # requests" tworzenie PR-a konczy sie 403 MIMO `pull-requests: write`
+          # w `permissions` (run z 2026-09-14: galaz zapchnieta, PR-a brak,
+          # krok czerwony bez sladu przyczyny). Dlatego kazde `gh` ma tu swoj
+          # komunikat i link do recznego otwarcia PR-a — dane sa juz na galezi.
+          KOMPARATOR="https://github.com/$GITHUB_REPOSITORY/compare/main...$BRANCH"
+          if ! OTWARTE=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number' 2>&1); then
+            echo "::error::gh pr list nie zadzialal: $OTWARTE"
+            echo "::error::dane sa na galezi $BRANCH — otworz PR recznie: $KOMPARATOR"
+            exit 1
+          fi
+
+          if [ -z "$OTWARTE" ]; then
             gh pr create --base main --head "$BRANCH" \
               --title "chore(dane): odswiezenie datasetu historycznego" \
               --body "$(cat <<'BODY'
