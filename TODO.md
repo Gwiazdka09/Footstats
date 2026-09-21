@@ -8,10 +8,10 @@
 
 > **🎯 KIERUNEK 2026-07-27:** produkt zostaje na **użytek prywatny + beta-testerzy (znajomi)**. Priorytet = **żeby bot się uczył** (pętla predykcja→settle→kalibracja→RAG). Zero monetyzacji, zero publicznego launchu. Plan wykonawczy → sekcja `🎯 PLAN P0-P3` niżej.
 
-**Aktualizacja:** 2026-08-14 · v3.4-stable
+**Aktualizacja:** 2026-09-21 · v3.4-stable
 **Accuracy (live, `model_log` 13.08):** **poisson-dc 65.2%** (15/23) · bzzoiro-ml 50.0% (41/82) — próba mała, ale poisson-dc realnie gra i prowadzi
 **Accuracy (offline):** Brier 0.6064 po fiksie rozdzielczości (było 0.6454); rynek 0.5912 — **wciąż nad nami**
-**Cel M1:** 55% win rate (mierzony na 1X2 — **do rewizji**, patrz werdykt per rynek) · **Suite:** 4375 testów
+**Cel M1:** 55% win rate (mierzony na 1X2 — **do rewizji**, patrz werdykt per rynek) · **Suite:** 6706 testów
 **LIVE:** pipeline **PC-off w chmurze** — Cloud Run Jobs (final 11:00 + evening 23:00) + Scheduler (draft 07:30, settle 06:00/21:30). Szczegóły → `docs/cloud_migration.md`.
 **⚠️ INCYDENT 27.07 (naprawiony):** redeploy zgubił env Cloud Run (`JWT_SECRET` itd.) → login zwracał 500 udający „złe hasło". Fix: rev 00313-mf5 + malformed-hash guard (401 nie 500) + `/mcp` off w prod + CD re-asertuje krytyczne sekrety + LoginView rozróżnia błąd serwera/limit/sieć od złych danych. Audyt auth: 6 znalezisk, rdzeń szczelny.
 **⚠️ INCYDENT 14-20.07 (naprawiony 07-20):** potrójna awaria — Neon quota-block → **DB = Supabase free** (session pooler); image jobów bez `footstats.data` (`.gcloudignore` fix); kupon=None crash. **Luka w danych 14-20.07** (zero predykcji/settled). Dane 1-17.07 uwięzione w Neonie do **1.08**. Szczegóły → `CHANGELOG.md` 07-20.
@@ -20,6 +20,77 @@
 > **📦 Ukończone → `CHANGELOG.md`.** 23.08 przeniesiono stamtąd 40 zamkniętych pozycji
 > (729 → 403 linie). Ten plik trzyma **wyłącznie to, co otwarte** — jeśli szukasz, jak coś
 > zostało naprawione, szukaj w CHANGELOG-u albo w `git log`.
+
+---
+
+## 🔴 21.09 — CO WYSZŁO Z RĘCZNEGO ODPALENIA POTOKU
+
+Dzień zaczął się od maila „Weekly dataset refresh failed", a skończył na trzech
+naprawach produkcji. **Wszystkie znaleziska pochodzą z odpalenia rzeczy na żywo,
+nie z testów** — suita była cały czas zielona.
+
+### Naprawione i wdrożone
+
+- **Potok padał w dniu bez typów** (`footstats-final-hxg5f`, dwie próby, exit 1).
+  `dane["kupon_a"]` bywa obecne z wartością None, a `.get(k, {})` broni tylko
+  przy BRAKU klucza. **Trzecia odsłona tego samego błędu** (09.07 `final-9hkn2`,
+  21.09 rano, 21.09 po południu — crash przeskoczył do PIĄTEGO wejścia już po
+  załataniu czterech). Naprawione u ŹRÓDŁA: `_analizuj_groq` normalizuje klucze
+  kuponów, więc żaden konsument nie dostanie None. Potwierdzone na produkcji:
+  `footstats-final-c2548` przeszedł ten sam pusty dzień na zielono.
+- **Odświeżanie datasetu** — dwie usterki naraz: GitHub blokował tworzenie PR-ów
+  przez Actions (przełącznik w Settings, user włączył 21.09) oraz
+  `--force-with-lease` odrzucał push, bo `actions/checkout` nie pobiera gałęzi
+  docelowej. Workflow dociąga teraz ref i opisuje błędy `gh` zamiast gołego
+  exit 1.
+- **Gitleaks** żądał licencji, bo pytał API GitHuba anonimowo ze wspólnego IP
+  runnera i łapał limit. Zamieniony na binarkę 8.30.1 z przypiętą sumą SHA-256.
+  **Pierwszy skan CAŁEJ historii** (1154 commity): 13 trafień, wszystkie
+  fałszywe (9 sum SHA-256, 3 testowy JWT_SECRET, atrapa klucza Groqa).
+  **Żadnego prawdziwego poświadczenia w historii nie ma.**
+- **Test z wpisaną datą** (`test_terminarz_api`) rozbroił się sam 21.09 i przez
+  bramkę CI zablokował WSZYSTKIE wdrożenia. Daty liczą się od `date.today()`.
+- Sprzątnięte: 16 gałęzi → 3, PR-y 13 → 2 (11 PR-ów Dependabota z czerwca
+  zamkniętych, wygeneruje świeże).
+
+### Zmierzone na produkcji (nie w testach)
+
+| Co | Wynik | Uwaga |
+|---|---|---|
+| Poisson (10 dni) | **140 / 332 = 42%** | przed naprawą nazw 17% — poprawka działa |
+| Poisson (pojedynczy przebieg 21.09) | **1-2 z 35 (2-5%)** | ⬅️ do zbadania, patrz niżej |
+| λ w model_log | **140 / 140** | przed naprawą 0% |
+| team-news | 21 / 140 (15%) | |
+| CLV | **68 / 689 nóg (10%)** | żyje w `legs_json.clv_closing` |
+| Rozliczanie (60 dni) | **124 / 138 predykcji (90%)** | |
+| Konta | 13, z czego **2 z datą urodzenia**, **0 zgód na ranking** | |
+| Dziennik ręczny | ostatni kupon **24.08** | 7/7 rozliczonych poprawnie |
+
+### OTWARTE — do decyzji
+
+1. **PR #14 z datasetem czeka na merge.** Dane w obrazie kończą się 03.09,
+   świeże sięgają 17.09 (+698 meczów, zero ubytków, sprawdzone per liga).
+   Podejrzenie: to główny powód, dla którego Poisson liczy dziś 2% zamiast 42%.
+2. **Typujemy ligi, których nie umiemy rozliczyć.** Brasileirão Serie B **0
+   wyników na 6 typów**, USL Championship 3/6 — te drużyny mają ZERO wystąpień
+   w zbiorze 40 lig. Kupon wisi 10 dni i ginie jako VOID. Do decyzji: odciąć
+   selekcję od lig bez pokrycia albo dołożyć źródło.
+3. **Alarm „rozliczanie stoi" jest szumem.** Liczy predykcje porzucone po
+   `MAX_PROB_ROZLICZENIA=5` jako „wciąż osiągalne", więc pali się codziennie bez
+   możliwości reakcji. Rozważyć rozdzielenie: osobno „czeka i próbujemy",
+   osobno „porzucone".
+4. **`Migawka kursow nieudana`** — ERROR w KAŻDYM przebiegu, pilot pomijany.
+5. **`cache/api_football` nie istnieje w kontenerze** — cache dyskowy martwy,
+   każde zapytanie zjada budżet API.
+6. **`predictions.clv_closing_odds` jest NULL w 336 na 336 wierszy** od zawsze.
+   CLV siedzi w nogach kuponów. Kolumna jest martwa — wypełnić albo usunąć,
+   bo mierzenie po niej daje fałszywe zero (raz mnie na to nabrało).
+7. **Kupon #618 na mecz, którego nie było** — „Levante – Athletic Club 16.09",
+   a w źródle Levante grał 13.09 z Barceloną. Sprawdzić datowanie terminarza
+   (Bzzoiro liczy w UTC+4).
+8. **Filtr ścieżek `cd-jobs.yml` pomija `tests/**`** — commit poprawiający tylko
+   testy NIE przebudowuje obrazu jobów. Dziś to znaczyło, że poprawka siedziała
+   na `main`, a produkcja jej nie miała. Ratunek: Run workflow ręcznie.
 
 ---
 
