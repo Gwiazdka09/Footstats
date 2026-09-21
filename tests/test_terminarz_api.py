@@ -5,6 +5,7 @@ warstwę scrapera (reguła: testy nie biją po zewnętrznych źródłach).
 """
 from __future__ import annotations
 
+from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -14,11 +15,19 @@ from footstats.api.auth import require_auth
 from footstats.api.main import app
 from footstats.core.response_cache import clear_response_cache
 
+# Daty LICZONE OD DZIS, nie wpisane na sztywno. Wersja z "2026-09-20" jako
+# meczem nadchodzacym byla prawdziwa do 20.09.2026 i 21.09 test padl sam z
+# siebie, bez zadnej zmiany w kodzie: filtr slusznie odrzucil mecz z wczoraj,
+# a asercja dalej oczekiwala jednego wyniku. CI na main stalo czerwone,
+# bramka zablokowala oba wdrozenia i wygladalo to jak regresja, ktorej nie ma.
+_JUTRO = (date.today() + timedelta(days=1)).isoformat()
+_MIESIAC_TEMU = (date.today() - timedelta(days=30)).isoformat()
+
 _MECZE = [
-    {"data": "2026-09-20", "godzina": "17:30", "kolejka": "Matchday 5",
+    {"data": _JUTRO, "godzina": "17:30", "kolejka": "Matchday 5",
      "gospodarz": "Arsenal FC", "goscie": "Chelsea FC", "rozegrany": False,
      "wynik": None, "liga": "Premier League", "sezon": "2026-27"},
-    {"data": "2025-08-16", "godzina": "20:00", "kolejka": "Matchday 1",
+    {"data": _MIESIAC_TEMU, "godzina": "20:00", "kolejka": "Matchday 1",
      "gospodarz": "Man Utd", "goscie": "Fulham", "rozegrany": True,
      "wynik": "1-0", "liga": "Premier League", "sezon": "2026-27"},
 ]
