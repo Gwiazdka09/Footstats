@@ -10,6 +10,11 @@ useDefault = true
 description = "Fałszywe sekrety testowe + artefakty (nie realne poświadczenia)"
 paths = [
   '''tests/''',
+  # Mapa skrotow SHA-256 plikow repo — 64 znaki hex wygladaja dla reguly
+  # `generic-api-key` jak klucz. To nie sa poswiadczenia, tylko sumy kontrolne.
+  '''\.vexp/''',
+  # Plany z 04.2026 cytuja testowy JWT_SECRET i sume SHA-256 obrazu.
+  '''docs/superpowers/plans/''',
   '''.*__pycache__.*''',
   '''.*\.pyc$''',
   '''src/footstats/gui/dist/''',
@@ -18,6 +23,10 @@ paths = [
 # Znane stałe testowe (jawnie fałszywe — bez wartości bezpieczeństwa).
 regexes = [
   '''test-secret-key-32-chars-long''',
+  # Stale z testow auth i AI, obecne takze w starych commitach poza `tests/`
+  # (m.in. `test_ai_integration.py` lezal kiedys w korzeniu repo).
+  '''testsecret1234567890abcdef12345678''',
+  '''gsk_testowy_klucz_12345678''',
   '''test-jwt-secret-32-chars-long''',
   '''onboarding@resend\.dev''',
 ]

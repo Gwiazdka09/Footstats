@@ -77,9 +77,6 @@ jobs:
 
   secrets:
     runs-on: ubuntu-latest
-    # Dependabot PR-y dostają read-only token bez dostępu do secrets → gitleaks-action failuje.
-    # Bumpy wersji nie dodają sekretów do źródła, więc skip jest bezpieczny.
-    if: github.actor != 'dependabot[bot]'
 
     steps:
       - uses: actions/checkout@v4
@@ -87,10 +84,35 @@ jobs:
           fetch-depth: 0   # pełna historia — gitleaks skanuje też stare commity
 
       # gitleaks: skan sekretów (klucze/hasła) wg .gitleaks.toml
+      #
+      # BINARKA, nie `gitleaks/gitleaks-action@v2`: akcja przed skanem pyta API
+      # GitHuba o typ konta, żeby sprawdzić, czy wymagana jest licencja. Krok nie
+      # dostawał `GITHUB_TOKEN`, więc pytanie szło anonimowo ze współdzielonego
+      # IP runnera i łapało limit zapytań; wtedy akcja nie potrafi stwierdzić, że
+      # repo jest publiczne i pada z "missing gitleaks license" (2026-09-21 na
+      # main, wcześniej 2026-09-01 na gałęzi). Sama binarka jest na MIT i nie robi
+      # ŻADNEGO zapytania do API — znika cała ta klasa awarii razem z pytaniem
+      # o licencję. Wersja i suma SHA-256 przypięte: pobieranie z sieci w CI bez
+      # weryfikacji byłoby dziurą w łańcuchu dostaw.
+      #
+      # Dependabot nie jest już pomijany — binarka nie potrzebuje sekretów, więc
+      # read-only token na jego PR-ach niczego nie psuje, a skan obejmuje też je.
+      #
+      # `gitleaks git` skanuje CAŁĄ historię, nie tylko nowe commity jak robiła
+      # akcja. Pierwsze takie przejście (21.09) dało 13 trafień z marca–maja:
+      # sumy SHA-256 i stałe testowe — wszystkie obsłużone allowlistą.
       - name: Gitleaks secret scan
-        uses: gitleaks/gitleaks-action@v2
         env:
-          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          set -euo pipefail
+          PLIK="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "/tmp/$PLIK" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$PLIK"
+          echo "$GITLEAKS_SHA256  /tmp/$PLIK" | sha256sum -c -
+          tar -xzf "/tmp/$PLIK" -C /tmp gitleaks
+          /tmp/gitleaks git . --config .gitleaks.toml --redact --no-banner
 
   test:
     runs-on: ubuntu-latest
