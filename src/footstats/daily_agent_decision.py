@@ -21,7 +21,11 @@ def _ocen_zdarzenia_decision_score(dane: dict, phase: str = "draft") -> None:
     _sep(f"DECISION SCORE — post-Groq [{phase.upper()}] (próg ≥ {threshold})")
 
     for kupon_key in ("kupon_a", "kupon_b", "kupon_c", "kupon_d"):
-        zdarzenia = dane.get(kupon_key, {}).get("zdarzenia", [])
+        # `or {}`, nie default w `.get()`: w dniu bez typow klucz JEST obecny
+        # z wartoscia None, a default dziala wylacznie przy BRAKU klucza.
+        # Tak padl `footstats-final-hxg5f` 2026-09-21 (dwie proby, obie exit 1),
+        # dwa miesiace po tej samej naprawie w `_weryfikuj_kupony`.
+        zdarzenia = (dane.get(kupon_key) or {}).get("zdarzenia", [])
         if not zdarzenia:
             continue
         console.print(f"[dim]{kupon_key.upper()}:[/dim]")

@@ -80,7 +80,7 @@ def _zapisz_txt(dane: dict, stawka_a: float, stawka_b: float) -> Path:
         ("KUPON C", "kupon_c", stawka_a),
         ("KUPON D", "kupon_d", stawka_a),
     ]:
-        kupon     = dane.get(kupon_key, {})
+        kupon     = dane.get(kupon_key) or {}   # None w dniu bez typow
         zdarzenia = kupon.get("zdarzenia", [])
         if not zdarzenia:
             continue
@@ -182,7 +182,7 @@ def _wyswietl(dane: dict, stawka_a: float, stawka_b: float):
         ("KUPON C", "kupon_c", stawka_a),
         ("KUPON D", "kupon_d", stawka_a),
     ]:
-        kupon = dane.get(kupon_key, {})
+        kupon = dane.get(kupon_key) or {}   # None w dniu bez typow
         zdarzenia = kupon.get("zdarzenia", [])
         if not zdarzenia:
             continue

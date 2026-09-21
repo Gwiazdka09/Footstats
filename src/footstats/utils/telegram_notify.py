@@ -215,7 +215,7 @@ def send_kupon(dane: dict, stawka_a: float = 10.0, stawka_b: float = 5.0) -> boo
         ("KUPON C", "kupon_c", stawka_a),
         ("KUPON D", "kupon_d", stawka_a),
     ]:
-        kupon     = dane.get(kupon_key, {})
+        kupon     = dane.get(kupon_key) or {}   # None w dniu bez typow
         zdarzenia = kupon.get("zdarzenia", [])
         if not zdarzenia:
             continue
