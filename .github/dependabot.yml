@@ -11,6 +11,16 @@ updates:
     labels: ["dependencies", "security"]
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      # `mcp` 2.x zmienilo sygnature `Server.__init__` na przyjmujaca tylko
+      # `name`, a `fastapi-mcp` 0.4.0 (najnowszy, lipiec 2025) wola
+      # `Server(name, description)` -> TypeError przy imporcie `api.main`,
+      # czyli CI nie zbiera ANI JEDNEGO testu. Powod przypiecia `<2.0` stoi
+      # w `pyproject.toml`. PR #19 probowal poluzowac to do `<3.0` i sluszne
+      # padl na jobie `test`. Bez tej reguly dependabot bedzie to powtarzal
+      # co tydzien. Zdjac dopiero, gdy `fastapi-mcp` wyda wersje na mcp 2.x.
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
 
   # Frontend GUI (npm).
   - package-ecosystem: "npm"
