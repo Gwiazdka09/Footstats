@@ -1,5 +1,4 @@
 """Coupon, match, kelly, and stats endpoints."""
-import hmac
 import json
 import logging
 import math
@@ -13,6 +12,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from footstats.api.auth import require_admin, require_auth
+from footstats.api.cron_auth import sprawdz_cron_secret
 from footstats.core import match_linker
 from footstats.core.coupon_tracker import STATUS_ACTIVE, save_coupon, update_coupon_status
 from footstats.core.probability_calibrator import calibrate_confidence
@@ -943,9 +943,7 @@ def settle_coupons(req: SettleRequest, user_id: int = Depends(require_admin)):
 @router.post("/cron/settle")
 def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
     """Endpoint dla Google Cloud Scheduler — rozlicza ACTIVE kupony."""
-    expected = os.getenv("CRON_SECRET", "")
-    if not expected or not hmac.compare_digest(x_cron_secret, expected):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    sprawdz_cron_secret(x_cron_secret)
     try:
         from footstats.core.coupon_settlement import settle_active_coupons
         from footstats.core.response_cache import clear_response_cache
@@ -1006,9 +1004,7 @@ def cron_settle_manual(x_cron_secret: str = Header(default=""), dry_run: bool = 
     NIE wpięty domyślnie w scheduler (enablement to świadoma decyzja usera,
     patrz `settle_manual_coupons`).
     """
-    expected = os.getenv("CRON_SECRET", "")
-    if not expected or not hmac.compare_digest(x_cron_secret, expected):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    sprawdz_cron_secret(x_cron_secret)
     try:
         from footstats.core.coupon_settlement import settle_manual_coupons
         from footstats.core.response_cache import clear_response_cache
@@ -1061,9 +1057,7 @@ def cron_draft(x_cron_secret: str = Header(default=""), days: int = 2, dry_run: 
     Playwright/Groq/Telegram. dry_run=True (DEFAULT) = podgląd, ZERO zapisów Neon.
     Live zbieranie danych: wywołać z dry_run=false (świadomie, po weryfikacji dry-run).
     """
-    expected = os.getenv("CRON_SECRET", "")
-    if not expected or not hmac.compare_digest(x_cron_secret, expected):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    sprawdz_cron_secret(x_cron_secret)
     from footstats.core.cloud_draft import generuj_system_draft
     result = generuj_system_draft(dni=days, dry_run=dry_run)
     podsumowanie = {k: v for k, v in result.items() if k != "legs"}
@@ -1085,9 +1079,7 @@ def cron_draft(x_cron_secret: str = Header(default=""), days: int = 2, dry_run: 
 @router.post("/cron/evict-cache")
 def cron_evict_cache(x_cron_secret: str = Header(default=""), max_days: int = 30):
     """Endpoint dla Google Cloud Scheduler — usuwa stare pliki cache."""
-    expected = os.getenv("CRON_SECRET", "")
-    if not expected or not hmac.compare_digest(x_cron_secret, expected):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    sprawdz_cron_secret(x_cron_secret)
     try:
         from footstats.utils.cache_evict import evict_old_cache
         deleted = evict_old_cache(max_days=max_days)
