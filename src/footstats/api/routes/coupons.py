@@ -164,13 +164,37 @@ _MAX_TEXT_LEN = 120
 _MAX_BOOKMAKER_LEN = 60
 _MAX_PREVIEW_LEGS = 30
 
+# GORNE GRANICE ZAPISU (audyt 24.09.2026). Walidacja pilnowala dolnych granic
+# (stawka > 0, kurs > 1.0, pola niepuste) i dlugosci pojedynczych napisow, ale nie
+# liczby nog ani wysokosci stawki. Zadanie z setka tysiecy nog przechodzilo
+# i ladowalo w bazie jako jeden gigantyczny `legs_json`; `GET /api/coupons` zwraca
+# go potem w calosci i potrafi przekroczyc timeout 10 s z `api/main`. Rejestracja
+# jest otwarta, wiec kosztem takiego zadania jest jedno konto.
+#
+# Liczba nog = tyle samo, co w podgladzie sygnalu. Podglad, ktory NIC nie zapisuje,
+# byl ostrozniejszy od zapisu do bazy.
+_MAX_NOG_KUPONU = _MAX_PREVIEW_LEGS
+# Dziennik liczy jednostki, nie realne pieniadze — ale wpis ze stawka 10^12
+# rozjezdza ROI i krzywa postepu w rankingu, ktory widza inni.
+_MAX_STAWKI = 100_000.0
+
 
 def _validate_manual_coupon(req: ManualCouponRequest) -> None:
     """Waliduje ręczny wpis kuponu (fail-fast, granica systemu — HTTP 400 + PL detail)."""
     if not req.legs:
         raise HTTPException(status_code=400, detail="Kupon musi mieć co najmniej jedną nogę")
+    if len(req.legs) > _MAX_NOG_KUPONU:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Kupon może mieć najwyżej {_MAX_NOG_KUPONU} nóg (podano {len(req.legs)})",
+        )
     if req.stake_pln <= 0:
         raise HTTPException(status_code=400, detail="Stawka musi być dodatnia")
+    if req.stake_pln > _MAX_STAWKI:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Stawka nie może przekraczać {_MAX_STAWKI:.0f}",
+        )
     if req.bookmaker and len(req.bookmaker) > _MAX_BOOKMAKER_LEN:
         raise HTTPException(
             status_code=400,
