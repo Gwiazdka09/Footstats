@@ -331,7 +331,7 @@ def register(request: Request, req: RegisterRequest) -> TokenResponse:
 def stan_sesji(user_id: int) -> dict | None:
     """Stan konta pod katem waznosci sesji, albo `None` gdy nie da sie sprawdzic.
 
-    Zwraca `{"wersja": int | None, "aktywne": bool}`.
+    Zwraca `{"wersja": int | None, "aktywne": bool, "admin": bool}`.
 
     Rozroznienie trzech przypadkow jest tu istotne i kazdy znaczy co innego:
 
@@ -350,17 +350,21 @@ def stan_sesji(user_id: int) -> dict | None:
     try:
         with connect() as conn:
             row = conn.execute(
-                "SELECT COALESCE(token_version, 0) AS wersja, is_active"
+                "SELECT COALESCE(token_version, 0) AS wersja, is_active,"
+                " COALESCE(is_admin, FALSE) AS is_admin"
                 " FROM users WHERE id = ?",
                 (int(user_id),),
             ).fetchone()
         if not row:
-            return {"wersja": None, "aktywne": False}
+            return {"wersja": None, "aktywne": False, "admin": False}
         dane = dict(row)
         wersja = dane.get("wersja")
         return {
             "wersja": None if wersja is None else int(wersja),
             "aktywne": bool(dane.get("is_active", True)),
+            # `admin` czytamy z bazy, bo claim w tokenie zyje 24h i odebranie
+            # uprawnien nie mialoby skutku do konca doby (audyt 24.09.2026).
+            "admin": bool(dane.get("is_admin", False)),
         }
     except Exception as e:                                   # noqa: BLE001
         log.warning("Nie udalo sie sprawdzic stanu sesji dla uid=%s: %s", user_id, e)
@@ -445,6 +449,24 @@ def require_admin(
     except PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     _sprawdz_wersje(payload, int(user_id))
+
+    # CLAIM TO DEKLARACJA, BAZA TO PRAWDA. Do 24.09.2026 wystarczal claim `adm`,
+    # wiec `UPDATE users SET is_admin = FALSE` nie odbieral dostepu do konca doby
+    # — a to jest dokladnie ta czynnosc, ktora wykonuje sie PO incydencie.
+    #
+    # AWARIA ODCZYTU PRZEPUSZCZA (jak w `_sprawdz_wersje`): przy niedostepnej bazie
+    # KAZDY endpoint administracyjny i tak nic nie zwroci, bo wszystkie czytaja
+    # baze — fail-closed nie zamykalby wiec zadnej realnej drogi, a wywracalby
+    # panel przy kazdym zakrztuszeniu poolera. Odrzucamy tylko wtedy, gdy baza
+    # mowi WPROST, ze to nie admin.
+    stan = stan_sesji(int(user_id))
+    if stan is not None and not stan.get("admin", False):
+        log.warning("require_admin: uid=%s ma claim adm, ale baza mowi is_admin=false"
+                    " — odrzucone", user_id)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    if stan is None:
+        log.warning("require_admin: uid=%s — nie udalo sie potwierdzic is_admin w bazie,"
+                    " przepuszczam na podstawie claimu", user_id)
     return int(user_id)
 
 

@@ -161,7 +161,13 @@ def test_token_bez_uid_odrzucony():
 
 # ── require_admin ───────────────────────────────────────────────────────────
 
-def test_admin_przechodzi():
+def test_admin_przechodzi(monkeypatch):
+    """Od 24.09.2026 `require_admin` czyta `is_admin` Z BAZY, nie tylko z claimu
+    — odebranie uprawnien ma dzialac od razu, nie po 24h (audyt bezpieczenstwa).
+    Stad atrapa stanu konta; bez niej test mierzylby brak bazy, nie autoryzacje.
+    """
+    monkeypatch.setattr(auth, "stan_sesji",
+                        lambda uid: {"wersja": 0, "aktywne": True, "admin": True})
     token = auth._make_token("admin", 1, is_admin=True)
     assert auth.require_admin(_cred(token)) == 1
 
