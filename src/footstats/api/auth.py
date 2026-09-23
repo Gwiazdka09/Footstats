@@ -531,11 +531,19 @@ _RESET_EXPIRE_MINUTES = 60
 _GENERIC_RESET_MSG = "Jeśli konto istnieje, wysłaliśmy link resetu na podany e-mail."
 
 
-def _make_reset_token(user_id: int) -> str:
-    """Krótki JWT (1h) do resetu hasła — claim purpose=reset odróżnia go od login-tokenu."""
+def _make_reset_token(user_id: int, token_version: int) -> str:
+    """Krótki JWT (1h) do resetu hasła — claim purpose=reset odróżnia go od login-tokenu.
+
+    `tv` (wersja sesji z chwili wystawienia) robi z tego token JEDNORAZOWY:
+    udany reset podbija `token_version`, więc drugie użycie tego samego linku
+    trafia na niezgodność wersji. Do 24.09.2026 claimu nie było i ten sam link
+    ustawiał hasło dowolną liczbę razy przez godzinę — a linki wyciekają inaczej
+    niż hasła (skrzynka, historia przeglądarki, kopia maila na innym urządzeniu).
+    """
     exp = datetime.now(timezone.utc) + timedelta(minutes=_RESET_EXPIRE_MINUTES)
     return jwt.encode(
-        {"uid": user_id, "purpose": "reset", "exp": exp}, _secret(), algorithm=_ALGORITHM
+        {"uid": user_id, "purpose": "reset", "tv": int(token_version), "exp": exp},
+        _secret(), algorithm=_ALGORITHM,
     )
 
 
@@ -575,7 +583,7 @@ def forgot_password(request: Request, req: ForgotPasswordRequest):
         return generic
     if not user:
         return generic
-    token = _make_reset_token(user["id"])
+    token = _make_reset_token(user["id"], int(user.get("token_version") or 0))
     base = os.getenv("FRONTEND_URL", "").rstrip("/")
     link = f"{base}/reset-password?token={token}"
     try:
@@ -596,6 +604,20 @@ def reset_password(request: Request, req: ResetPasswordRequest):
         raise HTTPException(status_code=400, detail="Nieprawidłowy lub wygasły token")
     if payload.get("purpose") != "reset" or not payload.get("uid"):
         raise HTTPException(status_code=400, detail="Nieprawidłowy token resetu")
+
+    # JEDNORAZOWOŚĆ. Token niesie wersję sesji z chwili wystawienia; udany reset
+    # ją podbija, więc drugie użycie tego samego linku tu odpada. FAIL CLOSED:
+    # brak claimu (token sprzed 24.09.2026) i nieczytelna wersja też odpadają —
+    # „nie wiem, więc przepuszczam" znosiłoby ochronę dokładnie przy awarii bazy,
+    # a koszt odmowy to jedno ponowne kliknięcie „nie pamiętam hasła".
+    wersja_tokenu = payload.get("tv")
+    stan = stan_sesji(int(payload["uid"])) if wersja_tokenu is not None else None
+    if wersja_tokenu is None or stan is None or stan["wersja"] != int(wersja_tokenu):
+        log.warning("reset hasla odrzucony dla uid=%s — wersja tokenu %s, w bazie %s",
+                    payload.get("uid"), wersja_tokenu,
+                    None if stan is None else stan["wersja"])
+        raise HTTPException(status_code=400, detail="Nieprawidłowy lub wygasły token")
+
     new_hash = bcrypt.hashpw(req.new_password.encode(), bcrypt.gensalt()).decode()
     from footstats.utils.db import connect
     with connect() as conn:
