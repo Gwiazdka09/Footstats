@@ -1,4 +1,5 @@
 """Bankroll endpoints."""
+import logging
 from datetime import datetime
 
 import psycopg2
@@ -7,6 +8,8 @@ from pydantic import BaseModel
 
 from footstats.api.auth import require_auth
 from footstats.utils.db import connect as _connect
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["bankroll"])
 
@@ -30,7 +33,8 @@ def update_bankroll(data: BankrollUpdate, user_id: int = Depends(require_auth)):
             )
         return {"ok": True, "balance": data.balance, "updated_at": now}
     except psycopg2.Error as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _log.error("update_bankroll error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.get("/bankroll/history")
@@ -44,4 +48,5 @@ def get_bankroll_history(limit: int = 50, user_id: int = Depends(require_auth)):
             ).fetchall()
         return [{"time": str(r["timestamp"])[:16], "balance": r["new_balance"]} for r in rows]
     except psycopg2.Error as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _log.error("get_bankroll_history error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")

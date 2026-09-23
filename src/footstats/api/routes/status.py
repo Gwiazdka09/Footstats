@@ -61,7 +61,8 @@ def get_status(user_id: int = Depends(require_auth)):
             },
         }
     except (ValueError, KeyError, AttributeError, TypeError) as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _log.error("get_status error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 _CALIBRATION_PATH = Path(__file__).parent.parent.parent.parent.parent / "data" / "model_calibration.json"
@@ -75,7 +76,8 @@ def get_calibration(user_id: int = Depends(require_auth)):
     except FileNotFoundError:
         return {"updated_at": None, "factor_home": None, "factor_away": None, "n_matches": 0}
     except (ValueError, KeyError, AttributeError, TypeError) as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _log.error("get_calibration error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.get("/config")
