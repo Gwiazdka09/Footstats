@@ -189,6 +189,7 @@ const SettingsView = ({ status, apiFetch, onSave, user, isAdmin, onAccountUpdate
                 <ConfigInput
                   label="Aktualne hasło"
                   type="password"
+                  autoComplete="current-password"
                   value={usernamePassword}
                   onChange={setUsernamePassword}
                 />
@@ -208,12 +209,14 @@ const SettingsView = ({ status, apiFetch, onSave, user, isAdmin, onAccountUpdate
                 <ConfigInput
                   label="Aktualne hasło"
                   type="password"
+                  autoComplete="current-password"
                   value={currentPassword}
                   onChange={setCurrentPassword}
                 />
                 <ConfigInput
                   label="Nowe hasło (min. 8 znaków)"
                   type="password"
+                  autoComplete="new-password"
                   value={newPassword}
                   onChange={setNewPassword}
                 />
@@ -250,6 +253,7 @@ const SettingsView = ({ status, apiFetch, onSave, user, isAdmin, onAccountUpdate
                   <ConfigInput
                     label="Potwierdź hasłem"
                     type="password"
+                    autoComplete="current-password"
                     value={deletePassword}
                     onChange={setDeletePassword}
                   />
