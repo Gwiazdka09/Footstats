@@ -1,6 +1,12 @@
 """
 response_cache.py – HTTP response caching with Cache-Control headers and TTL.
 
+`private` w Cache-Control (audyt 24.09.2026): wiekszosc cache'owanych tras zwraca
+dane KONKRETNEGO konta (kupony, statystyki, ustawienia). Bez `private` posrednik
+— proxy, CDN — ma prawo potraktowac taka odpowiedz jak wspolna i podac ja
+nastepnemu pytajacemu. Dzis przed API nic takiego nie stoi, ale postawienie CDN-a
+jest zmiana infrastruktury, przy ktorej nikt nie zaglada do tego dekoratora.
+
 Exports:
     cached_response(ttl_seconds, vary_by) → decorator for FastAPI routes
     cache_key_builder(request, vary_by) → cache key from request params
@@ -116,7 +122,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                                 content=entry["data"],
                                 status_code=entry["status"],
                             )
-                            response.headers["Cache-Control"] = f"max-age={int(ttl_seconds - age)}, must-revalidate"
+                            response.headers["Cache-Control"] = f"private, max-age={int(ttl_seconds - age)}, must-revalidate"
                             response.headers["X-Cache"] = "HIT"
                             return response
 
@@ -148,7 +154,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                         _evict_oldest()
 
                 response = JSONResponse(content=data, status_code=status)
-                response.headers["Cache-Control"] = f"max-age={ttl_seconds}, must-revalidate"
+                response.headers["Cache-Control"] = f"private, max-age={ttl_seconds}, must-revalidate"
                 response.headers["X-Cache"] = "MISS"
                 return response
 
@@ -178,7 +184,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                                 content=entry["data"],
                                 status_code=entry["status"],
                             )
-                            response.headers["Cache-Control"] = f"max-age={int(ttl_seconds - age)}, must-revalidate"
+                            response.headers["Cache-Control"] = f"private, max-age={int(ttl_seconds - age)}, must-revalidate"
                             response.headers["X-Cache"] = "HIT"
                             return response
 
@@ -210,7 +216,7 @@ def cached_response(ttl_seconds: int = 300, vary_by: Optional[list[str]] = None)
                         _evict_oldest()
 
                 response = JSONResponse(content=data, status_code=status)
-                response.headers["Cache-Control"] = f"max-age={ttl_seconds}, must-revalidate"
+                response.headers["Cache-Control"] = f"private, max-age={ttl_seconds}, must-revalidate"
                 response.headers["X-Cache"] = "MISS"
                 return response
 

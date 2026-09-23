@@ -36,6 +36,8 @@ def lista_lig(user_id: int = Depends(require_auth)):
 
 
 @router.get("/terminarz")
+# cache-wspolny: terminarz ligi jest identyczny dla kazdego konta, a wspolny wpis
+# oszczedza scrapowanie zrodel. `user_id` sluzy tu WYLACZNIE do uwierzytelnienia.
 @cached_response(ttl_seconds=_CACHE_TTL, vary_by=["limit_na_lige"])
 def przeglad(
     limit_na_lige: int = Query(3, ge=1, le=10),
@@ -52,6 +54,7 @@ def przeglad(
 
 
 @router.get("/terminarz/{kod_ligi}")
+# cache-wspolny: jak wyzej — wynik zalezy od ligi i parametrow zapytania, nie od konta.
 @cached_response(ttl_seconds=_CACHE_TTL, vary_by=["kod_ligi", "tylko_nadchodzace", "limit"])
 def terminarz_ligi(
     kod_ligi: str,
