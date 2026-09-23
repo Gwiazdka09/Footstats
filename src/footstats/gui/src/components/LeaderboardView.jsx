@@ -212,7 +212,7 @@ const LeaderboardView = ({ apiFetch }) => {
             const profitColor = l.profit_pln >= 0 ? 'var(--accent-primary)' : 'var(--accent-secondary)';
             return (
               <div
-                key={l.user_id}
+                key={l.username}
                 onClick={() => selectUser(l.username)}
                 className="glass-card p-6 flex flex-col md:flex-row items-center justify-between gap-6 cursor-pointer transition-colors"
                 style={selected === l.username ? { border: '2px solid var(--accent-primary)' } : undefined}

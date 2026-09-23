@@ -819,7 +819,11 @@ def get_leaderboard(min_coupons: int = 2, limit: int = 20, sort: str = "win_rate
             payout = r["payout"] or 0.0
             profit_pln = payout - staked
             result.append({
-                "user_id": r["user_id"],
+                # BEZ `user_id`: ranking jest PUBLICZNY (bez auth), a wewnetrzny
+                # identyfikator konta nie jest nikomu na zewnatrz potrzebny —
+                # `username` wystarcza i do wyswietlenia, i jako klucz listy.
+                # `get_user_shared_coupons` obok usuwal go celowo (OWASP API3),
+                # tutaj zostawal przez przeoczenie (audyt 24.09.2026).
                 "username": r["username"],
                 "total": total,
                 "wins": wins,
