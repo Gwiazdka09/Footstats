@@ -26,8 +26,16 @@ def test_metrics_middleware_records_request(app_with_metrics):
         assert 200 in call_args[0]
 
 
-def test_metrics_endpoint_returns_dict_or_prometheus(app_with_metrics):
-    """GET /metrics should return metrics in dict or Prometheus format."""
+def test_metrics_endpoint_returns_dict_or_prometheus(app_with_metrics, monkeypatch):
+    """GET /metrics should return metrics in dict or Prometheus format.
+
+    ZMIANA KONTRAKTU 24.09.2026: na produkcji bez `METRICS_TOKEN` endpoint
+    oddaje 404 (audyt bezpieczeństwa — brak zmiennej nie może znaczyć „otwarte",
+    patrz `test_metrics_zamkniete_na_prod.py`). Ten test dotyczy FORMATU
+    odpowiedzi, więc jawnie ustawia środowisko deweloperskie; bez tego mierzyłby
+    bramkę, a nie format.
+    """
+    monkeypatch.setenv("ENV", "dev")
     client = TestClient(app_with_metrics)
 
     response = client.get("/metrics")

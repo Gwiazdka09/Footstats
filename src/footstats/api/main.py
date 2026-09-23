@@ -1,5 +1,6 @@
 """FootStats API — app factory with auth, CORS, rate limiting, and timeout."""
 import asyncio
+import json
 import logging
 import os
 import time
@@ -10,7 +11,7 @@ import sentry_sdk
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -201,6 +202,12 @@ _CSP = "; ".join([
     "base-uri 'none'",
     "form-action 'self'",
     "object-src 'none'",
+    # BEZ TEGO TRYB RAPORTUJĄCY NIE RAPORTUJE. Do 24.09.2026 polityka jechała
+    # jako `Report-Only` bez adresu raportu, czyli naruszenie trafiało wyłącznie
+    # do konsoli użytkownika. Uzasadnienie trybu („nie mamy jeszcze ani jednego
+    # pomiaru naruszeń") nie mogło się więc nigdy spełnić — polityka nic nie
+    # blokowała i nic nie mierzyła.
+    "report-uri /api/csp-report",
 ])
 
 # DOMYŚLNIE RAPORTOWANIE, NIE WYMUSZANIE. CSP, która psuje GUI, jest gorsza od jej
@@ -300,12 +307,60 @@ def health() -> dict:
     }
 
 
+@app.post("/api/csp-report", status_code=204, tags=["ops"], include_in_schema=False)
+async def csp_report(request: Request):
+    """Odbiornik naruszeń CSP (`report-uri`). Zawsze 204.
+
+    PUBLICZNY Z KONIECZNOŚCI: raport wysyła przeglądarka odwiedzającego, bez
+    żadnego tokenu. Stąd trzy zaciski przeciw zasypaniu logów Cloud Run:
+    czytamy najwyżej 8 KB ciała, logujemy TRZY pola po 200 znaków, a globalny
+    limiter (60/min per klient) obowiązuje jak na każdym innym endpoincie.
+
+    ZAWSZE 204, NIGDY 4xx/5xx: to wejście dostanie kiedyś śmieci — od skanera,
+    od starej przeglądarki, od pomyłki. 500 byłoby darmowym sygnałem „tu się
+    coś wywraca", a 400 zachętą do dalszego szturchania. Raport, którego nie
+    dało się odczytać, po prostu przepada.
+    """
+    log = logging.getLogger(__name__)
+    try:
+        surowe = (await request.body())[:8192]
+        dane = json.loads(surowe or b"{}")
+        raport = dane.get("csp-report", dane) if isinstance(dane, dict) else {}
+        if not isinstance(raport, dict):
+            raport = {}
+        log.warning(
+            "CSP naruszenie: dyrektywa=%s zablokowane=%s strona=%s",
+            str(raport.get("violated-directive", "?"))[:200],
+            str(raport.get("blocked-uri", "?"))[:200],
+            str(raport.get("document-uri", "?"))[:200],
+        )
+    except (ValueError, TypeError, UnicodeDecodeError) as e:
+        # Śmieciowy raport nie jest awarią — ale cisza tutaj ukryłaby, że
+        # przeglądarki wysyłają format, którego nie umiemy odczytać.
+        log.info("CSP raport nieczytelny (%s) — pomijam", type(e).__name__)
+    return Response(status_code=204)
+
+
 @app.get("/metrics", tags=["ops"])
 def metrics_endpoint(x_metrics_token: str = Header(default="")):
-    # BEZPIECZEŃSTWO: metryki Prometheus ujawniają wolumen ruchu/endpointy.
-    # Gdy METRICS_TOKEN ustawiony (prod) — wymagaj nagłówka; gdy brak (dev/test) — otwarte.
+    # BEZPIECZEŃSTWO: metryki Prometheus ujawniają wolumen ruchu i listę endpointów.
+    #
+    # DO 24.09.2026 bramka brzmiała „gdy token USTAWIONY — sprawdzaj", czyli brak
+    # zmiennej = brak ochrony. Na produkcji `METRICS_TOKEN` nie jest ustawiony,
+    # więc endpoint odpowiadał każdemu; nic nie wyciekało WYŁĄCZNIE dlatego, że
+    # `prometheus_client` nie trafił do obrazu API i odpowiedź to `metrics-disabled`.
+    # Ochroną była nieobecność biblioteki, nie decyzja — a zależność przechodnia
+    # potrafi ją dołożyć bez niczyjej wiedzy.
+    #
+    # Teraz: na produkcji bez tokenu endpoint MILCZY (404 — nie ma powodu
+    # potwierdzać, że istnieje). Dev/test zostają otwarte, bo tam metryki są
+    # narzędziem pracy, a ruchu do podglądania nie ma.
     import hmac
     expected = os.getenv("METRICS_TOKEN", "")
+    na_produkcji = os.environ.get("ENV", "production").lower() not in (
+        "dev", "development", "local", "test")
+    if na_produkcji and not expected:
+        raise HTTPException(status_code=404, detail="Not Found")
     if expected and not hmac.compare_digest(x_metrics_token, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
