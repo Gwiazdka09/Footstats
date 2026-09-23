@@ -19,6 +19,7 @@ Użycie:
 
 import json
 import logging
+import os
 from datetime import date, datetime, timedelta
 
 log = logging.getLogger(__name__)
@@ -30,6 +31,13 @@ from footstats.utils.normalize import normalize_team_name, team_similarity
 # Kupony ACTIVE bez wyniku po tylu dniach (legi z nieobsługiwanych lig/friendly)
 # oznaczamy VOID, żeby nie blokowały na zawsze i nie liczyły się do accuracy/M1.
 VOID_AFTER_DAYS = 10
+
+# Ile razy probujemy sciagnac wynik kuponu, zanim przestanie podnosic alarm
+# o stojacym rozliczaniu. Ta sama liczba i to samo pojecie co przy predykcjach
+# (`results_updater.MAX_PROB_ROZLICZENIA`, 14.08) — tam zrodlem prawdy jest
+# kolumna `settle_attempts`, tu licznik `proby` w `legs_json`, bo `coupons`
+# takiej kolumny nie ma, a migracja dla samego alarmu byla by drozsza niz zysk.
+MAX_PROB_ROZLICZENIA_KUPONU = int(os.getenv("MAX_PROB_ROZLICZENIA_KUPONU", "5"))
 
 # Najdluzej siegajace zrodlo wynikow.
 #
@@ -85,6 +93,30 @@ def czeka_zbyt_dlugo(mdate: str, dzis: date | None = None) -> bool:
                     " czeka za dlugo, wiec alarm o zastoju go NIE zobaczy", mdate)
         return False
     return 1 <= ((dzis or date.today()) - dzien).days <= HORYZONT_ZRODEL_DNI
+
+
+def czeka_na_wynik_osiagalny(legs: list[dict]) -> bool:
+    """Czy wynik tego kuponu jeszcze REALNIE mozemy zdobyc.
+
+    ZMIERZONE 24.09.2026 na logach produkcji (8 dni): alarm „rozliczanie stoi"
+    poszedl 11 razy, a od 19.09 stale przy `czekajace_w_zasiegu = 3` — te same
+    kupony #609/#618/#619, na ligi bez pokrycia zrodel (Brasileirao Serie B, USL).
+    Reakcji nie ma i nie bedzie: wyniku nie ma skad wziac, kupon sam zniknie po
+    `VOID_AFTER_DAYS`. Alarm palacy sie codziennie uczy ignorowania alarmow.
+
+    ROZROZNIENIE: „jeszcze nie probowalismy" kontra „probowalismy wiele razy
+    i zrodla nie maja wyniku". Predykcje maja to od 14.08 (`settle_attempts`),
+    kupony nie mialy nic.
+
+    NIE UCISZA PRAWDZIWEJ AWARII: przy zepsutym zrodle codziennie przychodza NOWE
+    kupony z mala liczba prob, wiec alarm leci dalej. Milkna tylko te, ktore
+    przestaly byc odzyskiwalne — a o ich zniknieciu mowi osobny `kupony_przepadly`.
+
+    Brak pola `proby` (kupony sprzed tej zmiany) znaczy „swiezy": inaczej samo
+    wdrozenie uciszyloby alarm dla wszystkiego, co wisi w bazie.
+    """
+    proby = max((int(lg.get("proby") or 0) for lg in legs), default=0)
+    return proby < MAX_PROB_ROZLICZENIA_KUPONU
 
 
 def rozliczanie_stoi(settled: int, czekajace_w_zasiegu: int) -> str | None:
@@ -591,6 +623,13 @@ def settle_active_coupons(
                 if verbose:
                     print(f"  [VOID] Kupon #{coupon_id} — brak wyniku po {VOID_AFTER_DAYS}d → VOID\n")
                 continue
+            # Licznik prob na nogach, ktore WCIAZ nie maja wyniku. Rosnie przy
+            # kazdym przebiegu i jest jedyna rzecza, ktora odrozni „zrodlo padlo
+            # dzis" od „tej ligi nie umiemy rozliczyc od tygodnia".
+            for lg in updated_legs:
+                if lg.get("result") in (None, "", "?"):
+                    lg["proby"] = int(lg.get("proby") or 0) + 1
+
             # W oknie → zapisz znane per-leg wyniki (partial update) i czekaj
             if not dry_run:
                 try:
@@ -607,7 +646,10 @@ def settle_active_coupons(
             # rozliczaniu nie da sie ustawic tak, zeby nie wyl codziennie.
             # `czeka_zbyt_dlugo`, nie `data_jeszcze_osiagalna`: mecz z DZISIAJ moze
             # sie jeszcze nie odbyc, a wtedy brak wyniku jest stanem normalnym.
-            if czeka_zbyt_dlugo(mdate):
+            # Dwa warunki, bo pytaja o dwie rozne rzeczy: `czeka_zbyt_dlugo` —
+            # czy wynik POWINNISMY juz miec; `czeka_na_wynik_osiagalny` — czy
+            # jeszcze jest szansa, ze zrodlo go odda.
+            if czeka_zbyt_dlugo(mdate) and czeka_na_wynik_osiagalny(updated_legs):
                 stats["czekajace_w_zasiegu"] += 1
             if verbose:
                 print(f"  [PARTIAL] Kupon #{coupon_id} — czekam na brakujące wyniki\n")
