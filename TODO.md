@@ -8,10 +8,10 @@
 
 > **🎯 KIERUNEK 2026-07-27:** produkt zostaje na **użytek prywatny + beta-testerzy (znajomi)**. Priorytet = **żeby bot się uczył** (pętla predykcja→settle→kalibracja→RAG). Zero monetyzacji, zero publicznego launchu. Plan wykonawczy → sekcja `🎯 PLAN P0-P3` niżej.
 
-**Aktualizacja:** 2026-09-21 · v3.4-stable
+**Aktualizacja:** 2026-09-24 · v3.4-stable
 **Accuracy (live, `model_log` 13.08):** **poisson-dc 65.2%** (15/23) · bzzoiro-ml 50.0% (41/82) — próba mała, ale poisson-dc realnie gra i prowadzi
 **Accuracy (offline):** Brier 0.6064 po fiksie rozdzielczości (było 0.6454); rynek 0.5912 — **wciąż nad nami**
-**Cel M1:** 55% win rate (mierzony na 1X2 — **do rewizji**, patrz werdykt per rynek) · **Suite:** 6706 testów
+**Cel M1:** 55% win rate (mierzony na 1X2 — **do rewizji**, patrz werdykt per rynek) · **Suite:** 6798 testów
 **LIVE:** pipeline **PC-off w chmurze** — Cloud Run Jobs (final 11:00 + evening 23:00) + Scheduler (draft 07:30, settle 06:00/21:30). Szczegóły → `docs/cloud_migration.md`.
 **⚠️ INCYDENT 27.07 (naprawiony):** redeploy zgubił env Cloud Run (`JWT_SECRET` itd.) → login zwracał 500 udający „złe hasło". Fix: rev 00313-mf5 + malformed-hash guard (401 nie 500) + `/mcp` off w prod + CD re-asertuje krytyczne sekrety + LoginView rozróżnia błąd serwera/limit/sieć od złych danych. Audyt auth: 6 znalezisk, rdzeń szczelny.
 **⚠️ INCYDENT 14-20.07 (naprawiony 07-20):** potrójna awaria — Neon quota-block → **DB = Supabase free** (session pooler); image jobów bez `footstats.data` (`.gcloudignore` fix); kupon=None crash. **Luka w danych 14-20.07** (zero predykcji/settled). Dane 1-17.07 uwięzione w Neonie do **1.08**. Szczegóły → `CHANGELOG.md` 07-20.
@@ -20,6 +20,69 @@
 > **📦 Ukończone → `CHANGELOG.md`.** 23.08 przeniesiono stamtąd 40 zamkniętych pozycji
 > (729 → 403 linie). Ten plik trzyma **wyłącznie to, co otwarte** — jeśli szukasz, jak coś
 > zostało naprawione, szukaj w CHANGELOG-u albo w `git log`.
+
+---
+
+## 🔵 24.09 — AUDYT BEZPIECZEŃSTWA (zamknięty) + PORZĄDKI W REPO
+
+Pełny raport: **`docs/audyt_bezpieczenstwa_2026-09-24.md`**. Osiem znalezisk
+naprawionych (PR #31), wszystkie tego samego rodzaju: **ochrona była napisana, ale
+w produkcji nie działała albo nie obejmowała ścieżki, którą chodzą ludzie.**
+
+Najpoważniejsze trzy:
+
+- **Link resetu hasła działał wielokrotnie** przez 60 min — nic nie zużywało tokenu.
+  Ofiara resetuje hasło, napastnik z tym samym linkiem ustawia własne w ciągu
+  godziny; podbicie `token_version` wyrzucało wtedy WŁAŚCICIELA. Naprawa wiąże
+  token z wersją sesji (`tv`), fail closed w trzech miejscach.
+- **Front na Vercelu leciał bez nagłówków** — cała praca z 23.08 obejmowała tylko
+  kopię z Cloud Run. Zmierzone `curl -sI`: wracało wyłącznie HSTS. Logowanie dawało
+  się osadzić w cudzej ramce.
+- **500 oddawało treść wyjątku psycopg2** w 17 miejscach — nazwa relacji, kolumny
+  i fragment zapytania, czyli mapa schematu bez jednego wstrzyknięcia.
+
+Dalej: `/metrics` otwarte na produkcji (chroniła je NIEOBECNOŚĆ biblioteki, nie
+decyzja), admin brany z claimu zamiast z bazy, CSP raportująca bez adresu raportu,
+3 podatności `high` we froncie (vite), ręczny kupon bez limitu nóg, publiczny
+ranking oddający `user_id`, bramka `/cron/*` w pięciu kopiach, `Cache-Control` bez
+`private`, pola `/api/settings` bez granic, hasła bez `autoComplete`.
+
+**Poza audytem:** alarm „rozliczanie stoi" palił się **11 razy w 8 dni** (zmierzone
+na logach), zawsze od tych samych trzech kuponów z lig bez źródła wyników. Kupony
+mają teraz licznik prób w `legs_json` — tak jak predykcje od 14.08.
+
+**Metryki włączone** (decyzja użytkownika 24.09): `prometheus-client` w `[api]`,
+`METRICS_TOKEN` podpięty do serwisu i re-asertowany przez CD. Zmierzone na
+produkcji: 401 bez tokenu, 401 ze złym, 200 z poprawnym.
+
+**Porządki:** 11 otwartych PR-ów → 1 (draft #13). Zmergowane #25 (8 bumpów +
+przypięcie WSZYSTKICH akcji do SHA), #26 (checkout v7), #30 (react 19 z react-dom
++ 3 podatności high), #31 (audyt). Zamknięte z uzasadnieniem #19 (`mcp` 2.x psuje
+`fastapi-mcp` → reguła `ignore` na majora) i #22 (bumpował SAM `react`, bez
+`react-dom` — stąd `ReactCurrentDispatcher`). Skasowany zagnieżdżony klon repo
+(256 MB) i trzy zmergowane gałęzie.
+
+### Zostaje do decyzji — bezpieczeństwo
+
+- [ ] **`CSP_ENFORCE=1`** — polityka raportuje i MA GDZIE raportować (`/api/csp-report`).
+      Po 2-3 dniach bez naruszeń: flaga na Cloud Run + zamiana nazwy nagłówka
+      w `vercel.json`. Zła polityka = biała strona u wszystkich naraz, więc
+      najpierw dane.
+- [ ] **Token w `localStorage`** — wektor to XSS, obecnie odcięty (`script-src 'self'`,
+      zero wstrzykiwania HTML). Przeniesienie na ciasteczko `httpOnly` wymaga CSRF
+      i dotyka całego frontu. Świadomie odłożone.
+- [ ] **Brak weryfikacji e-maila przy rejestracji** — decyzja produktowa.
+- [ ] **`ALLOWED_ORIGINS` zawiera stary host Cloud Run** obok działającego.
+- [ ] **`POST /api/settings` wygląda na martwy** — GUI tylko czyta. Do skasowania,
+      jeśli sekcja „Algorytm & Ryzyko" nie wraca.
+
+### Otwarte z pomiarów
+
+- [ ] **Brak katalogu `cache/api_football` w kontenerze.** Log przy każdym przebiegu:
+      „cache dyskowy NIE DZIAŁA, każde zapytanie zużyje budżet API". Poprawka prosta,
+      ale ma być zmierzona przed/po (ile zapytań do API-Football na przebieg).
+- [x] ~~„Migawka kursów nieudana" ERROR co przebieg~~ — **samo zniknęło** po rebuildzie
+      obrazu; od 22.09 zapisuje 1472-1568 wierszy (`INFO`).
 
 ---
 
