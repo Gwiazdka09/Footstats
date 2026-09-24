@@ -161,7 +161,13 @@ def test_token_bez_uid_odrzucony():
 
 # ── require_admin ───────────────────────────────────────────────────────────
 
-def test_admin_przechodzi():
+def test_admin_przechodzi(monkeypatch):
+    """Od 24.09.2026 `require_admin` czyta `is_admin` Z BAZY, nie tylko z claimu
+    — odebranie uprawnien ma dzialac od razu, nie po 24h (audyt bezpieczenstwa).
+    Stad atrapa stanu konta; bez niej test mierzylby brak bazy, nie autoryzacje.
+    """
+    monkeypatch.setattr(auth, "stan_sesji",
+                        lambda uid: {"wersja": 0, "aktywne": True, "admin": True})
     token = auth._make_token("admin", 1, is_admin=True)
     assert auth.require_admin(_cred(token)) == 1
 
@@ -280,14 +286,14 @@ def test_flaga_admina_trafia_do_tokenu(baza):
 # ── reset hasla ─────────────────────────────────────────────────────────────
 
 def test_token_resetu_ma_claim_purpose():
-    token = auth._make_reset_token(7)
+    token = auth._make_reset_token(7, 0)
     dane = jwt.decode(token, os.environ["JWT_SECRET"], algorithms=[auth._ALGORITHM])
     assert dane["purpose"] == "reset"
     assert dane["uid"] == 7
 
 
 def test_token_resetu_wygasa_szybciej_niz_login():
-    reset = jwt.decode(auth._make_reset_token(1), os.environ["JWT_SECRET"],
+    reset = jwt.decode(auth._make_reset_token(1, 0), os.environ["JWT_SECRET"],
                        algorithms=[auth._ALGORITHM])
     login = jwt.decode(auth._make_token("admin", 1), os.environ["JWT_SECRET"],
                        algorithms=[auth._ALGORITHM])
@@ -302,9 +308,15 @@ def db_zapis(monkeypatch):
     class _Conn:
         def execute(self, sql, params=()):
             zapisy.append((" ".join(sql.split()), params))
+            self._select = " ".join(sql.split()).upper().startswith("SELECT")
             return self
 
         def fetchone(self):
+            # Od 24.09.2026 `reset_password` czyta `token_version`, zeby token
+            # resetu byl JEDNORAZOWY. Atrapa musi ten wiersz oddac, inaczej
+            # reset odmawia (fail closed) i testy mierzylyby zla rzecz.
+            if getattr(self, "_select", False):
+                return {"wersja": 0, "is_active": True}
             return None
 
         def commit(self):
@@ -370,7 +382,7 @@ def test_reset_wazny_token_zmienia_haslo(db_zapis):
     przejecie konta, wiec musi wyrzucic napastnika ze WSZYSTKICH urzadzen —
     wczesniej stary token dzialal dalej do konca doby (znalezisko B1).
     """
-    _reset(auth._make_reset_token(7))
+    _reset(auth._make_reset_token(7, 0))
     update = [z for z in db_zapis if z[0].upper().startswith("UPDATE USERS")]
     assert len(update) == 2
 
@@ -385,7 +397,7 @@ def test_reset_wazny_token_zmienia_haslo(db_zapis):
 
 
 def test_reset_dotyczy_tylko_konta_aktywnego(db_zapis):
-    _reset(auth._make_reset_token(7))
+    _reset(auth._make_reset_token(7, 0))
     sql = [z for z in db_zapis if z[0].upper().startswith("UPDATE USERS")][0][0]
     assert "is_active" in sql.lower()
 

@@ -109,6 +109,13 @@ jobs:
           # NIE jest komentarzem YAML — trafia do akcji jako tresc i wywala deploy.
           # Wszystkie objasnienia musza stac TUTAJ, nad blokiem. Sprawdzone na wlasnej
           # skorze 2026-08-24: komentarz wstawiony miedzy wpisy polozyl dwa deploye.
+          # METRICS_TOKEN doszedl 2026-09-24: sekret istnial w Secret Managerze od 24.06,
+          # ale NIE byl na serwisie — a bramka `/metrics` przepuszczala wszystko, gdy
+          # zmiennej brak. Endpoint nie wystawial danych tylko dlatego, ze
+          # `prometheus_client` nie byl w obrazie; ochrona sprowadzala sie do braku
+          # biblioteki. Od teraz bramka jest szczelna (404 bez tokenu na produkcji),
+          # biblioteka jest w `[api]`, a token re-asertuje CD — inaczej pierwszy deploy
+          # po recznym ustawieniu zdmuchnalby go tak, jak 27.07 zdmuchnal JWT_SECRET.
           # FOOTBALL_API_KEY doszedl 2026-08-24: sekret istnial i byl na OBU jobach, ale
           # nie na serwisie — a to serwis obsluguje /cron/settle (schedulery
           # settle-morning/-evening bija pod jego URL). Przez to `_get_matches_fdb`
@@ -126,6 +133,7 @@ jobs:
             FOOTBALL_API_KEY=FOOTBALL_API_KEY:latest
             ODDS_API_KEY=ODDS_API_KEY:latest
             CRON_SECRET=CRON_SECRET:latest
+            METRICS_TOKEN=METRICS_TOKEN:latest
           secrets_update_strategy: merge
 
       - name: Verify deployment health

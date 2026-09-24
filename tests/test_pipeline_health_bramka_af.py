@@ -51,7 +51,9 @@ def zdrowa_baza(monkeypatch):
             return []
 
     monkeypatch.setattr(status_routes, "_connect", lambda: _Conn())
-    monkeypatch.setattr(status_routes, "_sprawdz_cron_secret", lambda _s: None)
+    # Bramka /cron/* przeniesiona do `api/cron_auth` (24.09.2026), ale import
+    # jest na poziomie modulu, wiec patchujemy MIEJSCE UZYCIA, nie zrodlo.
+    monkeypatch.setattr(status_routes, "sprawdz_cron_secret", lambda _s: None)
     monkeypatch.setattr(status_routes, "_wyslij_alarm", lambda *a, **k: False)
 
 

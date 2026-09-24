@@ -191,7 +191,7 @@ def test_odczyt_zwraca_wersje_i_aktywnosc(monkeypatch):
         def execute(self, *a, **k):
             class _K:
                 def fetchone(self):
-                    return {"wersja": 5, "is_active": True}
+                    return {"wersja": 5, "is_active": True, "is_admin": False}
             return _K()
         def __enter__(self):
             return self
@@ -199,4 +199,6 @@ def test_odczyt_zwraca_wersje_i_aktywnosc(monkeypatch):
             return False
 
     monkeypatch.setattr("footstats.utils.db.connect", lambda: _Conn())
-    assert _auth.stan_sesji(1) == {"wersja": 5, "aktywne": True}
+    # Od 24.09.2026 `stan_sesji` oddaje tez `admin` — `require_admin` czyta
+    # uprawnienie z bazy, nie z claimu w tokenie (audyt bezpieczenstwa).
+    assert _auth.stan_sesji(1) == {"wersja": 5, "aktywne": True, "admin": False}

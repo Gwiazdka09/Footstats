@@ -193,6 +193,7 @@ const AdminPanelView = ({ apiFetch, onSettled }) => {
             />
             <input
               type="password"
+              autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Hasło (min. 8 znaków)"

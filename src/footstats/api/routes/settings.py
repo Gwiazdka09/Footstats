@@ -3,7 +3,7 @@ from typing import Optional
 
 import footstats.config as cfg
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from footstats.api.auth import require_auth
 from footstats.core.response_cache import cached_response
@@ -13,11 +13,19 @@ router = APIRouter(prefix="/api", tags=["settings"])
 
 
 class SettingsUpdate(BaseModel):
-    version: Optional[str] = None
-    pewniaczek_prog: Optional[float] = None
-    kandydat_prog: Optional[float] = None
-    kelly_fraction: Optional[int] = None
-    kelly_w1_multipliers: Optional[str] = None
+    """Granice pól (audyt 24.09.2026).
+
+    `bot_settings` to tabela per-user z wartosciami TEXT, a endpoint przyjmowal
+    napisy dowolnej dlugosci i liczby z dowolnego zakresu — czyli jedno konto
+    mogło wpisać tam megabajty albo `pewniaczek_prog = 1e308`. Zakresy sa tu
+    nie po to, zeby chronic model (te wartosci sa dzis tylko odczytywane do
+    wyswietlenia), ale zeby granica systemu miala proste, sprawdzalne wejscie.
+    """
+    version: Optional[str] = Field(default=None, max_length=40)
+    pewniaczek_prog: Optional[float] = Field(default=None, ge=0, le=100)
+    kandydat_prog: Optional[float] = Field(default=None, ge=0, le=100)
+    kelly_fraction: Optional[int] = Field(default=None, ge=1, le=100)
+    kelly_w1_multipliers: Optional[str] = Field(default=None, max_length=60)
 
 
 @router.get("/settings")

@@ -132,6 +132,8 @@ pillow==12.3.0
     # via reportlab
 playwright==1.62.0
     # via footstats (pyproject.toml)
+prometheus-client==0.26.0
+    # via footstats (pyproject.toml)
 protobuf==7.36.0
     # via
     #   googleapis-common-protos

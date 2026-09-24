@@ -88,6 +88,8 @@ pandas==3.0.5
     # via footstats (pyproject.toml)
 pillow==12.3.0
     # via reportlab
+prometheus-client==0.26.0
+    # via footstats (pyproject.toml)
 psycopg2-binary==2.9.12
     # via footstats (pyproject.toml)
 pyarrow==25.0.1

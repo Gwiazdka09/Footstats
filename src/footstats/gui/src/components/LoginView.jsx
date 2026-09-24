@@ -127,6 +127,7 @@ const LoginView = ({ setToken, setUser }) => {
               <input
                 id="pole-login"
                 type="text"
+                autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors"
@@ -157,6 +158,7 @@ const LoginView = ({ setToken, setUser }) => {
               <input
                 id="pole-haslo"
                 type="password"
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors"

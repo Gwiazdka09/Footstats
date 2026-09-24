@@ -97,7 +97,10 @@ export const CouponCard = ({ coupon, index }) => (
   </motion.div>
 );
 
-export const ConfigInput = ({ label, value, onChange, tooltip, type = "text" }) => (
+// `autoComplete` przelatuje do <input>, bo bez niego przegladarka zgaduje:
+// pole "nowe haslo" bywa podpowiadane starym, a menedzery hasel zapisuja
+// wartosc pod zlym wpisem (audyt 24.09.2026).
+export const ConfigInput = ({ label, value, onChange, tooltip, type = "text", autoComplete }) => (
   <div>
     <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase mb-2">
       {label}
@@ -109,6 +112,7 @@ export const ConfigInput = ({ label, value, onChange, tooltip, type = "text" }) 
     </label>
     <input
       type={type}
+      autoComplete={autoComplete}
       value={value || ''}
       onChange={e => onChange(e.target.value)}
       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"

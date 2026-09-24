@@ -1,10 +1,8 @@
 """Status and config endpoints."""
-import hmac
 import json
 
 import psycopg2
 import logging
-import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -12,6 +10,7 @@ import footstats.config as cfg
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 
 from footstats.api.auth import require_auth
+from footstats.api.cron_auth import sprawdz_cron_secret
 from footstats.core.draft_health import PROG_STALE_DNI, ocena_swiezosci
 from footstats.utils.db import connect as _connect
 
@@ -61,7 +60,8 @@ def get_status(user_id: int = Depends(require_auth)):
             },
         }
     except (ValueError, KeyError, AttributeError, TypeError) as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _log.error("get_status error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 _CALIBRATION_PATH = Path(__file__).parent.parent.parent.parent.parent / "data" / "model_calibration.json"
@@ -75,7 +75,8 @@ def get_calibration(user_id: int = Depends(require_auth)):
     except FileNotFoundError:
         return {"updated_at": None, "factor_home": None, "factor_away": None, "n_matches": 0}
     except (ValueError, KeyError, AttributeError, TypeError) as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _log.error("get_calibration error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.get("/config")
@@ -109,16 +110,7 @@ _MAX_WIEK_PREDYKCJI_H = 26.0
 _MAX_ZALEGLOSCI = 10
 
 
-def _sprawdz_cron_secret(podany: str) -> None:
-    """Wspólna bramka dla endpointów /cron/*.
 
-    `not oczekiwany` jest tu krytyczne: `hmac.compare_digest("", "")` zwraca True,
-    więc deploy bez zmiennej CRON_SECRET otwierałby endpoint dla każdego, kto
-    wyśle pusty nagłówek.
-    """
-    oczekiwany = os.getenv("CRON_SECRET", "")
-    if not oczekiwany or not hmac.compare_digest(podany, oczekiwany):
-        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 @router.post("/cron/pipeline-health")
@@ -141,7 +133,7 @@ def pipeline_health(
     Cisza przy zdrowym stanie jest celowa — alarm wysyłany codziennie
     "wszystko gra" przestaje być czytany po tygodniu.
     """
-    _sprawdz_cron_secret(x_cron_secret)
+    sprawdz_cron_secret(x_cron_secret)
 
     powody: list[str] = []
     wiek_h: float | None = None
@@ -314,7 +306,7 @@ def raport_dzienny(x_cron_secret: str = Header(default="")) -> dict:
     przechowywanej konfiguracji rutyny — ten sam błąd, przez który 14.08 `CRON_SECRET`
     wyciekł i wymagał rotacji. Raport liczy tam, gdzie poświadczenia już są.
     """
-    _sprawdz_cron_secret(x_cron_secret)
+    sprawdz_cron_secret(x_cron_secret)
 
     kupony = predykcje = rozliczone = 0
     problemy: list[str] = []
@@ -437,6 +429,6 @@ def cron_kalibracja_rozlicz(
     202, nie 200: 200 z licznikami znaczyloby "policzone", a w tym momencie nic
     jeszcze nie jest policzone.
     """
-    _sprawdz_cron_secret(x_cron_secret)
+    sprawdz_cron_secret(x_cron_secret)
     background_tasks.add_task(_rozlicz_dziennik_w_tle, dni_wstecz, dry_run)
     return {"started": True, "dni_wstecz": dni_wstecz, "dry_run": dry_run}

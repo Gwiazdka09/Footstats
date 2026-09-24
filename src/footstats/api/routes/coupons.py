@@ -1,5 +1,4 @@
 """Coupon, match, kelly, and stats endpoints."""
-import hmac
 import json
 import logging
 import math
@@ -13,6 +12,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from footstats.api.auth import require_admin, require_auth
+from footstats.api.cron_auth import sprawdz_cron_secret
 from footstats.core import match_linker
 from footstats.core.coupon_tracker import STATUS_ACTIVE, save_coupon, update_coupon_status
 from footstats.core.probability_calibrator import calibrate_confidence
@@ -164,13 +164,37 @@ _MAX_TEXT_LEN = 120
 _MAX_BOOKMAKER_LEN = 60
 _MAX_PREVIEW_LEGS = 30
 
+# GORNE GRANICE ZAPISU (audyt 24.09.2026). Walidacja pilnowala dolnych granic
+# (stawka > 0, kurs > 1.0, pola niepuste) i dlugosci pojedynczych napisow, ale nie
+# liczby nog ani wysokosci stawki. Zadanie z setka tysiecy nog przechodzilo
+# i ladowalo w bazie jako jeden gigantyczny `legs_json`; `GET /api/coupons` zwraca
+# go potem w calosci i potrafi przekroczyc timeout 10 s z `api/main`. Rejestracja
+# jest otwarta, wiec kosztem takiego zadania jest jedno konto.
+#
+# Liczba nog = tyle samo, co w podgladzie sygnalu. Podglad, ktory NIC nie zapisuje,
+# byl ostrozniejszy od zapisu do bazy.
+_MAX_NOG_KUPONU = _MAX_PREVIEW_LEGS
+# Dziennik liczy jednostki, nie realne pieniadze — ale wpis ze stawka 10^12
+# rozjezdza ROI i krzywa postepu w rankingu, ktory widza inni.
+_MAX_STAWKI = 100_000.0
+
 
 def _validate_manual_coupon(req: ManualCouponRequest) -> None:
     """Waliduje ręczny wpis kuponu (fail-fast, granica systemu — HTTP 400 + PL detail)."""
     if not req.legs:
         raise HTTPException(status_code=400, detail="Kupon musi mieć co najmniej jedną nogę")
+    if len(req.legs) > _MAX_NOG_KUPONU:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Kupon może mieć najwyżej {_MAX_NOG_KUPONU} nóg (podano {len(req.legs)})",
+        )
     if req.stake_pln <= 0:
         raise HTTPException(status_code=400, detail="Stawka musi być dodatnia")
+    if req.stake_pln > _MAX_STAWKI:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Stawka nie może przekraczać {_MAX_STAWKI:.0f}",
+        )
     if req.bookmaker and len(req.bookmaker) > _MAX_BOOKMAKER_LEN:
         raise HTTPException(
             status_code=400,
@@ -213,7 +237,7 @@ def get_active_coupons(user_id: int = Depends(require_auth)):
         return result
     except psycopg2.Error as e:
         _log.error("get_active_coupons error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.get("/coupons")
@@ -233,7 +257,7 @@ def get_coupons(limit: int = 50, user_id: int = Depends(require_auth)):
         return result
     except psycopg2.Error as e:
         _log.error("get_coupons error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.get("/stats/coupon-summary")
@@ -299,7 +323,8 @@ def get_coupon_summary(days: int = 30, user_id: int = Depends(require_auth)):
         stats["confidence_avg"] = 0.0
         return stats
     except psycopg2.Error as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _log.error("get_coupon_summary error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 # Statusy, przy ktorych zrodlo mowi WPROST, ze meczu juz nie ma po co typowac.
@@ -663,7 +688,7 @@ def set_coupon_result(coupon_id: int, req: CouponResultRequest, user_id: int = D
             total_odds = float(row["total_odds"] or 0.0)
     except psycopg2.Error as e:
         _log.error("set_coupon_result lookup error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
     if req.result == "WON":
         payout = round(stake * total_odds, 2)
@@ -702,7 +727,7 @@ def share_coupon(coupon_id: int, req: ShareRequest, user_id: int = Depends(requi
         return {"ok": True, "coupon_id": coupon_id, "shared": req.shared}
     except psycopg2.Error as e:
         _log.error("share_coupon error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 _LEADERBOARD_SORT_FIELDS = {"win_rate": "win_rate", "roi": "roi", "profit": "profit_pln"}
@@ -818,7 +843,11 @@ def get_leaderboard(min_coupons: int = 2, limit: int = 20, sort: str = "win_rate
             payout = r["payout"] or 0.0
             profit_pln = payout - staked
             result.append({
-                "user_id": r["user_id"],
+                # BEZ `user_id`: ranking jest PUBLICZNY (bez auth), a wewnetrzny
+                # identyfikator konta nie jest nikomu na zewnatrz potrzebny —
+                # `username` wystarcza i do wyswietlenia, i jako klucz listy.
+                # `get_user_shared_coupons` obok usuwal go celowo (OWASP API3),
+                # tutaj zostawal przez przeoczenie (audyt 24.09.2026).
                 "username": r["username"],
                 "total": total,
                 "wins": wins,
@@ -839,7 +868,7 @@ def get_leaderboard(min_coupons: int = 2, limit: int = 20, sort: str = "win_rate
         return result[:limit]
     except psycopg2.Error as e:
         _log.error("get_leaderboard error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.get("/leaderboard/pending")
@@ -863,7 +892,7 @@ def get_pending_shared():
         return [dict(r) for r in rows]
     except psycopg2.Error as e:
         _log.error("get_pending_shared error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.patch("/me/leaderboard")
@@ -884,7 +913,7 @@ def set_leaderboard_opt_in(req: ShareRequest, user_id: int = Depends(require_aut
         return {"ok": True, "leaderboard_opt_in": req.shared}
     except psycopg2.Error as e:
         _log.error("set_leaderboard_opt_in error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.get("/leaderboard/{username}/coupons")
@@ -912,7 +941,7 @@ def get_user_shared_coupons(username: str, limit: int = 20):
         return result
     except psycopg2.Error as e:
         _log.error("get_user_shared_coupons error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.post("/coupons/settle")
@@ -935,15 +964,14 @@ def settle_coupons(req: SettleRequest, user_id: int = Depends(require_admin)):
             ),
         }
     except (ValueError, KeyError, AttributeError, TypeError) as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _log.error("settle_coupons error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.post("/cron/settle")
 def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
     """Endpoint dla Google Cloud Scheduler — rozlicza ACTIVE kupony."""
-    expected = os.getenv("CRON_SECRET", "")
-    if not expected or not hmac.compare_digest(x_cron_secret, expected):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    sprawdz_cron_secret(x_cron_secret)
     try:
         from footstats.core.coupon_settlement import settle_active_coupons
         from footstats.core.response_cache import clear_response_cache
@@ -990,7 +1018,7 @@ def cron_settle(x_cron_secret: str = Header(default=""), days_back: int = 3):
         }
     except (ValueError, KeyError, RuntimeError) as e:
         _log.error("cron_settle error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.post("/cron/settle-manual")
@@ -1004,9 +1032,7 @@ def cron_settle_manual(x_cron_secret: str = Header(default=""), dry_run: bool = 
     NIE wpięty domyślnie w scheduler (enablement to świadoma decyzja usera,
     patrz `settle_manual_coupons`).
     """
-    expected = os.getenv("CRON_SECRET", "")
-    if not expected or not hmac.compare_digest(x_cron_secret, expected):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    sprawdz_cron_secret(x_cron_secret)
     try:
         from footstats.core.coupon_settlement import settle_manual_coupons
         from footstats.core.response_cache import clear_response_cache
@@ -1048,7 +1074,7 @@ def cron_settle_manual(x_cron_secret: str = Header(default=""), dry_run: bool = 
         }
     except (ValueError, KeyError, RuntimeError) as e:
         _log.error("cron_settle_manual error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
 @router.post("/cron/draft")
@@ -1059,9 +1085,7 @@ def cron_draft(x_cron_secret: str = Header(default=""), days: int = 2, dry_run: 
     Playwright/Groq/Telegram. dry_run=True (DEFAULT) = podgląd, ZERO zapisów Neon.
     Live zbieranie danych: wywołać z dry_run=false (świadomie, po weryfikacji dry-run).
     """
-    expected = os.getenv("CRON_SECRET", "")
-    if not expected or not hmac.compare_digest(x_cron_secret, expected):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    sprawdz_cron_secret(x_cron_secret)
     from footstats.core.cloud_draft import generuj_system_draft
     result = generuj_system_draft(dni=days, dry_run=dry_run)
     podsumowanie = {k: v for k, v in result.items() if k != "legs"}
@@ -1083,9 +1107,7 @@ def cron_draft(x_cron_secret: str = Header(default=""), days: int = 2, dry_run: 
 @router.post("/cron/evict-cache")
 def cron_evict_cache(x_cron_secret: str = Header(default=""), max_days: int = 30):
     """Endpoint dla Google Cloud Scheduler — usuwa stare pliki cache."""
-    expected = os.getenv("CRON_SECRET", "")
-    if not expected or not hmac.compare_digest(x_cron_secret, expected):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    sprawdz_cron_secret(x_cron_secret)
     try:
         from footstats.utils.cache_evict import evict_old_cache
         deleted = evict_old_cache(max_days=max_days)
@@ -1093,4 +1115,4 @@ def cron_evict_cache(x_cron_secret: str = Header(default=""), max_days: int = 30
         return {"ok": True, "deleted": deleted, "max_days": max_days}
     except (OSError, ImportError, ValueError) as e:
         _log.error("cron_evict_cache error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")

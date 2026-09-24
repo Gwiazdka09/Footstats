@@ -331,7 +331,7 @@ def register(request: Request, req: RegisterRequest) -> TokenResponse:
 def stan_sesji(user_id: int) -> dict | None:
     """Stan konta pod katem waznosci sesji, albo `None` gdy nie da sie sprawdzic.
 
-    Zwraca `{"wersja": int | None, "aktywne": bool}`.
+    Zwraca `{"wersja": int | None, "aktywne": bool, "admin": bool}`.
 
     Rozroznienie trzech przypadkow jest tu istotne i kazdy znaczy co innego:
 
@@ -350,17 +350,21 @@ def stan_sesji(user_id: int) -> dict | None:
     try:
         with connect() as conn:
             row = conn.execute(
-                "SELECT COALESCE(token_version, 0) AS wersja, is_active"
+                "SELECT COALESCE(token_version, 0) AS wersja, is_active,"
+                " COALESCE(is_admin, FALSE) AS is_admin"
                 " FROM users WHERE id = ?",
                 (int(user_id),),
             ).fetchone()
         if not row:
-            return {"wersja": None, "aktywne": False}
+            return {"wersja": None, "aktywne": False, "admin": False}
         dane = dict(row)
         wersja = dane.get("wersja")
         return {
             "wersja": None if wersja is None else int(wersja),
             "aktywne": bool(dane.get("is_active", True)),
+            # `admin` czytamy z bazy, bo claim w tokenie zyje 24h i odebranie
+            # uprawnien nie mialoby skutku do konca doby (audyt 24.09.2026).
+            "admin": bool(dane.get("is_admin", False)),
         }
     except Exception as e:                                   # noqa: BLE001
         log.warning("Nie udalo sie sprawdzic stanu sesji dla uid=%s: %s", user_id, e)
@@ -445,6 +449,24 @@ def require_admin(
     except PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     _sprawdz_wersje(payload, int(user_id))
+
+    # CLAIM TO DEKLARACJA, BAZA TO PRAWDA. Do 24.09.2026 wystarczal claim `adm`,
+    # wiec `UPDATE users SET is_admin = FALSE` nie odbieral dostepu do konca doby
+    # — a to jest dokladnie ta czynnosc, ktora wykonuje sie PO incydencie.
+    #
+    # AWARIA ODCZYTU PRZEPUSZCZA (jak w `_sprawdz_wersje`): przy niedostepnej bazie
+    # KAZDY endpoint administracyjny i tak nic nie zwroci, bo wszystkie czytaja
+    # baze — fail-closed nie zamykalby wiec zadnej realnej drogi, a wywracalby
+    # panel przy kazdym zakrztuszeniu poolera. Odrzucamy tylko wtedy, gdy baza
+    # mowi WPROST, ze to nie admin.
+    stan = stan_sesji(int(user_id))
+    if stan is not None and not stan.get("admin", False):
+        log.warning("require_admin: uid=%s ma claim adm, ale baza mowi is_admin=false"
+                    " — odrzucone", user_id)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    if stan is None:
+        log.warning("require_admin: uid=%s — nie udalo sie potwierdzic is_admin w bazie,"
+                    " przepuszczam na podstawie claimu", user_id)
     return int(user_id)
 
 
@@ -531,11 +553,19 @@ _RESET_EXPIRE_MINUTES = 60
 _GENERIC_RESET_MSG = "Jeśli konto istnieje, wysłaliśmy link resetu na podany e-mail."
 
 
-def _make_reset_token(user_id: int) -> str:
-    """Krótki JWT (1h) do resetu hasła — claim purpose=reset odróżnia go od login-tokenu."""
+def _make_reset_token(user_id: int, token_version: int) -> str:
+    """Krótki JWT (1h) do resetu hasła — claim purpose=reset odróżnia go od login-tokenu.
+
+    `tv` (wersja sesji z chwili wystawienia) robi z tego token JEDNORAZOWY:
+    udany reset podbija `token_version`, więc drugie użycie tego samego linku
+    trafia na niezgodność wersji. Do 24.09.2026 claimu nie było i ten sam link
+    ustawiał hasło dowolną liczbę razy przez godzinę — a linki wyciekają inaczej
+    niż hasła (skrzynka, historia przeglądarki, kopia maila na innym urządzeniu).
+    """
     exp = datetime.now(timezone.utc) + timedelta(minutes=_RESET_EXPIRE_MINUTES)
     return jwt.encode(
-        {"uid": user_id, "purpose": "reset", "exp": exp}, _secret(), algorithm=_ALGORITHM
+        {"uid": user_id, "purpose": "reset", "tv": int(token_version), "exp": exp},
+        _secret(), algorithm=_ALGORITHM,
     )
 
 
@@ -575,7 +605,7 @@ def forgot_password(request: Request, req: ForgotPasswordRequest):
         return generic
     if not user:
         return generic
-    token = _make_reset_token(user["id"])
+    token = _make_reset_token(user["id"], int(user.get("token_version") or 0))
     base = os.getenv("FRONTEND_URL", "").rstrip("/")
     link = f"{base}/reset-password?token={token}"
     try:
@@ -596,6 +626,20 @@ def reset_password(request: Request, req: ResetPasswordRequest):
         raise HTTPException(status_code=400, detail="Nieprawidłowy lub wygasły token")
     if payload.get("purpose") != "reset" or not payload.get("uid"):
         raise HTTPException(status_code=400, detail="Nieprawidłowy token resetu")
+
+    # JEDNORAZOWOŚĆ. Token niesie wersję sesji z chwili wystawienia; udany reset
+    # ją podbija, więc drugie użycie tego samego linku tu odpada. FAIL CLOSED:
+    # brak claimu (token sprzed 24.09.2026) i nieczytelna wersja też odpadają —
+    # „nie wiem, więc przepuszczam" znosiłoby ochronę dokładnie przy awarii bazy,
+    # a koszt odmowy to jedno ponowne kliknięcie „nie pamiętam hasła".
+    wersja_tokenu = payload.get("tv")
+    stan = stan_sesji(int(payload["uid"])) if wersja_tokenu is not None else None
+    if wersja_tokenu is None or stan is None or stan["wersja"] != int(wersja_tokenu):
+        log.warning("reset hasla odrzucony dla uid=%s — wersja tokenu %s, w bazie %s",
+                    payload.get("uid"), wersja_tokenu,
+                    None if stan is None else stan["wersja"])
+        raise HTTPException(status_code=400, detail="Nieprawidłowy lub wygasły token")
+
     new_hash = bcrypt.hashpw(req.new_password.encode(), bcrypt.gensalt()).decode()
     from footstats.utils.db import connect
     with connect() as conn:
