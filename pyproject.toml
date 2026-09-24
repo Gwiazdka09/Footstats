@@ -64,6 +64,12 @@ dependencies = [
 api = [
     "sentry-sdk[fastapi]>=2.0",
     "psycopg2-binary>=2.9",
+    # `/metrics` mial kod od dawna, ale biblioteki nie bylo w obrazie, wiec endpoint
+    # oddawal `{"status": "metrics-disabled"}`. Do 24.09.2026 bylo to JEDYNE, co go
+    # chronilo — bramka na token przepuszczala wszystko, gdy `METRICS_TOKEN` nie byl
+    # ustawiony. Teraz bramka jest szczelna (404 na produkcji bez tokenu), wiec
+    # biblioteka moze wejsc i metryki zaczynaja istniec.
+    "prometheus-client>=0.20",
 ]
 ai = [
     "groq>=0.4",
