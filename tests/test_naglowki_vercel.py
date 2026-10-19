@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 KORZEN = Path(__file__).resolve().parents[1]
-VERCEL = KORZEN / "vercel.json"
+VERCEL = KORZEN / "src" / "footstats" / "gui" / "vercel.json"
 
 # Adres API, do którego front faktycznie strzela — odczytany z produkcyjnego
 # pakietu (`/assets/index-*.js` na Vercelu), nie zgadnięty.
@@ -50,6 +50,19 @@ def _naglowki() -> dict[str, str]:
         for h in wpis.get("headers", []):
             plaskie[h["key"]] = h["value"]
     return plaskie
+
+
+def test_brak_vercel_json_w_korzeniu_repo() -> None:
+    """Vercel czyta vercel.json WYŁĄCZNIE z Root Directory (`src/footstats/gui`).
+
+    Plik w korzeniu repo jest martwy — nagłówki i SPA rewrite na produkcji
+    nie działały właśnie dlatego, że leżały tutaj.
+    """
+    assert not (KORZEN / "vercel.json").exists(), (
+        "vercel.json w korzeniu repo jest martwy: Vercel czyta plik tylko z "
+        "Root Directory (`src/footstats/gui`), więc nagłówki z korzenia nie "
+        "trafiają na produkcję — przenieś plik do `src/footstats/gui/`"
+    )
 
 
 @pytest.mark.parametrize("klucz,wartosc", sorted(WYMAGANE.items()))

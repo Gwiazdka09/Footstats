@@ -134,7 +134,7 @@ jedno konto. Limit nóg = 30 (tyle, co w podglądzie, który nic nie zapisuje), 
 ## Zostaje do decyzji właściciela
 
 1. **Wymuszenie CSP.** Teraz oba środowiska raportują i mają gdzie raportować. Po kilku
-   dniach bez naruszeń: `CSP_ENFORCE=1` na Cloud Run i zamiana nagłówka w `vercel.json`.
+   dniach bez naruszeń: `CSP_ENFORCE=1` na Cloud Run i zamiana nagłówka w `src/footstats/gui/vercel.json`.
    To zmiana konfiguracji produkcji, nie kodu — i przy złej polityce daje białą stronę
    wszystkim naraz, więc najpierw raporty.
 2. **`METRICS_TOKEN` na produkcji.** Dziś endpoint milczy (404). Jeśli metryki mają być
