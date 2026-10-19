@@ -19,6 +19,7 @@ jest jednym wywołaniem i nie da się nim przypadkiem okroić zbioru.
 
 import io
 import logging
+import time
 from datetime import date
 from pathlib import Path
 
@@ -201,14 +202,37 @@ XGABORA_ELO_URL = (
 
 # ─────────────────────────── helpers ──────────────────────────────────────
 
+# Przerwy przed 2. i 3. próbą pobrania (s). Incydent 19.10: football-data.co.uk
+# dawał przejściowe read timeouty na ~13 z 258 CSV; jedna próba wywracała
+# całe tygodniowe odświeżenie (strażnik `regresje_datasetu` odmawiał zapisu).
+_PRZERWY_PONOWIEN: tuple[int, ...] = (2, 5)
+
+
+def _przejsciowy(e: Exception) -> bool:
+    """Timeout, zerwane połączenie, HTTP 5xx/429 — warto ponowić."""
+    if isinstance(e, (requests.Timeout, requests.ConnectionError)):
+        return True
+    if isinstance(e, requests.HTTPError) and e.response is not None:
+        kod = e.response.status_code
+        return kod >= 500 or kod == 429
+    return False
+
+
 def _get(url: str, timeout: int = 30) -> bytes | None:
-    try:
-        r = requests.get(url, timeout=timeout, headers={"User-Agent": "FootStats/3.0"})
-        r.raise_for_status()
-        return r.content
-    except (requests.RequestException, OSError) as e:
-        log.warning("HTTP error %s → %s", url, e)
-        return None
+    for proba in range(len(_PRZERWY_PONOWIEN) + 1):
+        try:
+            r = requests.get(url, timeout=timeout, headers={"User-Agent": "FootStats/3.0"})
+            r.raise_for_status()
+            return r.content
+        except (requests.RequestException, OSError) as e:
+            if proba < len(_PRZERWY_PONOWIEN) and _przejsciowy(e):
+                log.info("Ponowienie %d/%d %s → %s", proba + 2,
+                         len(_PRZERWY_PONOWIEN) + 1, url, e)
+                time.sleep(_PRZERWY_PONOWIEN[proba])
+                continue
+            log.warning("HTTP error %s → %s", url, e)
+            return None
+    return None
 
 
 def _czytaj_csv(raw: bytes) -> pd.DataFrame:
