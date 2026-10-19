@@ -88,7 +88,7 @@ limits==5.8.0
     # via slowapi
 markdown-it-py==4.2.0
     # via rich
-mcp==1.29.0
+mcp==1.30.0
     # via
     #   footstats (pyproject.toml)
     #   fastapi-mcp
@@ -163,7 +163,7 @@ pyee==13.0.1
     # via playwright
 pygments==2.21.0
     # via rich
-pyjwt==2.13.0
+pyjwt==2.15.1
     # via
     #   footstats (pyproject.toml)
     #   mcp
@@ -258,7 +258,7 @@ typing-inspection==0.4.4
     #   mcp
     #   pydantic
     #   pydantic-settings
-urllib3==2.7.0
+urllib3==2.8.0
     # via
     #   requests
     #   sentry-sdk
