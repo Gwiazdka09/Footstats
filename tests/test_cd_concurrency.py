@@ -83,3 +83,126 @@ def test_grupy_api_i_jobow_sa_rozne() -> None:
         f"Grupy concurrency CD się powtarzają: {grupy} — "
         "API i joby muszą mieć różne grupy"
     )
+
+
+def _kroki(nazwa: str) -> list[dict[str, Any]]:
+    """Zwraca listę kroków pierwszego joba workflow."""
+    dane = _wczytaj_workflow(nazwa)
+    joby = dane["jobs"]
+    pierwszy = next(iter(joby.values()))
+    return pierwszy["steps"]
+
+
+def _indeks_kroku(kroki: list[dict[str, Any]], fragment: str) -> int:
+    """Indeks pierwszego kroku, którego `uses` zawiera fragment; -1 gdy brak."""
+    for i, krok in enumerate(kroki):
+        if fragment in str(krok.get("uses", "")):
+            return i
+    return -1
+
+
+STRAZNIK = "steps.glowa.outputs.aktualny == 'true'"
+
+
+def test_grupa_concurrency_jest_stalym_literalem() -> None:
+    """Grupa nie zależy od runu — inaczej każdy run dostaje własną blokadę."""
+    for nazwa in WORKFLOW_CD:
+        # Arrange
+        grupa = _wczytaj_workflow(nazwa)["concurrency"]["group"]
+
+        # Act
+        zalezna_od_wyrazenia = "${{" in str(grupa)
+
+        # Assert
+        assert not zalezna_od_wyrazenia, (
+            f"{nazwa}: grupa concurrency `{grupa}` jest zależna od runu "
+            "(np. github.run_id) — każdy run dostaje osobną blokadę "
+            "i wdrożenia znów się nakładają"
+        )
+
+
+def test_cd_api_ma_krok_glowa() -> None:
+    """Przed wdrożeniem stoi krok sprawdzający, czy commit to nadal HEAD main."""
+    # Arrange
+    kroki = _kroki("cd.yml")
+
+    # Act
+    glowa = [k for k in kroki if k.get("id") == "glowa"]
+
+    # Assert
+    assert len(glowa) == 1, (
+        "cd.yml: brak kroku `id: glowa` (strażnik „czy to nadal HEAD main”)"
+    )
+
+
+def test_krok_deploy_cloudrun_ma_straznika_glowa() -> None:
+    """Deploy na Cloud Run rusza tylko dla commita, który nadal jest HEAD main."""
+    # Arrange
+    kroki = _kroki("cd.yml")
+
+    # Act
+    indeks = _indeks_kroku(kroki, "deploy-cloudrun")
+
+    # Assert
+    assert indeks >= 0, "cd.yml: brak kroku deploy-cloudrun"
+    warunek = str(kroki[indeks].get("if", ""))
+    assert STRAZNIK in warunek, (
+        "cd.yml: krok deploy-cloudrun nie ma warunku strażnika HEAD main — "
+        "re-run albo stary run nadpisze nowszą rewizję"
+    )
+
+
+def test_krok_glowa_jest_przed_deploy() -> None:
+    """Strażnik HEAD musi być sprawdzony PRZED wdrożeniem, nie po nim."""
+    # Arrange
+    kroki = _kroki("cd.yml")
+    indeks_glowa = next(
+        i for i, k in enumerate(kroki) if k.get("id") == "glowa"
+    ) if any(k.get("id") == "glowa" for k in kroki) else -1
+
+    # Act
+    indeks_deploy = _indeks_kroku(kroki, "deploy-cloudrun")
+
+    # Assert
+    assert indeks_glowa >= 0, "cd.yml: brak kroku `id: glowa`"
+    assert indeks_glowa < indeks_deploy, (
+        "cd.yml: krok `glowa` musi stać przed deploy-cloudrun"
+    )
+
+
+def test_kroki_po_deploy_maja_straznika_glowa() -> None:
+    """Każdy krok od wdrożenia w dół zmienia lub sprawdza nową rewizję — ma strażnika."""
+    # Arrange
+    kroki = _kroki("cd.yml")
+    indeks_deploy = _indeks_kroku(kroki, "deploy-cloudrun")
+
+    # Act
+    niepilnowane = [
+        k.get("name", "?")
+        for k in kroki[indeks_deploy:]
+        if STRAZNIK not in str(k.get("if", ""))
+    ]
+
+    # Assert
+    assert indeks_deploy >= 0, "cd.yml: brak kroku deploy-cloudrun"
+    assert niepilnowane == [], (
+        f"cd.yml: kroki od wdrożenia w dół bez strażnika HEAD main: {niepilnowane}"
+    )
+
+
+def test_cd_jobs_nie_ma_straznika_glowa() -> None:
+    """cd-jobs ma paths-ignore: nowszy commit tylko z dokumentacją nie odpala jobów.
+
+    Strażnik HEAD pominąłby wtedy jedyne wdrożenie zmian kodu, więc go tu nie ma.
+    """
+    # Arrange
+    kroki = _kroki("cd-jobs.yml")
+
+    # Act
+    glowa = [k for k in kroki if k.get("id") == "glowa"]
+
+    # Assert
+    assert glowa == [], (
+        "cd-jobs.yml: nie dodawaj kroku `glowa` — cd-jobs ma paths-ignore, "
+        "strażnik HEAD pominąłby jedyne wdrożenie zmian kodu"
+    )

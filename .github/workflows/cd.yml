@@ -84,7 +84,23 @@ jobs:
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
 
+      # Re-run albo zakolejkowany STARY run nie może nadpisać nowszej rewizji:
+      # concurrency kolejkuje, ale nie porządkuje po commicie. Nowszy commit na main
+      # zawsze ma własny run CD (ten workflow nie ma filtra ścieżek), więc pominięcie
+      # tutaj niczego nie gubi.
+      - name: Czy ten commit to nadal HEAD main?
+        id: glowa
+        run: |
+          HEAD_MAIN=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$HEAD_MAIN" = "$GITHUB_SHA" ]; then
+            echo "aktualny=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Pomijam wdrożenie: $GITHUB_SHA nie jest już HEAD main ($HEAD_MAIN) — wdroży je nowszy run"
+            echo "aktualny=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy to Cloud Run
+        if: steps.glowa.outputs.aktualny == 'true'
         uses: google-github-actions/deploy-cloudrun@251330ba9a8a34bfbc1622895f42e1d53fd14522 # v2.7.6
         with:
           service: ${{ secrets.CLOUD_RUN_SERVICE }}
@@ -145,6 +161,7 @@ jobs:
           secrets_update_strategy: merge
 
       - name: Verify deployment health
+        if: steps.glowa.outputs.aktualny == 'true'
         run: |
           URL=$(gcloud run services describe ${{ secrets.CLOUD_RUN_SERVICE }} \
             --region ${{ secrets.GCP_REGION }} \
