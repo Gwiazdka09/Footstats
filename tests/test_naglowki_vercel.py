@@ -52,6 +52,15 @@ def _naglowki() -> dict[str, str]:
     return plaskie
 
 
+def _dyrektywy_csp(polityka: str) -> dict[str, list[str]]:
+    """Rozbija CSP na słownik: nazwa dyrektywy (lowercase) -> lista źródeł."""
+    dyrektywy: dict[str, list[str]] = {}
+    for fragment in polityka.split(";"):
+        if czesci := fragment.split():
+            dyrektywy[czesci[0].lower()] = czesci[1:]
+    return dyrektywy
+
+
 def test_brak_vercel_json_w_korzeniu_repo() -> None:
     """Vercel czyta vercel.json WYŁĄCZNIE z Root Directory (`src/footstats/gui`).
 
@@ -73,21 +82,28 @@ def test_naglowek_obecny(klucz: str, wartosc: str) -> None:
 def test_csp_dopuszcza_api_bo_inaczej_aplikacja_umiera() -> None:
     """Front i API są na różnych domenach — bez tego wpisu CSP ubija logowanie."""
     csp = _naglowki().get("Content-Security-Policy-Report-Only", "")
-    assert API_PROD in csp, "CSP nie dopuszcza domeny API — każde żądanie by padło"
-    assert "connect-src" in csp
+    assert API_PROD in _dyrektywy_csp(csp).get("connect-src", []), (
+        "CSP nie dopuszcza domeny API w connect-src — każde żądanie by padło"
+    )
+
+
+def test_helper_csp_nie_myli_dyrektyw() -> None:
+    """Adres z innej dyrektywy nie może zaliczyć się do `connect-src`."""
+    polityka = "default-src 'self'; img-src https://api.x; connect-src 'self'"
+    assert "https://api.x" not in _dyrektywy_csp(polityka).get("connect-src", [])
 
 
 def test_csp_ma_gdzie_raportowac() -> None:
     """Tryb raportujący bez adresu raportu to dekoracja — lekcja z wersji API."""
     csp = _naglowki().get("Content-Security-Policy-Report-Only", "")
-    assert f"report-uri {API_PROD}/api/csp-report" in csp
+    assert f"{API_PROD}/api/csp-report" in _dyrektywy_csp(csp).get("report-uri", [])
 
 
 def test_csp_blokuje_ramki_i_obce_skrypty() -> None:
-    csp = _naglowki().get("Content-Security-Policy-Report-Only", "")
-    assert "frame-ancestors 'none'" in csp
-    assert "script-src 'self'" in csp
-    assert "object-src 'none'" in csp
+    dyrektywy = _dyrektywy_csp(_naglowki().get("Content-Security-Policy-Report-Only", ""))
+    assert "'none'" in dyrektywy.get("frame-ancestors", [])
+    assert "'self'" in dyrektywy.get("script-src", [])
+    assert "'none'" in dyrektywy.get("object-src", [])
 
 
 def test_polityka_nie_jest_wymuszana_zanim_cokolwiek_zmierzymy() -> None:
