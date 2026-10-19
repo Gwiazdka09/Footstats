@@ -317,7 +317,7 @@ def test_run_evening_agent_triggers_auto_trainer():
          patch("footstats.core.clv_zalegle.uzupelnij_clv_zaleglych", return_value=(0, 0)), \
          patch("footstats.evening_agent._send_telegram_summary"), \
          patch("subprocess.Popen") as mock_popen, \
-         patch.dict("os.environ", {"APISPORTS_KEY": "test_key"}):
+         patch.dict("os.environ", {"APISPORTS_KEY": "test_key", "AUTO_TRENING": "1"}):
         run_evening_agent("2026-04-09")
 
     mock_popen.assert_called_once()

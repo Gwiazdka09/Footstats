@@ -14,6 +14,7 @@ odpalic trenera ani wyslac wiadomosci.
 """
 from __future__ import annotations
 
+import logging
 import subprocess
 
 import pytest
@@ -180,7 +181,7 @@ def test_zero_wynikow_nie_odpala_treningu(monkeypatch, auto_trening):
     assert auto_trening == []
 
 
-def test_blad_startu_podprocesu_zglaszany_ale_nie_wywala(monkeypatch, capsys):
+def test_blad_startu_podprocesu_zglaszany_ale_nie_wywala(monkeypatch, caplog):
     def _padnij(*a, **k):
         raise OSError("brak interpretera")
 
@@ -190,8 +191,9 @@ def test_blad_startu_podprocesu_zglaszany_ale_nie_wywala(monkeypatch, capsys):
     import footstats.utils.telegram_notify as tg
     monkeypatch.setattr(tg, "telegram_dostepny", lambda: False)
 
-    bt._sprawdz_auto_trening()
-    assert "Auto-trening start failed" in capsys.readouterr().out
+    with caplog.at_level(logging.WARNING):
+        bt._sprawdz_auto_trening()
+    assert "start trenera nieudany" in caplog.text
 
 
 def test_blad_bazy_nie_wywala_zapisu_wyniku(monkeypatch, auto_trening):

@@ -8,7 +8,6 @@ Użycie:
     python -m footstats.evening_agent --date 2026-04-09
 """
 
-import sys
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -546,19 +545,8 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     # Wyświetl tabelę
     _print_summary_table(summary)
 
-    # Auto-trainer po 20+ nowych wynikach
-    if nowe_wyniki >= 20:
-        console.print(f"[green]{nowe_wyniki} nowych wyników → uruchamiam auto-trainer...[/green]")
-        import subprocess
-        try:
-            subprocess.Popen(
-                [sys.executable, "-m", "footstats.ai.trainer"],
-                cwd=Path(__file__).parents[2],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )  # fire-and-forget auto-trainer
-        except OSError as e:
-            console.print(f"[red]Auto-trainer start failed: {e.__class__.__name__}: {e}[/red]")
+    # Auto-trainer po 20+ nowych wynikach (tylko przez wspólny wyłącznik AUTO_TRENING)
+    _moze_odpal_auto_trener(nowe_wyniki)
 
     _send_telegram_summary(summary, date_str)
 
@@ -570,6 +558,18 @@ def run_evening_agent(date_str: str | None = None) -> dict:
         pass
 
     return summary
+
+
+def _moze_odpal_auto_trener(nowe_wyniki: int) -> bool:
+    """Trener po 20+ nowych wynikach — TYLKO przez wspólny wyłącznik AUTO_TRENING."""
+    from footstats.core.backtest import auto_trening_wlaczony, odpal_trener_w_tle
+    if nowe_wyniki < 20 or not auto_trening_wlaczony():
+        return False
+    console.print(f"[green]{nowe_wyniki} nowych wyników → uruchamiam auto-trainer...[/green]")
+    if not odpal_trener_w_tle(cwd=Path(__file__).parents[2]):
+        console.print("[red]Auto-trainer: start nieudany — szczegóły w logu[/red]")
+        return False
+    return True
 
 
 def _print_summary_table(summary: dict) -> None:

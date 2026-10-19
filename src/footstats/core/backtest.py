@@ -174,6 +174,33 @@ def update_result(match_id: int, actual_result: str, match_stats: dict = None) -
 
 AUTO_TRENING_CO_N = 20  # co ile nowych wyników odpala trening
 
+
+def auto_trening_wlaczony() -> bool:
+    """AUTO_TRENING=1 włącza trener. Czytane przy każdym wywołaniu, nie jako stała."""
+    return os.getenv("AUTO_TRENING", "0") == "1"
+
+
+def odpal_trener_w_tle(cwd: str | os.PathLike[str] | None = None) -> bool:
+    """JEDYNE miejsce w kodzie, które uruchamia `footstats.ai.trainer`.
+
+    Pilnuje tego test w `tests/test_auto_trening.py` — wyłącznik w jednym
+    wejściu z kilku już raz zostawił drugie wejście bez flagi (evening_agent).
+    Zwraca True, gdy proces wystartował.
+    """
+    import subprocess
+    try:
+        subprocess.Popen(
+            [sys.executable, "-m", "footstats.ai.trainer"],
+            cwd=cwd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as e:
+        logger.warning("Auto-trening: start trenera nieudany (%s: %s)", type(e).__name__, e)
+        return False
+    return True
+
+
 def _sprawdz_auto_trening() -> None:
     """
     Sprawdza czy liczba ocenionych predykcji jest wielokrotnością AUTO_TRENING_CO_N.
@@ -184,7 +211,7 @@ def _sprawdz_auto_trening() -> None:
     Cloud Run Job (wynik przepada) i konkuruje z potokiem o limit TPM Groqa.
     Flaga jest czytana przy każdym wywołaniu, nie jako stała modułu.
     """
-    if os.getenv("AUTO_TRENING", "0") != "1":
+    if not auto_trening_wlaczony():
         logger.debug("Auto-trening wylaczony (AUTO_TRENING != 1) — pomijam")
         return
     try:
@@ -195,17 +222,9 @@ def _sprawdz_auto_trening() -> None:
         n = int((row["n"] if row else 0) or 0)
 
         if n > 0 and n % AUTO_TRENING_CO_N == 0:
-            import subprocess, sys
-            try:
-                subprocess.Popen(
-                    [sys.executable, "-m", "footstats.ai.trainer"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            except OSError as e:
-                print(f"[Backtest] Auto-trening start failed: {e}")
-            else:
-                print(f"[Backtest] Auto-trening uruchomiony (n={n} wynikow).")
+            if not odpal_trener_w_tle():
+                return
+            print(f"[Backtest] Auto-trening uruchomiony (n={n} wynikow).")
             try:
                 from footstats.utils.telegram_notify import _send, telegram_dostepny
                 if telegram_dostepny():
