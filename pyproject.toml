@@ -41,7 +41,9 @@ dependencies = [
     # to dlug rosnacy w ciszy — przy nastepnym CVE nikt nie odrozni "znane" od "nowe".
     # PyJWT byl juz w obrazie jako zaleznosc przechodnia; teraz jest jawna, bo
     # `api/auth.py` woła go wprost.
-    "pyjwt>=2.8",
+    # Dolna granica 2.15 = wymog BEZPIECZENSTWA: pyjwt < 2.15 ma 15 advisories
+    # (PYSEC-2026-4140..4152, 4183) wykrytych przez pip-audit.
+    "pyjwt>=2.15",
     "bcrypt>=4.0",
     "slowapi>=0.1.9",
     "httpx>=0.27",
@@ -53,10 +55,11 @@ dependencies = [
     # api.main -> CI nie zebralo ANI JEDNEGO testu (10 collection errors).
     #
     # DOLNA granica to wymog BEZPIECZENSTWA, nie wygody: mcp < 1.27.2 ma
-    # PYSEC-2026-3481 i -3482, a PYSEC-2026-3483 jest naprawione dopiero w 1.28.1.
+    # PYSEC-2026-3481 i -3482, PYSEC-2026-3483 jest naprawione dopiero w 1.28.1,
+    # a CVE-2026-59951 dopiero w 1.30.0.
     # Pierwsza wersja tego przypiecia miala `<1.28` i zablokowala projekt na
     # podatnym 1.27.1 — pip-audit w CI slusznie to zlapal.
-    "mcp>=1.28.1,<2.0",
+    "mcp>=1.30.0,<2.0",
     "tenacity>=8.0",
 ]
 
