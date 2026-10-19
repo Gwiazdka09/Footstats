@@ -20,7 +20,6 @@ bot/
 ├── Dockerfile.api              # Obraz API (Cloud Run Service)
 ├── Dockerfile.jobs             # Obraz batch (Cloud Run Jobs: Playwright+chromium)
 ├── docker-compose.yml          # Lokalny stack (DB + API)
-├── vercel.json                 # Deploy frontendu (Vercel)
 │
 ├── src/footstats/              # === KOD ŹRÓDŁOWY ===
 │   ├── __main__.py / cli.py    # CLI (python -m footstats.<modul>)
@@ -37,7 +36,7 @@ bot/
 │   ├── api/                    # FastAPI: routes, auth (JWT), admin
 │   ├── db/                     # Supabase Postgres: connect, migrations
 │   ├── export/                 # Eksport PDF / raporty
-│   ├── gui/                    # Frontend React/Vite/Tailwind v4 (Brain Graph)
+│   ├── gui/                    # Frontend React/Vite/Tailwind v4 (Brain Graph); gui/vercel.json = deploy (Vercel Root Directory)
 │   └── utils/                  # Logging, cache, DB helpers, betting math
 │
 ├── scripts/                    # === AUTOMATYZACJA / NARZĘDZIA ===

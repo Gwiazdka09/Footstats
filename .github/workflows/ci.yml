@@ -171,7 +171,7 @@ jobs:
           cache-dependency-path: src/footstats/gui/package-lock.json
 
       # `--legacy-peer-deps`, bo tego samego przełącznika używa build na Vercelu
-      # (vercel.json) — CI ma instalować to samo drzewo zależności co produkcja.
+      # (ustawienia builda projektu Vercel) — CI ma instalować to samo drzewo zależności co produkcja.
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
