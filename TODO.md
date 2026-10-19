@@ -8,7 +8,7 @@
 
 > **🎯 KIERUNEK 2026-07-27:** produkt zostaje na **użytek prywatny + beta-testerzy (znajomi)**. Priorytet = **żeby bot się uczył** (pętla predykcja→settle→kalibracja→RAG). Zero monetyzacji, zero publicznego launchu. Plan wykonawczy → sekcja `🎯 PLAN P0-P3` niżej.
 
-**Aktualizacja:** 2026-09-24 · v3.4-stable
+**Aktualizacja:** 2026-10-19 · v3.4-stable
 **Accuracy (live, `model_log` 13.08):** **poisson-dc 65.2%** (15/23) · bzzoiro-ml 50.0% (41/82) — próba mała, ale poisson-dc realnie gra i prowadzi
 **Accuracy (offline):** Brier 0.6064 po fiksie rozdzielczości (było 0.6454); rynek 0.5912 — **wciąż nad nami**
 **Cel M1:** 55% win rate (mierzony na 1X2 — **do rewizji**, patrz werdykt per rynek) · **Suite:** 6798 testów
@@ -20,6 +20,24 @@
 > **📦 Ukończone → `CHANGELOG.md`.** 23.08 przeniesiono stamtąd 40 zamkniętych pozycji
 > (729 → 403 linie). Ten plik trzyma **wyłącznie to, co otwarte** — jeśli szukasz, jak coś
 > zostało naprawione, szukaj w CHANGELOG-u albo w `git log`.
+
+---
+
+## 🟣 19.10 — PRZEGLĄD PO PRZERWIE (otwarte)
+
+Zrobione tego dnia (PR #39-#45, dataset, Dependabot) → `CHANGELOG.md` 2026-10-19.
+
+- [ ] **Zweryfikować w logach pierwszego `footstats-final` po wdrożeniu (20.10 11:00)**, że
+      nie ma „Blok auto-treningu przerwany", oraz że `footstats-evening` (19.10 23:00) przeszedł.
+- [ ] **Groq TPM obcina odpowiedź → JSON urwany → kupon fazy final niezapisany**
+      (19.10 i 20.09).
+- [ ] **Pokrycie Poissona często < 20%** (alarm pipeline-health 8× między 28.09 a 15.10) —
+      sprawdzić po świeżym datasecie (do 16.10), czy spadło.
+- [ ] **`npm audit` (dev): 2 high** (`source-map-js`, `undici`).
+- [ ] **Lokalny `.venv` = Python 3.14 bez pyarrow** → 37 fałszywych faili lokalnie + inny
+      komunikat `list.index` w 3.14 (`test_scrapery_nie_milcza`). Prod/CI to 3.12.
+- [ ] **3 zablokowane worktree w `.claude/worktrees/`** (dysk F: bez zapisu właściciela →
+      git „dubious ownership") — do usunięcia przez użytkownika.
 
 ---
 
@@ -37,7 +55,9 @@ Najpoważniejsze trzy:
   token z wersją sesji (`tv`), fail closed w trzech miejscach.
 - **Front na Vercelu leciał bez nagłówków** — cała praca z 23.08 obejmowała tylko
   kopię z Cloud Run. Zmierzone `curl -sI`: wracało wyłącznie HSTS. Logowanie dawało
-  się osadzić w cudzej ramce.
+  się osadzić w cudzej ramce. **⚠️ Korekta 19.10:** poprawka z 24.09 nie zadziałała —
+  Vercel ignorował `vercel.json` w korzeniu repo; plik przeniesiony do Root Directory
+  `src/footstats/gui` (PR #42), dopiero wtedy nagłówki realnie na prod.
 - **500 oddawało treść wyjątku psycopg2** w 17 miejscach — nazwa relacji, kolumny
   i fragment zapytania, czyli mapa schematu bez jednego wstrzyknięcia.
 
@@ -66,7 +86,7 @@ przypięcie WSZYSTKICH akcji do SHA), #26 (checkout v7), #30 (react 19 z react-d
 
 - [ ] **`CSP_ENFORCE=1`** — polityka raportuje i MA GDZIE raportować (`/api/csp-report`).
       Po 2-3 dniach bez naruszeń: flaga na Cloud Run + zamiana nazwy nagłówka
-      w `vercel.json`. Zła polityka = biała strona u wszystkich naraz, więc
+      w `vercel.json` (od 19.10: `src/footstats/gui/vercel.json`). Zła polityka = biała strona u wszystkich naraz, więc
       najpierw dane.
 - [ ] **Token w `localStorage`** — wektor to XSS, obecnie odcięty (`script-src 'self'`,
       zero wstrzykiwania HTML). Przeniesienie na ciasteczko `httpOnly` wymaga CSRF

@@ -1,9 +1,10 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-08-26
+**Last Updated:** 2026-10-19
 **Current Version:** v3.4-stable
 **System State:** FUNCTIONAL — PRODUCTION (pipeline PC-off na Cloud Run Jobs, DB = Supabase, dziennik kuponów J1-J6 live)
 **Suite:** **5130 testów zebranych**, 11 skipped (stabilnie w 3 przebiegach kronikarza; `passed` wahał się 5111–5119 między przebiegami z pojedynczym losowym FAILED za każdym razem w innym, niepowiązanym z sesją teście — `test_odpornosc_ataki.py`/`test_checkpoint.py`, oba zielone w izolacji; nie diagnozowane dalej). CI raportowane jako **8/8 zielone** (nie zweryfikowane bezpośrednio przez kronikarza — `gh` niedostępny w tym środowisku)
+**Nowe (10-19):** przegląd po przerwie — pipeline zielony, dataset do 2026-10-16 (prod stał na 09-17), CI zielone po PR #39-#45. CVE (pyjwt/urllib3/mcp) · auto-trening jawnie OFF + fix `KeyError: 0` · retry i typy w odświeżeniu datasetu · nagłówki bezpieczeństwa Vercel realnie działają (`vercel.json` w Root Directory) · CD API szeregowo + strażnik HEAD. Liczba testów: (do potwierdzenia — lokalny .venv to Py 3.14 bez pyarrow, wyniki lokalne niewiarygodne). Otwarte → `TODO.md` sekcja 19.10. Szczegóły → `CHANGELOG.md` 2026-10-19.
 **Nowe (08-26):** trzy zadania z planu „remisy/drugi wybór/raporty" (wszystkie zmergowane): **R** — remisy mierzone pierwszy raz (`draw_correct`, backfill 0→424, koszyk 30%+ bije bazę o 21,9pp po korekcie Šidáka p=0,024) · **D** — ranking 7 rynków z przewagą nad bazą (n=424, #1 +12,0pp monotonicznie malejąco, permutacja p<0,003; BTTS jako typ główny −3,3pp) · **S** — kalibracja 1X2 (n=427, krzywa rośnie 38,8→71,4%) + test przewagi nad kursem bukmachera (Poisson-dwumianowy dokładny + korekta Šidáka; żaden rynek nie bije ceny po korekcie). Decyzja produkcyjna: **`SELECTION_SKIP_BTTS=1`** włączone na API + oba joby (zweryfikowane na produkcji). Plus fix dziennika: kupon bez źródła wyników już nie wisi ACTIVE po cichu (`dziennik_utknal` alarm).
 **Nowe (08-14):** rozliczenia przestały gubić predykcje (okno bez nadrabiania → 95 sierot; migracja 12 + limit prób) · rozjazd wag ensemble zlikwidowany (joby = API = 0.70) · `CRON_SECRET` → `secretKeyRef` + rotacja · wyłączona wersja 1 sekretu `DATABASE_URL` (zawierała hasło Neona)
 **Nowe (08-13):** siła drużyny liczona też ze strzałów celnych (Brier 0.6454→0.6064) · raport uczenia czyta `model_log` · lekcje także z trafień
@@ -135,6 +136,9 @@
 
 | Problem | Data |
 |---------|------|
+| **Nagłówki bezpieczeństwa Vercel nie działały** (vercel.json w korzeniu ignorowany) → Root Directory `src/footstats/gui`, PR #42 | 10-19 |
+| **`KeyError: 0` w auto-treningu** w każdym przebiegu `footstats-final` od ≥09-20 → odczyt COUNT po nazwie, auto-trening OFF, PR #40 | 10-19 |
+| **Dataset stał na 09-17** (PR-y odświeżenia niezmergowane) → do 10-16, PR #32/#45 | 10-19 |
 | **Telegram spam (Arsenal-Chelsea 3:2)** — testy wysyłały realnie, zmockowane | 06-17 |
 | backup.yml padał — przywrócono backup_db.sh (błędnie usunięty) | 06-17 |
 | 5 sygnałów λ liczonych ale niewpiętych w daily (audyt core) | 06-17 |

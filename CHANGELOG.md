@@ -40,6 +40,18 @@
 - [x] ✅ Alarm o zaległościach wykluczał porzucone (97 → 48) — palił się wiecznie
   i **zagłuszył prawdziwą awarię**.
 
+## 2026-10-19
+
+Sesja „przegląd po przerwie" — 7 PR-ów własnych + Dependabot + dane. Zakres `f8374e6c6..origin/main`.
+
+- [x] **PR #39 — CVE** ✅ pyjwt 2.13→2.15, urllib3 2.7→2.8, mcp 1.29→1.30 (podatności z pip-audit; CI `security` było czerwone). `b8875252d`
+- [x] **PR #40 — auto-trening** ✅ `AUTO_TRENING` jawnie OFF (domyślnie 0); odczyt COUNT po nazwie (`KeyError: 0` w przebiegu `footstats-final` od ≥20.09); jedno wejście trenera `odpal_trener_w_tle()` dla `core/backtest` i `evening_agent` + test skanujący źródła; Telegram tylko po udanym starcie. Drugie wejście znalezione dzięki review Sourcery. `e9691f5af`, `44b58e194`
+- [x] **PR #41 — odświeżenie datasetu** ✅ retry `_get` (timeouty football-data wywróciły weekly refresh 19.10 rano) + dryf typów pandas 3 (`Float64`/data w us) naprawiony u źródła i obronnie w `load_cached()`. `49343d3d6`, `0befad824`
+- [x] **PR #42 — nagłówki Vercel** ✅ `vercel.json` w Root Directory `src/footstats/gui` (nagłówki z audytu 24.09 NIE działały na prod). Po merge zmierzone: X-Frame-Options/CSP-RO/nosniff/Referrer/Permissions obecne, deep link 200. Test CSP sprawdza `connect-src` per dyrektywa. `51252eadf`, `194c67e8e`
+- [x] **PR #43 — CD API** ✅ `concurrency: cd-api` + strażnik „commit to nadal HEAD main" (zadziałał live na runie #43) + fail-loud na pustym `ls-remote`. Powód: 3 merge'e w minutę = 3 równoległe deploye API. `3d14f0651`, `846f0475c`, `f56a8f85e`
+- [x] **PR #32 i #45 — dataset** ✅ do 2026-10-09, potem do 2026-10-16 (prod stał na 2026-09-17 od 28.09, bo PR-y odświeżenia nikt nie mergował). Audyt przed merge'em: czysty przyrost, 0 zmian historii, 0 lookahead. `3339071f4`
+- [x] **Dependabot** ✅ #38/#33/#34 (setup-node 7.1.0, build-push-action 7.4.0, deploy-cloudrun 3.0.1) zmergowane lokalnie (token MCP bez `workflow` scope); CD przeszło na nowych wersjach. Front zbiorczo w **PR #44** (vitest 5.0.5, react-is 19.3.1, recharts 3.10.1, tailwindcss + @tailwindcss/vite 4.3.3), weryfikacja wizualna PASS; #37 #36 #28 #35 #29 zamknięte.
+
 ## 2026-08-26
 
 ### Plan „remisy / drugi wybór / raporty" — trzy zadania, trzy merge commity
