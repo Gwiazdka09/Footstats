@@ -14,6 +14,7 @@ Użycie jako moduł:
 
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timedelta
 
@@ -177,12 +178,21 @@ def _sprawdz_auto_trening() -> None:
     """
     Sprawdza czy liczba ocenionych predykcji jest wielokrotnością AUTO_TRENING_CO_N.
     Jeśli tak — odpala trainer.py w tle i wysyła Telegram z nową kalibracją.
+
+    Domyślnie WYŁĄCZONE (AUTO_TRENING=1 włącza): model jest zamrożony od
+    2026-09-10, a trener zapisuje groq_lessons.json w efemerycznym kontenerze
+    Cloud Run Job (wynik przepada) i konkuruje z potokiem o limit TPM Groqa.
+    Flaga jest czytana przy każdym wywołaniu, nie jako stała modułu.
     """
+    if os.getenv("AUTO_TRENING", "0") != "1":
+        logger.debug("Auto-trening wylaczony (AUTO_TRENING != 1) — pomijam")
+        return
     try:
         with _connect() as conn:
-            n = conn.execute(
-                "SELECT COUNT(*) FROM predictions WHERE tip_correct IS NOT NULL"
-            ).fetchone()[0]
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM predictions WHERE tip_correct IS NOT NULL"
+            ).fetchone()
+        n = int((row["n"] if row else 0) or 0)
 
         if n > 0 and n % AUTO_TRENING_CO_N == 0:
             import subprocess, sys

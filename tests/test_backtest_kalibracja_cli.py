@@ -135,7 +135,7 @@ class _Conn:
         return self
 
     def fetchone(self):
-        return [self._n]
+        return {"n": self._n}  # RealDictCursor jak na Postgresie
 
     def __enter__(self):
         return self
@@ -148,6 +148,7 @@ class _Conn:
 def auto_trening(monkeypatch):
     """Odcina podproces i Telegram; zwraca liste odpalen."""
     odpalone: list = []
+    monkeypatch.setenv("AUTO_TRENING", "1")
     monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: odpalone.append(a))
 
     import footstats.utils.telegram_notify as tg
@@ -183,6 +184,7 @@ def test_blad_startu_podprocesu_zglaszany_ale_nie_wywala(monkeypatch, capsys):
     def _padnij(*a, **k):
         raise OSError("brak interpretera")
 
+    monkeypatch.setenv("AUTO_TRENING", "1")
     monkeypatch.setattr(bt, "_connect", lambda: _Conn(20))
     monkeypatch.setattr(subprocess, "Popen", _padnij)
     import footstats.utils.telegram_notify as tg
@@ -202,6 +204,7 @@ def test_blad_bazy_nie_wywala_zapisu_wyniku(monkeypatch, auto_trening):
 
 
 def test_telegram_wysylany_gdy_dostepny(monkeypatch):
+    monkeypatch.setenv("AUTO_TRENING", "1")
     monkeypatch.setattr(bt, "_connect", lambda: _Conn(20))
     monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: None)
 

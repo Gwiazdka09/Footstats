@@ -36,6 +36,7 @@ def test_przerwany_blok_auto_treningu_jest_glosny(caplog, monkeypatch):
 
     # `_connect` jest pierwsza rzecza w bloku — jego padniecie odtwarza dokladnie
     # ten scenariusz, ktory straznik `except Exception: pass` polykal.
+    monkeypatch.setenv("AUTO_TRENING", "1")
     monkeypatch.setattr(bt, "_connect", _wybuch)
 
     with caplog.at_level(logging.WARNING):
