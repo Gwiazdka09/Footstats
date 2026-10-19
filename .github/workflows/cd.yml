@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
 
+# Wdrożenia API po kolei, nie równolegle. 19.10 trzy merge'e w minutę dały trzy
+# równoległe deploye — rewizją produkcyjną zostaje ten, który skończy się OSTATNI,
+# niekoniecznie najnowszy commit. Bez anulowania trwającego (półwdrożony serwis),
+# a oczekujący pośredni run GitHub i tak zastępuje najnowszym.
+concurrency:
+  group: cd-api
+  cancel-in-progress: false
+
 env:
   IMAGE: europe-west1-docker.pkg.dev/footstats-495009/footstats/footstats-api
 
