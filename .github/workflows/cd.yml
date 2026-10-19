@@ -92,6 +92,11 @@ jobs:
         id: glowa
         run: |
           HEAD_MAIN=$(git ls-remote origin refs/heads/main | cut -f1)
+          # Pusta odpowiedź = nie wiemy, więc głośno, nie cichy skip wdrożenia.
+          if [ -z "$HEAD_MAIN" ]; then
+            echo "::error::Nie udało się odczytać HEAD main (git ls-remote) — przerywam zamiast zgadywać"
+            exit 1
+          fi
           if [ "$HEAD_MAIN" = "$GITHUB_SHA" ]; then
             echo "aktualny=true" >> "$GITHUB_OUTPUT"
           else
