@@ -23,6 +23,7 @@ import time
 from datetime import date
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import requests
 
@@ -63,7 +64,26 @@ def uzupelnij_schemat(df: pd.DataFrame) -> pd.DataFrame:
         return df
     out = df.copy()
     for kol in brak:
-        out[kol] = pd.Series([pd.NA] * len(out), index=out.index, dtype="Float64")
+        out[kol] = pd.Series(np.nan, index=out.index, dtype="float64")
+    return out
+
+
+def _normalizuj_typy(df: pd.DataFrame) -> pd.DataFrame:
+    """Zwraca NOWĄ ramkę z ustabilizowanymi typami (dryf z pandas 3 w CI).
+
+    Rozszerzone typy liczbowe (Float64/Int64...) -> float64 z NaN zamiast pd.NA
+    (`np.isnan`, `float()`, `if x` na pd.NA rzucają TypeError), a `date`
+    w dowolnej rozdzielczości -> datetime64[ns]. Wejście nie jest mutowane.
+    """
+    out = df.copy()
+    for kol in out.columns:
+        dtype = out[kol].dtype
+        if isinstance(dtype, pd.api.extensions.ExtensionDtype) and (
+            pd.api.types.is_numeric_dtype(dtype) and not pd.api.types.is_bool_dtype(dtype)
+        ):
+            out[kol] = out[kol].astype("float64")
+    if "date" in out.columns and pd.api.types.is_datetime64_any_dtype(out["date"]):
+        out["date"] = out["date"].astype("datetime64[ns]")
     return out
 
 
@@ -352,7 +372,7 @@ def _wpisz_ostre_i_najlepsze(out: pd.DataFrame, df: pd.DataFrame,
         # u źródła byłoby CISZĄ zamiast alarmem. Pusta kolumna daje 100% -> 0%
         # i alarm dostajemy.
         for kol in docelowe:
-            out[kol] = pd.Series([pd.NA] * len(out), index=out.index, dtype="Float64")
+            out[kol] = pd.Series(np.nan, index=out.index, dtype="float64")
         _wpisz_kursy(out, df, docelowe, [zrodlowe])
 
 
@@ -998,6 +1018,7 @@ def download_all(
     # już mamy. Kolejność ma znaczenie — „zapisz, potem zaloguj ostrzeżenie"
     # to dokładnie tryb, w którym incydent JPN (patrz `regresje_datasetu`)
     # przeżył cały dzień na produkcji.
+    df = _normalizuj_typy(df)  # dryf typów pandas 3: Float64 / date w us
     out_f = sciezka_pelnego()
     if out_f.exists():
         try:
@@ -1040,7 +1061,7 @@ def load_cached(z_af: bool = True) -> pd.DataFrame:
     f = sciezka_pelnego()
     if not f.exists():
         raise FileNotFoundError(f"Brak cache. Uruchom najpierw download_all(). Szukałem w: {f}")
-    df = pd.read_parquet(f)
+    df = _normalizuj_typy(pd.read_parquet(f))
 
     # PRZED rozgałęzieniem na `z_af`: ujednolicenie pisowni nazw jest ortogonalne
     # do statystyk z API-Football, więc oba ramiona A/B muszą je dostać tak samo.
