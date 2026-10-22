@@ -1,5 +1,7 @@
 """Testy core/match_tips.build_tips — sugerowany typ = argmax 1X2, nie zawsze '1'."""
-from footstats.core.match_tips import build_tips
+import pytest
+
+from footstats.core.match_tips import build_tips, over15_z_over25
 
 
 def _match(ph, pr, pp, *, odds=None):
@@ -59,3 +61,30 @@ def test_wszystkie_kursy_powyzej_1():
     out = build_tips(_match(0.92, 0.06, 0.02, odds=odds))
     zle = [(t["tip"], t["odds"]) for t in out["tips"] if t["odds"] <= 1.0]
     assert zle == [], f"kursy <=1.0: {zle}"
+
+
+# Krok 0 (22.10): Over 1.5 było liczone jako Over 2.5 + 15 pp — liczba bez
+# podstaw, widoczna w kreatorze. Teraz suma goli ~ Poisson(λ) z λ dobranym
+# tak, żeby P(suma >= 3) = Over 2.5; Over 1.5 = P(suma >= 2).
+@pytest.mark.parametrize("po, oczekiwane", [
+    (5.0, 19.8), (30.0, 57.0), (55.0, 78.3), (70.0, 87.6), (90.0, 96.9),
+])
+def test_over15_z_over25_wartosci_poissona(po, oczekiwane):
+    assert over15_z_over25(po) == pytest.approx(oczekiwane, abs=0.05)
+
+
+@pytest.mark.parametrize("po", [1.0, 10.0, 30.0, 50.0, 70.0, 95.0])
+def test_over15_zawsze_wieksze_od_over25(po):
+    assert over15_z_over25(po) > po
+
+
+def test_over15_nie_pokazuje_100_procent():
+    assert over15_z_over25(99.9) <= 99.0
+
+
+def test_build_tips_over15_z_poissona_nie_heurystyka():
+    m = _match(0.45, 0.27, 0.28)
+    m["pred_ml"]["prob_over_25"] = 0.30
+    tips = {t["tip"]: t for t in build_tips(m)["tips"]}
+    # heurystyka dawała 45.0
+    assert tips["Over 1.5"]["prob"] == pytest.approx(57.0, abs=0.05)
