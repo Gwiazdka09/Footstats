@@ -86,3 +86,39 @@ zakończone sukcesem: **22.09 (`trl69`)** i **23.09 (`cdm59`)**, oba ~09:03 UTC.
 na dokładnie tym samym warunku — dzień bez typów. Regresja zamknięta.
 
 Obraz jobów: commit `91417bd77` (zbiór do 17.09).
+
+## 2026-10-22 — pomiar decyzyjny: kalibracji NIE proponujemy
+
+Okno `model_log` 2026-09-22…2026-10-22, tylko `poisson-dc`, rozliczone: **n=267**
+(277 wierszy w oknie; 8 nierozliczonych — 7 z 22.10 i Osasuna – Racing z 18.10;
+2 wyniki po dogrywce/karnych nierozliczalne). Pierwszy wiersz `poisson-dc` w oknie: 25.09.
+Zero duplikatów. Liczone tymi samymi funkcjami co `scripts.stan_uczenia`
+(`sprawdz_obciazenie`, `oblicz_tip_correct`), w transakcji READ ONLY.
+
+| wyjście | deklaruje | zaszło | różnica | z | W1 \|z\|≥2,64 | W2 ≥3 pp | W3 kierunek |
+|---|---|---|---|---|---|---|---|
+| 1 | 43,7% | 46,1% | +2,4 pp | +0,81 | nie | nie | tak |
+| X | 24,6% | 21,3% | −3,3 pp | −1,24 | nie | tak | tak |
+| 2 | 31,7% | 32,6% | +0,9 pp | +0,32 | nie | nie | tak |
+| Over 2.5 | 55,0% | 60,3% | +5,3 pp | +1,75 | nie | tak | tak |
+| BTTS | 55,3% | 56,2% | +0,8 pp | +0,28 | nie | nie | tak |
+| typ #1 | 48,7% | 55,4% | +6,7 pp | +2,23 | nie | tak | tak |
+
+**Werdykt wg reguły: żadne wyjście nie spełnia warunku 1 → nie kalibrujemy, model
+zostaje zamrożony.**
+
+**Odczyt:**
+- Kierunek hipotezy się utrzymał i efekt urósł (Over 2.5 +1,9 → +5,3 pp, typ #1
+  +3,0 → +6,7 pp), ale przy n=267 błąd standardowy różnicy to ~3 pp, więc próg
+  z=2,64 wymaga ~7,9 pp. Próba za mała na potwierdzenie — progu nie przesuwamy po fakcie.
+- NLL out-of-sample (chronologicznie 70/30, n=186/81): przesunięcie w logit poprawia
+  test dla Over 2.5 (0,6566 → 0,6484) i typu #1 (0,7124 → 0,6965); Platt też. Bez
+  znaczenia dla decyzji, bo warunek 1 nie przeszedł.
+- `bzzoiro-ml` (kontekst, n=562): wszystkie wyjścia |z| < 1,6; jego obciążenie
+  Over 2.5 z 22.09 (+4,2 pp) zniknęło (+0,6 pp).
+- Ramiona nie mają wspólnych meczów — z założenia: mecz trafia do `poisson-dc`,
+  a gdy Poisson go nie policzy, do fallbacku `bzzoiro-ml`.
+- 7 wierszy z 22.10 rozliczy się po kolejnych przebiegach; z typu #1 mogłoby przekroczyć
+  2,64 tylko przy trafieniu praktycznie wszystkich 7 — do potwierdzenia powtórką skryptu.
+
+**Następny pomiar:** do decyzji właściciela (nowe okno trzeba ustalić Z GÓRY).
