@@ -295,11 +295,15 @@ _ALIASY_ZRODLA: dict[str, tuple[str, ...]] = {
     "POR-Primeira Liga":    ("Liga Portugal Betclic", "Liga Portugal"),
     "USA-MLS":              ("MLS", "Major League Soccer"),
     "RUS-Premier League":   ("Russian Premier League",),
-    "GRE-Super League":     ("Greek Super League",),
+    "GRE-Super League":     ("Greek Super League", "Stoiximan Super League"),
     "SWZ-Super League":     ("Swiss Super League",),
-    "TUR-Super Lig":        ("Süper Lig",),
+    "TUR-Super Lig":        ("Süper Lig", "Trendyol Süper Lig"),
     "ESP-Segunda Division": ("LaLiga 2",),
     "GER-2. Bundesliga":    ("2. Bundesliga",),
+    # 22.10: nazwy sponsora / rundy z logów 23.09–22.10 (≥17 meczów odrzuconych,
+    # choć liga jest w danych). Nazwa sponsora zmienia się co kilka sezonów —
+    # nowy przypadek widać w logu „Filtr lig … odrzucono”.
+    "MEX-Liga MX":          ("Liga MX Apertura", "Liga MX Clausura"),
 }
 
 
