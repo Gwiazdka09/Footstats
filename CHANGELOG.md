@@ -40,6 +40,21 @@
 - [x] ✅ Alarm o zaległościach wykluczał porzucone (97 → 48) — palił się wiecznie
   i **zagłuszył prawdziwą awarię**.
 
+## 2026-10-22
+
+Sesja „pomiar kalibracji + częściowe odmrożenie" — 5 PR-ów (#51–#55), pomiar decyzyjny i decyzja o rozwoju modelu. Zakres `f72b95542..4eed137c5` (wszystko na `main`).
+
+- [x] **Pomiar decyzyjny kalibracji (22.10)** ✅ okno `model_log` 22.09–22.10, tylko `poisson-dc`, n=267 rozliczonych (277 w oknie, 8 nierozliczonych). Typ #1 +6,7 pp (z=2,23), Over 2.5 +5,3 pp (z=1,75), reszta poniżej. Żadne wyjście nie przekracza |z|≥2,64 (próg dla 6 wyjść) → **nie kalibrujemy**, model zostaje na identity. `cadf4a3c3` (`docs/obserwacja_modelu.md`)
+- [x] **Decyzja: częściowe odmrożenie modelu** ✅ rozwój tylko dla 1X2, podwójnej szansy (1X/X2/12), Over/Under 0.5–4.5 i BTTS; jedna zmiana na 1–2 tyg., reguła akceptacji przed pomiarem, revert gdy nie poprawia. Kolejność: naprawy → zapis rynków → pokrycie → nowe ligi → przegląd błędów → kalibracja. CLAUDE.md: zamrożenie z 10.09 zastąpione. `a21753e8b`, spec `docs/superpowers/specs/2026-10-22-odmrozenie-modelu-design.md`
+- [x] **PR #51 — podwójna szansa (Krok 0.1)** ✅ `1X` brało samo P(1), `X2` samo P(2) — zaniżone o remis; `12` nie istniało. Inna linia goli (Over 1.5/3.5) dostawała P(Over 2.5). Druga kopia reguły w `daily_agent` deleguje teraz do `analyzer_helpers.prob_modelu` (zna też BTTS NIE). `790744578`, merge `d92405c5b`
+- [x] **PR #52 — Over 1.5 w kreatorze (Krok 0.2)** ✅ zamiast heurystyki „Over 2.5 + 15 pp" (przy 30% dawała 45%, Poisson 57%) — P(T≥2) z Poissona sumy goli, λ dobrane bisekcją tak, żeby P(T≥3) = Over 2.5; cap 99%. Uwaga: implementacja NIE czyta macierzy z `core/markets.py` jak zakładał spec. `d0c2a357d`, merge `19b7be512`
+- [x] **PR #53 — aliasy lig sponsorskich (Krok 0.3)** ✅ „Trendyol Süper Lig" (TUR), „Stoiximan Super League" (GRE), „Liga MX Apertura/Clausura" (MEX) — odrzucane mimo ligi na whiteliście (≥17 meczów w 30 dni). Akceptacja w logach otwarta do 30.10 → TODO. `b1d74b2b1`, merge `1f220a042`
+- [x] **PR #54 — CVE pillow / opentelemetry / certifi** ✅ pillow 12.3.0 → 13.0.0 (przez reportlab; 14 advisories wg pip-audit 22.10), opentelemetry-api 1.44.0 → 1.45.1 (przez langfuse; CVE-2026-114603), certifi 2026.7.22 → 2026.10.19 (tylko lock; PYSEC-2026-4320). Dolne granice w `pyproject.toml` (`pillow>=13.0`, `opentelemetry-api>=1.45.1`), locki api i jobs. `cbb6f66fe`, merge `3a2013794`. Pierwsza weryfikacja na obrazie: final 23.10 → TODO.
+- [x] **PR #55 — front zbiorczo (zamiast Dependabot #46–#50)** ✅ lucide-react 1.59.0, vite 8.3.4, jsdom 30.1.3, @testing-library/dom 10.4.2, user-event 14.6.8 — jednym PR, bo każdy osobno konfliktował w `package-lock.json`. `7536da321`, merge `4eed137c5`
+- [x] **`npm audit` (dev): 2 high → 0** ✅ (pozycja z TODO 19.10) lock: `source-map-js` 1.2.1 → 1.2.2, `undici` 7.29.0 → 8.12.3 (przez PR #55). `npm audit` na locku z `main` (22.10): 0 podatności, 225 zależności. `7536da321`
+- [x] **Diagnoza: zero predykcji w finalu 22.10 = celowo** ✅ (wg sesji, nie zapisane w git) same puchary i reprezentacje poza whitelistą — decyzja z `23ae6181c` („Log Pucharów NIE dodaje do whitelisty"). `/health agent.ok=false` do następnego dnia ligowego. Pomiar 30 dni (23.09–22.10): 1258 kandydatów, filtr lig odrzucił 59% (reprezentacje 44% nazwanych odrzuceń, puchary 189), Poisson policzył 28%.
+- Stan prod po sesji (wg sesji, nie w git): API rewizja `footstats-api-00594-btn`; obraz jobów tag `4eed137c5`; joby 19–22.10 8/8 zielone; zero „Blok auto-treningu przerwany” (naprawa z 19.10 potwierdzona w logach).
+
 ## 2026-10-19
 
 Sesja „przegląd po przerwie" — 7 PR-ów własnych + Dependabot + dane. Zakres `f8374e6c6..origin/main`.

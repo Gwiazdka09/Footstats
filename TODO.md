@@ -8,10 +8,12 @@
 
 > **🎯 KIERUNEK 2026-07-27:** produkt zostaje na **użytek prywatny + beta-testerzy (znajomi)**. Priorytet = **żeby bot się uczył** (pętla predykcja→settle→kalibracja→RAG). Zero monetyzacji, zero publicznego launchu. Plan wykonawczy → sekcja `🎯 PLAN P0-P3` niżej.
 
-**Aktualizacja:** 2026-10-19 · v3.4-stable
+> **🧭 ODMROŻENIE 2026-10-22 (CZĘŚCIOWE):** model rozwijany dalej tylko dla **1X2, podwójnej szansy, Over/Under 0.5–4.5 i BTTS** — jedna zmiana na 1–2 tyg., reguła akceptacji przed pomiarem, revert gdy nie poprawia. Reszta rynków zamrożona. Projekt → `docs/superpowers/specs/2026-10-22-odmrozenie-modelu-design.md`, otwarte → sekcja `🟢 22.10` niżej.
+
+**Aktualizacja:** 2026-10-22 · v3.4-stable
 **Accuracy (live, `model_log` 13.08):** **poisson-dc 65.2%** (15/23) · bzzoiro-ml 50.0% (41/82) — próba mała, ale poisson-dc realnie gra i prowadzi
 **Accuracy (offline):** Brier 0.6064 po fiksie rozdzielczości (było 0.6454); rynek 0.5912 — **wciąż nad nami**
-**Cel M1:** 55% win rate (mierzony na 1X2 — **do rewizji**, patrz werdykt per rynek) · **Suite:** 6798 testów
+**Cel M1:** 55% win rate (mierzony na 1X2 — **do rewizji**, patrz werdykt per rynek) · **Suite:** 6894 zebranych (`pytest --collect-only` 22.10, lokalnie Py 3.12.10; przebiegu pełnego nie potwierdzono — do potwierdzenia w CI; rozjazd z 6711 w README i 5130 w STATUS)
 **LIVE:** pipeline **PC-off w chmurze** — Cloud Run Jobs (final 11:00 + evening 23:00) + Scheduler (draft 07:30, settle 06:00/21:30). Szczegóły → `docs/cloud_migration.md`.
 **⚠️ INCYDENT 27.07 (naprawiony):** redeploy zgubił env Cloud Run (`JWT_SECRET` itd.) → login zwracał 500 udający „złe hasło". Fix: rev 00313-mf5 + malformed-hash guard (401 nie 500) + `/mcp` off w prod + CD re-asertuje krytyczne sekrety + LoginView rozróżnia błąd serwera/limit/sieć od złych danych. Audyt auth: 6 znalezisk, rdzeń szczelny.
 **⚠️ INCYDENT 14-20.07 (naprawiony 07-20):** potrójna awaria — Neon quota-block → **DB = Supabase free** (session pooler); image jobów bez `footstats.data` (`.gcloudignore` fix); kupon=None crash. **Luka w danych 14-20.07** (zero predykcji/settled). Dane 1-17.07 uwięzione w Neonie do **1.08**. Szczegóły → `CHANGELOG.md` 07-20.
@@ -23,17 +25,60 @@
 
 ---
 
+## 🟢 22.10 — POMIAR KALIBRACJI + CZĘŚCIOWE ODMROŻENIE (otwarte)
+
+Zrobione tego dnia (Krok 0, CVE, front, pomiar kalibracji) → `CHANGELOG.md` 2026-10-22.
+Pomiary przed/po każdego kroku → `docs/obserwacja_modelu.md`.
+
+- [ ] **Krok 0 — akceptacja aliasów lig (do 30.10).** Kod wdrożony (PR #53, `1f220a042`).
+      Warunek z speca: w logach „Filtr lig … odrzucono” zero Trendyol / Apertura / Stoiximan.
+      **Częściowe** — kod jest, log jeszcze tego nie potwierdza.
+- [ ] **Krok 1 — zapis wszystkich rynków do pomiarów.** Podwójna szansa, Under 2.5 i
+      „BTTS — nie” wyliczane z kolumn `model_log` i dodane do `_WYJSCIA_OBCIAZENIA`
+      w `scripts/stan_uczenia.py`. Nowe kolumny `prob_over05/15/35/45` (`core/kalibracja_log.py`,
+      `ADD COLUMN IF NOT EXISTS`); dla `bzzoiro-ml` NULL. Akceptacja: po tygodniu ≥95% nowych
+      wierszy `poisson-dc` z niepustymi kolumnami. **Nie zaczęte.**
+- [ ] **Krok 2 — pokrycie Poissona w ligach z whitelisty.** Pomiar 22.10 (okno 23.09–22.10,
+      wg sesji — nie zapisany w git): 1258 kandydatów, filtr lig odrzucił 59%, Poisson policzył 28%.
+      Najpierw diagnoza próbki meczów bez wyniku po przyczynie (nazwa drużyny, beniaminek,
+      brak w zbiorze, inne), potem naprawa największej, pomiar przed/po.
+- [ ] **Krok 3 — nowe ligi** (każda pozycja osobny mini-projekt przed startem, własny `model_source`):
+  - **3a reprezentacje** — 302 z 688 nazwanych odrzuceń w 30 dni (44%); darmowe wyniki meczów międzynarodowych.
+  - **3b puchary** — 189 odrzuceń; wymaga oceny siły ligi (para drużyn z różnych lig).
+    Wykluczone CELOWO (`23ae6181c`: „Log Pucharów NIE dodaje do whitelisty”).
+  - **3c pozostałe** (Nigeria, Kolumbia, K League, ligi kobiece) — gdy znajdzie się źródło (API-Football zawieszone).
+- [ ] **Krok 4 — przegląd błędów po krokach 0–3** (wymóg właściciela, przed kalibracją): ciche
+      awarie na danych prod (liczba przed/po), alarm końcowy w `core/alarmy_jakosci` dla każdej
+      nowej ścieżki, audyt `footstats-data-guard`, recenzja połykanych wyjątków, 7 dni logów bez
+      nowych ERROR/WARNING.
+- [ ] **Krok 5 — kalibracja na większej próbie.** Pomiar decyzyjny 22.10 (n=267, okno 22.09–22.10):
+      typ #1 +6,7 pp (z=2,23), Over 2.5 +5,3 pp (z=1,75) — próg |z|≥2,64 NIEPRZEKROCZONY →
+      **nie kalibrujemy**. Następne okno ustalane Z GÓRY po kroku 1 — decyzja właściciela.
+      Do rozliczenia: 7 wierszy z 22.10 (powtórka skryptu).
+- [ ] **Final 23.10 11:00 — pierwszy przebieg na obrazie z pillow 13 / opentelemetry 1.45.1**
+      (PR #54, `cbb6f66fe`). Sprawdzić `footstats-final` w logach (`jsonPayload.msg`): brak
+      błędów importu reportlab / langfuse, brak nowych WARNING/ERROR z PDF lub OTel.
+- [ ] **`/health` → `agent.ok=false` w dni bez meczów z whitelisty** (22.10: zero predykcji w finalu,
+      CELOWO — same puchary/reprezentacje; wg sesji). Do decyzji: szum (jak „rozliczanie stoi”
+      21.09) czy sygnał do przerobienia na „brak kandydatów z whitelisty”.
+
+**Bez zmian (otwarte z 19.10):** Groq TPM obcina odpowiedź (nadal 20.10) · API-Football zawieszone.
+
+---
+
 ## 🟣 19.10 — PRZEGLĄD PO PRZERWIE (otwarte)
 
 Zrobione tego dnia (PR #39-#45, dataset, Dependabot) → `CHANGELOG.md` 2026-10-19.
 
 - [ ] **Zweryfikować w logach pierwszego `footstats-final` po wdrożeniu (20.10 11:00)**, że
       nie ma „Blok auto-treningu przerwany", oraz że `footstats-evening` (19.10 23:00) przeszedł.
+      **Częściowe 22.10:** wg sesji joby 19–22.10 8/8 zielone, zero „Blok auto-treningu
+      przerwany” — to weryfikacja z logów, nie z git; zamknąć po potwierdzeniu w logach.
 - [ ] **Groq TPM obcina odpowiedź → JSON urwany → kupon fazy final niezapisany**
-      (19.10 i 20.09).
+      (19.10, 20.09 i 20.10 — bez zmian 22.10).
 - [ ] **Pokrycie Poissona często < 20%** (alarm pipeline-health 8× między 28.09 a 15.10) —
-      sprawdzić po świeżym datasecie (do 16.10), czy spadło.
-- [ ] **`npm audit` (dev): 2 high** (`source-map-js`, `undici`).
+      sprawdzić po świeżym datasecie (do 16.10), czy spadło. **Pomiar 22.10:** 28% kandydatów
+      w 30 dniach (wg sesji) → przeniesione do Krok 2 w sekcji 22.10.
 - [ ] **Lokalny `.venv` = Python 3.14 bez pyarrow** → 37 fałszywych faili lokalnie + inny
       komunikat `list.index` w 3.14 (`test_scrapery_nie_milcza`). Prod/CI to 3.12.
 - [ ] **3 zablokowane worktree w `.claude/worktrees/`** (dysk F: bez zapisu właściciela →

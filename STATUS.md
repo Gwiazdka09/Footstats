@@ -1,9 +1,10 @@
 # FootStats — Project Status Report
 
-**Last Updated:** 2026-10-19
+**Last Updated:** 2026-10-22
 **Current Version:** v3.4-stable
 **System State:** FUNCTIONAL — PRODUCTION (pipeline PC-off na Cloud Run Jobs, DB = Supabase, dziennik kuponów J1-J6 live)
-**Suite:** **5130 testów zebranych**, 11 skipped (stabilnie w 3 przebiegach kronikarza; `passed` wahał się 5111–5119 między przebiegami z pojedynczym losowym FAILED za każdym razem w innym, niepowiązanym z sesją teście — `test_odpornosc_ataki.py`/`test_checkpoint.py`, oba zielone w izolacji; nie diagnozowane dalej). CI raportowane jako **8/8 zielone** (nie zweryfikowane bezpośrednio przez kronikarza — `gh` niedostępny w tym środowisku)
+**Suite:** **6894 testów zebranych** (`pytest --collect-only` 22.10, lokalnie Py 3.12.10, `DATABASE_URL=""`; przebiegu pełnego nie potwierdzono — do potwierdzenia w CI). Rozjazd liczb w dokumentach: 6894 (ten pomiar), 6798 (TODO do 19.10), 6711 (README), 5130 (pomiar 19.10, wtedy passed 5111–5119 między przebiegami) — (do potwierdzenia). CI raportowane jako **8/8 zielone** (nie zweryfikowane przez kronikarza — `gh` niedostępny w tym środowisku; `main` na 4eed137c5)
+**Nowe (10-22):** pomiar decyzyjny kalibracji — poisson-dc n=267, żadne |z|≥2,64 → **nie kalibrujemy** (`cadf4a3c3`) · **częściowe odmrożenie modelu** (1X2 / podwójna szansa / O/U 0.5–4.5 / BTTS; `a21753e8b`) · Krok 0 naprawy: podwójna szansa = suma dwóch wyników (PR #51), Over 1.5 z Poissona zamiast +15 pp (PR #52), aliasy lig sponsorskich (PR #53) · CVE pillow 13 / opentelemetry 1.45.1 (PR #54) · front zbiorczo, `npm audit` 0 podatności (PR #55). Otwarte → `TODO.md` sekcja 22.10. Szczegóły → `CHANGELOG.md` 2026-10-22.
 **Nowe (10-19):** przegląd po przerwie — pipeline zielony, dataset do 2026-10-16 (prod stał na 09-17), CI zielone po PR #39-#45. CVE (pyjwt/urllib3/mcp) · auto-trening jawnie OFF + fix `KeyError: 0` · retry i typy w odświeżeniu datasetu · nagłówki bezpieczeństwa Vercel realnie działają (`vercel.json` w Root Directory) · CD API szeregowo + strażnik HEAD. Liczba testów: (do potwierdzenia — lokalny .venv to Py 3.14 bez pyarrow, wyniki lokalne niewiarygodne). Otwarte → `TODO.md` sekcja 19.10. Szczegóły → `CHANGELOG.md` 2026-10-19.
 **Nowe (08-26):** trzy zadania z planu „remisy/drugi wybór/raporty" (wszystkie zmergowane): **R** — remisy mierzone pierwszy raz (`draw_correct`, backfill 0→424, koszyk 30%+ bije bazę o 21,9pp po korekcie Šidáka p=0,024) · **D** — ranking 7 rynków z przewagą nad bazą (n=424, #1 +12,0pp monotonicznie malejąco, permutacja p<0,003; BTTS jako typ główny −3,3pp) · **S** — kalibracja 1X2 (n=427, krzywa rośnie 38,8→71,4%) + test przewagi nad kursem bukmachera (Poisson-dwumianowy dokładny + korekta Šidáka; żaden rynek nie bije ceny po korekcie). Decyzja produkcyjna: **`SELECTION_SKIP_BTTS=1`** włączone na API + oba joby (zweryfikowane na produkcji). Plus fix dziennika: kupon bez źródła wyników już nie wisi ACTIVE po cichu (`dziennik_utknal` alarm).
 **Nowe (08-14):** rozliczenia przestały gubić predykcje (okno bez nadrabiania → 95 sierot; migracja 12 + limit prób) · rozjazd wag ensemble zlikwidowany (joby = API = 0.70) · `CRON_SECRET` → `secretKeyRef` + rotacja · wyłączona wersja 1 sekretu `DATABASE_URL` (zawierała hasło Neona)
@@ -18,14 +19,14 @@
 | Metric | Status | Value |
 |--------|--------|-------|
 | **Accuracy (model offline)** | ✅ | Walk-forward 10 lig: DC **51.3%** > baseline 49.6% (NED 54.9%), kalibracja monotoniczna |
-| **Accuracy (live)** | 🟡 | `model_log` **656 wierszy (427 z wynikiem)** — główne źródło (oceny PRZED filtrami). 26.08 (`scripts.porownaj_modele`): `predictions` poisson-dc 55,2% (16/29) vs bzzoiro-ml 38,8% (50/129) — brakuje 1 do progu 30; `model_log` poisson-dc 53,5% (68/127) vs bzzoiro-ml 51,3% (154/300) — **przedziały ufności się nakładają, modele statystycznie nie do odróżnienia**. Confound: Poisson liczy ~10% meczów (D11) |
+| **Accuracy (live)** | 🟡 | **22.10 (pomiar decyzyjny, okno 22.09–22.10):** `poisson-dc` n=267 rozliczonych — typ #1 trafia **55,4%** (deklarowane 48,7%, +6,7 pp, z=2,23), Over 2.5 60,3% (+5,3 pp, z=1,75); żadne wyjście nie przekracza |z|≥2,64 → nie kalibrujemy. `model_log` **656 wierszy (427 z wynikiem)** — główne źródło (oceny PRZED filtrami). 26.08 (`scripts.porownaj_modele`): `predictions` poisson-dc 55,2% (16/29) vs bzzoiro-ml 38,8% (50/129) — brakuje 1 do progu 30; `model_log` poisson-dc 53,5% (68/127) vs bzzoiro-ml 51,3% (154/300) — **przedziały ufności się nakładają, modele statystycznie nie do odróżnienia**. Confound: Poisson liczy ~10% meczów (D11) |
 | **Kupony / ROI (paper)** | 🟡 | **141+ rozliczonych.** ROI System SINGLE **−7,1%** na n=133. Ranking 7 rynków (26.08, n=424): #1 bije bazę własnego rynku o +12,0pp, ale to przewaga nad BAZĄ, nie nad KURSEM — nad kursem bukmachera (n=133) żaden rynek nie wygrywa po korekcie Šidáka |
 | **Model faktycznie grający live** | ✅ | **`poisson-dc`** — parquet w obrazach jobów i API (08-13), a `QUICK_PICKS_USE_POISSON_CACHE` przestawione 0→1 na API (14.08). Przy `=0` draft z definicji chodził na `bzzoiro-ml`, stąd 218 vs 10 w historii |
 | **Czy model bije rynek (1X2)** | 🔴 | **NIE.** WF 14.08, n=3578, 3 grupy: przy niezgodzie model↔rynek (510 meczów) rynek trafia **42.9%**, model **29.8%**. ROI ujemne przy KAŻDEJ wadze. Poprawki z 13.08 tego nie zmieniły |
 | **RAG factors** | 🟡 | `factors='[]'` to **NIE bug** (werdykt 13.08) — odtworzenie łańcucha offline na tych samych 18 meczach daje 0/18 tak samo jak live. TWIERDZA wymaga serii ≥5, grane drużyny miały 0-3. Na próbce 300 meczów tagi zapalają się w 31.7%. Wąskie gardło = liczba predykcji |
 | **Rozliczenia** | ✅ | Okno gubiło predykcje **bezpowrotnie** (95 sierot, mecze od 7 maja; 13 do odzyskania, 82 stracone). Naprawione 14.08: zaległości wracają paczkami po 15, limit 5 prób, migracja 12 `settle_attempts`. Joby migrują teraz same |
 | **Model fixes** | ✅ | Cel B root-cause USUNIĘTY (bug 1 conf + bug kalibracji per-wynik 1X2, `11cc57232`) + D3 część 1+2 (prob modelu w `predictions` + guard `koryguj_tip_wg_modelu`, `4823ac9c0`) + Dixon-Coles w prod (flaga ON) + Faza 17 + A1-A3 + λ |
-| **Kalibracja** | 🟡 | Gate `CALIBRATION_ENABLED` OFF (identity) — zdegenerowana krzywa psuła Kelly/value-bet. Auto-refit co +30 settled wpięty (D2), czeka na próg ~88 settled |
+| **Kalibracja** | 🟡 | Gate `CALIBRATION_ENABLED` OFF (identity) — zdegenerowana krzywa psuła Kelly/value-bet. Auto-refit co +30 settled wpięty (D2), czeka na próg ~88 settled. **22.10:** pomiar decyzyjny nie przeszedł warunku (|z|≥2,64) → nie kalibrujemy; następne okno ustalane z góry po kroku 1 odmrożenia |
 | **Kursy (odds)** | ✅ | Fallback chain Bzzoiro → API-Football `/odds` (live OK, zero anti-bot) → Sofascore (403, niski priorytet) |
 | **Data collection** | ✅ | System paper-trading (single-leg, bez Groq) od 06-16 + **cloud-draft PC-niezależny** (`/cron/draft` + Cloud Scheduler `footstats-draft-morning` 07:30 CEST, requests-only, dry_run=false live) — draft już nie zależy od PC |
 | **Ensemble waga** | ✅ | `ENSEMBLE_MARKET_WEIGHT=0.70` (30/70 model/rynek) na API **oraz jobach** — rozjazd zlikwidowany 14.08. Do tego dnia joby chodziły na 70/30, więc ten sam mecz dawał inną predykcję zależnie od ścieżki. Przeliczony WF n=3578 potwierdził przewagę rynku |
@@ -38,7 +39,7 @@
 | **Standardy kodu** | ✅ | god-moduły rozbite: `superbet.py` 1128→867 (06-25), `daily_agent.py` 1078→818 (output+decision), `utils/logging.py` 723→539 (exceptions+safe_http). Ruff lint gate w CI |
 | **Dziennik kuponów** | ✅ | **J1-J6 DONE (07-21/22):** `core/user_stats.py` (ROI/win-rate/streak) · `StatsView` + `ProgressChart` (recharts) · ręczny wpis kuponu (`POST /api/coupon/manual`, kolumna `bookmaker`) · leaderboard v2 (sort+filtr dni, shared-only opt-in) · podgląd sygnału modelu w formularzu (`/api/coupon/preview-signal`) |
 | **Match-linking** | ✅ | `core/match_linker.py` (STRICT `_norm_ascii`, exact-only) + `settle_manual_coupons` all-legs-or-nothing + `POST /cron/settle-manual` (**NIE wpięty w scheduler** — decyzja usera) |
-| **Tests** | ✅ | **1656 testów zebranych**; 23 integracyjne biją w `DATABASE_URL` z `.env` (dług testowy: marker `@pytest.mark.integration` + test-DB) |
+| **Tests** | ✅ | **6894 testów zebranych** (22.10, `--collect-only`; do potwierdzenia w CI); 23 integracyjne biją w `DATABASE_URL` z `.env` (dług testowy: marker `@pytest.mark.integration` + test-DB) |
 | **Automation** | ✅ | **Cloud Run Jobs** `footstats-final` 11:00 + `footstats-evening` 23:00 + Scheduler (draft 07:30, settle 06:00/21:30). Lokalne Task Scheduler taski **WYŁĄCZONE** (`.bat/.vbs` zostają na rollback) |
 | **API** | ✅ | FastAPI + Sentry + SlowAPI + CORS + Timeout. `/mcp` montowany **tylko poza prod** (07-27) |
 | **DB** | 🟡 | **Supabase free** (session pooler eu-west-1) od 20.07, RLS na 11 tabelach. Neon zablokowany quota do **1.08** → backfill (`scripts/backfill_users_from_neon.py`, users gotowe; predictions+coupons do dopisania) |
@@ -54,7 +55,7 @@
 | Komponent | Status | URL/Info |
 |-----------|--------|----------|
 | **Frontend** | ✅ Vercel | bot-opal-nu.vercel.app |
-| **Backend API** | ✅ Cloud Run | footstats-api-949240532526.europe-west1.run.app |
+| **Backend API** | ✅ Cloud Run | footstats-api-949240532526.europe-west1.run.app · rewizja `footstats-api-00594-btn` (22.10, wg sesji — poza git) |
 | **DB** | ✅ Supabase free | session pooler eu-west-1 (od 20.07). Neon: quota-block do 1.08, do backfillu + rotacji hasła |
 | **Monitoring** | ✅ Sentry | aktywne w Cloud Run |
 | **Uptime** | ✅ UptimeRobot | monitor 803305270, /health HEAD+GET |
@@ -108,6 +109,9 @@
 
 | Funkcja | Data |
 |---------|------|
+| **Krok 0 odmrożenia — naprawy modelu i kreatora** — podwójna szansa = suma dwóch wyników (`790744578`, PR #51; druga kopia reguły w `daily_agent` zdelegowana do `prob_modelu`) · Over 1.5 z Poissona sumy goli zamiast +15 pp (`d0c2a357d`, PR #52) · aliasy lig sponsorskich TUR/GRE/MEX (`b1d74b2b1`, PR #53) | 10-22 |
+| **Pomiar decyzyjny kalibracji + częściowe odmrożenie modelu** — n=267, żadne |z|≥2,64 → nie kalibrujemy (`cadf4a3c3`); rozwój tylko 1X2 / podwójna szansa / O/U 0.5–4.5 / BTTS, jedna zmiana na 1–2 tyg. (`a21753e8b`, spec w `docs/superpowers/specs/`) | 10-22 |
+| **CVE pillow 13 + opentelemetry 1.45.1 + certifi** (`cbb6f66fe`, PR #54) · **front zbiorczo** lucide/vite/jsdom/testing-library (`7536da321`, PR #55) — `npm audit` 0 podatności | 10-22 |
 | **Remisy mierzone + ranking 7 rynków + testy przewagi nad kursem** — `draw_correct` (backfill 0→424), `core/ranking_rynkow.py` (przewaga nad bazą własnego rynku, n=424, #1 +12,0pp), `core/testy_przewagi.py` (Poisson-dwumianowy dokładny + korekta Šidáka). Decyzja: `SELECTION_SKIP_BTTS=1` na produkcji (BTTS jako typ główny miał −3,3pp). Dziennik: kupon bez źródła wyników już nie wisi ACTIVE po cichu | 08-25/26 |
 | **Auth hardening po incydencie logowania** — redeploy zgubił env Cloud Run (JWT_SECRET itd.) → login 500 udający „złe hasło". Fix rev 00313-mf5 + `335df65bb` (malformed hash → 401) + `0cded9b4d` (`/mcp` off w prod) + `b5c49484a` (CD re-asercje sekretów) + `cc4574d16` (LoginView) + `17a2ecea4` (backfill users Neon→Supabase) | 07-27 |
 | **Dziennik kuponów J1-J6** — statystyki usera (`core/user_stats.py`) + `StatsView` + krzywa postępu (recharts) + ręczny wpis kuponu + leaderboard v2 (sort/filtr dni) + predykcja jako sygnał w formularzu. Match-linking (`core/match_linker.py`) + auto-settle manual (`/cron/settle-manual`, nie wpięty) | 07-21/22 |
@@ -136,6 +140,11 @@
 
 | Problem | Data |
 |---------|------|
+| **Podwójna szansa zaniżona o remis** (`1X` = samo P(1), `X2` = samo P(2)), `12` nie istniało, Over 1.5/3.5 dostawały P(Over 2.5) — PR #51 | 10-22 |
+| **Over 1.5 = Over 2.5 + 15 pp** w kreatorze „Stwórz Kupon" (Over 2.5 = 30% → 45%, Poisson daje 57%) — PR #52 | 10-22 |
+| **Aliasy lig sponsorskich odrzucane mimo whitelisty** (Trendyol Süper Lig, Stoiximan Super League, Liga MX Apertura) — PR #53 | 10-22 |
+| **pip-audit czerwony** (pillow 12.3.0 — 14 advisories; opentelemetry-api 1.44.0 — CVE-2026-114603) — PR #54 | 10-22 |
+| **`npm audit` 2 high** (`source-map-js`, `undici`) — zamknięte przez PR #55 (0 podatności) | 10-22 |
 | **Nagłówki bezpieczeństwa Vercel nie działały** (vercel.json w korzeniu ignorowany) → Root Directory `src/footstats/gui`, PR #42 | 10-19 |
 | **`KeyError: 0` w auto-treningu** w każdym przebiegu `footstats-final` od ≥09-20 → odczyt COUNT po nazwie, auto-trening OFF, PR #40 | 10-19 |
 | **Dataset stał na 09-17** (PR-y odświeżenia niezmergowane) → do 10-16, PR #32/#45 | 10-19 |
