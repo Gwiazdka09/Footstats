@@ -14,9 +14,12 @@ Lang: PL. Context: Soccer predictions (Poisson + RAG + LLM).
 - Style: PEP8, Type hints, PL comments/logs.
 - Pieniądze / regulamin / teksty marketingowe → najpierw `.claude/rules/wypuszczenie-pl.md`
   (zakaz afiliacji i obietnic skuteczności, limity działalności nierejestrowanej, braki L1-L4).
-- **MODEL ZAMROŻONY (decyzja 2026-09-10).** Żadnych nowych funkcji modelu (cechy, ramiona,
-  korekty λ, źródła predykcji). Wolno: naprawy błędów, pomiary, monitoring. Produktem jest
-  dziennik kuponów ludzi — nasze typy nie pokazują się w GUI poza kreatorem „Stwórz Kupon”.
+- **MODEL CZĘŚCIOWO ODMROŻONY (decyzja 2026-10-22, zastępuje zamrożenie z 2026-09-10).**
+  Rozwój wolno prowadzić TYLKO dla 1X2, podwójnej szansy (1X/X2/12), Over/Under 0.5–4.5
+  i BTTS — jedna zmiana na 1–2 tygodnie, reguła akceptacji zapisana przed pomiarem,
+  revert gdy nie poprawia. Kolejność i zasady: `docs/superpowers/specs/2026-10-22-odmrozenie-modelu-design.md`.
+  Pozostałe rynki zamrożone. Produktem dalej jest dziennik kuponów ludzi — nasze typy
+  nie pokazują się w GUI poza kreatorem „Stwórz Kupon”; do kuponów liga trafia dopiero po pomiarze.
   Nowa kontrola poprawności = alarm końcowy w `core/alarmy_jakosci`, nie kolejny test jednostkowy.
 
 ## Subagent team (.claude/agents/)
