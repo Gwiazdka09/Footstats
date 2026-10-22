@@ -5,6 +5,8 @@ w core/risk_proposals.py (propozycje dnia low/medium/high).
 """
 from __future__ import annotations
 
+import math
+
 
 def to_pct(v, default: float = 33.0) -> float:
     if v is None:
@@ -15,6 +17,31 @@ def to_pct(v, default: float = 33.0) -> float:
 
 def fair_odds(prob_pct: float) -> float:
     return round(100.0 / prob_pct, 2) if prob_pct > 0 else 0.0
+
+
+def _p_co_najmniej(k: int, lam: float) -> float:
+    """P(T >= k) dla T ~ Poisson(lam)."""
+    return 1.0 - sum(math.exp(-lam) * lam ** i / math.factorial(i) for i in range(k))
+
+
+def over15_z_over25(po_pct: float) -> float:
+    """Over 1.5 (%) spójne z Over 2.5 (%).
+
+    Suma goli jako Poisson(λ) — suma dwóch niezależnych Poissonów (gospodarz,
+    gość) jest Poissonem. λ dobierane bisekcją tak, żeby P(T >= 3) = Over 2.5;
+    wtedy Over 1.5 = P(T >= 2). Zastępuje heurystykę `Over 2.5 + 15 pp`
+    (przy Over 2.5 = 30% dawała 45%, Poisson daje 57%). Cap 99%, żeby
+    kreator nie pokazywał pewności.
+    """
+    p = min(max(po_pct / 100.0, 1e-4), 1.0 - 1e-4)
+    lo, hi = 1e-3, 15.0
+    for _ in range(60):
+        srodek = (lo + hi) / 2.0
+        if _p_co_najmniej(3, srodek) < p:
+            lo = srodek
+        else:
+            hi = srodek
+    return min(round(_p_co_najmniej(2, (lo + hi) / 2.0) * 100.0, 1), 99.0)
 
 
 def dc_odds(o_a, o_b, o_other):
@@ -56,7 +83,7 @@ def build_tips(m: dict) -> dict:
     o_btts_y = odds.get("btts") or fair_odds(pbt)
     o_btts_n = odds.get("btts_no") or fair_odds(pbtts_no)
 
-    po15 = min(round(po + 15.0, 1), 95.0)
+    po15 = over15_z_over25(po)
     o_o15 = odds.get("over_1_5") or fair_odds(po15)
     o_o25 = odds.get("over_2_5") or fair_odds(po)
 
