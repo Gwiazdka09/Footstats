@@ -23,7 +23,7 @@ bcrypt==5.0.0
     # via footstats (pyproject.toml)
 beautifulsoup4==4.15.0
     # via footstats (pyproject.toml)
-certifi==2026.7.22
+certifi==2026.10.19
     # via
     #   httpcore
     #   httpx
@@ -102,25 +102,32 @@ numpy==2.5.2
     #   pandas
     #   scikit-learn
     #   scipy
-opentelemetry-api==1.44.0
+opentelemetry-api==1.45.1
     # via
+    #   footstats (pyproject.toml)
     #   langfuse
+    #   opentelemetry-exporter-http-transport
     #   opentelemetry-exporter-otlp-proto-http
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
-opentelemetry-exporter-otlp-proto-common==1.44.0
+opentelemetry-exporter-http-transport==0.66b1
     # via opentelemetry-exporter-otlp-proto-http
-opentelemetry-exporter-otlp-proto-http==1.44.0
+opentelemetry-exporter-otlp-common==0.66b1
+    # via opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-proto-common==1.45.1
+    # via opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-proto-http==1.45.1
     # via langfuse
-opentelemetry-proto==1.44.0
+opentelemetry-proto==1.45.1
     # via
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-sdk==1.44.0
+opentelemetry-sdk==1.45.1
     # via
     #   langfuse
+    #   opentelemetry-exporter-otlp-common
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-semantic-conventions==0.65b0
+opentelemetry-semantic-conventions==0.66b1
     # via opentelemetry-sdk
 packaging==26.3
     # via
@@ -128,8 +135,10 @@ packaging==26.3
     #   limits
 pandas==3.0.5
     # via footstats (pyproject.toml)
-pillow==12.3.0
-    # via reportlab
+pillow==13.0.0
+    # via
+    #   footstats (pyproject.toml)
+    #   reportlab
 playwright==1.62.0
     # via footstats (pyproject.toml)
 prometheus-client==0.26.0
@@ -187,6 +196,7 @@ requests==2.34.2
     # via
     #   footstats (pyproject.toml)
     #   fastapi-mcp
+    #   opentelemetry-exporter-http-transport
     #   opentelemetry-exporter-otlp-proto-http
     #   tiktoken
 rich==15.0.0
