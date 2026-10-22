@@ -23,6 +23,10 @@ dependencies = [
     "rich>=13.0",
     "python-dotenv>=1.0",
     "reportlab>=4.0",
+    # pillow = zaleznosc PRZECHODNIA reportlab (eksport PDF). Dolna granica 13.0 =
+    # wymog BEZPIECZENSTWA: pillow 12.3 ma 14 advisories (pip-audit 22.10, m.in.
+    # CVE-2026-112892, GHSA-78g4-xqwv-q3g8).
+    "pillow>=13.0",
     "fastapi>=0.110",
     "uvicorn>=0.29",
     # pydantic i starlette to zaleznosci PRZECHODNIE fastapi, ale importujemy je
@@ -77,6 +81,9 @@ api = [
 ai = [
     "groq>=0.4",
     "langfuse>=2.0",
+    # opentelemetry-api = zaleznosc PRZECHODNIA langfuse. Dolna granica 1.45.1 =
+    # wymog BEZPIECZENSTWA: CVE-2026-114603 (pip-audit 22.10).
+    "opentelemetry-api>=1.45.1",
     # Licznik tokenow promptu (I2). Bez niego `szacuj_tokeny` dzieli dlugosc
     # tekstu przez stala 1.4 zn/tok — dobrana pod opisy meczow z emoji (1.47),
     # ale zawyzajaca zwykly polski tekst o 84% (realnie 2.56). Skutkiem nie jest

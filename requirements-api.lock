@@ -20,7 +20,7 @@ bcrypt==5.0.0
     # via footstats (pyproject.toml)
 beautifulsoup4==4.15.0
     # via footstats (pyproject.toml)
-certifi==2026.7.22
+certifi==2026.10.19
     # via
     #   httpcore
     #   httpx
@@ -86,8 +86,10 @@ packaging==26.3
     # via limits
 pandas==3.0.5
     # via footstats (pyproject.toml)
-pillow==12.3.0
-    # via reportlab
+pillow==13.0.0
+    # via
+    #   footstats (pyproject.toml)
+    #   reportlab
 prometheus-client==0.26.0
     # via footstats (pyproject.toml)
 psycopg2-binary==2.9.12
