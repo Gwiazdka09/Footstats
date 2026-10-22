@@ -15,11 +15,23 @@ logger = logging.getLogger(__name__)
 
 # Mapowanie typ tipa → klucz prawdopodobieństwa w pred Poissona (wartości w %).
 _TYP_DO_PROB_KEY: dict[str, str] = {
-    "1": "p_wygrana", "1x": "p_wygrana",
+    "1": "p_wygrana",
     "x": "p_remis",
-    "2": "p_przegrana", "x2": "p_przegrana",
+    "2": "p_przegrana",
     "btts": "btts",
 }
+
+# Podwójna szansa = SUMA dwóch wyników. Do 22.10 "1x" brało samo p_wygrana,
+# a "x2" samo p_przegrana — zaniżone o remis (~25 pp); "12" nie istniało wcale.
+_PODWOJNA_SZANSA: dict[str, tuple[str, str]] = {
+    "1x": ("p_wygrana", "p_remis"),
+    "x2": ("p_remis", "p_przegrana"),
+    "12": ("p_wygrana", "p_przegrana"),
+}
+
+# Linia goli z typu: "over 2.5", "over2.5", "under 3,5". Bez liczby = 2.5
+# (tak czytała to dotychczasowa reguła `startswith("over")`).
+_LINIA_GOLI = re.compile(r"^(over|under)\s*(\d+(?:[.,]\d+)?)?")
 
 
 def pewnosc_z_modelu(typ: str, pred: dict, fallback_pct: float | None = None) -> int:
@@ -47,13 +59,19 @@ def prob_modelu(typ: str, pred: dict) -> float | None:
     if t in _BTTS_NO:
         bt = pred.get("btts")
         return None if bt is None else 100.0 - bt
+    if t in _PODWOJNA_SZANSA:
+        a, b = (pred.get(k) for k in _PODWOJNA_SZANSA[t])
+        return None if a is None or b is None else a + b
     key = _TYP_DO_PROB_KEY.get(t)
     if key:
         return pred.get(key)
-    if t.startswith("over"):
-        return pred.get("over25")
-    if t.startswith("under"):
-        return pred.get("under25")
+    linia = _LINIA_GOLI.match(t)
+    if linia:
+        # pred zna tylko linię 2.5. Inna linia to INNY rynek — do 22.10 "Over 1.5"
+        # dostawało P(Over 2.5) (zaniżone), a "Over 3.5" też (zawyżone).
+        if linia.group(2) not in (None, "2.5", "2,5"):
+            return None
+        return pred.get("over25" if linia.group(1) == "over" else "under25")
     return None
 
 

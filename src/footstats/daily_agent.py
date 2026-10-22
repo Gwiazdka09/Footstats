@@ -25,6 +25,7 @@ from footstats.utils.normalize import (
 from footstats.config import BTTS_TWO_WAY
 from footstats.core.checkpoint import save_predictions_batch, cleanup_old_checkpoints
 from footstats.core.rynki import TYP_DO_ODDS_KEY, TYPY_BTTS_NIE
+from footstats.ai.analyzer_helpers import prob_modelu
 from footstats.daily_agent_output import (  # noqa: F401  re-export (ścieżki + patch-targety)
     LOGS_DIR,
     _blad,
@@ -358,23 +359,12 @@ _MIN_PROB_MODELU = 40.0       # p_modelu < 40% ⇒ odrzuć (model nie wspiera ty
 
 
 def _prob_modelu_dla_typu(typ: str, pred: dict) -> float | None:
-    """Prawdopodobieństwo modelu (%) dla danego typu tipa. None jeśli brak danych."""
-    if not pred:
-        return None
-    t = typ.strip().lower()
-    if t in ("1", "1x"):
-        return pred.get("p_wygrana")
-    if t == "x":
-        return pred.get("p_remis")
-    if t in ("2", "x2"):
-        return pred.get("p_przegrana")
-    if t.startswith("over"):
-        return pred.get("over25")
-    if t.startswith("under"):
-        return pred.get("under25")
-    if t == "btts":
-        return pred.get("btts")
-    return None
+    """Prawdopodobieństwo modelu (%) dla danego typu tipa. None jeśli brak danych.
+
+    Deleguje do `analyzer_helpers.prob_modelu`. Do 22.10 była tu druga kopia tej
+    reguły i rozjechała się z pierwszą: brak BTTS NIE, 1X/X2 bez remisu.
+    """
+    return prob_modelu(typ, pred)
 
 
 def _powod_odrzucenia_longshot(typ: str, kurs: float | None, pred: dict) -> str | None:
