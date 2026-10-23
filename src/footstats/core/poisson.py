@@ -16,25 +16,13 @@ from footstats.core.form import _oblicz_sile_wazona
 #  MODUL 10 - PREDYKCJA POISSONA
 # ================================================================
 
-@functools.lru_cache(maxsize=512)
-def _macierz(lambda_g: float, lambda_a: float, N: int, rho: float = 0.0) -> tuple:
-    """
-    Cached Poisson matrix with Laplace smoothing and Dixon-Coles tau.
+def _macierz_wynikow(lambda_g: float, lambda_a: float, N: int,
+                     rho: float = 0.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Macierz wyników N x N + rozkłady brzegowe (po wygładzeniu).
 
-    Args should be pre-rounded to 4dp.
-    Smoothing prevents zero probabilities and numerical instability.
-
-    `rho` to korekta Dixona-Colesa (1997): mnozy CZTERY komorki niskiego wyniku,
-    reszte macierzy zostawia nietknieta. Przy rho<0 rosna 0-0 i 1-1, maleja 1-0
-    i 0-1 — Poisson notorycznie zaniza remisy niskobramkowe i zmierzylismy to
-    u siebie (1.36 pp na holdoucie, patrz `config.DC_RHO_CLASSIC`).
-
-    Poprawki sumuja sie TOZSAMOSCIOWO do zera, wiec `over25` i `btts` sa od rho
-    NIEZALEZNE — obie te wielkosci licza sie z komorek o sumie goli, ktorej tau
-    nie przesuwa. Pilnuje tego `tests/test_poisson_rho.py`.
-
-    `rho` JEST czescia klucza cache — inaczej pierwsze wywolanie zatruloby
-    wszystkie nastepne.
+    Poisson z wygładzeniem Laplace'a i tau Dixona-Colesa (opis w `_macierz`).
+    Wydzielona 23.10, żeby linie goli (`prob_linii_goli`) liczyły się z DOKŁADNIE
+    tej samej macierzy co 1X2, BTTS i Over 2.5. Bez cache — zwraca tablice numpy.
     """
     SMOOTHING_EPS = 1e-8
 
@@ -60,6 +48,30 @@ def _macierz(lambda_g: float, lambda_a: float, N: int, rho: float = 0.0) -> tupl
     M_sum = np.sum(M)
     if M_sum > 0:
         M = M / M_sum
+    return M, pmf_g, pmf_a
+
+
+@functools.lru_cache(maxsize=512)
+def _macierz(lambda_g: float, lambda_a: float, N: int, rho: float = 0.0) -> tuple:
+    """
+    Cached Poisson matrix with Laplace smoothing and Dixon-Coles tau.
+
+    Args should be pre-rounded to 4dp.
+    Smoothing prevents zero probabilities and numerical instability.
+
+    `rho` to korekta Dixona-Colesa (1997): mnozy CZTERY komorki niskiego wyniku,
+    reszte macierzy zostawia nietknieta. Przy rho<0 rosna 0-0 i 1-1, maleja 1-0
+    i 0-1 — Poisson notorycznie zaniza remisy niskobramkowe i zmierzylismy to
+    u siebie (1.36 pp na holdoucie, patrz `config.DC_RHO_CLASSIC`).
+
+    Poprawki sumuja sie TOZSAMOSCIOWO do zera, wiec `over25` i `btts` sa od rho
+    NIEZALEZNE — obie te wielkosci licza sie z komorek o sumie goli, ktorej tau
+    nie przesuwa. Pilnuje tego `tests/test_poisson_rho.py`.
+
+    `rho` JEST czescia klucza cache — inaczej pierwsze wywolanie zatruloby
+    wszystkie nastepne.
+    """
+    M, pmf_g, pmf_a = _macierz_wynikow(lambda_g, lambda_a, N, rho)
 
     pw  = float(np.sum(np.tril(M, -1)))
     pr  = float(np.sum(np.diag(M)))
@@ -72,6 +84,23 @@ def _macierz(lambda_g: float, lambda_a: float, N: int, rho: float = 0.0) -> tupl
     rows_, cols_ = np.unravel_index(top5_raw, M.shape)
     top5_data = tuple((int(r), int(c), float(M[r, c])) for r, c in zip(rows_, cols_))
     return (pw, pr, pp, btts, over25_raw, int(idx[0]), int(idx[1]), top5_data)
+
+
+def prob_linii_goli(lambda_g: float, lambda_a: float,
+                    linie: tuple[float, ...] = (0.5, 1.5, 2.5, 3.5, 4.5)) -> dict[float, float]:
+    """P(suma goli > linia), skala 0–1, z tej samej macierzy co `predict_match`.
+
+    Lambdy zaokrąglane do 4 miejsc, `N = MAX_GOLE + 1`, `rho = DC_RHO_CLASSIC` —
+    jak w wywołaniu `_macierz` w predykcji, więc Over 2.5 stąd == `over25_raw`.
+    Over 0.5 i 1.5 ZALEŻĄ od rho (komórki 0-0, 0-1, 1-0), Over 2.5+ nie.
+    Dla meczów jednego spotkania (`jest_single`) predykcja dodatkowo dzieli
+    Over 2.5 przez sumę 1X2 po podbiciu remisu — tu tego nie ma.
+    """
+    N = MAX_GOLE + 1
+    M, _, _ = _macierz_wynikow(round(lambda_g, 4), round(lambda_a, 4), N, DC_RHO_CLASSIC)
+    i_idx, j_idx = np.meshgrid(np.arange(N), np.arange(N), indexing="ij")
+    suma_goli = i_idx + j_idx
+    return {linia: 1.0 - float(M[suma_goli <= linia].sum()) for linia in linie}
 
 
 # Mapa "nazwa znormalizowana → nazwa z historii", trzymana w `df.attrs`.

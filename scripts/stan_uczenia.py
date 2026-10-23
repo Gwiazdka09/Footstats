@@ -339,6 +339,70 @@ def raport_obciazenia_modelu(conn) -> None:
         print(f"\n  → WERDYKT: model wykazuje istotne obciazenie na: {', '.join(opisy)}.")
 
 
+# Linie goli z lambd zapisanych w `model_log`, przez TĘ SAMĄ macierz co predykcja
+# (`poisson.prob_linii_goli`). To CZYSTY Poisson: zapisane `prob_*` to mieszanka
+# z Bzzoiro (`core/ensemble`, na prod ENSEMBLE_MARKET_WEIGHT=0.70 → 70% Bzzoiro),
+# a lambdy pochodzą sprzed mieszania — pomiar 23.10: Over 2.5 z lambd vs zapisane
+# średnio 6,1 pp. Linii innych niż 2.5 Bzzoiro nie podaje, więc katalog rynków
+# i tak liczy je z czystej macierzy. Podwójnej szansy, Under i BTTS NIE testujemy
+# osobno: to dopełnienia mierzonych wyjść (ten sam |z|, odwrócony znak).
+_LINIE_GOLI: tuple[float, ...] = (0.5, 1.5, 2.5, 3.5, 4.5)
+
+
+def raport_linii_goli(conn) -> None:
+    """Obciążenie CZYSTEGO Poissona na liniach Over 0.5–4.5 (krok 1 odmrożenia).
+
+    Różnicę Over 2.5 (czysty Poisson vs zapisana mieszanka z Bzzoiro) pokazuje
+    informacyjnie — to wpływ mieszania, nie błąd danych.
+    """
+    from footstats.core.bledy_pomiaru import sprawdz_obciazenie
+    from footstats.core.poisson import prob_linii_goli
+    from footstats.utils.betting import oblicz_tip_correct
+
+    print("\n=== LINIE GOLI: czysty Poisson z lambd w model_log (poisson-dc) ===")
+    wiersze = _licz(conn, """
+        SELECT prob_over25, lambda_h, lambda_a, actual_result
+        FROM model_log
+        WHERE actual_result IS NOT NULL
+          AND model_source = 'poisson-dc'
+          AND lambda_h IS NOT NULL AND lambda_a IS NOT NULL
+    """)
+    if not wiersze:
+        print("  BRAK DANYCH — brak rozliczonych wierszy poisson-dc z lambdami.")
+        return
+
+    linie = [(w, prob_linii_goli(float(w["lambda_h"]), float(w["lambda_a"])))
+             for w in wiersze]
+
+    roznice: list[float] = []
+    for w, p in linie:
+        zapisane = _prob01(w.get("prob_over25"))
+        if zapisane is not None:
+            roznice.append(abs(p[2.5] - zapisane))
+    if roznice:
+        srednia_pp = sum(roznice) / len(roznice) * 100.0
+        ponad_1pp = sum(1 for r in roznice if r > 0.01)
+        print(f"  Over 2.5: czysty Poisson vs zapisane (mieszanka z Bzzoiro) — średnio"
+              f" {srednia_pp:.2f} pp, > 1 pp w {ponad_1pp}/{len(roznice)} wierszach."
+              " To wpływ mieszania, nie błąd — tabela niżej mierzy SAM Poisson.")
+
+    for linia in _LINIE_GOLI:
+        pary: list[tuple[float, int]] = []
+        for w, p in linie:
+            trafiony = oblicz_tip_correct(f"OVER {linia}", w["actual_result"])
+            if trafiony is None:
+                continue
+            pary.append((p[linia], trafiony))
+        wynik = sprawdz_obciazenie(pary)
+        if wynik is None:
+            print(f"  Over {linia:<4} BRAK DANYCH")
+            continue
+        etykieta = "ISTOTNE" if wynik["istotne"] else "szum"
+        print(f"  Over {linia:<4} n={wynik['n']:4}  deklarowane={wynik['deklarowane_pct']:.1f}%"
+              f"  zaszlo={wynik['zaszlo_pct']:.1f}%  roznica={wynik['roznica_pp']:+.1f}pp"
+              f"  z={wynik['z']:+.2f}  p={wynik['p_value']:.3f}  {etykieta}")
+
+
 def raport_kalibracji_1x2(conn) -> None:
     """Czy pewnosc modelu we WLASNYM typie 1X2 jest wiarygodna? (model_log)
 
@@ -867,6 +931,7 @@ def main() -> None:
         raport_wzorcow(conn)
         dziennik = raport_dziennika(conn)
         raport_obciazenia_modelu(conn)
+        raport_linii_goli(conn)
         raport_kalibracji_1x2(conn)
         raport_rynkow_golowych(conn)
         raport_remisow(conn)
