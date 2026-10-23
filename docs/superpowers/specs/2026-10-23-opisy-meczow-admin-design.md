@@ -18,18 +18,20 @@ samą kartę); sam LLM bez karty (halucynacje — znany problem z kursami Groqa 
 ## Karta liczb (`core/opis_meczu.py`)
 
 `zbuduj_karte(home, away, liga, data, df, bzz) -> dict`:
-- **Czysty Poisson** (`poisson.predict_match` na zbiorze z `load_cached()` +
-  `adapt_to_prod_schema`): λ gospodarzy/gości, 1X2, linie Over 0.5–4.5
+- **Poisson bez mieszania z Bzzoiro** (`poisson.predict_match` z opcjami domyślnymi na
+  zbiorze z `load_cached()` + `adapt_to_prod_schema`; λ jak w potoku — po kalibracji
+  i xG; 1X2 z limitem remisu 40%): λ gospodarzy/gości, 1X2, linie Over 0.5–4.5
   (`poisson.prob_linii_goli`), BTTS. Brak wyniku → `poisson=None` + powód.
 - **Bzzoiro-ML** (event z `predykcje_tygodnia`, dopasowany po nazwach jak w
   `api/routes/analyses.py`): 1X2, Over 2.5, BTTS.
 - **Rynek** z kursów eventu (1X2 i O/U 2.5) po zdjęciu marży: proporcjonalnie (1/kurs
   znormalizowane). Brak kursów → `rynek=None`.
 - **Forma** z `df`: ostatnie 5 meczów każdej drużyny (data, rywal, wynik, dom/wyjazd),
-  średnie gole strzelone/stracone z ostatnich 10.
+  średnie gole strzelone/stracone z ostatnich 10; tylko mecze sprzed daty meczu
+  (opis meczu z przeszłości nie zna późniejszych wyników).
 - **Statystyki drużyn** z `build_match_card` (gf_pg, ga_pg, rating, strzelcy) — gdy dostępne.
-- **Uwagi stałe** wpisane do karty: „czysty Poisson zaniża sumę goli o ~0,3/mecz
-  (próba odkrywcza 23.10, w trakcie replikacji)”; „model nie bije rynku (39/39 lig)”.
+- **Uwagi stałe** wpisane do karty: definicja ramienia Poissona (jw.); „Poisson z λ
+  potoku zaniża sumę goli o ~0,3/mecz (próba odkrywcza 23.10, w trakcie replikacji)”; „model nie bije rynku (39/39 lig)”.
 
 `prompt_opisu(karta) -> str` — po polsku, 5 sekcji: siła i forma, czego spodziewa się
 model, gdzie model różni się od rynku (różnice ≥ 5 pp), niepewność (mała historia,
