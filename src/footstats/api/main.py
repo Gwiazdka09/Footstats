@@ -91,6 +91,7 @@ class _MetricsMiddleware(BaseHTTPMiddleware):
 skonfiguruj_logi_json()
 
 from footstats.api.auth import router as auth_router
+from footstats.api.routes.admin_opisy import router as admin_opisy_router
 from footstats.api.routes.admin_users import router as admin_users_router
 from footstats.api.routes.bankroll import router as bankroll_router
 from footstats.api.routes.coupons import router as coupons_router
@@ -247,6 +248,7 @@ app.include_router(bankroll_router)
 app.include_router(settings_router)
 app.include_router(coupons_router)
 app.include_router(model_stats_router)
+app.include_router(admin_opisy_router)
 app.include_router(analyses_router)
 app.include_router(user_stats_router)
 app.include_router(terminarz_router)
