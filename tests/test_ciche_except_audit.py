@@ -172,6 +172,11 @@ BASELINE: dict[str, int] = {
     "core/match_analysis.py": 2,
     "core/match_linker.py": 1,
     "core/ml_features.py": 1,
+    # Opis meczu (admin): `_kurs` zamienia pole kursu eventu Bzzoiro na float. Brak
+    # albo śmieć (None, "", tekst) to NORMA przy niepelnych rynkach, a funkcja jest
+    # wolana dla kazdego kursu kazdego meczu — log zalalby logi szumem. Skutek jest
+    # widoczny w karcie: `rynek` = None i sygnal „brak kursow rynkowych” w prompcie.
+    "core/opis_meczu.py": 1,
     # 29.08: 5 -> 2. `except sqlite3.Error -> {}/[]/None` sprawialo, ze AWARIA
     # BAZY wygladala jak nieznana druzyna — a cicho zerowala `goal_share`, wiec
     # korekta lambda za kontuzje przestawala dzialac. Zostaja konwertery pol

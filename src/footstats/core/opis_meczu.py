@@ -3,8 +3,9 @@
 Spec: docs/superpowers/specs/2026-10-23-opisy-meczow-admin-design.md.
 
 Dwa kroki, celowo rozdzielone:
-  1. `zbuduj_karte` — DETERMINISTYCZNA karta liczb z własnych danych (czysty Poisson,
-     Bzzoiro-ML, rynek bez marży, forma z historii, statystyki drużyn). Bez LLM.
+  1. `zbuduj_karte` — DETERMINISTYCZNA karta liczb z własnych danych (Poisson bez
+     mieszania z Bzzoiro, Bzzoiro-ML, rynek bez marży, forma z historii, statystyki
+     drużyn). Bez LLM.
   2. `opisz` — Groq dostaje WYŁĄCZNIE kartę i ma ją zinterpretować. Prompt zabrania
      dopisywania faktów spoza karty i rekomendacji zakładu. Gdy LLM padnie, zwracamy
      `None`, a karta i tak trafia do GUI.
@@ -52,7 +53,9 @@ _MAX_WPISOW_CACHE = 200
 # Uwagi dopisywane do KAŻDEJ karty — to są ograniczenia modelu, które LLM ma
 # uwzględnić w sekcji „niepewność”, a właściciel widzieć obok liczb.
 UWAGI_STALE: tuple[str, ...] = (
-    "Czysty Poisson zaniża sumę goli o ok. 0,3 gola na mecz (próba odkrywcza z 23.10,"
+    "Poisson (bez mieszania z Bzzoiro; λ jak w potoku — po kalibracji i xG; 1X2 z limitem"
+    " remisu 40%).",
+    "Poisson z λ potoku zaniża sumę goli o ok. 0,3 gola na mecz (próba odkrywcza z 23.10,"
     " w trakcie replikacji) — linie Over mogą być zaniżone, a Under zawyżone.",
     "Model nie bije rynku (zmierzone: 39 z 39 lig) — liczby opisują, czego model się"
     " spodziewa, a nie wskazują wartościowego zakładu.",
@@ -131,13 +134,19 @@ def dopasuj_event(
 
 # ── Forma z historii ────────────────────────────────────────────────────────
 
-def forma(df: pd.DataFrame | None, druzyna: str, n: int = 5) -> dict[str, Any] | None:
+def forma(
+    df: pd.DataFrame | None, druzyna: str, n: int = 5, do_daty: str | None = None,
+) -> dict[str, Any] | None:
     """Ostatnie `n` meczów drużyny (najnowszy pierwszy) + średnie gole z ostatnich 10.
 
     Wynik zawsze z perspektywy badanej drużyny. Nazwa jest tłumaczona na zapis
     z historii tą samą funkcją co w `predict_match` ("Stoke City" -> "Stoke").
     None, gdy brak zbioru albo drużyna nie ma w nim rozegranych meczów.
     Mecze bez wyniku (NaN) są pomijane.
+
+    `do_daty` (data meczu, `RRRR-MM-DD` lub ISO z godziną) odcina mecze rozegrane tego
+    dnia i później — opis meczu z przeszłości nie może znać późniejszych wyników.
+    Brak albo nieczytelna data = bez odcięcia.
     """
     import pandas as pd
 
@@ -151,6 +160,9 @@ def forma(df: pd.DataFrame | None, druzyna: str, n: int = 5) -> dict[str, Any] |
     mecze = df[(df["gospodarz"] == nazwa) | (df["goscie"] == nazwa)]
     mecze = mecze.dropna(subset=["gole_g", "gole_a"]).reset_index(drop=True)
     daty = pd.to_datetime(mecze["data"], errors="coerce").dropna()
+    granica = pd.to_datetime((do_daty or "")[:10], errors="coerce")
+    if pd.notna(granica):
+        daty = daty[daty < granica]
     if daty.empty:
         return None
     daty = daty.sort_values(ascending=False, kind="stable")
@@ -189,15 +201,17 @@ def _pct(ulamek: float) -> float:
 
 
 def _poisson(home: str, away: str, df: pd.DataFrame | None) -> tuple[dict[str, Any] | None, str | None]:
-    """(blok czystego Poissona, powód braku). Dokładnie jedno z nich jest None."""
+    """(blok Poissona bez mieszania z Bzzoiro, powód braku). Dokładnie jedno z nich jest None."""
     if df is None:
         return None, "brak zbioru historycznego meczów (Poisson niedostępny)"
 
     from footstats.core.poisson import predict_match, prob_linii_goli
 
     try:
-        # Czysty Poisson: bez heurystyk/H2H/fortecy (to obiekty pipeline'u, nie karty).
-        # Domyślne stage="REGULAR_SEASON" — jak w `quick_picks`.
+        # Poisson bez mieszania z Bzzoiro i bez heurystyk/H2H/fortecy (obiekty pipeline'u,
+        # nie karty). Opcje domyślne CELOWO: kalibracja λ, xG i limit remisu 40% — te same
+        # λ co w potoku i w pomiarze linii goli z 23.10. Stage="REGULAR_SEASON" — jak
+        # w `quick_picks`.
         wynik = predict_match(home, away, df)
     except Exception as e:  # noqa: BLE001 — karta ma przeżyć awarię jednego ramienia
         log.warning("opis_meczu: predict_match(%s, %s) nieudany: %s: %s",
@@ -290,7 +304,8 @@ def zbuduj_karte(
         "poisson_powod": powod,
         "bzzoiro": _bzzoiro(bzz),
         "rynek": _rynek(bzz),
-        "forma": None if df is None else {"home": forma(df, home), "away": forma(df, away)},
+        "forma": None if df is None else {
+            "home": forma(df, home, do_daty=data), "away": forma(df, away, do_daty=data)},
         "statystyki": _statystyki(karta_druzyn),
         "uwagi": list(UWAGI_STALE),
     }
@@ -305,12 +320,13 @@ def _fmt(wartosc: float | None, jednostka: str = "%") -> str:
 def _linia_poissona(karta: dict[str, Any]) -> list[str]:
     p = karta.get("poisson")
     if not p:
-        return [f"Czysty Poisson: brak — {karta.get('poisson_powod') or 'powód nieznany'}"]
+        return [f"Model Poissona (bez Bzzoiro): brak — {karta.get('poisson_powod') or 'powód nieznany'}"]
     linie = ", ".join(f"Over {k}={v:.1f}%" for k, v in p["linie"].items())
     return [
-        f"Czysty Poisson: λ gospodarzy {p['lambda_home']:.2f}, λ gości {p['lambda_away']:.2f};"
+        f"Model Poissona (bez Bzzoiro): λ gospodarzy {p['lambda_home']:.2f},"
+        f" λ gości {p['lambda_away']:.2f};"
         f" 1={p['p1']:.1f}% X={p['px']:.1f}% 2={p['p2']:.1f}%; BTTS={p['btts']:.1f}%",
-        f"Linie goli (czysty Poisson): {linie}",
+        f"Linie goli (model Poissona): {linie}",
     ]
 
 
@@ -397,7 +413,7 @@ def _roznice_od_rynku(karta: dict[str, Any]) -> list[str]:
 def _sygnaly_niepewnosci(karta: dict[str, Any]) -> list[str]:
     wynik = []
     if not karta.get("poisson"):
-        wynik.append("brak czystego Poissona (powód podany wyżej)")
+        wynik.append("brak modelu Poissona (powód podany wyżej)")
     for klucz in ("home", "away"):
         f = (karta.get("forma") or {}).get(klucz)
         if karta.get("forma") and not f:
@@ -495,7 +511,9 @@ def opisz_z_info(
 
     try:
         odpowiedz = zapytaj(prompt_opisu(karta), max_tokens=_MAX_TOKENS_OPISU)
-    except Exception as e:  # noqa: BLE001 — Groq/Ollama/sieć: karta i tak wraca do GUI
+    except RuntimeError as e:
+        # `zapytaj_ai` kontraktowo rzuca tylko RuntimeError ("Groq i Ollama padły"); błędy
+        # SDK łapie sam. Inny wyjątek to błąd programisty i ma być głośny, nie ukryty.
         log.warning("opis_meczu: LLM nieudany: %s: %s", type(e).__name__, e)
         return None, False
 

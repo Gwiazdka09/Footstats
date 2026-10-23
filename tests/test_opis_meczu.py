@@ -93,6 +93,37 @@ def test_forma_nieznana_druzyna_none():
     assert forma(_df(), "Nieistniejacy FC", n=5) is None
 
 
+def test_forma_do_daty_nie_widzi_pozniejszych_wynikow():
+    """Opis meczu z przeszłości nie może znać wyników rozegranych PO nim."""
+    f = forma(_df(), "Alfa", n=5, do_daty="2026-09-12")
+
+    # Mecz z 12.09 jest równą datą, więc też odpada (ostra nierówność): pierwszy to 05.09.
+    assert [m["data"] for m in f["ostatnie"]] == [
+        "2026-09-05", "2026-08-29", "2026-08-22", "2026-08-15", "2026-08-08"]
+    assert f["mecze_w_sredniej"] == 6                  # w historii przed 12.09 jest 6 meczów Alfy
+    # Średnie z tych 6 meczów: strzelone 9, stracone 5 (nie z całej historii).
+    assert f["gole_strzelone_sr10"] == pytest.approx(1.5)
+    assert f["gole_stracone_sr10"] == pytest.approx(5 / 6, abs=0.01)
+
+
+def test_forma_do_daty_przed_pierwszym_meczem_none():
+    assert forma(_df(), "Alfa", n=5, do_daty="2026-08-01") is None
+
+
+def test_forma_do_daty_przyjmuje_znacznik_czasu_iso():
+    f = forma(_df(), "Alfa", n=5, do_daty="2026-09-12T18:30:00+02:00")
+
+    assert f["ostatnie"][0]["data"] == "2026-09-05"
+
+
+def test_forma_nieczytelna_data_nie_obcina_historii():
+    """Bzzoiro bywa bez daty/ze śmieciem — brak odcięcia, nie błąd."""
+    pelna = forma(_df(), "Alfa", n=5)
+
+    assert forma(_df(), "Alfa", n=5, do_daty="nie-data") == pelna
+    assert forma(_df(), "Alfa", n=5, do_daty=None) == pelna
+
+
 def test_forma_pomija_mecze_bez_wyniku():
     df = _df()
     df["gole_g"] = df["gole_g"].astype(float)
@@ -276,12 +307,35 @@ def test_karta_forma_obu_druzyn():
     assert k["forma"]["away"]["ostatnie"][0]["rywal"] == "Gamma"   # Beta 2:2 Gamma 10.10
 
 
+def test_karta_forma_nie_widzi_meczow_po_dacie_meczu():
+    """Karta meczu z 12.09 liczy formę tylko z wyników sprzed 12.09."""
+    k = zbuduj_karte("Alfa", "Beta", "Test League", "2026-09-12", _df(), None)
+
+    assert k["forma"]["home"]["ostatnie"][0]["data"] == "2026-09-05"
+    assert k["forma"]["away"]["ostatnie"][0]["data"] == "2026-08-29"   # Beta: nic po 29.08 przed 12.09
+    for druzyna in ("home", "away"):
+        assert all(m["data"] < "2026-09-12" for m in k["forma"][druzyna]["ostatnie"])
+
+
 def test_karta_uwagi_stale():
     k = zbuduj_karte("Alfa", "Beta", "Test League", "2026-10-25", None, None)
 
     tekst = " ".join(k["uwagi"])
-    assert "0,3" in tekst and "zaniża" in tekst                # zaniżone gole czystego Poissona
+    assert "0,3" in tekst and "zaniża" in tekst                # Poisson z λ potoku zaniża gole
     assert "39" in tekst and "nie bije rynku" in tekst         # model nie bije rynku
+
+
+def test_karta_nie_nazywa_poissona_czystym():
+    """Liczby idą z `predict_match` z kalibracją λ, xG i limitem remisu, więc nie są „czyste”."""
+    k = zbuduj_karte("Alfa", "Beta", "Test League", "2026-10-25", _df(), _EVENT)
+
+    widoczne = " ".join(k["uwagi"]) + " " + prompt_opisu(k)
+    assert "czyst" not in widoczne.lower()
+    # Definicja ramienia jest w uwagach stałych (LLM i właściciel widzą, co to za liczby).
+    uwagi = " ".join(k["uwagi"])
+    assert "bez mieszania z Bzzoiro" in uwagi
+    assert "kalibracji" in uwagi and "xG" in uwagi and "40%" in uwagi
+    assert "Model Poissona (bez Bzzoiro)" in prompt_opisu(k)
 
 
 def test_karta_statystyki_druzyn_gdy_dostepne():
@@ -442,6 +496,12 @@ def test_opisz_wyjatek_klienta_daje_none_i_nie_cache():
 
     z = _Zapytaj()
     assert opisz_z_info(k, zapytaj=z) == ("Opis testowy.", False)   # porażka nie zatruła cache
+
+
+def test_opisz_blad_programisty_nie_jest_polykany():
+    """Kontrakt `zapytaj_ai` to RuntimeError; KeyError z kodu ma być głośny, nie `None`."""
+    with pytest.raises(KeyError):
+        opisz(_pelna_karta(), zapytaj=_Zapytaj(wyjatek=KeyError("blad w kodzie")))
 
 
 @pytest.mark.parametrize("odpowiedz", [None, "", "   "])
