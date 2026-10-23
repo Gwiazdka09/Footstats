@@ -122,3 +122,45 @@ zostaje zamrożony.**
   2,64 tylko przy trafieniu praktycznie wszystkich 7 — do potwierdzenia powtórką skryptu.
 
 **Następny pomiar:** do decyzji właściciela (nowe okno trzeba ustalić Z GÓRY).
+
+---
+
+## 2026-10-23 — krok 1: linie goli czystego Poissona (próba ODKRYWCZA)
+
+Narzędzie: `raport_linii_goli` w `scripts/stan_uczenia.py`. Linie Over 0.5–4.5 liczone
+z `lambda_h`/`lambda_a` tą samą macierzą co predykcja (`core/poisson.prob_linii_goli`).
+
+**Ważne o danych:** `prob_*` wierszy `poisson-dc` w `model_log` to mieszanka z Bzzoiro
+(`core/ensemble`, `ENSEMBLE_MARKET_WEIGHT=0.70` na obu jobach → 70% Bzzoiro, 30% Poisson);
+lambdy są sprzed mieszania. Over 2.5 z lambd vs zapisane: średnio 6,1 pp (382/420 > 1 pp).
+**Pomiar decyzyjny z 22.10 dotyczył więc mieszanki, nie samego Poissona.** Surowych
+prawdopodobieństw Poissona nikt nie zapisuje.
+
+Okres 2026-09-11 … 2026-10-22, n=418 rozliczonych (2 wyniki po dogrywce/karnych odpadają):
+
+| linia | deklaruje | zaszło | różnica | z |
+|---|---|---|---|---|
+| Over 0.5 | 92,4% | 96,4% | +4,0 pp | +3,11 |
+| Over 1.5 | 75,3% | 78,5% | +3,1 pp | +1,52 |
+| Over 2.5 | 51,4% | 58,1% | +6,7 pp | +2,82 |
+| Over 3.5 | 30,4% | 38,8% | +8,4 pp | +3,85 |
+| Over 4.5 | 15,7% | 20,8% | +5,2 pp | +2,98 |
+
+Suma λ średnio 2,77, gole 3,09: **+0,32 gola na mecz (SE 0,088)**. Obie połowy okresu
+w tę samą stronę (Over 3.5: +6,7 pp z=2,18 do 07.10; +10,1 pp z=3,26 po 07.10).
+
+**Odczyt:** czysty Poisson zaniża sumę goli o ~11%. To próba odkrywcza — nie traktujemy
+jej jako ustalenia (zasada: replikacja przed ustaleniem). Możliwe przyczyny bez błędu
+modelu: sezon bramkowy (22.09 też 56,4% Over przy ~52% deklarowanych), selekcja lig
+przez whitelistę.
+
+**Reguła replikacji — ustalona Z GÓRY (2026-10-23):**
+- Okno: wiersze `model_log` `poisson-dc` z lambdami, utworzone **2026-10-24 … 2026-11-23**.
+- Test główny: średnia (gole − λ_h − λ_a) > 0, z ≥ 2,58 i efekt ≥ +0,15 gola.
+- Warunek kierunku: Over 2.5 i Over 3.5 czystego Poissona — obie różnice > 0.
+- Równolegle offline: walk-forward na `full_dataset.parquet` (sezon 2025/26) — czy
+  estymator λ zaniża sumę goli także na danych historycznych.
+- Spełnione → propozycja korekty λ (rynki golowe, zasady odmrożenia) z warunkiem poprawy
+  NLL out-of-sample; decyzja właściciela.
+
+**Następny pomiar:** 2026-11-23.
