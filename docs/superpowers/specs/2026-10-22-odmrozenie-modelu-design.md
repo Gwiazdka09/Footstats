@@ -49,15 +49,22 @@ nie „wygrywanie z bukmacherem”.
 
 Akceptacja: testy z przypadkami z logów + po tygodniu w logach zero odrzuceń tych nazw.
 
-### Krok 1 — zapis wszystkich rynków do pomiarów
-- Podwójną szansę, Under 2.5 i „BTTS — nie” da się wyliczyć z kolumn, które już są
-  w `model_log` (sumy i dopełnienia) — wystarczy dodać je do narzędzia pomiaru
-  (`scripts/stan_uczenia.py`, `_WYJSCIA_OBCIAZENIA`), bez nowych kolumn.
-- Nowe kolumny `model_log`: `prob_over05`, `prob_over15`, `prob_over35`, `prob_over45`
-  z macierzy Poissona (`core/markets.py`); dla `bzzoiro-ml` NULL (nie podaje tych linii).
-  Migracja jak dotychczas: idempotentny `ALTER TABLE … ADD COLUMN IF NOT EXISTS`
-  w `core/kalibracja_log.py`.
-- Akceptacja: po tygodniu ≥ 95% nowych wierszy `poisson-dc` ma niepuste nowe kolumny.
+### Krok 1 — pomiar wszystkich rynków (zmienione 23.10 po lekturze kodu)
+- **Podwójna szansa, Under 2.5 i „BTTS — nie” NIE dostają osobnego testu:** to
+  dopełnienia wyjść już mierzonych (1X = 1 − P(2), X2 = 1 − P(1), 12 = 1 − P(X),
+  Under = 1 − Over). Test obciążenia na dopełnieniu daje ten sam |z| z odwróconym
+  znakiem — zero nowej informacji, a dodatkowe wyjścia podniosłyby próg Šidáka.
+- **Linie Over 0.5 / 1.5 / 3.5 / 4.5 bez nowych kolumn:** `model_log` ma `lambda_h`
+  i `lambda_a`, więc linie liczymy z TEJ SAMEJ macierzy co predykcja
+  (`core/poisson.prob_linii_goli`, wydzielona `_macierz_wynikow`) — także wstecz,
+  na całej historii. Zysk: od razu ~270 rozliczonych zamiast czekania tygodniami,
+  bez migracji i zapisów do prod.
+- **Kontrola zgodności przed tabelą:** Over 2.5 przeliczone z lambd vs zapisane
+  `prob_over25`; średnia różnica > 0,5 pp → raport się zatrzymuje (lambdy w logu nie
+  byłyby tymi z predykcji).
+- Akceptacja: raport w `scripts/stan_uczenia.py` liczy linie na danych prod,
+  kontrola zgodności ≤ 0,5 pp; pierwszy wynik jako punkt wyjścia w
+  `docs/obserwacja_modelu.md`.
 
 ### Krok 2 — pokrycie w ligach z whitelisty
 - Fakt (23.09–22.10): z ~517 kandydatów po filtrze lig Poisson policzył ~351 — około 1/3
