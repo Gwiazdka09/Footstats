@@ -339,29 +339,27 @@ def raport_obciazenia_modelu(conn) -> None:
         print(f"\n  → WERDYKT: model wykazuje istotne obciazenie na: {', '.join(opisy)}.")
 
 
-# Linie goli spoza 2.5 — z lambd zapisanych w `model_log`, przez TĘ SAMĄ macierz
-# co predykcja (`poisson.prob_linii_goli`). Podwójnej szansy, Under i BTTS NIE nie
-# testujemy osobno: to dopełnienia wyjść powyżej (1X = 1 − P(2), 12 = 1 − P(X),
-# Under = 1 − Over), więc ich test obciążenia to ten sam |z| z odwróconym znakiem.
-_LINIE_GOLI_POZA_2_5: tuple[float, ...] = (0.5, 1.5, 3.5, 4.5)
-
-# Powyżej tej średniej różnicy Over 2.5 (z lambd vs zapisane) lambdy w logu nie są
-# tymi, z których liczyła predykcja — tabela linii byłaby fikcją. Zaokrąglenie
-# lambd w zapisie daje ~0,1 pp, więc 0,5 pp zostawia zapas tylko na nie.
-PROG_ZGODNOSCI_LAMBD_PP = 0.5
+# Linie goli z lambd zapisanych w `model_log`, przez TĘ SAMĄ macierz co predykcja
+# (`poisson.prob_linii_goli`). To CZYSTY Poisson: zapisane `prob_*` to mieszanka
+# z Bzzoiro (`core/ensemble`, na prod ENSEMBLE_MARKET_WEIGHT=0.70 → 70% Bzzoiro),
+# a lambdy pochodzą sprzed mieszania — pomiar 23.10: Over 2.5 z lambd vs zapisane
+# średnio 6,1 pp. Linii innych niż 2.5 Bzzoiro nie podaje, więc katalog rynków
+# i tak liczy je z czystej macierzy. Podwójnej szansy, Under i BTTS NIE testujemy
+# osobno: to dopełnienia mierzonych wyjść (ten sam |z|, odwrócony znak).
+_LINIE_GOLI: tuple[float, ...] = (0.5, 1.5, 2.5, 3.5, 4.5)
 
 
 def raport_linii_goli(conn) -> None:
-    """Obciążenie poisson-dc na liniach Over 0.5 / 1.5 / 3.5 / 4.5 (krok 1 odmrożenia).
+    """Obciążenie CZYSTEGO Poissona na liniach Over 0.5–4.5 (krok 1 odmrożenia).
 
-    Najpierw kontrola zgodności: Over 2.5 przeliczone z lambd musi pokrywać się
-    z zapisanym `prob_over25`. Dopiero wtedy test na całej próbie dla każdej linii.
+    Różnicę Over 2.5 (czysty Poisson vs zapisana mieszanka z Bzzoiro) pokazuje
+    informacyjnie — to wpływ mieszania, nie błąd danych.
     """
     from footstats.core.bledy_pomiaru import sprawdz_obciazenie
     from footstats.core.poisson import prob_linii_goli
     from footstats.utils.betting import oblicz_tip_correct
 
-    print("\n=== LINIE GOLI: poisson-dc, z lambd w model_log ===")
+    print("\n=== LINIE GOLI: czysty Poisson z lambd w model_log (poisson-dc) ===")
     wiersze = _licz(conn, """
         SELECT prob_over25, lambda_h, lambda_a, actual_result
         FROM model_log
@@ -381,19 +379,14 @@ def raport_linii_goli(conn) -> None:
         zapisane = _prob01(w.get("prob_over25"))
         if zapisane is not None:
             roznice.append(abs(p[2.5] - zapisane))
-    if not roznice:
-        print("  BRAK DANYCH — żaden wiersz nie ma prob_over25 do kontroli zgodności.")
-        return
-    srednia_pp = sum(roznice) / len(roznice) * 100.0
-    ponad_1pp = sum(1 for r in roznice if r > 0.01)
-    print(f"  kontrola: Over 2.5 z lambd vs zapisane — średnio {srednia_pp:.2f} pp,"
-          f" > 1 pp w {ponad_1pp}/{len(roznice)} wierszach")
-    if srednia_pp > PROG_ZGODNOSCI_LAMBD_PP:
-        print("  → STOP: lambdy w model_log nie odtwarzają zapisanego Over 2.5 —"
-              " tabela linii byłaby fikcją, nie liczę jej.")
-        return
+    if roznice:
+        srednia_pp = sum(roznice) / len(roznice) * 100.0
+        ponad_1pp = sum(1 for r in roznice if r > 0.01)
+        print(f"  Over 2.5: czysty Poisson vs zapisane (mieszanka z Bzzoiro) — średnio"
+              f" {srednia_pp:.2f} pp, > 1 pp w {ponad_1pp}/{len(roznice)} wierszach."
+              " To wpływ mieszania, nie błąd — tabela niżej mierzy SAM Poisson.")
 
-    for linia in _LINIE_GOLI_POZA_2_5:
+    for linia in _LINIE_GOLI:
         pary: list[tuple[float, int]] = []
         for w, p in linie:
             trafiony = oblicz_tip_correct(f"OVER {linia}", w["actual_result"])

@@ -286,17 +286,20 @@ def test_linie_goli_licza_obciazenie_z_lambd(capsys):
     stan_uczenia.raport_linii_goli(_Conn([wiersze]))
     out = capsys.readouterr().out
     assert "średnio 0.00 pp" in out
-    for linia in ("0.5", "1.5", "3.5", "4.5"):
+    for linia in ("0.5", "1.5", "2.5", "3.5", "4.5"):
         assert f"Over {linia}" in out
     assert "n=   6" in out
 
 
-def test_linie_goli_stop_gdy_lambdy_nie_odtwarzaja_over25(capsys):
+def test_linie_goli_mieszanka_nie_zatrzymuje_raportu(capsys):
+    # Zapisane prob_over25 to mieszanka z Bzzoiro — różnica wobec lambd jest
+    # oczekiwana i ma być tylko pokazana, nie blokować tabeli czystego Poissona.
     wiersze = [_wiersz_linii((0.5, 0.5), "1-0", over25=90.0)]
     stan_uczenia.raport_linii_goli(_Conn([wiersze]))
     out = capsys.readouterr().out
-    assert "STOP" in out
-    assert "Over 0.5" not in out
+    assert "mieszanka z Bzzoiro" in out
+    assert "Over 0.5 " in out
+    assert "STOP" not in out
 
 
 def test_linie_goli_pyta_tylko_poisson_dc_i_tylko_select():
