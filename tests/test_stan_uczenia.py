@@ -269,3 +269,39 @@ def test_raport_kursow_nie_polyka_innych_bledow():
 
     with _pytest.raises(RuntimeError, match="connection reset"):
         stan_uczenia.raport_predykcji(conn)
+
+# --- Krok 1 odmrożenia (23.10): linie goli z lambd w model_log -------------------
+
+def _wiersz_linii(lam, wynik, over25=None):
+    from footstats.core.poisson import prob_linii_goli
+    if over25 is None:
+        over25 = prob_linii_goli(*lam)[2.5] * 100.0
+    return {"prob_over25": over25, "lambda_h": lam[0], "lambda_a": lam[1],
+            "actual_result": wynik}
+
+
+def test_linie_goli_licza_obciazenie_z_lambd(capsys):
+    wiersze = [_wiersz_linii((1.5, 1.1), w)
+               for w in ("2-1", "0-0", "1-0", "3-2", "1-1", "4-0")]
+    stan_uczenia.raport_linii_goli(_Conn([wiersze]))
+    out = capsys.readouterr().out
+    assert "średnio 0.00 pp" in out
+    for linia in ("0.5", "1.5", "3.5", "4.5"):
+        assert f"Over {linia}" in out
+    assert "n=   6" in out
+
+
+def test_linie_goli_stop_gdy_lambdy_nie_odtwarzaja_over25(capsys):
+    wiersze = [_wiersz_linii((0.5, 0.5), "1-0", over25=90.0)]
+    stan_uczenia.raport_linii_goli(_Conn([wiersze]))
+    out = capsys.readouterr().out
+    assert "STOP" in out
+    assert "Over 0.5" not in out
+
+
+def test_linie_goli_pyta_tylko_poisson_dc_i_tylko_select():
+    conn = _Conn([[]])
+    stan_uczenia.raport_linii_goli(conn)
+    sql = conn.zapytania[0]
+    assert "model_source = 'poisson-dc'" in sql
+    assert sql.strip().upper().startswith("SELECT")
