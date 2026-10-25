@@ -384,6 +384,22 @@ def get_team_players(
     return [dict(r) for r in rows]
 
 
+def team_goal_shares_recent_z_sezonem(
+    team: str, season: int, lookback: int = 2, db_path: Path | str = DB_PATH
+) -> tuple[int | None, dict[str, float]]:
+    """Jak `team_goal_shares_recent`, ale zwraca też sezon, z którego wzięto udziały.
+
+    (None, {}) gdy w oknie nie ma pełnego składu. Sezon jest potrzebny GUI: od
+    zawieszenia API-Football (16.08.2026) bieżący sezon jest pusty i karta pokazuje
+    strzelców z poprzedniego — z zawodnikami, którzy latem zmienili klub.
+    """
+    for s in range(int(season), int(season) - lookback - 1, -1):
+        shares = team_goal_shares(team, s, db_path=db_path)
+        if len(shares) >= MIN_SKLAD:
+            return s, shares
+    return None, {}
+
+
 def team_goal_shares_recent(
     team: str, season: int, lookback: int = 2, db_path: Path | str = DB_PATH
 ) -> dict[str, float]:
@@ -403,11 +419,7 @@ def team_goal_shares_recent(
     Pusty wynik jest tu wynikiem POPRAWNYM: `absence_attack_factor` bez udziałów
     schodzi na płaską korektę, a zmyślony udział przesuwa λ w złą stronę.
     """
-    for s in range(int(season), int(season) - lookback - 1, -1):
-        shares = team_goal_shares(team, s, db_path=db_path)
-        if len(shares) >= MIN_SKLAD:
-            return shares
-    return {}
+    return team_goal_shares_recent_z_sezonem(team, season, lookback, db_path)[1]
 
 
 # ── team_stats: siła drużyn (kadr MŚ → Poisson λ, model nie ma historii kadr) ──

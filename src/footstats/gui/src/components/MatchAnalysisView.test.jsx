@@ -103,3 +103,24 @@ describe('Analizy meczów — start meczu i teksty', () => {
     expect(await screen.findByText('Brak nadchodzących ważnych meczów dziś i jutro.')).toBeInTheDocument();
   });
 });
+
+describe('Analizy meczów — podpis strzelców z poprzedniego sezonu', () => {
+  const NOTKA = /Strzelcy wg poprzedniego sezonu/;
+  const ze_strzelcami = (flaga) => ({
+    ...KARTA,
+    top_scorers_home: [{ name: 'Lewandowski', goal_share: 0.3 }],
+    strzelcy_poprzedni_sezon: flaga,
+  });
+  const api = (karta) => vi.fn(() => Promise.resolve({ matches: [karta] }));
+
+  it('z flagą pokazuje podpis pod strzelcami', async () => {
+    render(<MatchAnalysisView apiFetch={api(ze_strzelcami(true))} />);
+    expect(await screen.findByText(NOTKA)).toBeInTheDocument();
+  });
+
+  it('bez flagi podpisu nie ma', async () => {
+    render(<MatchAnalysisView apiFetch={api(ze_strzelcami(false))} />);
+    await screen.findByText(/Lewandowski/);
+    expect(screen.queryByText(NOTKA)).toBeNull();
+  });
+});
