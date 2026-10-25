@@ -54,8 +54,12 @@ class _RequestIDMiddleware(BaseHTTPMiddleware):
 # Cloud Schedulera (attemptDeadline 180 s) wygląda to jak awaria endpointu i idzie w retry.
 # `/api/admin/opis-meczu` dołączył 2026-10-25: pierwsze żądanie po starcie instancji
 # ładuje zbiór historyczny (~18 s) + Groq, więc w 10 s wracało 504 „Request timeout”.
+# `/api/analyses/matches` dołączył 2026-10-25 razem z paginacją Bzzoiro: kilka stron
+# /predictions/ + 4 zapytania do DB na każdą z ~35 kart (dziś i jutro) nie mieści się
+# pewnie w 10 s, a 504 wygląda w GUI jak brak meczów.
 _LONG_RUNNING_PATHS = {"/api/coupons/settle", "/api/cron/settle", "/api/cron/draft",
-                       "/api/cron/settle-manual", "/api/admin/opis-meczu"}
+                       "/api/cron/settle-manual", "/api/admin/opis-meczu",
+                       "/api/analyses/matches"}
 _LONG_RUNNING_TIMEOUT = 120.0
 
 
