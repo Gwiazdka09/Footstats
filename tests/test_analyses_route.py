@@ -20,7 +20,7 @@ def test_build_cards_filtruje_wazne(monkeypatch):
     monkeypatch.setattr(analyses, "get_team_stats",
                         lambda t, s: {"matches": 3, "goals_for": 10, "goals_against": 2,
                                       "avg_rating": 7.16} if t == "France" else None)
-    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda t, s: {})
+    monkeypatch.setattr(analyses, "team_goal_shares_recent_z_sezonem", lambda t, s: (None, {}))
     cards = analyses._build_cards(_EVENTS)
     assert len(cards) == 1                       # tylko World Cup, Botola odpada
     c = cards[0]
@@ -32,7 +32,7 @@ def test_karta_bez_predykcji_i_kursow(monkeypatch):
     """Decyzja 10.09: zakładka to statystyki drużyn — event niesie `pred_ml`
     i `odds`, ale do odpowiedzi nie może trafić żadne z nich."""
     monkeypatch.setattr(analyses, "get_team_stats", lambda t, s: None)
-    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda t, s: {})
+    monkeypatch.setattr(analyses, "team_goal_shares_recent_z_sezonem", lambda t, s: (None, {}))
 
     [c] = analyses._build_cards(_EVENTS)
 
@@ -74,7 +74,7 @@ def test_mecz_z_kompletem_nazw_dalej_buduje_karte(monkeypatch):
     from footstats.api.routes import analyses
 
     monkeypatch.setattr(analyses, "get_team_stats", lambda *a, **k: {})
-    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda *a, **k: {})
+    monkeypatch.setattr(analyses, "team_goal_shares_recent_z_sezonem", lambda *a, **k: (None, {}))
     monkeypatch.setattr(analyses, "build_match_card", lambda *a, **k: {"ok": True, "home_stats": {"gf_pg": 1}, "away_stats": {"gf_pg": 1}})
 
     karty = analyses._build_cards(
@@ -128,7 +128,7 @@ def _wywolaj(monkeypatch, events, q=None):
     monkeypatch.setitem(sys.modules, "footstats.scrapers.bzzoiro", modul)
     monkeypatch.setenv("BZZOIRO_KEY", "x")
     monkeypatch.setattr(analyses, "get_team_stats", lambda *a, **k: {})
-    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda *a, **k: {})
+    monkeypatch.setattr(analyses, "team_goal_shares_recent_z_sezonem", lambda *a, **k: (None, {}))
     monkeypatch.setattr(analyses, "build_match_card",
                         lambda match, **k: {"home": match["gospodarz"], "away": match["goscie"],
                                             "liga": match["liga"], "data": match["data"],
@@ -208,7 +208,7 @@ def test_godzina_brak_lub_nieczytelna_to_none():
 
 def test_karta_ma_godzine(monkeypatch):
     monkeypatch.setattr(analyses, "get_team_stats", lambda t, s: None)
-    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda t, s: {})
+    monkeypatch.setattr(analyses, "team_goal_shares_recent_z_sezonem", lambda t, s: (None, {}))
     monkeypatch.setattr(analyses, "_zbior", lambda: None)
     ev = [{"gosp": "A", "gosc": "B", "liga": "Premier League", "data": "2026-10-31", "godzina": "19:00"}]
     [c] = analyses._build_cards(ev)
@@ -217,7 +217,7 @@ def test_karta_ma_godzine(monkeypatch):
 
 def test_gole_z_historii_gdy_brak_team_stats(monkeypatch):
     monkeypatch.setattr(analyses, "get_team_stats", lambda t, s: None)
-    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda t, s: {})
+    monkeypatch.setattr(analyses, "team_goal_shares_recent_z_sezonem", lambda t, s: (None, {}))
     monkeypatch.setattr(analyses, "_zbior", lambda: object())
     monkeypatch.setattr(
         analyses.opis_meczu, "forma",
@@ -233,8 +233,33 @@ def test_gole_z_historii_gdy_brak_team_stats(monkeypatch):
 def test_team_stats_ma_pierwszenstwo_przed_historia(monkeypatch):
     monkeypatch.setattr(analyses, "get_team_stats",
                         lambda t, s: {"matches": 4, "goals_for": 8, "goals_against": 4})
-    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda t, s: {})
+    monkeypatch.setattr(analyses, "team_goal_shares_recent_z_sezonem", lambda t, s: (None, {}))
     monkeypatch.setattr(analyses, "_zbior", lambda: pytest.fail("nie powinno ladowac zbioru"))
     ev = [{"gosp": "A", "gosc": "B", "liga": "Premier League", "data": "2026-10-31"}]
     [c] = analyses._build_cards(ev)
     assert c["home_stats"]["gf_pg"] == 2.0
+
+
+# ── strzelcy z poprzedniego sezonu: uczciwy podpis na karcie ────────────────
+
+def _karta_z_udzialami(monkeypatch, odpowiedz):
+    monkeypatch.setattr(analyses, "get_team_stats", lambda t, s: None)
+    monkeypatch.setattr(analyses, "team_goal_shares_recent_z_sezonem",
+                        lambda *a, **k: odpowiedz)
+    [c] = analyses._build_cards(_EVENTS)
+    return c
+
+
+def test_karta_flaga_gdy_udzialy_z_poprzedniego_sezonu(monkeypatch):
+    c = _karta_z_udzialami(monkeypatch, (2025, {"Lewandowski": 0.3}))
+    assert c["strzelcy_poprzedni_sezon"] is True
+
+
+def test_karta_bez_flagi_gdy_udzialy_z_biezacego_sezonu(monkeypatch):
+    c = _karta_z_udzialami(monkeypatch, (analyses._SEASON, {"Lewandowski": 0.3}))
+    assert c["strzelcy_poprzedni_sezon"] is False
+
+
+def test_karta_bez_flagi_gdy_brak_strzelcow(monkeypatch):
+    c = _karta_z_udzialami(monkeypatch, (None, {}))
+    assert c["strzelcy_poprzedni_sezon"] is False

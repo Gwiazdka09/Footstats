@@ -165,3 +165,21 @@ def test_season_isolation(tmp_path):
     assert len(s25) == 3
     assert list(s24.keys()) == ["Haaland"]
     assert s24["Haaland"] == 1.0  # jedyny gracz 2024
+
+
+def test_z_sezonem_zwraca_sezon_zrodla(tmp_path):
+    # bieżący 2026 pusty → udziały z 2025, a funkcja mówi, z którego sezonu są
+    db = tmp_path / "t.db"
+    player_db.upsert_players(_pelny(2025), db_path=db)
+    sezon, shares = player_db.team_goal_shares_recent_z_sezonem(
+        "Manchester City", 2026, lookback=2, db_path=db)
+    assert sezon == 2025
+    assert abs(shares["Haaland"] - 20 / _SUMA_PELNA) < 1e-6
+
+
+def test_z_sezonem_brak_pelnego_skladu(tmp_path):
+    # w całym oknie same resztki (3 nazwiska < MIN_SKLAD) → (None, {})
+    db = tmp_path / "t.db"
+    player_db.upsert_players(_rows(2025), db_path=db)
+    assert player_db.team_goal_shares_recent_z_sezonem(
+        "Manchester City", 2026, lookback=2, db_path=db) == (None, {})

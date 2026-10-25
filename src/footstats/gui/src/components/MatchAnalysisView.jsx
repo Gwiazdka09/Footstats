@@ -175,10 +175,17 @@ function MatchCard({ card, isAdmin, apiFetch }) {
       </div>
 
       {(card.top_scorers_home?.length > 0 || card.top_scorers_away?.length > 0) && (
-        <div className="grid grid-cols-2 gap-3 mt-1">
-          <TopScorers list={card.top_scorers_home} align="left" />
-          <TopScorers list={card.top_scorers_away} align="right" />
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 mt-1">
+            <TopScorers list={card.top_scorers_home} align="left" />
+            <TopScorers list={card.top_scorers_away} align="right" />
+          </div>
+          {card.strzelcy_poprzedni_sezon && (
+            <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+              Strzelcy wg poprzedniego sezonu — letnie transfery mogą być nieuwzględnione.
+            </p>
+          )}
+        </>
       )}
 
       {(card.injuries_home?.length > 0 || card.injuries_away?.length > 0) && (

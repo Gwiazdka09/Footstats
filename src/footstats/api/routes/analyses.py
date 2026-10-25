@@ -21,7 +21,7 @@ from footstats.api.auth import require_auth
 from footstats.core import opis_meczu
 from footstats.core.czas_meczu import juz_sie_zaczal, moment_meczu
 from footstats.core.match_analysis import build_match_card
-from footstats.core.player_db import team_goal_shares_recent, get_team_stats
+from footstats.core.player_db import team_goal_shares_recent_z_sezonem, get_team_stats
 from footstats.utils.normalize import _norm_ascii
 
 router = APIRouter(prefix="/api", tags=["analyses"])
@@ -138,10 +138,12 @@ def _build_cards(events: list[dict], tylko_wazne: bool = True) -> list[dict]:
                         " — pomijam karte meczu", home, away, m.get("liga"))
             continue
         match = {"gospodarz": home, "goscie": away, "liga": m.get("liga"), "data": m.get("data")}
+        sez_home, gs_home = team_goal_shares_recent_z_sezonem(home, _SEASON)
+        sez_away, gs_away = team_goal_shares_recent_z_sezonem(away, _SEASON)
         card = build_match_card(
             match,
             ts_home=get_team_stats(home, _SEASON), ts_away=get_team_stats(away, _SEASON),
-            gs_home=team_goal_shares_recent(home, _SEASON), gs_away=team_goal_shares_recent(away, _SEASON),
+            gs_home=gs_home, gs_away=gs_away,
             inj_home=m.get("injuries_home"), inj_away=m.get("injuries_away"),
         )
         # `build_match_card` zawsze dokłada blok `model` (używał go prompt LLM) —
@@ -152,6 +154,9 @@ def _build_cards(events: list[dict], tylko_wazne: bool = True) -> list[dict]:
             "home_stats": _blok_z_historii(card["home_stats"], home),
             "away_stats": _blok_z_historii(card["away_stats"], away),
             "data_pl": data_pl, "godzina": godzina,
+            # Bieżący sezon pusty → strzelcy z poprzedniego: GUI musi to podpisać.
+            "strzelcy_poprzedni_sezon": any(
+                s is not None and s < _SEASON for s in (sez_home, sez_away)),
         }
         cards.append(card)
     return cards
