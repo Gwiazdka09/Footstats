@@ -59,7 +59,9 @@ class _RequestIDMiddleware(BaseHTTPMiddleware):
 # pewnie w 10 s, a 504 wygląda w GUI jak brak meczów.
 _LONG_RUNNING_PATHS = {"/api/coupons/settle", "/api/cron/settle", "/api/cron/draft",
                        "/api/cron/settle-manual", "/api/admin/opis-meczu",
-                       "/api/analyses/matches"}
+                       "/api/analyses/matches",
+                       # Kilka stron Bzzoiro na zimnym starcie nie mieści się w 10 s.
+                       "/api/matches/today", "/api/coupons/daily-proposals"}
 _LONG_RUNNING_TIMEOUT = 120.0
 
 
