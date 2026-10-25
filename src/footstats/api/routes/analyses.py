@@ -144,6 +144,10 @@ def _build_cards(events: list[dict], tylko_wazne: bool = True) -> list[dict]:
         match = {"gospodarz": home, "goscie": away, "liga": m.get("liga"), "data": m.get("data")}
         sez_home, gs_home = team_goal_shares_recent_z_sezonem(home, _SEASON)
         sez_away, gs_away = team_goal_shares_recent_z_sezonem(away, _SEASON)
+        # Skład znany => strzelcy zweryfikowani na obecnym składzie: podpis
+        # "poprzedni sezon" byłby mylący, więc ta strona nie ustawia flagi.
+        gs_home, ok_home = sklad_fotmob.filtruj_strzelcow(gs_home, home)
+        gs_away, ok_away = sklad_fotmob.filtruj_strzelcow(gs_away, away)
         card = build_match_card(
             match,
             ts_home=get_team_stats(home, _SEASON), ts_away=get_team_stats(away, _SEASON),
