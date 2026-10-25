@@ -37,6 +37,10 @@ BASELINE: dict[str, int] = {
     "api/main.py": 3,  # startup DB init + health endpoint (5xx-proof) + Sentry init guard
     "api/routes/bankroll.py": 1,
     "api/routes/model_stats.py": 1,  # /admin/model-vs-live: błąd DB → 503 nie 500
+    # Statystyki druzyn w opisie meczu: dodatek do karty, ktory czyta z player_db
+    # (sqlite3 lokalnie, psycopg2 na prod — dwie hierarchie wyjatkow, a psycopg2 nie
+    # musi byc importowalny w dev). Awaria zdejmuje tylko ten blok; log.warning z typem.
+    "api/routes/admin_opisy.py": 1,
     "api/routes/coupons.py": 3,
     "api/routes/status.py": 2,
     "core/async_utils.py": 1,
@@ -54,6 +58,12 @@ BASELINE: dict[str, int] = {
     "core/ensemble_optimizer.py": 1,
     "core/lambda_optimizer.py": 1,
     "core/poisson.py": 1,
+    # Opis meczu na zadanie (admin): ramie Poissona to opcjonalna czesc karty. Silnik
+    # liczbowy `predict_match` moze paść na wielu typach (ZeroDivisionError, KeyError,
+    # IndexError, ValueError — zalezy od ksztaltu zbioru), a karta z Bzzoiro/rynkiem
+    # ma przezyc jego awarie. Handler jest GLOSNY (log.warning z typem) i zapisuje
+    # powod do `poisson_powod`, ktory widzi wlasciciel. Handler LLM zawezony do RuntimeError.
+    "core/opis_meczu.py": 1,
     "core/probability_calibrator.py": 1,
     "core/processing.py": 2,
     "core/quick_picks.py": 1,
