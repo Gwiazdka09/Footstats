@@ -152,6 +152,9 @@ jobs:
           # — JEDYNE zrodlo z pelna historia — nigdy nie bralo udzialu w codziennym
           # rozliczaniu. Dlatego zawieszenie konta API-Football 16.08 zatrzymalo
           # rozliczanie na osiem dni: zapas lezal obok, gotowy, nieuzyty.
+          # GROQ_API_KEY doszedl 2026-10-25: sekret byl na OBU jobach, ale nie na serwisie,
+          # a od #57 serwis ma `POST /api/admin/opis-meczu` (tylko admin, 10/min), ktory
+          # wola `zapytaj_ai`. Bez klucza opis wracal pusty bez bledu dla klienta.
           secrets: |
             JWT_SECRET=JWT_SECRET:latest
             FOOTSTATS_USER=FOOTSTATS_USER:latest
@@ -163,6 +166,7 @@ jobs:
             ODDS_API_KEY=ODDS_API_KEY:latest
             CRON_SECRET=CRON_SECRET:latest
             METRICS_TOKEN=METRICS_TOKEN:latest
+            GROQ_API_KEY=GROQ_API_KEY:latest
           secrets_update_strategy: merge
 
       - name: Verify deployment health

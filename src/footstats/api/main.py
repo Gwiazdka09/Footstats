@@ -52,8 +52,10 @@ class _RequestIDMiddleware(BaseHTTPMiddleware):
 # do tego dnia czytał wyłącznie naszą bazę i mieścił się w 10 s. Po włączeniu flagi
 # pierwsze wywołanie na produkcji wróciło 504 z tego właśnie middleware — a dla
 # Cloud Schedulera (attemptDeadline 180 s) wygląda to jak awaria endpointu i idzie w retry.
+# `/api/admin/opis-meczu` dołączył 2026-10-25: pierwsze żądanie po starcie instancji
+# ładuje zbiór historyczny (~18 s) + Groq, więc w 10 s wracało 504 „Request timeout”.
 _LONG_RUNNING_PATHS = {"/api/coupons/settle", "/api/cron/settle", "/api/cron/draft",
-                       "/api/cron/settle-manual"}
+                       "/api/cron/settle-manual", "/api/admin/opis-meczu"}
 _LONG_RUNNING_TIMEOUT = 120.0
 
 
