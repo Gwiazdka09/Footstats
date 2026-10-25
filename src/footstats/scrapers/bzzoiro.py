@@ -82,9 +82,12 @@ class BzzoiroClient:
                     _cache_set(cache_key, data)
                     return data
                 if r.status_code in (429, 500, 502, 503, 504):
-                    delay = 2 ** attempt
-                    logger.warning(f"Bzzoiro HTTP {r.status_code} na {path}, retry {attempt+1}/3 za {delay}s")
-                    time.sleep(delay)
+                    if attempt < 2:
+                        delay = 2 ** attempt
+                        logger.warning(f"Bzzoiro HTTP {r.status_code} na {path}, retry {attempt+1}/3 za {delay}s")
+                        time.sleep(delay)
+                    else:
+                        logger.error(f"Bzzoiro HTTP {r.status_code} na {path}, ostatnia próba")
                     continue
                 logger.error(f"Bzzoiro HTTP {r.status_code} na {path}")
                 return None
@@ -104,13 +107,14 @@ class BzzoiroClient:
         """Zbiera wszystkie strony /predictions/ (limit+offset), bez duplikatow po event.id."""
         preds: list = []
         widziane: set = set()
-        for nr in range(_BZZ_MAX_STRON):
-            offset = nr * _BZZ_LIMIT_STRONY
+        offset = 0
+        count = None
+        for _ in range(_BZZ_MAX_STRON):
             dane = self._get("/predictions/", params={
                 **params, "limit": _BZZ_LIMIT_STRONY, "offset": offset})
             if dane is None:
                 logger.warning("Bzzoiro paginacja: brak odpowiedzi dla offset=%s, "
-                               "zwracam %s zebranych predykcji", offset, len(preds))
+                               "zebrano %s z %s predykcji", offset, len(preds), count)
                 return preds
             strona = dane.get("results") or []
             for pred in strona:
@@ -120,12 +124,18 @@ class BzzoiroClient:
                         continue
                     widziane.add(eid)
                 preds.append(pred)
-            count = dane.get("count")
-            if len(strona) < _BZZ_LIMIT_STRONY or (
-                    isinstance(count, int) and offset + _BZZ_LIMIT_STRONY >= count):
-                return preds
-        logger.warning("Bzzoiro paginacja: osiagnieto limit %s stron, wynik moze byc niepelny",
-                       _BZZ_MAX_STRON)
+            if isinstance(dane.get("count"), int):
+                count = dane["count"]
+            # Offset rośnie o FAKTYCZNIE otrzymane rekordy — serwer może przyciąć limit.
+            offset += len(strona)
+            if not strona or (count is not None and offset >= count):
+                break
+        else:
+            logger.warning("Bzzoiro paginacja: osiagnieto limit %s stron, wynik moze byc niepelny",
+                           _BZZ_MAX_STRON)
+            return preds
+        if count is not None and len(preds) < count:
+            logger.warning("Bzzoiro paginacja: zebrano %s z %s predykcji", len(preds), count)
         return preds
 
     def predykcje_tygodnia(self, liga_kod: str = None) -> list:
