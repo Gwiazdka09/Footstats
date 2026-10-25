@@ -22,6 +22,7 @@ from footstats.core import opis_meczu
 from footstats.core.czas_meczu import juz_sie_zaczal, moment_meczu
 from footstats.core.match_analysis import build_match_card
 from footstats.core.player_db import team_goal_shares_recent_z_sezonem, get_team_stats
+from footstats.scrapers.teamnews import sklad as sklad_fotmob
 from footstats.utils.normalize import _norm_ascii
 
 router = APIRouter(prefix="/api", tags=["analyses"])
@@ -126,6 +127,9 @@ def _build_cards(events: list[dict], tylko_wazne: bool = True) -> list[dict]:
     `pred_ml` i `odds` z eventu są celowo POMIJANE — karta to statystyki drużyn.
     """
     cards = []
+    kandydaci = [m for m in events if not tylko_wazne or _wazna(m.get("liga"))]
+    sklad_fotmob.przygotuj_sklady(
+        [n for m in kandydaci for n in (m.get("gosp"), m.get("gosc")) if n])
     for m in events:
         if tylko_wazne and not _wazna(m.get("liga")):
             continue
@@ -156,7 +160,8 @@ def _build_cards(events: list[dict], tylko_wazne: bool = True) -> list[dict]:
             "data_pl": data_pl, "godzina": godzina,
             # Bieżący sezon pusty → strzelcy z poprzedniego: GUI musi to podpisać.
             "strzelcy_poprzedni_sezon": any(
-                s is not None and s < _SEASON for s in (sez_home, sez_away)),
+                s is not None and s < _SEASON and not ok
+                for s, ok in ((sez_home, ok_home), (sez_away, ok_away))),
         }
         cards.append(card)
     return cards

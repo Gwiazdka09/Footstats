@@ -102,12 +102,13 @@ def _statystyki_druzyn(
     try:
         from footstats.core.match_analysis import build_match_card
         from footstats.core.player_db import get_team_stats, team_goal_shares_recent
+        from footstats.scrapers.teamnews.sklad import strzelcy_w_skladzie
 
         return build_match_card(
             {"gospodarz": home, "goscie": away, "liga": liga, "data": data},
             ts_home=get_team_stats(home, _SEZON), ts_away=get_team_stats(away, _SEZON),
-            gs_home=team_goal_shares_recent(home, _SEZON),
-            gs_away=team_goal_shares_recent(away, _SEZON),
+            gs_home=strzelcy_w_skladzie(team_goal_shares_recent(home, _SEZON), home),
+            gs_away=strzelcy_w_skladzie(team_goal_shares_recent(away, _SEZON), away),
         )
     except Exception as e:  # noqa: BLE001 — DB/sqlite3/psycopg2: statystyki są dodatkiem
         log.warning("opis-meczu: statystyki drużyn niedostępne (%s: %s)", type(e).__name__, e)
