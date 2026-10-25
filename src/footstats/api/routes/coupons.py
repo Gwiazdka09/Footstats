@@ -14,6 +14,11 @@ from pydantic import BaseModel, Field
 from footstats.api.auth import require_admin, require_auth
 from footstats.api.cron_auth import sprawdz_cron_secret
 from footstats.core import match_linker
+from footstats.core.czas_meczu import (  # noqa: F401
+    STATUSY_ROZPOCZETE,
+    juz_sie_zaczal,
+    moment_meczu,
+)
 from footstats.core.coupon_tracker import STATUS_ACTIVE, save_coupon, update_coupon_status
 from footstats.core.probability_calibrator import calibrate_confidence
 from footstats.core.response_cache import cached_response
@@ -327,66 +332,10 @@ def get_coupon_summary(days: int = 30, user_id: int = Depends(require_auth)):
         raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
 
-# Statusy, przy ktorych zrodlo mowi WPROST, ze meczu juz nie ma po co typowac.
-# Lista jest blokujaca, nie dopuszczajaca: status nieznany NIE wyklucza meczu,
-# tylko oddaje decyzje zegarowi. Odwrotnie — allowlista — oprozniłaby kreator
-# w dniu, w ktorym dostawca zmieni slownik, i nikt by nie zauwazyl dlaczego.
-_STATUSY_ROZPOCZETE = frozenset({
-    "inprogress", "in_progress", "live", "playing", "halftime", "ht",
-    "finished", "ft", "ended", "aet", "pen", "afterpen",
-    "cancelled", "canceled", "postponed", "abandoned", "suspended", "awarded",
-})
-
-
-def _moment_meczu(m: dict) -> datetime | None:
-    """Poczatek meczu jako moment ZE STREFA (UTC). None gdy nie da sie odczytac.
-
-    Pole `godzina` NIE MA jednej konwencji w tym projekcie: `api_football`
-    i `football_data` dopisuja do niej " UTC", `bzzoiro` i `terminarz` oddaja
-    goly wycinek ISO. Poprzednia wersja parsowala to jednym `strptime`
-    z `"%H:%M"`, wiec wiersze z sufiksem rzucaly `ValueError` i wypadaly CICHO —
-    kreator gubil cale zrodla, a lista dalej wygladala poprawnie.
-
-    `data_full` (pelne ISO, czesto z przesunieciem strefy) jest wiarygodniejsze
-    i dlatego idzie pierwsze. Gdy zostaje sama `data`+`godzina` bez strefy,
-    przyjmujemy UTC — i to jest ZALOZENIE, nie fakt: `bzzoiro.py` tnie
-    `event_date` bez normalizacji, a jego przesuniecie nie jest w kodzie nigdzie
-    potwierdzone. Dlatego zegar NIE jest tu jedynym zabezpieczeniem i pracuje
-    razem z `_STATUSY_ROZPOCZETE`.
-    """
-    pelna = str(m.get("data_full") or "").strip()
-    data = str(m.get("data") or "").strip()
-    godzina = str(m.get("godzina") or "").strip()
-    if godzina.upper().endswith("UTC"):
-        godzina = godzina[:-3].strip()
-    godzina = godzina[-5:] if len(godzina) > 5 else godzina
-
-    try:
-        if pelna:
-            dt = datetime.fromisoformat(pelna.replace("Z", "+00:00"))
-            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-        if data and godzina:
-            return datetime.strptime(f"{data} {godzina}", "%Y-%m-%d %H:%M").replace(
-                tzinfo=timezone.utc)
-    except (ValueError, TypeError):
-        # NIE cisza. Mecz bez czytelnej daty wypada z kreatora, a wlasnie tak
-        # znikaly cale zrodla: `strptime` dlawilo sie sufiksem " UTC", `except`
-        # polykalo blad i lista dalej wygladala poprawnie.
-        _log.warning("Nieczytelna data meczu id=%s: data_full=%r data=%r godzina=%r",
-                     m.get("id"), pelna, data, m.get("godzina"))
-    return None
-
-
-def _juz_sie_zaczal(m: dict, teraz: datetime) -> bool:
-    """Czy mecz odpadl z typowania. Status jest wazniejszy niz zegar.
-
-    Status pochodzi od dostawcy i jest stwierdzeniem faktu; godzina wymaga
-    zalozenia o strefie. Gdy oba sa dostepne, wystarczy jedno, zeby wykluczyc.
-    """
-    if str(m.get("status") or "").strip().lower().replace(" ", "") in _STATUSY_ROZPOCZETE:
-        return True
-    moment = _moment_meczu(m)
-    return moment is not None and moment <= teraz
+# Aliasy wsteczne (testy i starszy kod importuja nazwy z prefiksem "_")
+_STATUSY_ROZPOCZETE = STATUSY_ROZPOCZETE
+_moment_meczu = moment_meczu
+_juz_sie_zaczal = juz_sie_zaczal
 
 
 @router.get("/matches/today")
