@@ -79,3 +79,20 @@ def test_mecz_z_kompletem_nazw_dalej_buduje_karte(monkeypatch):
         [{"liga": "Premier League", "gosp": "Arsenal", "gosc": "Chelsea", "pred_ml": {}}]
     )
     assert len(karty) == 1
+
+
+def test_dzis_i_jutro_odcina_reszte_tygodnia_i_sortuje():
+    """25.10: po paginacji Bzzoiro tydzien to ~100 waznych meczow, a kazda karta
+    to 4 zapytania do DB przy timeoucie middleware 10 s — bierzemy dzis+jutro."""
+    from datetime import date
+
+    ev = [
+        {"gosp": "C", "gosc": "D", "data": "2026-10-26", "godzina": "18:00"},
+        {"gosp": "E", "gosc": "F", "data": "2026-10-29", "godzina": "18:00"},
+        {"gosp": "A", "gosc": "B", "data": "2026-10-25", "godzina": "20:00"},
+        {"gosp": "G", "gosc": "H", "data": "2026-10-24", "godzina": "20:00"},
+        {"gosp": "I", "gosc": "J", "data": "2026-10-25", "godzina": "15:00"},
+    ]
+    wynik = analyses._na_dzis_i_jutro(ev, date(2026, 10, 25))
+
+    assert [m["gosp"] for m in wynik] == ["I", "A", "C"]

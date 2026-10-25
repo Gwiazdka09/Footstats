@@ -28,3 +28,8 @@ def test_cd_daje_serwisowi_klucz_groq():
     assert "GROQ_API_KEY=GROQ_API_KEY:latest" in (linia.strip() for linia in blok)
     # `secrets: |` to literal scalar — linia z `#` w bloku wywala deploy (24.08).
     assert not any(linia.strip().startswith("#") for linia in blok)
+
+
+def test_analizy_meczow_maja_dlugi_timeout():
+    # Od paginacji Bzzoiro (25.10) karta „Analiz” to ~35 meczów × 4 zapytania DB.
+    assert "/api/analyses/matches" in _LONG_RUNNING_PATHS

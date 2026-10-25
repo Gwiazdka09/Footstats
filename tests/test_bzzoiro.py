@@ -442,3 +442,66 @@ def test_zakres_dat_zawsze_podany(siec):
 
     params = siec["wywolania"][0][1]
     assert params["date_from"] <= params["date_to"]
+
+
+# ── paginacja predykcje_tygodnia (limit/offset) ─────────────────────────────
+
+def _klient_ze_stronami(monkeypatch, total: int, count: int | None = None):
+    """Klient, którego `_get` oddaje strony wg limit/offset (jak prawdziwe API)."""
+    wywolania: list[dict] = []
+
+    def fake_get(self, path, params=None):
+        wywolania.append(dict(params))
+        lim, off = params["limit"], params.get("offset", 0)
+        ids = range(off, min(off + lim, total))
+        return {"count": total if count is None else count,
+                "next": None,
+                "results": [_pred(event={"id": i}) for i in ids]}
+
+    monkeypatch.setattr(BzzoiroClient, "_get", fake_get)
+    return BzzoiroClient("k"), wywolania
+
+
+def test_paginacja_zbiera_wszystkie_strony(monkeypatch):
+    k, wyw = _klient_ze_stronami(monkeypatch, 450)
+
+    wynik = k.predykcje_tygodnia()
+
+    assert len(wynik) == 450
+    assert len({m["id"] for m in wynik}) == 450
+    assert [w["offset"] for w in wyw] == [0, 200, 400]
+
+
+def test_paginacja_konczy_gdy_count_klamie(monkeypatch):
+    """count=5000, a API oddaje 250 → pętla musi się skończyć na pustej stronie."""
+    k, wyw = _klient_ze_stronami(monkeypatch, 250, count=5000)
+
+    assert len(k.predykcje_tygodnia()) == 250
+    assert len(wyw) <= 3
+
+
+def test_paginacja_bezpiecznik_stron(monkeypatch):
+    """API zawsze oddaje pełną stronę z nowymi id → twardy limit liczby stron."""
+    k, wyw = _klient_ze_stronami(monkeypatch, 10**6)
+
+    k.predykcje_tygodnia()
+
+    assert len(wyw) == bz._BZZ_MAX_STRON
+
+
+def test_paginacja_brak_odpowiedzi_w_srodku_ostrzega(monkeypatch, caplog):
+    stan = {"n": 0}
+
+    def fake_get(self, path, params=None):
+        stan["n"] += 1
+        if stan["n"] == 2:
+            return None
+        return {"count": 600, "results": [_pred(event={"id": i}) for i in range(200)]}
+
+    monkeypatch.setattr(BzzoiroClient, "_get", fake_get)
+
+    with caplog.at_level("WARNING", logger="footstats.scrapers.bzzoiro"):
+        wynik = BzzoiroClient("k").predykcje_tygodnia()
+
+    assert len(wynik) == 200
+    assert any("paginacj" in r.message.lower() for r in caplog.records)

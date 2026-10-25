@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 
@@ -33,6 +35,18 @@ _SEASON = 2026
 
 def _wazna(liga: str | None) -> bool:
     return any(w in (liga or "").lower() for w in _WAZNE)
+
+
+def _na_dzis_i_jutro(events: list[dict], dzis: date) -> list[dict]:
+    """Pure: zostawia mecze z dziś i jutra, posortowane po dacie i godzinie.
+
+    Od 2026-10-25 `predykcje_tygodnia()` pobiera wszystkie strony (609 zamiast 50),
+    czyli ~100 meczów ważnych lig na 7 dni. Każda karta to 4 zapytania do DB,
+    a middleware ma timeout 10 s — dlatego endpoint pokazuje tylko dziś i jutro.
+    """
+    dozwolone = {dzis.isoformat(), (dzis + timedelta(days=1)).isoformat()}
+    wybrane = [m for m in events if m.get("data") in dozwolone]
+    return sorted(wybrane, key=lambda m: (m.get("data") or "", m.get("godzina") or ""))
 
 
 def _build_cards(events: list[dict]) -> list[dict]:
@@ -77,4 +91,5 @@ def analyses_matches(user_id: int = Depends(require_auth)):
     except (OSError, ValueError, KeyError) as e:
         log.warning("analyses_matches: %s", e)
         return {"matches": [], "error": str(e)}
-    return {"matches": _build_cards(events)}
+    dzis = datetime.now(ZoneInfo("Europe/Warsaw")).date()
+    return {"matches": _build_cards(_na_dzis_i_jutro(events, dzis))}

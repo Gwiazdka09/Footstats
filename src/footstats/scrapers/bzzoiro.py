@@ -9,6 +9,13 @@ from footstats.config import ENV_BZZOIRO  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
+# Paginacja /predictions/ (2026-10-25): API zwraca `count: 609`, ale `results`
+# ma tylko 50, a `next` jest None — `page`/`page_size` sa ignorowane, dziala
+# wylacznie `limit` + `offset`. Bez tego gubilismy ~92% tygodnia, w tym dzisiejsze
+# wieczorne mecze (np. Barcelona - Real, 20:00).
+_BZZ_LIMIT_STRONY = 200
+_BZZ_MAX_STRON = 20
+
 # ================================================================
 #  MODUL 4c – BZZOIRO (sports.bzzoiro.com) v2.7
 #  DARMOWY bez limitu: ML predictions CatBoost + kursy bukmacherskie
@@ -93,6 +100,34 @@ class BzzoiroClient:
     # event_id (bug cache po ich stronie). Zero wolan w kodzie.
     # Zamiennik: predykcje_tygodnia() ponizej.
 
+    def _pobierz_strony_predykcji(self, params: dict) -> list:
+        """Zbiera wszystkie strony /predictions/ (limit+offset), bez duplikatow po event.id."""
+        preds: list = []
+        widziane: set = set()
+        for nr in range(_BZZ_MAX_STRON):
+            offset = nr * _BZZ_LIMIT_STRONY
+            dane = self._get("/predictions/", params={
+                **params, "limit": _BZZ_LIMIT_STRONY, "offset": offset})
+            if dane is None:
+                logger.warning("Bzzoiro paginacja: brak odpowiedzi dla offset=%s, "
+                               "zwracam %s zebranych predykcji", offset, len(preds))
+                return preds
+            strona = dane.get("results") or []
+            for pred in strona:
+                eid = (pred.get("event") or {}).get("id")
+                if eid is not None:
+                    if eid in widziane:
+                        continue
+                    widziane.add(eid)
+                preds.append(pred)
+            count = dane.get("count")
+            if len(strona) < _BZZ_LIMIT_STRONY or (
+                    isinstance(count, int) and offset + _BZZ_LIMIT_STRONY >= count):
+                return preds
+        logger.warning("Bzzoiro paginacja: osiagnieto limit %s stron, wynik moze byc niepelny",
+                       _BZZ_MAX_STRON)
+        return preds
+
     def predykcje_tygodnia(self, liga_kod: str = None) -> list:
         """
         Pobiera predykcje ML na caly tydzien z /predictions/.
@@ -108,8 +143,7 @@ class BzzoiroClient:
         if liga_id:
             params["league"] = liga_id
 
-        dane = self._get("/predictions/", params=params)
-        preds = dane.get("results", []) if dane else []
+        preds = self._pobierz_strony_predykcji(params)
 
         wynik = []
         for pred in preds:
