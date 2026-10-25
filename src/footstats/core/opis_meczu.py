@@ -24,6 +24,7 @@ import hashlib
 import json
 import logging
 import math
+import re
 import threading
 import time
 from collections import OrderedDict
@@ -317,13 +318,20 @@ def _fmt(wartosc: float | None, jednostka: str = "%") -> str:
     return "brak" if wartosc is None else f"{wartosc:.1f}{jednostka}"
 
 
+# Etykiety dwóch ramion w prompcie. 25.10 „Model Poissona (bez Bzzoiro)” LLM czytał
+# jako „Bzzoiro brak” i pisał, że Poisson jest jedynym modelem, choć karta miała oba.
+_ETYKIETA_POISSONA = "Model Poissona (osobny model, liczony bez Bzzoiro-ML)"
+_ETYKIETA_BZZOIRO = "Bzzoiro-ML (drugi, niezależny model)"
+
+
 def _linia_poissona(karta: dict[str, Any]) -> list[str]:
     p = karta.get("poisson")
     if not p:
-        return [f"Model Poissona (bez Bzzoiro): brak — {karta.get('poisson_powod') or 'powód nieznany'}"]
+        powod = karta.get("poisson_powod") or "powód nieznany"
+        return [f"{_ETYKIETA_POISSONA}: brak — {powod}"]
     linie = ", ".join(f"Over {k}={v:.1f}%" for k, v in p["linie"].items())
     return [
-        f"Model Poissona (bez Bzzoiro): λ gospodarzy {p['lambda_home']:.2f},"
+        f"{_ETYKIETA_POISSONA}: λ gospodarzy {p['lambda_home']:.2f},"
         f" λ gości {p['lambda_away']:.2f};"
         f" 1={p['p1']:.1f}% X={p['px']:.1f}% 2={p['p2']:.1f}%; BTTS={p['btts']:.1f}%",
         f"Linie goli (model Poissona): {linie}",
@@ -333,8 +341,8 @@ def _linia_poissona(karta: dict[str, Any]) -> list[str]:
 def _linia_bzzoiro(karta: dict[str, Any]) -> str:
     b = karta.get("bzzoiro")
     if not b:
-        return "Bzzoiro-ML: brak predykcji"
-    return (f"Bzzoiro-ML: 1={_fmt(b['p1'])} X={_fmt(b['px'])} 2={_fmt(b['p2'])};"
+        return f"{_ETYKIETA_BZZOIRO}: brak predykcji"
+    return (f"{_ETYKIETA_BZZOIRO}: 1={_fmt(b['p1'])} X={_fmt(b['px'])} 2={_fmt(b['p2'])};"
             f" Over 2.5={_fmt(b['over25'])}; BTTS={_fmt(b['btts'])}")
 
 
@@ -441,6 +449,11 @@ def prompt_opisu(karta: dict[str, Any]) -> str:
         " ani wyników spoza karty.",
         "2. Nie dawaj rekomendacji zakładu ani typu do postawienia i nie obiecuj skuteczności.",
         "3. Czego w karcie brak, tego nie zgaduj — napisz „brak danych”.",
+        "4. Model nie bije rynku (zmierzone). Różnicę względem rynku opisuj jako różnicę"
+        " ocen, NIGDY jako „niedowartościowanie”, „wartość”, „okazję” ani przewagę nad"
+        " bukmacherem.",
+        "5. Zwykły tekst bez Markdownu: bez gwiazdek, krzyżyków i list. Nagłówek sekcji to"
+        " sama jej nazwa w osobnej linii.",
         "",
         "KARTA LICZB",
         f"Mecz: {karta.get('home')} – {karta.get('away')}"
@@ -497,6 +510,19 @@ def rozmiar_cache() -> int:
         return len(_cache)
 
 
+# `[ \t]`, nie `\s`: `\s` łapie też `\n`, więc zjadał pustą linię przed nagłówkiem.
+_MARKDOWN = re.compile(r"\*\*|__|^[ \t]{0,3}#{1,6}[ \t]*", re.MULTILINE)
+
+
+def _bez_markdownu(tekst: str) -> str:
+    """Zdejmuje pogrubienia i nagłówki Markdownu — GUI pokazuje surowy tekst.
+
+    25.10 model mimo zakazu w prompcie zwracał „**Siła i forma**”; GUI renderuje
+    `whitespace-pre-line`, więc gwiazdki szły na ekran.
+    """
+    return _MARKDOWN.sub("", tekst).strip()
+
+
 def opisz_z_info(
     karta: dict[str, Any], zapytaj: Callable[..., str | None] = zapytaj_ai,
 ) -> tuple[str | None, bool]:
@@ -517,7 +543,7 @@ def opisz_z_info(
         log.warning("opis_meczu: LLM nieudany: %s: %s", type(e).__name__, e)
         return None, False
 
-    opis = (odpowiedz or "").strip()
+    opis = _bez_markdownu(odpowiedz or "")
     if not opis:
         log.warning("opis_meczu: LLM zwrócił pustą odpowiedź")
         return None, False

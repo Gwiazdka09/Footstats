@@ -335,7 +335,7 @@ def test_karta_nie_nazywa_poissona_czystym():
     uwagi = " ".join(k["uwagi"])
     assert "bez mieszania z Bzzoiro" in uwagi
     assert "kalibracji" in uwagi and "xG" in uwagi and "40%" in uwagi
-    assert "Model Poissona (bez Bzzoiro)" in prompt_opisu(k)
+    assert "Model Poissona (osobny model, liczony bez Bzzoiro-ML)" in prompt_opisu(k)
 
 
 def test_karta_statystyki_druzyn_gdy_dostepne():
@@ -535,3 +535,19 @@ def test_opisz_cache_trzyma_najwyzej_200_wpisow():
     # Najstarszy wpis został wyparty, najnowszy został.
     assert opisz_z_info(karty[0], zapytaj=z)[1] is False
     assert opisz_z_info(karty[200], zapytaj=z)[1] is True
+
+
+def test_prompt_nazywa_bzzoiro_osobnym_modelem_i_zakazuje_jezyka_wartosci():
+    # 25.10: LLM pisał „Poisson jest jedynym modelem” mimo Bzzoiro w karcie
+    # i „niedowartościowanie szans Śląska” — język value betu, sprzeczny z pomiarami.
+    k = zbuduj_karte("Alfa", "Beta", "Test League", "2026-10-25", _df(), _EVENT)
+    prompt = prompt_opisu(k)
+    assert "Bzzoiro-ML (drugi, niezależny model)" in prompt
+    assert "niedowartościowanie" in prompt and "Model nie bije rynku" in prompt
+    assert "bez Markdownu" in prompt
+
+
+def test_opis_bez_markdownu():
+    tekst = "**Siła i forma**\nAlfa w formie.\n\n## Podsumowanie\nKrótko __tak__."
+    opis, _ = opisz_z_info({"home": "MD", "away": "X"}, zapytaj=lambda *a, **k: tekst)
+    assert opis == "Siła i forma\nAlfa w formie.\n\nPodsumowanie\nKrótko tak."
