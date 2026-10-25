@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import MatchAnalysisView from './MatchAnalysisView';
 
 /**
@@ -14,7 +14,7 @@ const KARTA = {
 };
 
 const apiFetchZ = (opis) => vi.fn((endpoint) => {
-  if (endpoint === '/analyses/matches') return Promise.resolve({ matches: [KARTA] });
+  if (endpoint.startsWith('/analyses/matches')) return Promise.resolve({ matches: [KARTA] });
   if (endpoint === '/admin/opis-meczu') {
     return Promise.resolve({
       karta: {
@@ -50,5 +50,34 @@ describe('Analizy meczów — opis tylko dla admina', () => {
     render(<MatchAnalysisView apiFetch={apiFetchZ(null)} isAdmin />);
     fireEvent.click(await screen.findByRole('button', { name: /opis \(admin\)/i }));
     expect(await screen.findByText(/opis niedostępny/i)).toBeInTheDocument();
+  });
+});
+
+describe('Analizy meczów — wyszukiwarka', () => {
+  it('wpisanie „barc” pyta API z ?q=barc', async () => {
+    const api = apiFetchZ('x');
+    render(<MatchAnalysisView apiFetch={api} />);
+    await screen.findByText('Premier League');
+    fireEvent.change(screen.getByLabelText('Szukaj meczu'), { target: { value: 'barc' } });
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/analyses/matches?q=barc'));
+    expect(await screen.findByText(/Wyniki dla „barc”/)).toBeInTheDocument();
+  });
+
+  it('pusty wynik wyszukiwania pokazuje komunikat', async () => {
+    const api = vi.fn((e) => Promise.resolve({ matches: e.includes('q=') ? [] : [KARTA] }));
+    render(<MatchAnalysisView apiFetch={api} />);
+    await screen.findByText('Premier League');
+    fireEvent.change(screen.getByLabelText('Szukaj meczu'), { target: { value: 'zzzz' } });
+    expect(await screen.findByText('Brak nadchodzących meczów dla „zzzz”')).toBeInTheDocument();
+  });
+
+  it('jeden znak nie uruchamia wyszukiwania', async () => {
+    const api = apiFetchZ('x');
+    render(<MatchAnalysisView apiFetch={api} />);
+    await screen.findByText('Premier League');
+    fireEvent.change(screen.getByLabelText('Szukaj meczu'), { target: { value: 'b' } });
+    await new Promise(r => setTimeout(r, 600));
+    expect(api.mock.calls.some(([e]) => e.includes('q='))).toBe(false);
+    expect(screen.getByText('Dziś i jutro')).toBeInTheDocument();
   });
 });

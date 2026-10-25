@@ -96,3 +96,90 @@ def test_dzis_i_jutro_odcina_reszte_tygodnia_i_sortuje():
     wynik = analyses._na_dzis_i_jutro(ev, date(2026, 10, 25))
 
     assert [m["gosp"] for m in wynik] == ["I", "A", "C"]
+
+
+# ── Wyszukiwarka + ukrywanie meczów rozpoczętych ────────────────────────────
+
+def _ev(gosp, gosc, liga, dni=0, godz=3, status=None):
+    """Event Bzzoiro w przyszłości (godz. od teraz) lub przeszłości (ujemne)."""
+    from datetime import datetime, timedelta, timezone
+    t = datetime.now(timezone.utc) + timedelta(days=dni, hours=godz)
+    ev = {"gosp": gosp, "gosc": gosc, "liga": liga,
+          "data": t.astimezone(__import__("zoneinfo").ZoneInfo("Europe/Warsaw")).date().isoformat(),
+          "godzina": t.strftime("%H:%M"), "data_full": t.isoformat()}
+    if status:
+        ev["status"] = status
+    return ev
+
+
+def _wywolaj(monkeypatch, events, q=None):
+    import sys
+    import types
+
+    class _Klient:
+        def __init__(self, *_a, **_k): ...
+        def predykcje_tygodnia(self):
+            return events
+
+    modul = types.ModuleType("footstats.scrapers.bzzoiro")
+    modul.BzzoiroClient = _Klient
+    monkeypatch.setitem(sys.modules, "footstats.scrapers.bzzoiro", modul)
+    monkeypatch.setenv("BZZOIRO_KEY", "x")
+    monkeypatch.setattr(analyses, "get_team_stats", lambda *a, **k: {})
+    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda *a, **k: {})
+    monkeypatch.setattr(analyses, "build_match_card",
+                        lambda match, **k: {"home": match["gospodarz"], "away": match["goscie"],
+                                            "liga": match["liga"], "data": match["data"]})
+    return analyses.analyses_matches(user_id=1, q=q)["matches"]
+
+
+def test_zakonczony_i_rozpoczety_nie_pojawiaja_sie(monkeypatch):
+    events = [
+        _ev("Arsenal", "Chelsea", "Premier League", godz=3),
+        _ev("Jagiellonia", "Wisla Plock", "Ekstraklasa", godz=1, status="finished"),
+        _ev("Liverpool", "Everton", "Premier League", godz=-1),
+    ]
+    homes = [c["home"] for c in _wywolaj(monkeypatch, events)]
+    assert homes == ["Arsenal"]
+
+
+def test_q_szuka_w_calym_tygodniu_i_poza_waznymi_ligami(monkeypatch):
+    events = [
+        _ev("Arsenal", "Chelsea", "Premier League", dni=0, godz=3),
+        _ev("Raja", "Wydad", "Botola Pro", dni=5, godz=2),
+    ]
+    assert [c["home"] for c in _wywolaj(monkeypatch, events)] == ["Arsenal"]
+    assert [c["home"] for c in _wywolaj(monkeypatch, events, q="wydad")] == ["Raja"]
+
+
+def test_q_ignoruje_diakrytyki_i_szuka_w_lidze(monkeypatch):
+    events = [
+        _ev("Jagiellonia Białystok", "Wisła Płock", "Ekstraklasa", dni=2, godz=2),
+        _ev("Arsenal", "Chelsea", "Premier League", dni=1, godz=2),
+    ]
+    assert len(_wywolaj(monkeypatch, events, q="wisla")) == 1
+    assert len(_wywolaj(monkeypatch, events, q="BIALYSTOK")) == 1
+    assert len(_wywolaj(monkeypatch, events, q="premier")) == 1
+
+
+def test_q_limit_20_wynikow_posortowane(monkeypatch):
+    events = [_ev(f"Klub{i} FC", "Rywal", "Botola Pro", dni=1, godz=i % 5 + 1) for i in range(30)]
+    wynik = _wywolaj(monkeypatch, events, q="klub")
+    assert len(wynik) == analyses._MAX_WYNIKOW_SZUKANIA == 20
+
+
+def test_q_jednoznakowe_to_widok_domyslny(monkeypatch):
+    events = [
+        _ev("Arsenal", "Chelsea", "Premier League", dni=0, godz=3),
+        _ev("Raja", "Wydad", "Botola Pro", dni=5, godz=2),
+    ]
+    assert [c["home"] for c in _wywolaj(monkeypatch, events, q=" a ")] == ["Arsenal"]
+
+
+def test_czas_meczu_przeniesiony_dziala_jak_w_kreatorze():
+    from datetime import datetime, timezone
+    from footstats.core.czas_meczu import juz_sie_zaczal, moment_meczu
+    teraz = datetime(2026, 10, 25, 12, 0, tzinfo=timezone.utc)
+    assert juz_sie_zaczal({"status": "FT"}, teraz) is True
+    assert juz_sie_zaczal({"data_full": "2026-10-25T13:00:00Z"}, teraz) is False
+    assert moment_meczu({}) is None

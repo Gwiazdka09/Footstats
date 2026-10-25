@@ -12,14 +12,16 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from footstats.api.auth import require_auth
+from footstats.core.czas_meczu import juz_sie_zaczal, moment_meczu
 from footstats.core.match_analysis import build_match_card
 from footstats.core.player_db import team_goal_shares_recent, get_team_stats
+from footstats.utils.normalize import _norm_ascii
 
 router = APIRouter(prefix="/api", tags=["analyses"])
 log = logging.getLogger(__name__)
@@ -31,6 +33,10 @@ _WAZNE = (
     "ekstraklasa", "pko bp",
 )
 _SEASON = 2026
+# Maks. liczba wyników wyszukiwania: każda karta = 4 zapytania do DB,
+# a middleware ma timeout, więc szeroki `q` nie może budować setek kart.
+_MAX_WYNIKOW_SZUKANIA = 20
+_MIN_DLUGOSC_ZAPYTANIA = 2
 
 
 def _wazna(liga: str | None) -> bool:
@@ -49,14 +55,37 @@ def _na_dzis_i_jutro(events: list[dict], dzis: date) -> list[dict]:
     return sorted(wybrane, key=lambda m: (m.get("data") or "", m.get("godzina") or ""))
 
 
-def _build_cards(events: list[dict]) -> list[dict]:
+def _bez_rozpoczetych(events: list[dict], teraz: datetime) -> list[dict]:
+    """Pure: odrzuca mecze trwające, zakończone, odwołane lub już rozpoczęte."""
+    return [m for m in events if not juz_sie_zaczal(m, teraz)]
+
+
+def _szukaj(events: list[dict], q: str, limit: int = _MAX_WYNIKOW_SZUKANIA) -> list[dict]:
+    """Pure: mecze z `q` w gospodarzu, gościu lub lidze (bez wielkości liter i diakrytyków).
+
+    Szuka w całym tygodniu i we wszystkich ligach; wynik posortowany po
+    momencie meczu i obcięty do `limit`.
+    """
+    szukane = _norm_ascii(q)
+    if not szukane:
+        return []
+    trafione = [
+        m for m in events
+        if any(szukane in _norm_ascii(m.get(k) or "") for k in ("gosp", "gosc", "liga"))
+    ]
+    koniec = datetime.max.replace(tzinfo=timezone.utc)
+    trafione.sort(key=lambda m: moment_meczu(m) or koniec)
+    return trafione[:limit]
+
+
+def _build_cards(events: list[dict], tylko_wazne: bool = True) -> list[dict]:
     """Pure: z eventów Bzzoiro buduje karty ważnych meczów + team_stats/goal_share.
 
     `pred_ml` i `odds` z eventu są celowo POMIJANE — karta to statystyki drużyn.
     """
     cards = []
     for m in events:
-        if not _wazna(m.get("liga")):
+        if tylko_wazne and not _wazna(m.get("liga")):
             continue
         home, away = m.get("gosp"), m.get("gosc")
         if not home or not away:
@@ -80,8 +109,15 @@ def _build_cards(events: list[dict]) -> list[dict]:
 
 
 @router.get("/analyses/matches")
-def analyses_matches(user_id: int = Depends(require_auth)):
-    """Karty ważnych meczów (dane, bez LLM). Źródło: Bzzoiro predykcje_tygodnia."""
+def analyses_matches(
+    user_id: int = Depends(require_auth),
+    q: str | None = Query(None, max_length=50),
+):
+    """Karty meczów (dane, bez LLM). Źródło: Bzzoiro predykcje_tygodnia.
+
+    Bez `q`: dziś i jutro, ważne ligi. Z `q` (≥2 znaki): cały tydzień, wszystkie
+    ligi. Mecze rozpoczęte i zakończone są ukrywane zawsze.
+    """
     try:
         from footstats.scrapers.bzzoiro import BzzoiroClient
         klucz = os.getenv("BZZOIRO_KEY", "").strip()
@@ -91,5 +127,9 @@ def analyses_matches(user_id: int = Depends(require_auth)):
     except (OSError, ValueError, KeyError) as e:
         log.warning("analyses_matches: %s", e)
         return {"matches": [], "error": str(e)}
+    events = _bez_rozpoczetych(events, datetime.now(timezone.utc))
+    zapytanie = (q or "").strip()
+    if len(zapytanie) >= _MIN_DLUGOSC_ZAPYTANIA:
+        return {"matches": _build_cards(_szukaj(events, zapytanie), tylko_wazne=False)}
     dzis = datetime.now(ZoneInfo("Europe/Warsaw")).date()
     return {"matches": _build_cards(_na_dzis_i_jutro(events, dzis))}

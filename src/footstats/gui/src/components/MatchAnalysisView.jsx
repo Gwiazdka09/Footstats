@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Swords, Shield, Target, FileText } from 'lucide-react';
+import { Swords, Shield, Target, FileText, Search } from 'lucide-react';
 
 // 10.09: sama statystyka drużyn — bez paska 1X2, Over/BTTS i „Analizy AI”
 // (nasze typy nie pokazują się w GUI poza kreatorem „Stwórz Kupon”).
@@ -180,16 +180,36 @@ function MatchCard({ card, isAdmin, apiFetch }) {
   );
 }
 
+const MIN_ZNAKOW = 2;
+const DEBOUNCE_MS = 400;
+
 export default function MatchAnalysisView({ apiFetch, isAdmin = false }) {
   const [cards, setCards] = useState(null);
   const [err, setErr] = useState(null);
+  const [wpisane, setWpisane] = useState('');
+  const [zapytanie, setZapytanie] = useState('');
+
+  // Debounce: do API idzie dopiero po przerwie w pisaniu; <2 znaki = widok domyślny.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const q = wpisane.trim();
+      setZapytanie(q.length >= MIN_ZNAKOW ? q : '');
+    }, DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [wpisane]);
 
   useEffect(() => {
-    apiFetch('/analyses/matches')
-      .then(d => { setCards(d.matches || []); if (d.error) setErr(d.error); })
-      .catch(e => setErr(e.message || 'Błąd połączenia'));
+    let aktualne = true;
+    const endpoint = zapytanie
+      ? '/analyses/matches?q=' + encodeURIComponent(zapytanie)
+      : '/analyses/matches';
+    setErr(null);
+    apiFetch(endpoint)
+      .then(d => { if (!aktualne) return; setCards(d.matches || []); if (d.error) setErr(d.error); })
+      .catch(e => { if (aktualne) setErr(e.message || 'Błąd połączenia'); });
+    return () => { aktualne = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [zapytanie]);
 
   return (
     <div>
@@ -202,10 +222,31 @@ export default function MatchAnalysisView({ apiFetch, isAdmin = false }) {
         <span className="inline-flex items-center gap-1"><Shield size={16} /> gole stracone / mecz</span>
       </p>
 
+      <label className="relative block mb-4">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2"
+          style={{ color: 'var(--text-muted)' }} />
+        <input
+          type="search"
+          aria-label="Szukaj meczu"
+          placeholder="Szukaj meczu: drużyna lub liga"
+          value={wpisane}
+          maxLength={50}
+          onChange={e => setWpisane(e.target.value)}
+          className="w-full py-2 pl-9 pr-3 outline-none"
+          style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)',
+            borderRadius: 8, border: 'none' }}
+        />
+      </label>
+      <p className="mb-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+        {zapytanie ? `Wyniki dla „${zapytanie}”` : 'Dziś i jutro'}
+      </p>
+
       {err && <div className="glass-card p-4 mb-4" style={{ color: 'var(--accent-secondary)' }}>{err}</div>}
       {cards === null && <p style={{ color: 'var(--text-muted)' }}>Ładowanie…</p>}
       {cards?.length === 0 && !err && (
-        <p style={{ color: 'var(--text-muted)' }}>Brak ważnych meczów w tym tygodniu.</p>
+        <p style={{ color: 'var(--text-muted)' }}>
+          {zapytanie ? `Brak nadchodzących meczów dla „${zapytanie}”` : 'Brak ważnych meczów w tym tygodniu.'}
+        </p>
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
