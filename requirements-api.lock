@@ -48,7 +48,7 @@ fastapi==0.141.1
     #   sentry-sdk
 fastapi-mcp==0.4.0
     # via footstats (pyproject.toml)
-groq==1.7.0
+groq==1.6.0
     # via footstats (pyproject.toml)
 h11==0.16.0
     # via
