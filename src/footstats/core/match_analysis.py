@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from footstats.config import DB_PATH
+from footstats.utils.normalize import _norm_ascii
 
 _CACHE_DDL = """
 CREATE TABLE IF NOT EXISTS analysis_cache (
@@ -27,12 +28,45 @@ CREATE TABLE IF NOT EXISTS analysis_cache (
 """
 
 
+def _tokeny(nazwa: str) -> list[str]:
+    """Nazwa zawodnika -> tokeny ASCII lowercase (spacja i myślnik rozdzielają)."""
+    return _norm_ascii(nazwa.replace("-", " ")).split()
+
+
+def _ten_sam_zawodnik(a: str, sa: float, b: str, sb: float) -> bool:
+    """Heurystyka duplikatu strzelca (ta sama osoba, dwie pisownie w źródłach).
+
+    1) po normalizacji (bez diakrytyków) nazwy identyczne ("Ferrán"/"Ferran");
+    2) to samo pierwsze imię, a człony nazwiska jednego zawierają się w drugim
+       ("Mbappe-Lottin" vs "Mbappé");
+    3) identyczne nazwisko i identyczny udział goli (zdrobnienie imienia:
+       "Antonio"/"Toni" Martínez). Różny udział = różni zawodnicy, nie sklejamy.
+    """
+    ta, tb = _tokeny(a), _tokeny(b)
+    if not ta or not tb:
+        return False
+    if ta == tb:
+        return True
+    na, nb = set(ta[1:]), set(tb[1:])
+    if ta[0] == tb[0] and na and nb and (na <= nb or nb <= na):
+        return True
+    return bool(na) and na == nb and round(sa, 3) == round(sb, 3)
+
+
 def _top_scorers(gs: dict | None, n: int = 3) -> list[dict]:
-    """Top strzelcy drużyny wg goal_share ({name, goal_share})."""
+    """Top strzelcy drużyny wg goal_share ({name, goal_share}), bez duplikatów pisowni.
+
+    Dedup działa tylko na wyświetlanie (nie zmienia udziałów w bazie); przy
+    duplikacie zostaje wpis o wyższym udziale (przy remisie — pierwszy).
+    """
     if not gs:
         return []
-    top = sorted(gs.items(), key=lambda kv: kv[1], reverse=True)[:n]
-    return [{"name": nm, "goal_share": round(s, 3)} for nm, s in top]
+    kolejnosc = sorted(gs.items(), key=lambda kv: kv[1], reverse=True)
+    zostawione: list[tuple[str, float]] = []
+    for nm, sh in kolejnosc:
+        if not any(_ten_sam_zawodnik(nm, sh, k, ks) for k, ks in zostawione):
+            zostawione.append((nm, sh))
+    return [{"name": nm, "goal_share": round(s, 3)} for nm, s in zostawione[:n]]
 
 
 def _team_block(ts: dict | None, name: str) -> dict:

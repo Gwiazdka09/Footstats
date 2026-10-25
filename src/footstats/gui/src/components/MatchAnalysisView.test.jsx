@@ -81,3 +81,25 @@ describe('Analizy meczów — wyszukiwarka', () => {
     expect(screen.getByText('Dziś i jutro')).toBeInTheDocument();
   });
 });
+
+describe('Analizy meczów — start meczu i teksty', () => {
+  it('pokazuje dzień, datę i godzinę z API', async () => {
+    const karta = { ...KARTA, data: '2026-10-31', data_pl: '2026-10-31', godzina: '20:00' };
+    const api = vi.fn(() => Promise.resolve({ matches: [karta] }));
+    render(<MatchAnalysisView apiFetch={api} />);
+    expect(await screen.findByText('sob 31.10 · 20:00')).toBeInTheDocument();
+  });
+
+  it('bez godziny pokazuje samą datę', async () => {
+    const api = vi.fn(() => Promise.resolve({ matches: [{ ...KARTA, data: '2026-10-31' }] }));
+    render(<MatchAnalysisView apiFetch={api} />);
+    expect(await screen.findByText('sob 31.10')).toBeInTheDocument();
+  });
+
+  it('podtytuł i pusta lista zgodne z widokiem dziś i jutro', async () => {
+    const api = vi.fn(() => Promise.resolve({ matches: [] }));
+    render(<MatchAnalysisView apiFetch={api} />);
+    expect(screen.getByText(/dziś i jutro; wyszukiwarka obejmuje cały tydzień/)).toBeInTheDocument();
+    expect(await screen.findByText('Brak nadchodzących ważnych meczów dziś i jutro.')).toBeInTheDocument();
+  });
+});

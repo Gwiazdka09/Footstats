@@ -142,6 +142,18 @@ function AdminOpis({ card, apiFetch }) {
   );
 }
 
+const DNI = ['nd', 'pn', 'wt', 'śr', 'czw', 'pt', 'sob'];
+
+// „sob 31.10 · 20:00” (czas Europe/Warsaw z API); bez godziny — sama data.
+export function formatStart(card) {
+  const data = card.data_pl || card.data;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data || '');
+  if (!m) return data || '';
+  const dzien = DNI[new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()];
+  const dataTxt = `${dzien} ${m[3]}.${m[2]}`;
+  return card.godzina ? `${dataTxt} · ${card.godzina}` : dataTxt;
+}
+
 function MatchCard({ card, isAdmin, apiFetch }) {
   return (
     <div className="glass-card p-5">
@@ -150,7 +162,7 @@ function MatchCard({ card, isAdmin, apiFetch }) {
           style={{ background: 'rgba(129,140,248,0.12)', color: 'var(--accent-primary)' }}>
           {card.liga}
         </span>
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{card.data}</span>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatStart(card)}</span>
       </div>
 
       <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3 my-3">
@@ -215,7 +227,7 @@ export default function MatchAnalysisView({ apiFetch, isAdmin = false }) {
     <div>
       <h2 className="brand text-2xl mb-1" style={{ color: 'var(--text-main)' }}>Analizy meczów</h2>
       <p className="mb-6" style={{ color: 'var(--text-muted)' }}>
-        Najważniejsze mecze tygodnia — gole zdobyte i stracone na mecz, strzelcy, kontuzje.
+        Najważniejsze mecze dziś i jutro; wyszukiwarka obejmuje cały tydzień i wszystkie ligi.
       </p>
       <p className="mb-6 -mt-4 text-xs inline-flex items-center gap-3" style={{ color: 'var(--text-muted)' }}>
         <span className="inline-flex items-center gap-1"><Target size={16} /> gole zdobyte / mecz</span>
@@ -245,7 +257,7 @@ export default function MatchAnalysisView({ apiFetch, isAdmin = false }) {
       {cards === null && <p style={{ color: 'var(--text-muted)' }}>Ładowanie…</p>}
       {cards?.length === 0 && !err && (
         <p style={{ color: 'var(--text-muted)' }}>
-          {zapytanie ? `Brak nadchodzących meczów dla „${zapytanie}”` : 'Brak ważnych meczów w tym tygodniu.'}
+          {zapytanie ? `Brak nadchodzących meczów dla „${zapytanie}”` : 'Brak nadchodzących ważnych meczów dziś i jutro.'}
         </p>
       )}
 

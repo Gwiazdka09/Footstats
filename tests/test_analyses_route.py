@@ -2,6 +2,8 @@
 test_analyses_route.py — endpoint Analizy meczowe: filtr ważnych lig + budowa kart
 z eventów Bzzoiro. Bez sieci/DB (mock player_db).
 """
+import pytest
+
 from footstats.api.routes import analyses
 
 
@@ -73,7 +75,7 @@ def test_mecz_z_kompletem_nazw_dalej_buduje_karte(monkeypatch):
 
     monkeypatch.setattr(analyses, "get_team_stats", lambda *a, **k: {})
     monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda *a, **k: {})
-    monkeypatch.setattr(analyses, "build_match_card", lambda *a, **k: {"ok": True})
+    monkeypatch.setattr(analyses, "build_match_card", lambda *a, **k: {"ok": True, "home_stats": {"gf_pg": 1}, "away_stats": {"gf_pg": 1}})
 
     karty = analyses._build_cards(
         [{"liga": "Premier League", "gosp": "Arsenal", "gosc": "Chelsea", "pred_ml": {}}]
@@ -129,7 +131,8 @@ def _wywolaj(monkeypatch, events, q=None):
     monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda *a, **k: {})
     monkeypatch.setattr(analyses, "build_match_card",
                         lambda match, **k: {"home": match["gospodarz"], "away": match["goscie"],
-                                            "liga": match["liga"], "data": match["data"]})
+                                            "liga": match["liga"], "data": match["data"],
+                                            "home_stats": {"gf_pg": 1}, "away_stats": {"gf_pg": 1}})
     return analyses.analyses_matches(user_id=1, q=q)["matches"]
 
 
@@ -183,3 +186,55 @@ def test_czas_meczu_przeniesiony_dziala_jak_w_kreatorze():
     assert juz_sie_zaczal({"status": "FT"}, teraz) is True
     assert juz_sie_zaczal({"data_full": "2026-10-25T13:00:00Z"}, teraz) is False
     assert moment_meczu({}) is None
+
+
+# ── 25.10: godzina meczu w Europe/Warsaw + gole z historii gdy team_stats puste ──
+
+def test_godzina_warszawska_czas_letni():
+    # 2026-10-24: jeszcze CEST (UTC+2) — 18:00 UTC to 20:00 w Warszawie
+    assert analyses._start_warszawa({"data": "2026-10-24", "godzina": "18:00"}) == ("2026-10-24", "20:00")
+
+
+def test_godzina_warszawska_czas_zimowy_i_zmiana_dnia():
+    # 2026-10-31 CET (UTC+1) po zmianie czasu 25.10; 23:30 UTC -> 00:30 nastepnego dnia
+    assert analyses._start_warszawa({"data": "2026-10-31", "godzina": "19:00"}) == ("2026-10-31", "20:00")
+    assert analyses._start_warszawa({"data": "2026-10-31", "godzina": "23:30"}) == ("2026-11-01", "00:30")
+
+
+def test_godzina_brak_lub_nieczytelna_to_none():
+    assert analyses._start_warszawa({"data": "2026-10-31"}) == (None, None)
+    assert analyses._start_warszawa({"data": "x", "godzina": "y"}) == (None, None)
+
+
+def test_karta_ma_godzine(monkeypatch):
+    monkeypatch.setattr(analyses, "get_team_stats", lambda t, s: None)
+    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda t, s: {})
+    monkeypatch.setattr(analyses, "_zbior", lambda: None)
+    ev = [{"gosp": "A", "gosc": "B", "liga": "Premier League", "data": "2026-10-31", "godzina": "19:00"}]
+    [c] = analyses._build_cards(ev)
+    assert c["godzina"] == "20:00" and c["data_pl"] == "2026-10-31"
+
+
+def test_gole_z_historii_gdy_brak_team_stats(monkeypatch):
+    monkeypatch.setattr(analyses, "get_team_stats", lambda t, s: None)
+    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda t, s: {})
+    monkeypatch.setattr(analyses, "_zbior", lambda: object())
+    monkeypatch.setattr(
+        analyses.opis_meczu, "forma",
+        lambda df, t: {"gole_strzelone_sr10": 1.8, "gole_stracone_sr10": 0.9, "mecze_w_sredniej": 10}
+        if t == "A" else None)
+    ev = [{"gosp": "A", "gosc": "B", "liga": "Premier League", "data": "2026-10-31"}]
+    [c] = analyses._build_cards(ev)
+    assert c["home_stats"]["gf_pg"] == 1.8 and c["home_stats"]["ga_pg"] == 0.9
+    assert c["home_stats"]["matches"] == 10
+    assert c["away_stats"]["gf_pg"] is None          # brak w historii = brak, bez zmyślania
+
+
+def test_team_stats_ma_pierwszenstwo_przed_historia(monkeypatch):
+    monkeypatch.setattr(analyses, "get_team_stats",
+                        lambda t, s: {"matches": 4, "goals_for": 8, "goals_against": 4})
+    monkeypatch.setattr(analyses, "team_goal_shares_recent", lambda t, s: {})
+    monkeypatch.setattr(analyses, "_zbior", lambda: pytest.fail("nie powinno ladowac zbioru"))
+    ev = [{"gosp": "A", "gosc": "B", "liga": "Premier League", "data": "2026-10-31"}]
+    [c] = analyses._build_cards(ev)
+    assert c["home_stats"]["gf_pg"] == 2.0

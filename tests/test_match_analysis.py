@@ -78,3 +78,45 @@ def test_data_hash_stabilny_i_zmienny():
     assert card_data_hash(c1) == card_data_hash(c2)        # te same dane → ten sam hash
     c3 = build_match_card(_MATCH, ts_home=_TS_H, inj_home=[{"name": "X", "position": "F"}])
     assert card_data_hash(c3) != card_data_hash(c1)        # nowa kontuzja → inny hash (regen)
+
+
+# ── Duplikaty strzelców (25.10): ta sama osoba pod dwiema pisowniami ──────────
+
+def test_top_scorers_dedup_diakrytyki():
+    from footstats.core.match_analysis import _top_scorers
+    gs = {"Ferrán Torres": 0.14, "Ferran Torres": 0.14, "Lewandowski": 0.30}
+    nazwy = [s["name"] for s in _top_scorers(gs)]
+    assert len(nazwy) == 2 and "Lewandowski" in nazwy
+    assert sum("Torres" in n for n in nazwy) == 1
+
+
+def test_top_scorers_dedup_czlon_nazwiska_zostawia_wyzszy_udzial():
+    from footstats.core.match_analysis import _top_scorers
+    gs = {"Kylian Mbappe-Lottin": 0.23, "Kylian Mbappé": 0.25, "Rodrygo": 0.10}
+    top = _top_scorers(gs)
+    assert [s["name"] for s in top] == ["Kylian Mbappé", "Rodrygo"]
+
+
+def test_top_scorers_dedup_nie_laczy_roznych_osob():
+    from footstats.core.match_analysis import _top_scorers
+    gs = {"Jose Silva": 0.2, "Joao Silva": 0.15, "Bernardo Silva": 0.1}
+    assert len(_top_scorers(gs)) == 3
+
+
+def test_top_scorers_dedup_przed_obcieciem_do_n():
+    from footstats.core.match_analysis import _top_scorers
+    gs = {"A Torres": 0.3, "A Torrés": 0.29, "B One": 0.2, "C Two": 0.1}
+    assert [s["name"] for s in _top_scorers(gs, n=3)] == ["A Torres", "B One", "C Two"]
+
+
+def test_top_scorers_dedup_zdrobnienie_imienia_ten_sam_udzial():
+    from footstats.core.match_analysis import _top_scorers
+    gs = {"Antonio Martínez": 0.25, "Toni Martínez": 0.25, "Oyarzabal": 0.10}
+    nazwy = [s["name"] for s in _top_scorers(gs)]
+    assert len(nazwy) == 2 and sum("Mart" in n for n in nazwy) == 1
+
+
+def test_top_scorers_dedup_to_samo_nazwisko_inny_udzial_zostaje():
+    from footstats.core.match_analysis import _top_scorers
+    gs = {"Antonio Martinez": 0.25, "Toni Martinez": 0.10}
+    assert len(_top_scorers(gs)) == 2
