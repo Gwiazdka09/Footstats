@@ -203,3 +203,11 @@ Reszta niedopasowań: „PK-35|FF Jaro” — nazwy OK, za mało świeżej histo
   (przed: 61,3%).
 - Zmiana zostaje, jeśli próg spełniony ORAZ ręczna kontrola 20 losowych nowych
   dopasowań nie znajdzie pomyłki; inaczej revert pomyłkowych wpisów.
+
+**Pewność linii goli ≠ 2.5 (2026-10-26).** Od #51 (22.10) `prob_modelu` zwracał None dla
+Over/Under ≠ 2.5, więc `pewnosc_z_modelu` zapisywał do `predictions.ai_confidence` stałe
+Groq-fallback/50 zamiast prawdopodobieństwa modelu, a filtr longshot (`_MIN_PROB_MODELU`)
+przepuszczał takie nogi. Poprawka liczy te linie z λ (`prob_linii_goli`), Over/Under 2.5
+bez zmian. Wiersze `predictions` z linią ≠ 2.5 zapisane 22.10–26.10 mają „pewność” bez
+pokrycia w modelu — w raportach kalibracji odcinać datą (match_date/created ≥ 2026-10-27)
+albo wykluczać te linie.
