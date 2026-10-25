@@ -77,6 +77,10 @@ api = [
     # ustawiony. Teraz bramka jest szczelna (404 na produkcji bez tokenu), wiec
     # biblioteka moze wejsc i metryki zaczynaja istniec.
     "prometheus-client>=0.20",
+    # Opis meczu dla wlasciciela (POST /api/admin/opis-meczu, 25.10): `zapytaj_ai`
+    # importuje `groq` leniwie, wiec bez paczki w obrazie API kazdy opis konczyl sie
+    # cichym „Brak dostepnego AI” i karta wracala bez tekstu.
+    "groq>=0.4",
 ]
 ai = [
     "groq>=0.4",
