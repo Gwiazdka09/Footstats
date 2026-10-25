@@ -164,3 +164,42 @@ przez whitelistę.
   NLL out-of-sample; decyzja właściciela.
 
 **Następny pomiar:** 2026-11-23.
+
+
+## 2026-10-25 — krok 2: pokrycie Poissona
+
+**Diagnoza** (wiersze `model_log` 23.09–22.10, ligi z whitelisty mające dane w zbiorze):
+398 unikalnych meczów, Poisson policzył 244 (**61,3%**), 154 poszło na fallback `bzzoiro-ml`.
+We WSZYSTKICH 154 przynajmniej jedna drużyna nie była rozpoznana przez
+`poisson._kanoniczne_nazwy` (106 różnych nazw: „SG Dynamo Dresden” vs „Dresden”,
+„Atlético Madrid” vs „Ath Madrid”, „Levante UD”, Ligue 2, Allsvenskan, Superliga RO,
+Argentyna, National League, J1…). Przyczyna to pisownia, nie brak danych.
+
+**Zmiana:** `data/team_mappings.json` +99 par (klucz = nazwa źródła znormalizowana bez
+mapowań, wartość = nazwa ze zbioru), każda zatwierdzona ręcznie jako ten sam klub w tej
+samej lidze. Bez zmian w kodzie; `_kanoniczne_nazwy` nadal bez dopasowania rozmytego.
+Kontrole przed zapisem: brak konfliktu z istniejącymi kluczami, brak łańcuchów, klucz nie
+równa się nazwie innego klubu ze zbioru; po zapisie liczba unikalnych postaci
+kanonicznych nazw zbioru bez zmian (1072 → 1072), zero nowych kolizji.
+
+**Pomiar przed/po** (te same 398 meczów, `predict_match` z opcjami domyślnymi):
+
+| | przed | po |
+|---|---|---|
+| (a) obie nazwy rozpoznane | 244 (61,3%) | 383 (96,2%) |
+| (b) `predict_match` != None | 244 (61,3%) | 382 (96,0%) |
+
+**Brak w zbiorze** (nie mapowane): Oxford United, Peterborough United, Plymouth Argyle,
+Queens Park Rangers (angielskie League One/Championship — etykieta ligi zlana z
+szkocką/aliasem, zbiór nie ma tych klubów), Celta Fortuna (rezerwy).
+**Wątpliwe / konflikt z testami** (celowo pominięte): „Wisła Kraków” → „Wisla” psuje
+`test_af_backfill` (dwie nazwy źródła na jedną drużynę), „Turun Palloseura” → „TPS”
+zeruje `team_similarity` do „Turku PS” w `test_aliasy_nazw_z_zaleglosci` (rozliczenia).
+Reszta niedopasowań: „PK-35|FF Jaro” — nazwy OK, za mało świeżej historii.
+
+**REGUŁA AKCEPTACJI NA ŻYWO — ustalona Z GÓRY (2026-10-25):**
+- Okno: 7 dni od wdrożenia.
+- W ligach whitelisty z danymi udział meczów policzonych przez `poisson-dc` ≥ **85%**
+  (przed: 61,3%).
+- Zmiana zostaje, jeśli próg spełniony ORAZ ręczna kontrola 20 losowych nowych
+  dopasowań nie znajdzie pomyłki; inaczej revert pomyłkowych wpisów.
