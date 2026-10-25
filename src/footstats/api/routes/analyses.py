@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Query
 
 from footstats.api.auth import require_auth
+from footstats.core import opis_meczu
 from footstats.core.czas_meczu import juz_sie_zaczal, moment_meczu
 from footstats.core.match_analysis import build_match_card
 from footstats.core.player_db import team_goal_shares_recent, get_team_stats
@@ -78,6 +79,47 @@ def _szukaj(events: list[dict], q: str, limit: int = _MAX_WYNIKOW_SZUKANIA) -> l
     return trafione[:limit]
 
 
+def _zbior():
+    """Zbiór historyczny z `admin_opisy` (jeden leniwy cache). Import lokalny:
+    admin_opisy importuje `_SEASON` stąd, więc na górze byłby cykl."""
+    from footstats.api.routes.admin_opisy import _zbior as zbior_admina
+    return zbior_admina()
+
+
+_STREFA_PL = ZoneInfo("Europe/Warsaw")
+
+
+def _start_warszawa(m: dict) -> tuple[str | None, str | None]:
+    """Pure: (data, godzina) startu w Europe/Warsaw albo (None, None).
+
+    Bzzoiro `godzina` to wycinek UTC; `moment_meczu` daje moment ze strefą, tu
+    tylko konwersja (uwzględnia CET/CEST). Bez godziny nie zgadujemy.
+    """
+    if not (m.get("godzina") or m.get("data_full")):
+        return None, None
+    moment = moment_meczu(m)
+    if moment is None:
+        return None, None
+    lokalny = moment.astimezone(_STREFA_PL)
+    return lokalny.strftime("%Y-%m-%d"), lokalny.strftime("%H:%M")
+
+
+def _blok_z_historii(blok: dict, druzyna: str) -> dict:
+    """Nowy blok statystyk z gf/ga policzonymi z ostatnich meczów zbioru historycznego.
+
+    `team_stats` zawiera tylko 48 reprezentacji (WC 2026) — dla klubów jest puste,
+    więc średnie goli liczymy z `data/hist_cache/full_dataset.parquet` (ostatnie 10
+    meczów, jak w opisie meczu). Brak drużyny w zbiorze = blok bez zmian (bez zmyślania).
+    """
+    if blok.get("gf_pg") is not None:
+        return blok
+    f = opis_meczu.forma(_zbior(), druzyna)
+    if not f:
+        return blok
+    return {**blok, "matches": f["mecze_w_sredniej"],
+            "gf_pg": f["gole_strzelone_sr10"], "ga_pg": f["gole_stracone_sr10"]}
+
+
 def _build_cards(events: list[dict], tylko_wazne: bool = True) -> list[dict]:
     """Pure: z eventów Bzzoiro buduje karty ważnych meczów + team_stats/goal_share.
 
@@ -104,7 +146,14 @@ def _build_cards(events: list[dict], tylko_wazne: bool = True) -> list[dict]:
         )
         # `build_match_card` zawsze dokłada blok `model` (używał go prompt LLM) —
         # tu go wycinamy, żeby w odpowiedzi nie jechały nawet puste pola predykcji.
-        cards.append({k: v for k, v in card.items() if k != "model"})
+        data_pl, godzina = _start_warszawa(m)
+        card = {
+            **{k: v for k, v in card.items() if k != "model"},
+            "home_stats": _blok_z_historii(card["home_stats"], home),
+            "away_stats": _blok_z_historii(card["away_stats"], away),
+            "data_pl": data_pl, "godzina": godzina,
+        }
+        cards.append(card)
     return cards
 
 
