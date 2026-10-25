@@ -36,10 +36,10 @@ _cache: dict[str, tuple[float, frozenset[str] | None]] = {}
 
 def _znajdz_id(nazwa: str) -> int | None:
     """Nazwa drużyny → id FotMob przez search/suggest (najlepsze podobieństwo nazw)."""
-    grupy = fotmob._pobierz("search/suggest", term=nazwa)
+    grupy: object = fotmob._pobierz("search/suggest", term=nazwa)
     cel = normalize_team_name(nazwa)
     najlepszy: tuple[float, int] | None = None
-    for grupa in grupy if isinstance(grupy, list) else []:
+    for grupa in (grupy if isinstance(grupy, list) else []):
         for s in (grupa or {}).get("suggestions") or []:
             if not isinstance(s, dict) or s.get("type") != "team" or not s.get("id"):
                 continue
