@@ -95,9 +95,10 @@ def test_odswiezenie_kursow_uniewaznia_cache_bzzoiro(monkeypatch):
         def waliduj(self):
             return True, "ok"
 
+        def predykcje_tygodnia(self):
+            return []
+
     monkeypatch.setattr("footstats.scrapers.bzzoiro.BzzoiroClient", _Klient)
-    monkeypatch.setattr("footstats.core.quick_picks.szybkie_pewniaczki_2dni",
-                        lambda *a, **k: [])
 
     c._cache_set("bz:/predictions/:{}", {"stare": True})
     c._cache_set("fd:/matches/:{}", {"inne_zrodlo": True})
