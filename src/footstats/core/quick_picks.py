@@ -203,6 +203,19 @@ def szybkie_pewniaczki_2dni(
 
     console.print(f"[dim]   Pobrano {len(lista_ml)} wydarzen.[/dim]")
 
+    # 29.10: od paginacji Bzzoiro (#60) lista ma ~600 wydarzen zamiast 50, a petla
+    # nizej liczy Poissona dla KAZDEGO meczu w oknie. `footstats-final` przekroczyl
+    # limit 1200 s cztery dni z rzedu (26-29.10, utkniety w KROKU 1) i nie zapisal
+    # ani jednego typu. Ten sam filtr lig, ktory potok i tak stosuje pozniej
+    # (`daily_agent`, `cloud_draft`, `system_paper`) — tylko PRZED kosztownym liczeniem.
+    from footstats.config import LIGA_FILTER_ENABLED
+    if LIGA_FILTER_ENABLED:
+        from footstats.core.daily_filters import _pre_filtruj_ligi
+        _n_przed_ligi = len(lista_ml)
+        lista_ml = _pre_filtruj_ligi(lista_ml)
+        console.print(f"[dim]   Filtr lig przed Poissonem: {_n_przed_ligi} -> "
+                      f"{len(lista_ml)} wydarzen.[/dim]")
+
     wyniki = []
     # Pokrycie Poissona liczone PER PRZEBIEG. Bez tego jedyna informacja o tym,
     # ktory model realnie policzyl stawke, siedziala w `model_log` i nikt jej
