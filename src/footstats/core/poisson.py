@@ -1,5 +1,6 @@
 import functools
 import logging
+import weakref
 import pandas as pd
 import numpy as np
 from scipy.stats import poisson
@@ -103,14 +104,33 @@ def prob_linii_goli(lambda_g: float, lambda_a: float,
     return {linia: 1.0 - float(M[suma_goli <= linia].sum()) for linia in linie}
 
 
-# Mapa "nazwa znormalizowana → nazwa z historii", trzymana w `df.attrs`.
+# Mapa "nazwa znormalizowana → nazwa z historii", trzymana w cache ramki.
 #
 # Nie jako dodatkowe KOLUMNY: `predict_match` dostaje zwykle wycinek ramki,
 # więc zapis kolumny leci na widok i pandas słusznie krzyczy
 # SettingWithCopyWarning — cache mógłby się nie utrwalić, a przy 50 meczach
 # dziennie normalizacja 30k+ wierszy za każdym razem to czysta strata.
-# `attrs` to oficjalny worek na metadane ramki i nie rusza jej danych.
 _ATR_MAPA = "_footstats_mapa_nazw"
+
+# Cache pomocniczy per ramka — CELOWO poza `df.attrs`. Do 29.10 siedział
+# w `attrs`, a pandas przy KAŻDEJ operacji tworzącej nową ramkę/serię (maska,
+# kolumna, wycinek) robi `deepcopy(attrs)`. Z mapą nazw i siłami lig to
+# ~5 ms na operację × ~900 operacji na mecz: 87% czasu `predict_match`
+# (cProfile 29.10), KROK 1 `footstats-final` ~1950 s i timeout joba.
+# Klucz to tożsamość ramki; `weakref.finalize` zdejmuje wpis, gdy ramka
+# umiera, więc `id` nie zostanie ponownie użyte ze starym cache.
+_CACHE_RAMEK: dict[int, dict] = {}
+
+
+def _cache_ramki(df: pd.DataFrame) -> dict:
+    """Słownik cache przypięty do TEJ ramki (nie dziedziczą go wycinki)."""
+    klucz = id(df)
+    wpis = _CACHE_RAMEK.get(klucz)
+    if wpis is None:
+        wpis = {}
+        _CACHE_RAMEK[klucz] = wpis
+        weakref.finalize(df, _CACHE_RAMEK.pop, klucz, None)
+    return wpis
 
 # Klucz cache tabeli sił ligowych — liczenie jej dla każdego meczu z osobna
 # przy 40 ligach i 139k meczów kosztowałoby więcej niż cała reszta predykcji.
@@ -154,7 +174,7 @@ def _baza_ligowa(
     if liga is None:
         return None
 
-    cache = df_mecze.attrs.setdefault(_ATR_SILY_LIG, {})
+    cache = _cache_ramki(df_mecze).setdefault(_ATR_SILY_LIG, {})
     if liga not in cache:
         from footstats.core.form import sily_ligowe
         cache[liga] = sily_ligowe(df_mecze[df_mecze["league"] == liga])
@@ -200,7 +220,7 @@ def _kanoniczne_nazwy(df_mecze: pd.DataFrame, g: str, a: str) -> tuple[str, str]
     """
     from footstats.utils.normalize import normalize_team_name
 
-    mapa = df_mecze.attrs.get(_ATR_MAPA)
+    mapa = _cache_ramki(df_mecze).get(_ATR_MAPA)
     if mapa is None:
         mapa = {}
         for kolumna in ("gospodarz", "goscie"):
@@ -208,7 +228,7 @@ def _kanoniczne_nazwy(df_mecze: pd.DataFrame, g: str, a: str) -> tuple[str, str]
                 nazwa = str(oryginal).strip()
                 if nazwa:
                     mapa.setdefault(normalize_team_name(nazwa), nazwa)
-        df_mecze.attrs[_ATR_MAPA] = mapa
+        _cache_ramki(df_mecze)[_ATR_MAPA] = mapa
 
     def _jedna(nazwa: str) -> str:
         klucz = normalize_team_name(nazwa)
@@ -276,7 +296,7 @@ def _swieze_nazwy(df_mecze: pd.DataFrame) -> frozenset:
     Bez kolumny `data` nie da się tego sprawdzić, więc zbiór jest pusty i reguły
     zapasowe nie trafiają niczego (fail-closed). Dokładny klucz działa dalej.
     """
-    swieze = df_mecze.attrs.get(_ATR_SWIEZE)
+    swieze = _cache_ramki(df_mecze).get(_ATR_SWIEZE)
     if swieze is not None:
         return swieze
     if "data" not in df_mecze.columns or df_mecze.empty:
@@ -290,7 +310,7 @@ def _swieze_nazwy(df_mecze: pd.DataFrame) -> frozenset:
             for kolumna in ("gospodarz", "goscie")
             for n in ostatnie[kolumna].dropna().unique()
         )
-    df_mecze.attrs[_ATR_SWIEZE] = swieze
+    _cache_ramki(df_mecze)[_ATR_SWIEZE] = swieze
     return swieze
 
 
@@ -303,7 +323,7 @@ def _kraje_nazwy(df_mecze: pd.DataFrame) -> dict[str, frozenset]:
     Bez kolumny `league` słownik jest pusty, więc reguła słów-szumu nie trafia
     niczego (fail-closed). Pozostałe reguły kraju nie potrzebują.
     """
-    kraje = df_mecze.attrs.get(_ATR_KRAJE)
+    kraje = _cache_ramki(df_mecze).get(_ATR_KRAJE)
     if kraje is not None:
         return kraje
     zebrane: dict[str, set] = {}
@@ -313,7 +333,7 @@ def _kraje_nazwy(df_mecze: pd.DataFrame) -> dict[str, frozenset]:
             for nazwa, liga in pary.itertuples(index=False):
                 zebrane.setdefault(str(nazwa).strip(), set()).add(str(liga).split("-", 1)[0])
     kraje = {n: frozenset(k) for n, k in zebrane.items()}
-    df_mecze.attrs[_ATR_KRAJE] = kraje
+    _cache_ramki(df_mecze)[_ATR_KRAJE] = kraje
     return kraje
 
 
