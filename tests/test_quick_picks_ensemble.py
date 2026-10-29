@@ -211,7 +211,9 @@ def test_bez_pred_ml_gdy_poisson_zwraca_none_pomija():
 _BZZ_EVENT_SYGNAL = {
     "gosp": "Londrina",
     "gosc": "Athletic",
-    "liga": "Brazil Serie B",
+    # Liga z whitelisty: od 29.10 quick_picks filtruje ligi PRZED Poissonem (ten sam
+    # filtr co potok), a test sprawdza sygnal 1X2, nie filtr lig.
+    "liga": "Premier League",
     "data": _DATE,
     "godzina": _HOUR,
     # Asymetryczny sygnal: gosc faworytem (away 52), gospodarz outsider (home 18).

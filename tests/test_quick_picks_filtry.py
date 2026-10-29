@@ -205,3 +205,30 @@ def test_wynik_niesie_nazwy_i_lige():
     assert wynik[0]["gospodarz"] == "Legia"
     assert wynik[0]["goscie"] == "Lech"
     assert wynik[0]["liga"] == "POL-Ekstraklasa"
+
+
+def test_filtr_lig_przed_poissonem_odcina_ligi_spoza_whitelisty(monkeypatch):
+    """29.10: ~600 wydarzen po paginacji Bzzoiro = timeout joba w KROKU 1.
+
+    Mecz z ligi spoza whitelisty nie moze dojsc do `predict_match` (kosztowne
+    liczenie) — ten sam filtr, ktory potok i tak stosuje pozniej.
+    """
+    from datetime import datetime, timedelta
+    from unittest.mock import MagicMock, patch
+
+    import pandas as pd
+
+    from footstats.core.quick_picks import szybkie_pewniaczki_2dni
+
+    jutro = datetime.now() + timedelta(hours=20)
+    ev = {"gosp": "A", "gosc": "B", "liga": "Liga Nieznana Testowa",
+          "data": jutro.strftime("%Y-%m-%d"), "godzina": jutro.strftime("%H:%M"),
+          "status": "notstarted",
+          "pred_ml": {"percent": {"home": "50%", "draw": "30%", "away": "20%"}}}
+    zrodlo = MagicMock()
+    zrodlo.predykcje_tygodnia.return_value = [ev]
+    df = pd.DataFrame([{"gospodarz": "A", "goscie": "B", "gole_g": 1, "gole_a": 0,
+                        "data": "2026-01-01"}])
+    with patch("footstats.core.poisson.predict_match") as pm:
+        szybkie_pewniaczki_2dni(zrodlo, prog=0.0, df_mecze=df)
+    pm.assert_not_called()
