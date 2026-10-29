@@ -7,6 +7,13 @@ import pytest
 from footstats.api.routes import analyses
 
 
+@pytest.fixture(autouse=True)
+def _bez_fotmoba(monkeypatch):
+    """Skład z FotMob = sieć; domyślnie "nie wiemy" (None) → karta bez filtra."""
+    monkeypatch.setattr(analyses.sklad_fotmob, "aktualny_sklad", lambda n: None)
+    monkeypatch.setattr(analyses.sklad_fotmob, "przygotuj_sklady", lambda n: None)
+
+
 _EVENTS = [
     {"gosp": "France", "gosc": "Egypt", "liga": "World Cup 2026", "data": "2026-07-08",
      "pred_ml": {"prob_home_win": 56, "prob_draw": 24, "prob_away_win": 20,
@@ -263,3 +270,23 @@ def test_karta_bez_flagi_gdy_udzialy_z_biezacego_sezonu(monkeypatch):
 def test_karta_bez_flagi_gdy_brak_strzelcow(monkeypatch):
     c = _karta_z_udzialami(monkeypatch, (None, {}))
     assert c["strzelcy_poprzedni_sezon"] is False
+
+
+def test_strzelcy_na_karcie_tylko_z_obecnego_skladu(monkeypatch):
+    monkeypatch.setattr(analyses, "get_team_stats", lambda t, s: None)
+    monkeypatch.setattr(analyses, "team_goal_shares_recent_z_sezonem",
+                        lambda *a, **k: (2025, {"R. Lewandowski": 0.12, "L. Yamal": 0.2}))
+    monkeypatch.setattr(analyses.sklad_fotmob, "aktualny_sklad",
+                        lambda n: frozenset({"lamine yamal"}))
+    c = analyses._build_cards([_EVENTS[0]])[0]
+    assert [x["name"] for x in c["top_scorers_home"]] == ["L. Yamal"]
+    # skład znany => dane zweryfikowane, bez podpisu "poprzedni sezon"
+    assert c["strzelcy_poprzedni_sezon"] is False
+
+
+def test_flaga_poprzedni_sezon_zostaje_gdy_sklad_nieznany(monkeypatch):
+    monkeypatch.setattr(analyses, "get_team_stats", lambda t, s: None)
+    monkeypatch.setattr(analyses, "team_goal_shares_recent_z_sezonem",
+                        lambda *a, **k: (2025, {"R. Lewandowski": 0.12}))
+    c = analyses._build_cards([_EVENTS[0]])[0]     # autouse: aktualny_sklad -> None
+    assert c["strzelcy_poprzedni_sezon"] is True
