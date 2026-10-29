@@ -55,11 +55,11 @@ def _h() -> dict:
 
 
 def _mecz(mid: str, kiedy: datetime, sufiks_utc: bool = False,
-          status: str = "notstarted") -> dict:
+          status: str = "notstarted", liga: str = "La Liga") -> dict:
     g = kiedy.strftime("%H:%M") + (" UTC" if sufiks_utc else "")
     return {
         "id": mid, "gosp": f"Dom{mid}", "gosc": f"Wyj{mid}",
-        "liga": "TEST", "data": kiedy.strftime("%Y-%m-%d"), "godzina": g,
+        "liga": liga, "data": kiedy.strftime("%Y-%m-%d"), "godzina": g,
         "data_full": kiedy.isoformat(), "status": status,
         "pw": 45.0, "pr": 27.0, "pp": 28.0,
     }
@@ -193,3 +193,20 @@ def test_moment_meczu_oddaje_None_gdy_nie_da_sie_odczytac():
     assert _moment_meczu({}) is None
     assert _moment_meczu({"data": "2026-09-04"}) is None
     assert _moment_meczu({"data": "bez sensu", "godzina": "18:45"}) is None
+
+
+def test_whitelista_przed_obcieciem_do_30(monkeypatch, _bez_cache):
+    """40 porannych meczów lig spoza whitelisty nie wypycha wieczornej La Liga."""
+    teraz = datetime.now(timezone.utc)
+    ranne = [_mecz(f"j{i}", teraz + timedelta(hours=1, minutes=i), liga="Indian Super League")
+             for i in range(40)]
+    wieczor = _mecz("laliga", teraz + timedelta(hours=10), liga="La Liga")
+    _podstaw(monkeypatch, ranne + [wieczor])
+    ids = {m["id"] for m in client.get("/api/matches/today", headers=_h()).json()}
+    assert ids == {"laliga"}
+
+
+def test_same_ligi_spoza_whitelisty_daja_pusta_liste(monkeypatch, _bez_cache):
+    teraz = datetime.now(timezone.utc)
+    _podstaw(monkeypatch, [_mecz("x", teraz + timedelta(hours=2), liga="Indian Super League")])
+    assert client.get("/api/matches/today", headers=_h()).json() == []

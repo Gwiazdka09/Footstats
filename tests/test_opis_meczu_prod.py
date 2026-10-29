@@ -33,3 +33,9 @@ def test_cd_daje_serwisowi_klucz_groq():
 def test_analizy_meczow_maja_dlugi_timeout():
     # Od paginacji Bzzoiro (25.10) karta „Analiz” to ~35 meczów × 4 zapytania DB.
     assert "/api/analyses/matches" in _LONG_RUNNING_PATHS
+
+
+def test_kreator_kuponu_ma_dlugi_timeout():
+    # Kilka stron Bzzoiro na zimnym starcie nie mieści się w 10 s.
+    assert "/api/matches/today" in _LONG_RUNNING_PATHS
+    assert "/api/coupons/daily-proposals" in _LONG_RUNNING_PATHS

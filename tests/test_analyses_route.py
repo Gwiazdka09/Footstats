@@ -290,3 +290,21 @@ def test_flaga_poprzedni_sezon_zostaje_gdy_sklad_nieznany(monkeypatch):
                         lambda *a, **k: (2025, {"R. Lewandowski": 0.12}))
     c = analyses._build_cards([_EVENTS[0]])[0]     # autouse: aktualny_sklad -> None
     assert c["strzelcy_poprzedni_sezon"] is True
+
+
+def test_blad_zrodla_nie_wycieka_trescia_wyjatku(monkeypatch):
+    """D7: klient dostaje stały komunikat, treść wyjątku trafia tylko do logu."""
+    from footstats.scrapers import bzzoiro
+
+    class _Zepsuty:
+        def __init__(self, *a, **k) -> None: ...
+        def predykcje_tygodnia(self):
+            raise OSError("host=db.internal passwd=sekret")
+
+    monkeypatch.setenv("BZZOIRO_KEY", "k")
+    monkeypatch.setattr(bzzoiro, "BzzoiroClient", _Zepsuty)
+
+    wynik = analyses.analyses_matches(user_id=1, q=None)
+
+    assert wynik["matches"] == []
+    assert "sekret" not in str(wynik) and "db.internal" not in str(wynik)

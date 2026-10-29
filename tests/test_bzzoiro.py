@@ -505,3 +505,81 @@ def test_paginacja_brak_odpowiedzi_w_srodku_ostrzega(monkeypatch, caplog):
 
     assert len(wynik) == 200
     assert any("paginacj" in r.message.lower() for r in caplog.records)
+
+
+def _klient_tnacy_limit(monkeypatch, total: int, cap: int, count: int | None = None):
+    """Serwer ignoruje żądany limit i oddaje najwyżej `cap` rekordów na stronę."""
+    wywolania: list[dict] = []
+
+    def fake_get(self, path, params=None):
+        wywolania.append(dict(params))
+        off = params.get("offset", 0)
+        ids = range(off, min(off + cap, total))
+        return {"count": total if count is None else count,
+                "results": [_pred(event={"id": i}) for i in ids]}
+
+    monkeypatch.setattr(BzzoiroClient, "_get", fake_get)
+    return BzzoiroClient("k"), wywolania
+
+
+def test_paginacja_serwer_tnie_limit_zbiera_wszystko(monkeypatch):
+    """Serwer oddaje 100 zamiast 200 przy count=450 → offset rośnie o faktyczną liczbę."""
+    k, wyw = _klient_tnacy_limit(monkeypatch, 450, cap=100)
+
+    wynik = k.predykcje_tygodnia()
+
+    assert len(wynik) == 450
+    assert [w["offset"] for w in wyw] == [0, 100, 200, 300, 400]
+
+
+def test_paginacja_niepelny_zbior_ostrzega_z_liczbami(monkeypatch, caplog):
+    """Strona pusta przed osiągnięciem count → warning 'zebrano X z Y'."""
+    k, _ = _klient_tnacy_limit(monkeypatch, 250, cap=200, count=609)
+
+    with caplog.at_level("WARNING", logger="footstats.scrapers.bzzoiro"):
+        wynik = k.predykcje_tygodnia()
+
+    assert len(wynik) == 250
+    assert any("250" in r.message and "609" in r.message for r in caplog.records)
+
+
+def test_paginacja_brak_odpowiedzi_podaje_liczby(monkeypatch, caplog):
+    stan = {"n": 0}
+
+    def fake_get(self, path, params=None):
+        stan["n"] += 1
+        if stan["n"] == 2:
+            return None
+        return {"count": 600, "results": [_pred(event={"id": i}) for i in range(200)]}
+
+    monkeypatch.setattr(BzzoiroClient, "_get", fake_get)
+
+    with caplog.at_level("WARNING", logger="footstats.scrapers.bzzoiro"):
+        BzzoiroClient("k").predykcje_tygodnia()
+
+    assert any("200" in r.message and "600" in r.message for r in caplog.records)
+
+
+def test_get_nie_spi_po_ostatniej_probie(monkeypatch):
+    """Po 3. nieudanej próbie nie ma sensu czekać 4 s przed zwrotem None."""
+    import requests
+
+    spania: list[float] = []
+    monkeypatch.setattr(bz.time, "sleep", lambda s: spania.append(s))
+    monkeypatch.setattr(bz, "_cache_get", lambda k: None)
+
+    class R:
+        status_code = 503
+
+    monkeypatch.setattr(bz.requests, "get", lambda *a, **kw: R())
+    assert BzzoiroClient("k")._get("/x") is None
+    assert spania == [1, 2]
+
+    spania.clear()
+
+    def boom(*a, **kw):
+        raise requests.RequestException("x")
+
+    monkeypatch.setattr(bz.requests, "get", boom)
+    assert BzzoiroClient("k")._get("/x") is None
+    assert spania == [1, 2]

@@ -14,6 +14,7 @@ dekoratorem, a FastAPI musi rozwiązać adnotacje `Request`/modelu w jej globala
 import logging
 import os
 import threading
+import time
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -44,9 +45,13 @@ class OpisMeczuRequest(BaseModel):
 #
 # Parquet (~140 tys. meczów) czyta się ~sekundę i zajmuje sporo pamięci, więc nie
 # ładujemy go przy starcie API — dopiero przy pierwszym żądaniu o opis (pierwsze
-# jest wolniejsze). Porażka (brak pliku/pyarrow) NIE jest zapamiętywana: cache'owane
-# None zamroziłoby Poissona do restartu procesu mimo naprawy.
+# jest wolniejsze). Porażka (brak pliku/pyarrow) NIE jest zapamiętywana
+# na krótko (TTL): karta „Analiz” woła `_zbior()` ~70x na żądanie, więc bez tego
+# każde wywołanie próbowałoby czytać parquet od nowa. Wieczny None zamroziłby
+# Poissona do restartu mimo naprawy — stąd TTL, nie flaga.
 _zbior_df: "pd.DataFrame | None" = None
+_zbior_porazka_do: float = 0.0   # time.monotonic(), do kiedy nie ponawiamy ładowania
+_TTL_PORAZKI_ZBIORU = 600.0
 _blokada_zbioru = threading.Lock()
 
 
@@ -71,10 +76,12 @@ def _wczytaj_zbior() -> "pd.DataFrame | None":
 
 
 def _zbior() -> "pd.DataFrame | None":
-    global _zbior_df
+    global _zbior_df, _zbior_porazka_do
     with _blokada_zbioru:
-        if _zbior_df is None:
+        if _zbior_df is None and time.monotonic() >= _zbior_porazka_do:
             _zbior_df = _wczytaj_zbior()
+            if _zbior_df is None:
+                _zbior_porazka_do = time.monotonic() + _TTL_PORAZKI_ZBIORU
         return _zbior_df
 
 

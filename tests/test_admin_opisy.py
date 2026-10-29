@@ -64,6 +64,7 @@ def _czysty_stan(monkeypatch):
     opis_meczu.wyczysc_cache()
     monkeypatch.setattr(admin_opisy, "_pobierz_eventy", lambda: [_EVENT])
     monkeypatch.setattr(admin_opisy, "_zbior_df", None)
+    monkeypatch.setattr(admin_opisy, "_zbior_porazka_do", 0.0)
     monkeypatch.setattr(admin_opisy, "_wczytaj_zbior", _df)       # `_zbior()` idzie prawdziwą drogą
     monkeypatch.setattr(admin_opisy, "_statystyki_druzyn", lambda *a, **k: None)
     yield
@@ -239,14 +240,28 @@ def test_zbior_ladowany_raz_na_proces(monkeypatch):
     assert wywolania == [1]
 
 
-def test_zbior_niedostepny_nie_jest_cache_owany(monkeypatch):
-    """Porażka (brak pliku / pyarrow) nie może zamrozić None do restartu procesu."""
+def test_zbior_niedostepny_porazka_pamietana_z_ttl(monkeypatch):
+    """Porażka jest zapamiętana na TTL (karta Analiz woła `_zbior` ~70x na żądanie),
+    ale po upływie TTL ładowanie jest ponawiane — None nie zamraża Poissona do restartu."""
     wyniki = iter([None, _df()])
+    wywolania = []
+    zegar = {"t": 1000.0}
 
-    monkeypatch.setattr(admin_opisy, "_wczytaj_zbior", lambda: next(wyniki))
+    def _wczytaj():
+        wywolania.append(1)
+        return next(wyniki)
+
+    monkeypatch.setattr(admin_opisy, "_wczytaj_zbior", _wczytaj)
+    monkeypatch.setattr(admin_opisy, "_zbior_porazka_do", 0.0)
+    monkeypatch.setattr(admin_opisy.time, "monotonic", lambda: zegar["t"])
 
     assert admin_opisy._zbior() is None
+    assert admin_opisy._zbior() is None
+    assert wywolania == [1], "druga próba tuż po porażce ładuje parquet ponownie"
+
+    zegar["t"] += admin_opisy._TTL_PORAZKI_ZBIORU + 1
     assert admin_opisy._zbior() is not None
+    assert wywolania == [1, 1]
 
 
 def test_wczytaj_zbior_brak_pliku_daje_none(monkeypatch):

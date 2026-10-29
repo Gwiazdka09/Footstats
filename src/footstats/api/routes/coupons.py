@@ -351,6 +351,11 @@ def get_matches_today(user_id: int = Depends(require_auth)):
         if moment is None or moment > cutoff or _juz_sie_zaczal(m, now):
             continue
         future.append(m)
+    # Whitelista PRZED obcięciem do 30: po paginacji Bzzoiro w oknie 48 h jest
+    # ~600 meczów, a rano grają ligi azjatyckie/pd-amerykańskie — bez filtra
+    # wieczorne mecze dużych lig wypadały z kreatora. Ta sama funkcja co w potoku.
+    from footstats.core.daily_filters import _pre_filtruj_ligi
+    future = _pre_filtruj_ligi(future)
     future.sort(key=lambda m: _moment_meczu(m) or cutoff)
     _MATCHES_CACHE = future[:30] if future else []
     return _MATCHES_CACHE
