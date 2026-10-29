@@ -188,8 +188,8 @@ def analyses_matches(
             return {"matches": [], "error": "brak BZZOIRO_KEY"}
         events = BzzoiroClient(klucz).predykcje_tygodnia() or []
     except (OSError, ValueError, KeyError) as e:
-        log.warning("analyses_matches: %s", e)
-        return {"matches": [], "error": str(e)}
+        log.warning("analyses_matches: %s: %s", type(e).__name__, e)
+        return {"matches": [], "error": "Źródło predykcji jest chwilowo niedostępne"}
     events = _bez_rozpoczetych(events, datetime.now(timezone.utc))
     zapytanie = (q or "").strip()
     if len(zapytanie) >= _MIN_DLUGOSC_ZAPYTANIA:

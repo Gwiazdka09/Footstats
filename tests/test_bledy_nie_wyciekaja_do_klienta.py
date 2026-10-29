@@ -35,6 +35,8 @@ KATALOG_API = Path(__file__).resolve().parents[1] / "src" / "footstats" / "api"
 _WYCIEK = re.compile(
     r"detail\s*=\s*(?:str|repr)\(\s*(?:e|exc|err|error|ex)\s*\)"
     r"|detail\s*=\s*f[\"'][^\"']*\{\s*(?:e|exc|err|error|ex)[\s!:}]"
+    # Wariant bez HTTPException: `return {"error": str(e)}` (analyses, 26.10).
+    r"|[\"']error[\"']\s*:\s*(?:str|repr)\(\s*(?:e|exc|err|error|ex)\s*\)"
 )
 
 
@@ -71,6 +73,8 @@ def test_regexp_lapie_znany_ksztalt() -> None:
     assert _WYCIEK.search('raise HTTPException(status_code=500, detail=str(e))')
     assert _WYCIEK.search('raise HTTPException(500, detail=f"blad: {e}")')
     assert _WYCIEK.search('raise HTTPException(500, detail=repr(exc))')
+    assert _WYCIEK.search('return {"matches": [], "error": str(e)}')
+    assert not _WYCIEK.search('return {"matches": [], "error": "brak BZZOIRO_KEY"}')
     # A tego łapać NIE MA prawa — to nasz własny komunikat.
     assert not _WYCIEK.search('raise HTTPException(404, detail="Kupon nie istnieje")')
     assert not _WYCIEK.search('raise HTTPException(400, detail=f"Nieznany sort {sort}")')
