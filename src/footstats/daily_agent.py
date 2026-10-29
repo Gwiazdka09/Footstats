@@ -374,6 +374,10 @@ def _powod_odrzucenia_longshot(typ: str, kurs: float | None, pred: dict) -> str 
     p_mod = _prob_modelu_dla_typu(typ, pred)
     if p_mod is not None and p_mod < _MIN_PROB_MODELU:
         return f"p_modelu {p_mod:.0f}% < {_MIN_PROB_MODELU:.0f}%"
+    if p_mod is None:
+        # Brak P modelu (np. mecz bez ramienia Poissona) — noga przechodzi bez
+        # filtra 40%; widoczne w logu, żeby nie było to ciche obejście.
+        log.info("Filtr longshot pominięty dla typu %r — brak p_modelu", typ)
     return None
 
 

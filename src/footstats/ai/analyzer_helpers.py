@@ -67,12 +67,27 @@ def prob_modelu(typ: str, pred: dict) -> float | None:
         return pred.get(key)
     linia = _LINIA_GOLI.match(t)
     if linia:
-        # pred zna tylko linię 2.5. Inna linia to INNY rynek — do 22.10 "Over 1.5"
-        # dostawało P(Over 2.5) (zaniżone), a "Over 3.5" też (zawyżone).
-        if linia.group(2) not in (None, "2.5", "2,5"):
-            return None
-        return pred.get("over25" if linia.group(1) == "over" else "under25")
+        # pred zna gotowe P tylko dla linii 2.5 (ensemble z Bzzoiro) — zostaje bez zmian.
+        # Inna linia to INNY rynek: do 22.10 "Over 1.5" dostawało P(Over 2.5), od 22.10
+        # None, a stąd stałe 50 w `predictions`. Teraz liczymy ją z λ ramienia Poissona
+        # (ta sama macierz co predykcja); bez λ nadal None.
+        nad = linia.group(1) == "over"
+        if linia.group(2) in (None, "2.5", "2,5"):
+            return pred.get("over25" if nad else "under25")
+        return _prob_linii_z_lambd(float(linia.group(2).replace(",", ".")), nad, pred)
     return None
+
+
+def _prob_linii_z_lambd(linia: float, over: bool, pred: dict) -> float | None:
+    """P(Over/Under linia) w % z λ w `pred`; None gdy brak λ albo linia spoza 0.5-4.5."""
+    lam_g, lam_a = pred.get("lambda_g"), pred.get("lambda_a")
+    if lam_g is None or lam_a is None:
+        return None
+    from footstats.core.poisson import prob_linii_goli
+    p_over = prob_linii_goli(float(lam_g), float(lam_a)).get(linia)
+    if p_over is None:
+        return None
+    return 100.0 * p_over if over else 100.0 - 100.0 * p_over
 
 
 def _wzbogac_forme(wyniki: list, top_n: int = 12) -> None:

@@ -395,6 +395,10 @@ def szybkie_pewniaczki_2dni(
                 "btts":        bt,
                 "over25":      o25,
                 "under25":     u25,
+                # λ Poissona: z nich `prob_modelu` liczy linie goli ≠ 2.5
+                # (Over 1.5/3.5…). None gdy mecz poszedł bez ramienia Poissona.
+                "lambda_g":    _lam_g,
+                "lambda_a":    _lam_a,
                 # P3/C: sygnały λ, z których `rag.wyciagnij_faktory` robi tagi
                 # (PATENT/ZEMSTA/TWIERDZA/ROTACJA/ZMECZENIE). Bez nich RAG zapisywał
                 # factors='[]' i nie miał czego zestawiać z wynikami meczów.
