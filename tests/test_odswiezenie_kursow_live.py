@@ -46,8 +46,21 @@ def _klucz(monkeypatch):
 
 
 def _podstaw_fresh(monkeypatch, fresh):
-    monkeypatch.setattr("footstats.core.quick_picks.szybkie_pewniaczki_2dni",
-                        lambda *a, **k: fresh)
+    """Surowe wydarzenia Bzzoiro (`gosp`/`gosc`), z ktorych 3b bierze kursy.
+
+    Od 29.10 krok NIE wola `szybkie_pewniaczki_2dni` (drugi pelny Poisson, ~30 min);
+    test pilnuje tego wprost — wywolanie quick_picks konczy test bledem.
+    """
+    zdarzenia = [{"gosp": w.get("gospodarz", ""), "gosc": w.get("goscie", ""),
+                  "odds": w.get("odds")} for w in fresh]
+    from footstats.scrapers import bzzoiro
+    monkeypatch.setattr(bzzoiro.BzzoiroClient, "predykcje_tygodnia",
+                        lambda self, *a, **k: zdarzenia, raising=False)
+
+    def _zakazane(*a, **k):
+        raise AssertionError("KROK 3b nie moze liczyc Poissona drugi raz")
+
+    monkeypatch.setattr("footstats.core.quick_picks.szybkie_pewniaczki_2dni", _zakazane)
 
 
 def test_zmieniony_kurs_trafia_do_indeksu(monkeypatch):

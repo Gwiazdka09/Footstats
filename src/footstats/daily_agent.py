@@ -139,8 +139,6 @@ def _pobierz_kandydatow(dni: int = 2) -> tuple[list, dict]:
 def _odswiez_kursy_live(indeks: dict, dni: int = 3) -> dict:
     """Re-fetch Bzzoiro odds and update indeks with fresh data."""
     from footstats.scrapers.bzzoiro import BzzoiroClient, ENV_BZZOIRO
-    from footstats.core.quick_picks import szybkie_pewniaczki_2dni
-    from footstats.config import AGENT_KANDYDAT_PROG
 
     klucz = os.getenv(ENV_BZZOIRO, "")
     if not klucz:
@@ -162,7 +160,15 @@ def _odswiez_kursy_live(indeks: dict, dni: int = 3) -> dict:
         from footstats.utils.cache import uniewaznij_cache
         uniewaznij_cache("bz:")
 
-        fresh = szybkie_pewniaczki_2dni(c, prog=AGENT_KANDYDAT_PROG, godziny=dni * 24)
+        # 29.10: krok wolal tu PELNE `szybkie_pewniaczki_2dni` — drugi raz caly
+        # Poisson (~30 min po paginacji Bzzoiro, #60) tylko po to, zeby wziac
+        # `odds`. Kursy sa w surowych wydarzeniach Bzzoiro; wystarczy je pobrac.
+        # Klucze jak w wyniku quick_picks (`gospodarz`/`goscie` = `gosp`/`gosc`).
+        fresh = [
+            {"gospodarz": ev.get("gosp", ""), "goscie": ev.get("gosc", ""),
+             "odds": ev.get("odds") or {}}
+            for ev in (c.predykcje_tygodnia() or [])
+        ]
         updated = dopasowanych = 0
         for w in fresh:
             g = w.get("gospodarz", "")
