@@ -126,6 +126,7 @@ _ROZ_SKROTY = {
 #     (Sevilla Atletico zostaje na aliasach w team_mappings.json).
 ZNACZNIKI_REZERW = {
     "ii", "iii", "iv", "b", "c",
+    "2",             # MLS Next Pro i podobne: "Atlanta United 2"
     "u18", "u19", "u20", "u21", "u23",
     "res", "reserve", "reserves", "rezerwy",
     "youth", "academy", "castilla", "amateure",

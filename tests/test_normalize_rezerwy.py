@@ -97,3 +97,37 @@ def test_klub_z_litera_b_w_srodku_nazwy_nie_jest_rezerwa():
     """Znacznik rezerw to osobny człon na końcu, nie dowolne 'b' w nazwie."""
     assert team_similarity("Hertha BSC", "Hertha BSC") == 1.0
     assert team_similarity("Bayer Leverkusen", "Bayer Leverkusen") == 1.0
+
+
+# Drużyny rezerw z sufiksem cyfrowym (MLS Next Pro: "Atlanta United 2").
+REZERWY_CYFRA = [
+    ("Atlanta United", "Atlanta United 2"),
+    ("Atlanta Utd", "Atlanta United 2"),
+    ("LA Galaxy", "LA Galaxy 2"),
+]
+
+
+@pytest.mark.parametrize("pierwszy,rezerwy", REZERWY_CYFRA)
+def test_sufiks_2_to_druzyna_rezerw(pierwszy, rezerwy):
+    assert team_similarity(pierwszy, rezerwy) == 0.0
+
+
+@pytest.mark.parametrize("a,b", [
+    ("1. FC Köln", "FC Köln"),
+    ("Hannover 96", "Hannover"),
+    ("Schalke 04", "Schalke"),
+    ("1. FC Union Berlin", "Union Berlin"),
+])
+def test_cyfra_w_nazwie_nie_jest_znacznikiem_rezerw(a, b):
+    assert team_similarity(a, b) >= PROG_ZNAJDZ_WYNIK
+
+
+def test_la_galaxy_vs_lafc_kolizja_jednostronna_udokumentowana():
+    """Po aliasie `la galaxy` -> `los angeles galaxy` sama nazwa kolizji z
+    "Los Angeles FC" daje 0.80 (>= 0.70). To NIE rozlicza kuponu błędnie:
+    `_znajdz_wynik_fdb` i dopasowania w daily_phases liczą `min` z obu stron
+    pary, więc potrzebna byłaby kolizja także przeciwnika w tym samym meczu
+    (LA Galaxy i LAFC nie grają w jeden dzień z tym samym rywalem)."""
+    assert team_similarity("LA Galaxy", "Los Angeles FC") >= PROG_ZNAJDZ_WYNIK
+    assert min(team_similarity("LA Galaxy", "Los Angeles FC"),
+               team_similarity("San Jose Earthquakes", "Seattle Sounders")) < PROG_ZNAJDZ_WYNIK
