@@ -120,3 +120,30 @@ def test_top_scorers_dedup_to_samo_nazwisko_inny_udzial_zostaje():
     from footstats.core.match_analysis import _top_scorers
     gs = {"Antonio Martinez": 0.25, "Toni Martinez": 0.10}
     assert len(_top_scorers(gs)) == 2
+
+
+def test_top_scorers_regula3_rozne_inicjaly_to_rozne_osoby():
+    # Skan 30.10 (682 druzyny x sezony): rowny udzial + to samo nazwisko
+    # sklejalo braci/imiennikow podpisanych inicjalem.
+    from footstats.core.match_analysis import _top_scorers
+    gs = {"K. Haugen": 0.0139, "H. Haugen": 0.0139, "Inny Gracz": 0.2}
+    assert len(_top_scorers(gs, n=5)) == 3
+
+
+def test_top_scorers_regula3_inicjal_kontra_pelne_imie():
+    from footstats.core.match_analysis import _top_scorers
+    gs = {"Pierre Ganiou": 0.05, "I. Ganiou": 0.05}
+    assert len(_top_scorers(gs, n=5)) == 2
+
+
+def test_top_scorers_regula3_zgodny_inicjal_dalej_skleja():
+    from footstats.core.match_analysis import _top_scorers
+    gs = {"Antonio Martinez": 0.246, "A. Martinez": 0.246}
+    assert len(_top_scorers(gs, n=5)) == 1
+
+
+def test_top_scorers_regula3_zdrobnienie_dalej_skleja():
+    # Dwa pelne imiona (zdrobnienie) — regula 3 bez zmian.
+    from footstats.core.match_analysis import _top_scorers
+    gs = {"Toni Martinez": 0.246, "Antonio Martinez": 0.246}
+    assert len(_top_scorers(gs, n=5)) == 1

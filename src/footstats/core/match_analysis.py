@@ -40,7 +40,8 @@ def _ten_sam_zawodnik(a: str, sa: float, b: str, sb: float) -> bool:
     2) to samo pierwsze imię, a człony nazwiska jednego zawierają się w drugim
        ("Mbappe-Lottin" vs "Mbappé");
     3) identyczne nazwisko i identyczny udział goli (zdrobnienie imienia:
-       "Antonio"/"Toni" Martínez). Różny udział = różni zawodnicy, nie sklejamy.
+       "Antonio"/"Toni" Martínez). Różny udział = różni zawodnicy, nie sklejamy;
+       inicjał musi pasować do imienia drugiej pisowni ("K."/"H." Haugen to dwie osoby).
     """
     ta, tb = _tokeny(a), _tokeny(b)
     if not ta or not tb:
@@ -50,7 +51,16 @@ def _ten_sam_zawodnik(a: str, sa: float, b: str, sb: float) -> bool:
     na, nb = set(ta[1:]), set(tb[1:])
     if ta[0] == tb[0] and na and nb and (na <= nb or nb <= na):
         return True
-    return bool(na) and na == nb and round(sa, 3) == round(sb, 3)
+    if not (na and na == nb and round(sa, 3) == round(sb, 3)):
+        return False
+    # Inicjał musi zgadzać się z pierwszą literą imienia drugiej pisowni.
+    # Skan 30.10 (682 drużyny×sezony): "K./H. Haugen", "J./A. Smith",
+    # "F./L. González" — równy udział i to samo nazwisko kleiły różne osoby.
+    # Dwa pełne imiona przechodzą jak dotąd ("Toni"/"Antonio" Martínez).
+    ia, ib = ta[0].rstrip("."), tb[0].rstrip(".")
+    if len(ia) == 1 or len(ib) == 1:
+        return ia[:1] == ib[:1]
+    return True
 
 
 def _top_scorers(gs: dict | None, n: int = 3) -> list[dict]:
