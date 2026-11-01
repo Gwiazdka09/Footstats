@@ -105,7 +105,7 @@ const LoginView = ({ setToken, setUser }) => {
   }[mode];
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#020617]">
+    <div className="flex items-center justify-center min-h-screen p-4 bg-[#020617]">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
