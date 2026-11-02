@@ -19,7 +19,12 @@ from footstats.core.czas_meczu import (  # noqa: F401
     juz_sie_zaczal,
     moment_meczu,
 )
-from footstats.core.coupon_tracker import STATUS_ACTIVE, save_coupon, update_coupon_status
+from footstats.core.coupon_tracker import (
+    STATUS_ACTIVE,
+    save_coupon,
+    update_coupon_status,
+    wyplata_po_podatku,
+)
 from footstats.core.probability_calibrator import calibrate_confidence
 from footstats.core.response_cache import cached_response
 from footstats.utils.db import connect as _connect
@@ -141,6 +146,7 @@ class ManualLeg(BaseModel):
     away: str
     tip: str
     odds: float
+    match_date: Optional[str] = None  # własna data nogi (kupony Pn + Sob), RRRR-MM-DD
 
 
 class ManualCouponRequest(BaseModel):
@@ -152,12 +158,14 @@ class ManualCouponRequest(BaseModel):
 
 class CouponResultRequest(BaseModel):
     result: str  # "WON" | "LOST" | "VOID"
+    payout_pln: Optional[float] = None  # ręczna realna wypłata, tylko przy WON
 
 
 class PreviewLeg(BaseModel):
     home: str
     away: str
     tip: str
+    match_date: Optional[str] = None  # własna data nogi (opcjonalna)
 
 
 class PreviewSignalRequest(BaseModel):
@@ -182,6 +190,7 @@ _MAX_NOG_KUPONU = _MAX_PREVIEW_LEGS
 # Dziennik liczy jednostki, nie realne pieniadze — ale wpis ze stawka 10^12
 # rozjezdza ROI i krzywa postepu w rankingu, ktory widza inni.
 _MAX_STAWKI = 100_000.0
+_MAX_WYPLATY = 10_000_000.0
 
 
 def _validate_manual_coupon(req: ManualCouponRequest) -> None:
@@ -211,6 +220,13 @@ def _validate_manual_coupon(req: ManualCouponRequest) -> None:
         except ValueError:
             raise HTTPException(status_code=400, detail="Data meczu musi być w formacie RRRR-MM-DD")
     for leg in req.legs:
+        if leg.match_date:
+            try:
+                datetime.strptime(leg.match_date, "%Y-%m-%d")
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, detail="Data nogi musi być w formacie RRRR-MM-DD"
+                )
         if leg.odds <= 1.0:
             raise HTTPException(status_code=400, detail="Kurs każdej nogi musi być większy niż 1.0")
         for pole, wartosc in (("gospodarz", leg.home), ("gość", leg.away), ("typ", leg.tip)):
@@ -525,7 +541,11 @@ def manual_coupon(req: ManualCouponRequest, user_id: int = Depends(require_auth)
     dziennik nie rusza papierowego salda (bankroll_state).
     """
     _validate_manual_coupon(req)
-    legs = [{"home": leg.home, "away": leg.away, "tip": leg.tip, "odds": leg.odds} for leg in req.legs]
+    legs = [
+        {"home": leg.home, "away": leg.away, "tip": leg.tip, "odds": leg.odds,
+         **({"match_date": leg.match_date} if leg.match_date else {})}
+        for leg in req.legs
+    ]
     total_odds = round(math.prod(leg.odds for leg in req.legs), 2)
     coupon_id = save_coupon(
         phase="manual",
@@ -587,7 +607,7 @@ def preview_signal(req: PreviewSignalRequest, user_id: int = Depends(require_aut
         )
     result = []
     for leg in req.legs:
-        link = match_linker.link_leg(leg.home, leg.away, req.match_date)
+        link = match_linker.link_leg(leg.home, leg.away, leg.match_date or req.match_date)
         if not link.matched or link.prediction is None:
             result.append(_empty_signal())
             continue
@@ -623,10 +643,18 @@ def set_coupon_result(coupon_id: int, req: CouponResultRequest, user_id: int = D
     """
     if req.result not in ("WON", "LOST", "VOID"):
         raise HTTPException(status_code=400, detail="Wynik musi być WON, LOST lub VOID")
+    if req.payout_pln is not None:
+        if req.result != "WON":
+            raise HTTPException(status_code=400, detail="Kwotę wypłaty można podać tylko przy WON")
+        if not math.isfinite(req.payout_pln) or not 0 <= req.payout_pln <= _MAX_WYPLATY:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Wypłata musi być liczbą od 0 do {_MAX_WYPLATY:.0f}",
+            )
     try:
         with _connect() as conn:
             row = conn.execute(
-                "SELECT user_id, stake_pln, total_odds, kupon_type FROM coupons WHERE id = ?",
+                "SELECT user_id, stake_pln, total_odds, kupon_type, status FROM coupons WHERE id = ?",
                 (coupon_id,),
             ).fetchone()
             if not row:
@@ -638,6 +666,7 @@ def set_coupon_result(coupon_id: int, req: CouponResultRequest, user_id: int = D
                     status_code=400,
                     detail="Tylko ręcznie dodane kupony można rozliczać ręcznie",
                 )
+            status_kuponu = row["status"]
             stake = float(row["stake_pln"] or 0.0)
             total_odds = float(row["total_odds"] or 0.0)
     except psycopg2.Error as e:
@@ -645,14 +674,23 @@ def set_coupon_result(coupon_id: int, req: CouponResultRequest, user_id: int = D
         raise HTTPException(status_code=500, detail="Błąd serwera — szczegóły w logach")
 
     if req.result == "WON":
-        payout = round(stake * total_odds, 2)
+        payout = (
+            req.payout_pln if req.payout_pln is not None
+            else wyplata_po_podatku(stake, total_odds)
+        )
     elif req.result == "LOST":
         payout = 0.0
     else:  # VOID — neutralne, stawka zwrócona
         payout = stake
 
+    # Korekta wypłaty po rozliczeniu: WON -> WON z podaną kwotą zmienia tylko wypłatę
+    # (i ROI); WON bez kwoty na kuponie WON zostaje 409 jak każde inne przejście.
+    korekta = (
+        req.result == "WON" and req.payout_pln is not None and status_kuponu == "WON"
+    )
     zmieniono = update_coupon_status(
-        coupon_id, req.result, payout_pln=payout, expected_status="ACTIVE"
+        coupon_id, req.result, payout_pln=payout,
+        expected_status="WON" if korekta else "ACTIVE",
     )
     if not zmieniono:
         raise HTTPException(status_code=409, detail="Kupon już rozliczony lub nieaktywny")

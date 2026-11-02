@@ -222,11 +222,11 @@ def test_manual_coupon_brak_daty_dozwolony(tmp_db):
 
 # ── PATCH /coupon/{id}/result ────────────────────────────────────────────────
 
-def test_result_won_payout_stake_x_odds(tmp_db):
+def test_result_won_payout_netto_po_podatku(tmp_db):
     cid = _saved_coupon(stake=10.0, odds=2.5)
     res = set_coupon_result(cid, CouponResultRequest(result="WON"), user_id=1)
     assert res["status"] == "WON"
-    assert res["payout_pln"] == pytest.approx(25.0)
+    assert res["payout_pln"] == pytest.approx(22.0)  # 10 * 0.88 * 2.5
 
 
 def test_result_lost_payout_zero(tmp_db):
@@ -313,3 +313,74 @@ def test_won_manual_coupon_liczony_w_user_stats(tmp_db):
     assert stats.settled_count == 1
     assert stats.wins == 1
     assert stats.losses == 0
+
+
+# ── ręczna korekta wypłaty + data nogi ───────────────────────────────────────
+
+def test_result_won_z_kwota_zapisuje_kwote(tmp_db):
+    cid = _saved_coupon(stake=10.0, odds=2.5)
+    res = set_coupon_result(cid, CouponResultRequest(result="WON", payout_pln=23.4), user_id=1)
+    assert res["payout_pln"] == pytest.approx(23.4)
+    assert _row(tmp_db, cid)["payout_pln"] == pytest.approx(23.4)
+
+
+@pytest.mark.parametrize("wynik,kwota", [
+    ("LOST", 5.0), ("VOID", 5.0), ("WON", -1.0), ("WON", 10_000_001.0),
+    ("WON", float("nan")), ("WON", float("inf")),
+])
+def test_result_zla_kwota_odrzucona(tmp_db, wynik, kwota):
+    cid = _saved_coupon()
+    with pytest.raises(HTTPException) as exc:
+        set_coupon_result(cid, CouponResultRequest(result=wynik, payout_pln=kwota), user_id=1)
+    assert exc.value.status_code in (400, 422)
+    assert _row(tmp_db, cid)["status"] == "ACTIVE"
+
+
+def test_result_korekta_won_do_won_z_kwota(tmp_db):
+    cid = _saved_coupon(stake=10.0, odds=2.5)
+    set_coupon_result(cid, CouponResultRequest(result="WON"), user_id=1)
+    res = set_coupon_result(cid, CouponResultRequest(result="WON", payout_pln=24.0), user_id=1)
+    row = _row(tmp_db, cid)
+    assert res["payout_pln"] == pytest.approx(24.0)
+    assert row["status"] == "WON"
+    assert row["payout_pln"] == pytest.approx(24.0)
+    assert row["roi_pct"] == pytest.approx(140.0)
+
+
+def test_result_won_do_won_bez_kwoty_409(tmp_db):
+    cid = _saved_coupon()
+    set_coupon_result(cid, CouponResultRequest(result="WON"), user_id=1)
+    with pytest.raises(HTTPException) as exc:
+        set_coupon_result(cid, CouponResultRequest(result="WON"), user_id=1)
+    assert exc.value.status_code == 409
+
+
+def test_result_korekta_cudzego_kuponu_403(tmp_db):
+    cid = _saved_coupon(user_id=1)
+    set_coupon_result(cid, CouponResultRequest(result="WON"), user_id=1)
+    with pytest.raises(HTTPException) as exc:
+        set_coupon_result(cid, CouponResultRequest(result="WON", payout_pln=30.0), user_id=2)
+    assert exc.value.status_code == 403
+
+
+def test_manual_coupon_zapisuje_date_nogi_tylko_gdy_podana(tmp_db):
+    import json
+
+    req = ManualCouponRequest(
+        legs=[ManualLeg(home="A", away="B", tip="1", odds=1.5, match_date="2026-07-25"),
+              _leg()],
+        stake_pln=10.0,
+    )
+    legs = json.loads(_row(tmp_db, manual_coupon(req, user_id=1)["coupon_id"])["legs_json"])
+    assert legs[0]["match_date"] == "2026-07-25"
+    assert "match_date" not in legs[1]
+
+
+def test_manual_coupon_zla_data_nogi_400(tmp_db):
+    req = ManualCouponRequest(
+        legs=[ManualLeg(home="A", away="B", tip="1", odds=1.5, match_date="25-07-2026")],
+        stake_pln=10.0,
+    )
+    with pytest.raises(HTTPException) as exc:
+        manual_coupon(req, user_id=1)
+    assert exc.value.status_code == 400
