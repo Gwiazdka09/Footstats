@@ -199,9 +199,12 @@ _OKNO_NOGI_DO_PRZODU = 7
 
 def _data_poprawna(tekst: object) -> date | None:
     """Zwraca datę z YYYY-MM-DD albo None, gdy tekst nie jest poprawną datą."""
+    if not tekst:
+        return None
     try:
-        return date.fromisoformat(str(tekst or "")[:10])
+        return date.fromisoformat(str(tekst)[:10])
     except ValueError:
+        log.warning("Niepoprawna data nogi kuponu: %r", tekst)
         return None
 
 
