@@ -25,6 +25,7 @@ from datetime import date, datetime, timedelta
 log = logging.getLogger(__name__)
 
 from footstats.core import match_linker
+from footstats.core.coupon_tracker import wyplata_po_podatku
 from footstats.utils.betting import oblicz_tip_correct, powod_nierozliczalny
 from footstats.utils.normalize import normalize_team_name, team_similarity
 
@@ -187,6 +188,48 @@ def dziennik_utknal(ile: int) -> str | None:
             " celowo — domknac je mozna tylko recznie w Historii"
             " (WYGRANY / PRZEGRANY / ANULOWANY). Zwykle powod: liga spoza"
             " zasiegu naszych zrodel wynikow.")
+
+
+# Formularz dziennika ma JEDNĄ datę na kupon, a kupony Pn + Sob są normalne.
+# Noga bez własnej daty szukana jest w oknie [mdate-1, mdate+7], inaczej
+# późniejsza noga nigdy by się nie zlinkowała i kupon wisiałby ACTIVE.
+_OKNO_NOGI_WSTECZ = 1
+_OKNO_NOGI_DO_PRZODU = 7
+
+
+def _data_poprawna(tekst: object) -> date | None:
+    """Zwraca datę z YYYY-MM-DD albo None, gdy tekst nie jest poprawną datą."""
+    if not tekst:
+        return None
+    try:
+        return date.fromisoformat(str(tekst)[:10])
+    except ValueError:
+        log.warning("Niepoprawna data nogi kuponu: %r", tekst)
+        return None
+
+
+def _okno_nogi(leg: dict, mdate: str) -> tuple[str, int]:
+    """(centrum, tolerancja) okna dat dla `link_leg`/`wynik_z_model_log`.
+
+    Noga z własną poprawną datą: ±1 dzień od niej. Bez niej: okno od
+    mdate-1 do mdate+7. Niepoprawne `mdate` zwraca (mdate, 1), czyli
+    zachowanie sprzed zmiany (`link_leg` odpowie matched=False, bez wyjątku).
+    """
+    wlasna = _data_poprawna(leg.get("match_date"))
+    if wlasna is not None:
+        return wlasna.isoformat(), 1
+    baza = _data_poprawna(mdate)
+    if baza is None:
+        return mdate, 1
+    srodek = baza + timedelta(days=(_OKNO_NOGI_DO_PRZODU - _OKNO_NOGI_WSTECZ) // 2)
+    tolerancja = (_OKNO_NOGI_DO_PRZODU + _OKNO_NOGI_WSTECZ + 1) // 2
+    return srodek.isoformat(), tolerancja
+
+
+def _najpozniejsza_data(legs: list, mdate: str) -> str:
+    """Najpóźniejsza data nogi (gdy nogi mają daty), inaczej `mdate`."""
+    daty = [d for d in (_data_poprawna(leg.get("match_date")) for leg in legs) if d]
+    return max(daty).isoformat() if daty else mdate
 
 
 def _poza_terminem(mdate: str) -> bool:
@@ -914,7 +957,8 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
             for leg in legs:
                 home = leg.get("home", "")
                 away = leg.get("away", "")
-                lr = match_linker.link_leg(home, away, mdate)
+                okno_data, okno_tol = _okno_nogi(leg, mdate)
+                lr = match_linker.link_leg(home, away, okno_data, okno_tol)
 
                 # NASZE DANE PIERWSZE — są darmowe i pochodzą z tego samego
                 # przebiegu co typ. Zewnętrzne źródła to fallback, nie zamiennik.
@@ -928,7 +972,8 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                     # meczu. Dwuznaczność jest wynikiem: odmawiamy, nie schodzimy
                     # do kolejnego źródła.
                     wynik = None
-                elif (z_dziennika := match_linker.wynik_z_model_log(home, away, mdate)):
+                elif (z_dziennika := match_linker.wynik_z_model_log(
+                        home, away, okno_data, okno_tol)):
                     # `model_log` to TA SAMA nasza baza, tylko szersza:
                     # `predictions` zapisuje jedynie ścieżkę top3/kupon_d
                     # (161 wierszy na prod 28.08), `model_log` każdy oceniony
@@ -936,7 +981,10 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                     wynik = z_dziennika
                     z_dziennika_kupon += 1
                 elif zewnetrzne:
-                    wynik = _find_leg_result(home, away, mdate, fixtures_cache,
+                    # Ścieżka zewnętrzna: okna nie poszerzamy, tylko bierzemy
+                    # własną datę nogi (jeśli jest) zamiast daty kuponu.
+                    data_nogi = (_data_poprawna(leg.get("match_date")) or mdate)
+                    wynik = _find_leg_result(home, away, str(data_nogi), fixtures_cache,
                                              fdb_cache, api_key, fdb_key)
                     if wynik:
                         z_zewnatrz_kupon += 1
@@ -973,7 +1021,7 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                 stats["skipped"] += 1
                 # `skipped` sam w sobie nie odroznia "poczekamy do jutra" od
                 # "nie doczekamy sie nigdy" — a to druga sytuacja wymaga czlowieka.
-                if _poza_terminem(mdate):
+                if _poza_terminem(_najpozniejsza_data(legs, mdate)):
                     stats["przeterminowane"] += 1
                 if verbose:
                     print(f"  [ACTIVE] Kupon manual #{coupon_id} — noga bez pewnego wyniku, zostaje ACTIVE")
@@ -986,7 +1034,9 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
 
             all_won = all(c == 1 for c in leg_results)
             new_status = "WON" if all_won else "LOST"
-            payout = round(stake * total_odds, 2) if all_won else 0.0
+            # Podatek 12% tylko w dzienniku ręcznym; kupony AI zostają brutto,
+            # bo są powiązane z `credit_win` i papierowym bankrollem.
+            payout = wyplata_po_podatku(stake, total_odds) if all_won else 0.0
 
             if verbose:
                 tag = "DRY" if dry_run else "SETTLE"

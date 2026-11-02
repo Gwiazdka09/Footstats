@@ -13,6 +13,18 @@ STATUS_LOST    = "LOST"
 STATUS_PARTIAL = "PARTIAL"
 STATUS_VOID    = "VOID"
 
+PODATEK_PL = 0.12  # podatek od stawki w zakładach bukmacherskich w Polsce
+
+
+def wyplata_po_podatku(stake: float, kurs: float) -> float:
+    """Realna wypłata wygranego kuponu RĘCZNEGO: podatek 12% zabiera się ze stawki.
+
+    Kupony AI/systemu celowo zostają brutto (stake * kurs) — są powiązane
+    z `credit_win` i papierowym bankrollem, którego ta funkcja nie dotyka.
+    """
+    return round(stake * (1 - PODATEK_PL) * kurs, 2)
+
+
 ACTIVE_STATUSES = (STATUS_DRAFT, STATUS_ACTIVE)
 VALID_STATUSES = {STATUS_DRAFT, STATUS_ACTIVE, STATUS_WON, STATUS_LOST, STATUS_PARTIAL, STATUS_VOID}
 

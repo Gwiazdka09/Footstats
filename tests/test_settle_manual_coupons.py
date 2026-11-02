@@ -190,7 +190,7 @@ def test_pewna_noga_z_wynikiem_settluje_won(tmp_db, monkeypatch):
 
     row = _row(tmp_db, cid)
     assert row["status"] == "WON"
-    assert row["payout_pln"] == pytest.approx(20.0)
+    assert row["payout_pln"] == pytest.approx(17.6)  # 10 * 0.88 * 2.0 (podatek 12%)
     assert stats["settled"] == 1
     assert stats["skipped"] == 0
     assert _bankroll(tmp_db) == pytest.approx(100.0)  # bankroll nietknięty
@@ -424,3 +424,156 @@ def test_cron_settle_manual_wymaga_sekretu(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         cron_settle_manual(x_cron_secret="zly-sekret")
     assert exc.value.status_code == 401
+
+
+# ── kupony wielodniowe + wypłata po podatku (prawdziwy link_leg na SQLite) ───
+
+from datetime import date as _date  # noqa: E402
+from datetime import timedelta as _td  # noqa: E402
+
+_PRED_SCHEMA = """
+CREATE TABLE predictions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, team_home TEXT, team_away TEXT,
+    match_date TEXT, ai_tip TEXT, ai_confidence REAL, prob_home REAL,
+    prob_draw REAL, prob_away REAL, actual_result TEXT
+);
+CREATE TABLE model_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, team_home TEXT, team_away TEXT,
+    match_date TEXT, actual_result TEXT
+);
+"""
+
+
+@pytest.fixture
+def prawdziwy_linker(tmp_db, monkeypatch):
+    """Prawdziwe `link_leg`/`wynik_z_model_log` na tej samej plikowej SQLite."""
+    conn = sqlite3.connect(tmp_db)
+    conn.executescript(_PRED_SCHEMA)
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(match_linker, "connect", lambda: _SQLiteConn(tmp_db))
+    return tmp_db
+
+
+def _mecz(db: str, home: str, away: str, data: str, wynik: str | None = "2-0") -> None:
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "INSERT INTO predictions (team_home, team_away, match_date, ai_tip,"
+        " ai_confidence, actual_result) VALUES (?,?,?,?,?,?)",
+        (home, away, data, "1", 70, wynik),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _noga(home: str, away: str, data: str | None = None) -> dict:
+    noga = {"home": home, "away": away, "tip": "1"}
+    if data:
+        noga["match_date"] = data
+    return noga
+
+
+def test_okno_nogi_z_wlasna_data():
+    assert settlement._okno_nogi({"match_date": "2026-07-25"}, "2026-07-20") == ("2026-07-25", 1)
+
+
+def test_okno_nogi_bez_daty_to_tydzien_do_przodu():
+    # mdate-1 .. mdate+7  =>  srodek mdate+3, tolerancja 4
+    assert settlement._okno_nogi({}, "2026-07-20") == ("2026-07-23", 4)
+
+
+def test_okno_nogi_niepoprawne_daty_bez_wyjatku():
+    assert settlement._okno_nogi({"match_date": "xx"}, "2026-07-20") == ("2026-07-23", 4)
+    assert settlement._okno_nogi({}, "nie-data") == ("nie-data", 1)
+
+
+def test_wyplata_po_podatku_przyklady():
+    assert coupon_tracker.wyplata_po_podatku(8, 5.57) == 39.21
+    assert coupon_tracker.wyplata_po_podatku(5, 5.17) == 22.75
+
+
+def test_pn_sob_z_datami_nog_won_wyplata_netto(prawdziwy_linker):
+    _mecz(prawdziwy_linker, "Legia", "Lech", "2026-07-20")
+    _mecz(prawdziwy_linker, "Ajax", "PSV", "2026-07-25")
+    cid = _insert_coupon(
+        prawdziwy_linker,
+        [_noga("Legia", "Lech", "2026-07-20"), _noga("Ajax", "PSV", "2026-07-25")],
+        match_date="2026-07-20", total_odds=5.57, stake=8.0,
+    )
+
+    stats = settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    row = _row(prawdziwy_linker, cid)
+    assert row["status"] == "WON"
+    assert row["payout_pln"] == pytest.approx(39.21)
+    assert stats["settled"] == 1
+
+
+def test_noga_5_dni_po_match_date_first_bez_daty_rozlicza_sie(prawdziwy_linker):
+    _mecz(prawdziwy_linker, "Legia", "Lech", "2026-07-20")
+    _mecz(prawdziwy_linker, "Ajax", "PSV", "2026-07-25")
+    cid = _insert_coupon(
+        prawdziwy_linker, [_noga("Legia", "Lech"), _noga("Ajax", "PSV")],
+        match_date="2026-07-20",
+    )
+
+    settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(prawdziwy_linker, cid)["status"] == "WON"
+
+
+def test_noga_10_dni_po_bez_daty_zostaje_active(prawdziwy_linker):
+    _mecz(prawdziwy_linker, "Legia", "Lech", "2026-07-20")
+    _mecz(prawdziwy_linker, "Ajax", "PSV", "2026-07-30")
+    cid = _insert_coupon(
+        prawdziwy_linker, [_noga("Legia", "Lech"), _noga("Ajax", "PSV")],
+        match_date="2026-07-20",
+    )
+
+    settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(prawdziwy_linker, cid)["status"] == "ACTIVE"
+
+
+def test_noga_z_wlasna_data_linkuje_sie_tylko_w_plus_minus_1(prawdziwy_linker):
+    _mecz(prawdziwy_linker, "Ajax", "PSV", "2026-07-25")
+    daleko = _insert_coupon(
+        prawdziwy_linker, [_noga("Ajax", "PSV", "2026-07-22")], match_date="2026-07-20"
+    )
+    blisko = _insert_coupon(
+        prawdziwy_linker, [_noga("Ajax", "PSV", "2026-07-24")], match_date="2026-07-20"
+    )
+
+    settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(prawdziwy_linker, daleko)["status"] == "ACTIVE"
+    assert _row(prawdziwy_linker, blisko)["status"] == "WON"
+
+
+def test_ta_sama_para_dwa_razy_w_oknie_zostaje_active(prawdziwy_linker):
+    _mecz(prawdziwy_linker, "Ajax", "PSV", "2026-07-21")
+    _mecz(prawdziwy_linker, "Ajax", "PSV", "2026-07-25")
+    cid = _insert_coupon(
+        prawdziwy_linker, [_noga("Ajax", "PSV")], match_date="2026-07-20"
+    )
+
+    settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(prawdziwy_linker, cid)["status"] == "ACTIVE"
+
+
+def test_brak_wyniku_soboty_nie_jest_przeterminowany_przed_sobota(prawdziwy_linker):
+    dzis = _date.today()
+    pn = (dzis - _td(days=12)).isoformat()
+    sob = (dzis + _td(days=2)).isoformat()
+    _mecz(prawdziwy_linker, "Legia", "Lech", pn)
+    cid = _insert_coupon(
+        prawdziwy_linker, [_noga("Legia", "Lech", pn), _noga("Ajax", "PSV", sob)],
+        match_date=pn,
+    )
+
+    stats = settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(prawdziwy_linker, cid)["status"] == "ACTIVE"
+    assert stats["skipped"] == 1
+    assert stats["przeterminowane"] == 0
