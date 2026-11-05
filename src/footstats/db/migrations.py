@@ -507,8 +507,10 @@ def run_migrations() -> None:
         _log.info("Migration %d (%s): %s", version, dialect, description)
         with connect() as conn:
             _exec_statements(conn, statements, dialect)
+            # Dwa procesy (API przy starcie, joby) mogą zastosować tę samą migrację równocześnie; `_exec_statements` ignoruje powtórne ALTER, a powtórny wpis wersji nie może wywrócić startu.
             conn.execute(
-                "INSERT INTO schema_migrations (version, description) VALUES (?, ?)",
+                "INSERT INTO schema_migrations (version, description) VALUES (?, ?)"
+                " ON CONFLICT (version) DO NOTHING",
                 (version, description),
             )
         _log.info("Migration %d done.", version)
