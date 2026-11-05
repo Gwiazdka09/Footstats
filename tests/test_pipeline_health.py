@@ -82,8 +82,10 @@ class _Conn:
         # Te testy dotyczą trzech wymiarów ilościowych — dziennik pusty, więc
         # jakość nie ma czego zgłosić. Bez tej gałęzi atrapa oddawałaby `n`
         # zaległości jako liczbę ocen i dokładała fałszywy powód "Poisson".
+        # Od 05.11 pusty dziennik (0 ocen w 24h) sam jest alarmem, wiec zdrowy
+        # stan ma kilka ocen (poniżej wszystkich progów próby).
         if "model_log" in plaski:
-            return _Kursor({})
+            return _Kursor({"n": 5})
         return _Kursor({"n": self.zaleglosci})
 
     def commit(self):

@@ -178,3 +178,14 @@ def test_awaria_telegrama_nie_wywala_endpointu(srodowisko, monkeypatch):
 
     assert r.status_code == 200
     assert r.json()["wyslany"] is False
+
+
+def test_zero_predykcji_przy_kuponach_to_problem(srodowisko):
+    """Final mogl sie nie wykonac, a kupony z kreatora dalej powstaja."""
+    srodowisko["conn"] = _Conn(kupony=5, predykcje=0)
+
+    dane = _raport().json()
+
+    assert dane["ok"] is False, dane
+    assert any("predykcji" in p for p in dane["problemy"]), dane
+    assert "✅" not in srodowisko["wiadomosci"][0]

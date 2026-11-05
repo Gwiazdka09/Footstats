@@ -338,6 +338,13 @@ def raport_dzienny(x_cron_secret: str = Header(default="")) -> dict:
     if not problemy and kupony == 0:
         problemy.append("ZERO kuponów w ostatniej dobie — draft mógł paść")
 
+    # Zero predykcji przy działającym zapytaniu: final mógł się nie wykonać.
+    if not problemy and predykcje == 0:
+        problemy.append(
+            "ZERO predykcji w ostatniej dobie — final mógł się nie wykonać "
+            "(albo dzień bez meczów z whitelisty)"
+        )
+
     ok = not problemy
     wyslany = _wyslij_raport(ok, kupony, predykcje, rozliczone, problemy)
 

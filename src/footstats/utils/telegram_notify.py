@@ -326,7 +326,8 @@ def send_stop_loss_alert(drawdown_pct: float, bankroll: float) -> bool:
         "🛑 <b>STOP-LOSS — AGENT ZAPAUZOWANY</b>\n"
         f"Tygodniowy drawdown: <b>{drawdown_pct:.1%}</b> (próg 20%)\n"
         f"Aktualny bankroll: <b>{bankroll:.0f} PLN</b>\n"
-        "Wznów przez dashboard → sekcja Bankroll → 'Wznów agenta'"
+        "Saldo jest wirtualne. Odblokowanie następuje samo, gdy strata wyjdzie "
+        "z okna 7 dni, albo przez STOP_LOSS_ZATRZYMUJE=0 na jobie."
     )
     return _send(text)
 

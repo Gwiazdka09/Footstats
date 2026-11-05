@@ -95,11 +95,19 @@ def credit_win(payout: float, user_id: int, description: str = "") -> float:
 # ── P7.8: Stop-Loss & Bankroll Protection ────────────────────────────────────
 
 DAILY_MAX_LOSS_PCT = 0.10   # 10% bankrolla dziennie
-# 20% w tygodniu → alert/auto-pause. Konfigurowalne env `WEEKLY_DRAWDOWN_PCT`.
-# 06-21: faza PAPER-validation — stop-loss był blokerem (drawdown z zepsutego pipeline'u
-# Cel B, już naprawione) wstrzymywał CAŁY pipeline od 06-16. Paper = darmowe → próg
-# podniesiony w .env (WEEKLY_DRAWDOWN_PCT) by zbierać dane. PRZYWRÓĆ 0.20 przed real-money/launch.
+# 20% w tygodniu → ostrzeżenie w logu (a z `STOP_LOSS_ZATRZYMUJE=1` auto-pauza).
+# Konfigurowalne env `WEEKLY_DRAWDOWN_PCT`. Saldo agenta jest wirtualne, a drawdown
+# powstaje z kuponów właściciela, więc domyślnie stop-loss NIE zatrzymuje potoku
+# (od 1.11 blokada wstrzymywała predykcje przy exit 0) — patrz `stop_loss_zatrzymuje`.
 WEEKLY_DRAWDOWN_ALERT_PCT = float(os.getenv("WEEKLY_DRAWDOWN_PCT", "0.20") or "0.20")
+
+
+def stop_loss_zatrzymuje() -> bool:
+    """True tylko przy `STOP_LOSS_ZATRZYMUJE=1`. Czytane przy KAŻDYM wywołaniu
+    (nie stała modułowa — stałe odcinają monkeypatch)."""
+    return os.getenv("STOP_LOSS_ZATRZYMUJE", "0").strip() == "1"
+
+
 STREAK_THRESHOLD = 3        # po 3 przegranych z rzędu → reduce stakes
 STREAK_MULTIPLIER = 0.50    # 50% stawek po streak
 
