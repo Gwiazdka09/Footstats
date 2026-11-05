@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     roi_pct          REAL,
     match_date_first TEXT,
     bookmaker        TEXT,
-    user_id          INTEGER DEFAULT 1
+    user_id          INTEGER DEFAULT 1,
+    settled_at       TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS bankroll_state (
     user_id    INTEGER PRIMARY KEY,

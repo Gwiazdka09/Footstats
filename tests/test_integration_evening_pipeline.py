@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     decision_score   INTEGER DEFAULT 70,
     match_date_first TEXT,
     user_id          INTEGER DEFAULT 1,
-    shared           BOOLEAN NOT NULL DEFAULT 0
+    shared           BOOLEAN NOT NULL DEFAULT 0,
+    settled_at       TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS predictions (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,

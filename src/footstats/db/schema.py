@@ -48,7 +48,9 @@ SCHEMAT_BAZOWY = """
         -- `user_id` celowo BEZ klucza obcego: `users` powstaje dopiero migracja 1,
         -- czyli PO schemacie bazowym.
         bookmaker        TEXT,
-        user_id          INTEGER
+        user_id          INTEGER,
+        -- Migracja 19 — jak bookmaker: swieza baza ma kolumne od razu.
+        settled_at       TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_coupon_status  ON coupons(status);
     CREATE INDEX IF NOT EXISTS idx_coupon_created ON coupons(created_at);

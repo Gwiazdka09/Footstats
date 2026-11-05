@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     match_date_first TEXT,
     bookmaker        TEXT,
     user_id          INTEGER DEFAULT 1,
-    shared           BOOLEAN NOT NULL DEFAULT 0
+    shared           BOOLEAN NOT NULL DEFAULT 0,
+    settled_at       TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS predictions (
     id                   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -291,7 +292,8 @@ def test_run_evening_agent_pending_when_no_result():
          patch.dict("os.environ", {"APISPORTS_KEY": "test_key"}):
         summary = run_evening_agent("2026-04-09")
 
-    assert summary["active"] == 1
+    # Puste fixtures: pętla pominięta (rozlicza /cron/settle), kupon nietknięty.
+    assert summary["checked"] == 0
     assert len(get_active_coupons()) == 1
 
 

@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     match_date_first TEXT,
     bookmaker        TEXT,
     user_id          INTEGER DEFAULT 1,
-    shared           BOOLEAN NOT NULL DEFAULT 0
+    shared           BOOLEAN NOT NULL DEFAULT 0,
+    settled_at       TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_coupon_status  ON coupons(status);
 CREATE INDEX IF NOT EXISTS idx_coupon_created ON coupons(created_at);

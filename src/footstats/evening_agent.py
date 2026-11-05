@@ -9,6 +9,8 @@ Użycie:
 """
 
 import argparse
+import sqlite3
+import psycopg2
 from datetime import datetime
 from pathlib import Path
 from statistics import median
@@ -120,6 +122,14 @@ def _find_result(home: str, away: str, fixtures: list[dict]) -> str | None:
     return best_result
 
 
+def _jest_manual(kupon) -> bool:
+    """Czy kupon pochodzi z dziennika ręcznego (row-safe: dict i sqlite3.Row)."""
+    klucze = kupon.keys()
+    return any(
+        k in klucze and kupon[k] == "manual" for k in ("kupon_type", "phase")
+    )
+
+
 def _save_coupon_legs(coupon_id: int, updated_legs: list[dict]) -> None:
     """Zapisuje zaktualizowane legs_json (z result/leg_won per leg) do DB."""
     import json
@@ -138,15 +148,17 @@ def _status_kuponu(nogi_statusy: list[str]) -> str:
     """
     Oblicza finalny status kuponu z listy statusów nóg.
     Wejście: lista 'WIN' | 'LOSS' | 'PENDING' | 'VOID'
+    Przegrana noga przesądza akumulator mimo nierozegranych pozostałych
+    (ta sama reguła co `any_leg_lost` w `settle_active_coupons`).
     """
     if not nogi_statusy:
         return "VOID"
+    if "LOSS" in nogi_statusy:
+        return "LOST"
     if "PENDING" in nogi_statusy:
         return STATUS_ACTIVE  # "ACTIVE" — czekamy na resztę meczów
     if all(s == "WIN" for s in nogi_statusy):
         return "WON"
-    if any(s == "LOSS" for s in nogi_statusy):
-        return "LOST"
     if all(s == "VOID" for s in nogi_statusy):
         return "VOID"
     return "PARTIAL"
@@ -328,17 +340,83 @@ def _kurs_zamkniecia_nogi(
     return _fetch_closing_odds(api_key, fix_id)
 
 
+# Błędy zapytania do bazy: sqlite3 (testy/legacy) i psycopg2 (prod).
+_BLEDY_BAZY: tuple[type[BaseException], ...] = (
+    OSError, ValueError, RuntimeError, KeyError, sqlite3.Error, psycopg2.Error)
+
+
+def _statystyki_raportu() -> dict[str, int]:
+    """Liczby do raportu — z BAZY, nie z liczników pętli.
+
+    Pętla evening nie rozlicza już nic bez fixtures API-Football (kupony
+    rozlicza `/cron/settle`), więc jej liczniki są puste z konstrukcji.
+    Rozliczone w 24 h = `settled_at`; zaległe = aktywne, których ostatni mecz
+    (data nogi albo `match_date_first`) był przed dzisiejszą datą, czyli
+    ponad ~24 h temu przy przebiegu o 23:00.
+    """
+    import json
+    from datetime import date, timedelta, timezone
+    from footstats.core.coupon_settlement import _data_poprawna, _najpozniejsza_data
+    from footstats.core.coupon_tracker import ACTIVE_STATUSES, _exec
+
+    # CURRENT_TIMESTAMP w bazie jest w UTC — próg liczymy tak samo.
+    prog = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+
+    def _fn(conn):
+        rozl = conn.execute(
+            "SELECT status, COUNT(*) AS n FROM coupons"
+            " WHERE settled_at >= ? GROUP BY status", (prog,),
+        ).fetchall()
+        aktywne = conn.execute(
+            "SELECT legs_json, match_date_first FROM coupons WHERE status IN (?, ?)",
+            tuple(ACTIVE_STATUSES),
+        ).fetchall()
+        return rozl, aktywne
+
+    rozl, aktywne = _exec(_fn)
+    wg_statusu = {r["status"]: int(r["n"]) for r in rozl}
+    dzis = date.today()
+    zalegle = 0
+    for row in aktywne:
+        try:
+            legs = json.loads(row["legs_json"] or "[]")
+        except ValueError:
+            log.warning("Raport evening: nieczytelne legs_json aktywnego kuponu")
+            legs = []
+        ostatni = _data_poprawna(_najpozniejsza_data(legs, row["match_date_first"] or ""))
+        if ostatni is not None and ostatni < dzis:
+            zalegle += 1
+    return {
+        "won": wg_statusu.get("WON", 0),
+        "lost": wg_statusu.get("LOST", 0),
+        "void": wg_statusu.get("VOID", 0) + wg_statusu.get("PARTIAL", 0),
+        "aktywne": len(aktywne),
+        "zalegle": zalegle,
+    }
+
+
+def _wiersze_raportu(summary: dict) -> list[str]:
+    """Wiersze raportu (Telegram i konsola) z bazy; przy błędzie „brak danych”."""
+    try:
+        st = _statystyki_raportu()
+        wiersze = [
+            f"Rozliczone w 24 h: W {st['won']} / L {st['lost']} / V {st['void']}",
+            f"Aktywne: {st['aktywne']}, w tym zaległe {st['zalegle']}"
+            " (ostatni mecz ponad 24 h temu)",
+        ]
+    except _BLEDY_BAZY as e:  # raport nie może wywrócić joba
+        log.warning("Raport evening: brak danych z bazy: %s: %s", type(e).__name__, e)
+        wiersze = ["Rozliczone w 24 h: brak danych", "Aktywne: brak danych"]
+    if "clv_nowe" in summary:
+        wiersze.append(f"CLV: {summary.get('clv_nowe', 0)} nowych,"
+                       f" zaległe {summary.get('clv_zalegle', 0)}")
+    return wiersze
+
+
 def _send_telegram_summary(summary: dict, date_str: str) -> None:
     try:
         from footstats.utils.telegram_notify import send_message
-        msg = (
-            f"* Evening Report {date_str}*\n"
-            f"Sprawdzono: {summary.get('checked', 0)} kuponów\n"
-            f"Wygranych: {summary.get('won', 0)}\n"
-            f"Przegranych: {summary.get('lost', 0)}\n"
-            f"Oczekujących: {summary.get('active', 0)}"
-        )
-        send_message(msg)
+        send_message("\n".join([f"* Evening Report {date_str}*", *_wiersze_raportu(summary)]))
     except (ImportError, OSError, RuntimeError):
         pass  # Telegram opcjonalny
 
@@ -423,12 +501,31 @@ def run_evening_agent(date_str: str | None = None) -> dict:
     nowe_clv = 0
     nog_rozliczonych = 0
 
+    if not fixtures:
+        # Źródło wyników milczy (API-Football wyłączony) — kupony rozlicza
+        # `/cron/settle`. Pętla bez wyników mogłaby tylko kasować `result/leg_won`
+        # nóg rozliczonych wcześniej, więc nie dotykamy tabeli `coupons` wcale.
+        log.info("Evening: brak fixtures — rozliczanie kuponów robi /cron/settle,"
+                 " pomijam pętlę po %d aktywnych", len(active_coupons))
+        active_coupons = []
+
     for kupon in active_coupons:
+        # Kupony dziennika rozlicza `settle_manual_coupons` (netto, bez bankrollu);
+        # brutto z `credit_win` byłoby inną regułą dla tych samych pieniędzy.
+        if _jest_manual(kupon):
+            continue
         legs = get_coupon_legs(kupon["id"])
         nogi_statusy: list[str] = []
         updated_legs = [dict(leg) for leg in legs]  # kopia z per-leg results
+        zmieniona = False
 
         for leg_idx, leg in enumerate(legs):
+            # Noga rozliczona wcześniej (inny dzień / `/cron/settle`) zostaje
+            # w całości — dzisiejsze fixtures jej nie obejmują.
+            if leg.get("leg_won") is not None:
+                nogi_statusy.append("WIN" if leg["leg_won"] else "LOSS")
+                continue
+
             home   = leg.get("gospodarz") or leg.get("home", "")
             away   = leg.get("goscie")    or leg.get("away", "")
             ai_tip = leg.get("tip") or leg.get("typ") or leg.get("ai_tip", "")
@@ -436,19 +533,21 @@ def run_evening_agent(date_str: str | None = None) -> dict:
             wynik = _find_result(home, away, fixtures)
             if wynik is None:
                 nogi_statusy.append("PENDING")
-                updated_legs[leg_idx]["result"] = None
-                updated_legs[leg_idx]["leg_won"] = None
                 continue
 
             correct = oblicz_tip_correct(ai_tip, wynik)
-            nogi_statusy.append("WIN" if correct == 1 else ("LOSS" if correct == 0 else "VOID"))
+            if correct is None:
+                # Typ nie do oceny z samego wyniku — nie VOID (zablokowałby kupon
+                # jako PARTIAL/VOID), tylko czekamy dalej.
+                nogi_statusy.append("PENDING")
+                continue
+            nogi_statusy.append("WIN" if correct == 1 else "LOSS")
             nog_rozliczonych += 1
 
             # Zapisz per-leg wynik
             updated_legs[leg_idx]["result"] = wynik
-            updated_legs[leg_idx]["leg_won"] = (
-                True if correct == 1 else (False if correct == 0 else None)
-            )
+            updated_legs[leg_idx]["leg_won"] = correct == 1
+            zmieniona = True
             nowe_wyniki += 1
 
             # CLV liczy się dla KAŻDEJ nogi, nie tylko tej z `prediction_id`.
@@ -477,8 +576,9 @@ def run_evening_agent(date_str: str | None = None) -> dict:
                     except (ImportError, ValueError, KeyError, OSError) as e:
                         log.debug("CLV dla predykcji %s nieustalone: %s", pred_id, e)
 
-        # Zapisz per-leg wyniki do DB
-        _save_coupon_legs(kupon["id"], updated_legs)
+        # Zapisz per-leg wyniki do DB — tylko gdy cokolwiek się zmieniło
+        if zmieniona:
+            _save_coupon_legs(kupon["id"], updated_legs)
 
         nowy_status = _status_kuponu(nogi_statusy)
 
@@ -576,10 +676,9 @@ def _print_summary_table(summary: dict) -> None:
     t = Table(title="Evening Agent — Podsumowanie")
     t.add_column("Status", style="cyan")
     t.add_column("Liczba", justify="right")
-    t.add_row("Sprawdzonych", str(summary.get("checked", 0)))
-    t.add_row("Wygranych",  str(summary.get("won", 0)))
-    t.add_row("Przegranych", str(summary.get("lost", 0)))
-    t.add_row("Oczekujących", str(summary.get("active", 0)))
+    for wiersz in _wiersze_raportu(summary):
+        nazwa, _, wartosc = wiersz.partition(": ")
+        t.add_row(nazwa, wartosc)
     console.print(t)
 
 

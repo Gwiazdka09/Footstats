@@ -191,9 +191,10 @@ def test_oczekujaca_noga_trzyma_kupon_aktywnym():
     assert ea._status_kuponu(["WIN", "PENDING"]) == ea.STATUS_ACTIVE
 
 
-def test_oczekujaca_wazniejsza_niz_przegrana():
-    """Nawet z przegraną nogą czekamy — VOID reszty mógłby zmienić wynik."""
-    assert ea._status_kuponu(["LOSS", "PENDING"]) == ea.STATUS_ACTIVE
+def test_przegrana_wazniejsza_niz_oczekujaca():
+    """Przegrana noga przesądza akumulator, choć reszta meczów jeszcze trwa
+    (zmiana 05.11: wcześniej czekaliśmy; teraz ta sama reguła co settle)."""
+    assert ea._status_kuponu(["LOSS", "PENDING"]) == "LOST"
 
 
 def test_wszystko_uniewaznione_to_void():
