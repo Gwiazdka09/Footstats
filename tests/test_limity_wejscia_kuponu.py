@@ -67,7 +67,7 @@ def test_absurdalna_stawka_odrzucona():
     """
     with pytest.raises(HTTPException) as exc:
         coupons._validate_manual_coupon(_zadanie(stawka=coupons._MAX_STAWKI + 1))
-    assert exc.value.status_code == 400
+    assert exc.value.status_code == 422  # wspólna walidacja liczb daje 422
 
 
 def test_stawka_na_granicy_przechodzi():
