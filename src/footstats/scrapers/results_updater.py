@@ -526,6 +526,7 @@ def update_pending(
 
     # Pobierz fixtures per data per liga (cache per (date, liga))
     fixtures_cache: dict[tuple, list] = {}
+    espn_cache: dict[str, list] = {}
     req_count = 0
 
     stats = {"updated": 0, "not_found": 0, "errors": 0}
@@ -571,6 +572,17 @@ def update_pending(
             if wynik_data:
                 wynik_found, stats_found = wynik_data
                 break
+
+        # ESPN: darmowe, bez klucza, wynik po 90 min (cache per data w espn_cache).
+        # Import lokalny — coupon_settlement importuje ten moduł, więc na górze byłby cykl.
+        if not wynik_found:
+            from footstats.core.coupon_settlement import _get_matches_espn, _znajdz_wynik_fdb
+            if match_date not in espn_cache:
+                espn_cache[match_date] = _get_matches_espn(match_date)
+            wynik_found = _znajdz_wynik_fdb(
+                p["team_home"], p["team_away"], espn_cache[match_date]) or None
+            if wynik_found:
+                stats_found = {}  # ESPN daje sam wynik, bez statystyk
 
         # FALLBACK: Scraper jeśli API nie znalazło lub limit osiągnięty
         if not wynik_found:
