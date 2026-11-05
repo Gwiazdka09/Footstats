@@ -127,7 +127,9 @@ def test_brak_kolumn_w_wierszu_nie_wybucha():
             return _Kursor({"cos_innego": 1})
 
     powody, metryki = aj.sprawdz_jakosc(_Pusta())
-    assert powody == [] and metryki["oceny_24h"] == 0
+    # Zero ocen to od 05.11 osobny alarm — ale TYLKO on, reszta milczy.
+    assert len(powody) == 1 and "zero nowych ocen" in powody[0]
+    assert metryki["oceny_24h"] == 0
 
 
 def test_sql_bez_znaku_zapytania_poza_parametrami_i_bez_procentow():

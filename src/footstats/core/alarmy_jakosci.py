@@ -72,6 +72,11 @@ def sprawdz_jakosc(conn) -> tuple[list[str], dict]:
     n24, pois, pois_lambda = (_liczba(oceny, k) for k in ("n", "pois", "pois_lambda"))
     pokrycie = pois / n24 if n24 else None
 
+    if n24 == 0:
+        powody.append(
+            "model_log: zero nowych ocen w 24h — final mógł się nie wykonać "
+            "(albo dzień bez meczów z whitelisty, np. przerwa reprezentacyjna)"
+        )
     if n24 >= MIN_OCEN_POKRYCIA and pokrycie is not None and pokrycie < PROG_POKRYCIA_POISSONA:
         powody.append(
             f"Poisson policzył {pois} z {n24} ocen w 24h ({pokrycie:.0%}, próg "

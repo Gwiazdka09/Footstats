@@ -858,6 +858,67 @@ def _zgloś_brak_kuponu_do_zapisu(faza: str, dane: dict | None) -> None:
             "slad, zeby dalo sie odroznic od awarii.", faza)
 
 
+def _stop_loss_przerywa(args, admin_uid: int, current_bankroll: float) -> bool:
+    """
+    True, gdy stop-loss ma przerwać przebieg PRZED KROK 0.
+
+    Saldo agenta jest wirtualne (kod nie stawia prawdziwych pieniędzy), a
+    drawdown powstaje z kuponów właściciela z kreatora. Blokada nie chroniła
+    więc niczego, a od 1.11 final kończył się po 100 s bez jednej predykcji.
+    Dlatego domyślnie przekroczenie progu tylko ostrzega w logu (bez Telegrama
+    i bez zapisu pliku pauzy); stare zachowanie wraca z `STOP_LOSS_ZATRZYMUJE=1`.
+    """
+    if args.dry_run:
+        return False
+
+    # Import lokalny — patch-target to źródło (core.bankroll)
+    from footstats.core.bankroll import (
+        DAILY_MAX_LOSS_PCT, WEEKLY_DRAWDOWN_ALERT_PCT,
+        check_and_auto_pause, check_daily_stop_loss, check_weekly_alert,
+        get_daily_loss, get_weekly_drawdown, stop_loss_zatrzymuje,
+    )
+
+    if not stop_loss_zatrzymuje():
+        if check_daily_stop_loss(user_id=admin_uid):
+            log.warning(
+                "STOP-LOSS (tylko ostrzeżenie): saldo jest wirtualne, więc przebieg "
+                "idzie dalej. Dzienna strata %.2f PLN >= %.0f%% salda (%.2f PLN). "
+                "Blokadę włącza STOP_LOSS_ZATRZYMUJE=1.",
+                get_daily_loss(user_id=admin_uid), DAILY_MAX_LOSS_PCT * 100,
+                current_bankroll,
+            )
+        if check_weekly_alert(user_id=admin_uid):
+            log.warning(
+                "STOP-LOSS (tylko ostrzeżenie): saldo jest wirtualne, więc przebieg "
+                "idzie dalej. Tygodniowy drawdown %.1f%% >= %.0f%%. "
+                "Blokadę włącza STOP_LOSS_ZATRZYMUJE=1.",
+                get_weekly_drawdown(user_id=admin_uid) * 100,
+                WEEKLY_DRAWDOWN_ALERT_PCT * 100,
+            )
+        return False
+
+    if check_daily_stop_loss(user_id=admin_uid):
+        console.print("[bold red]STOP-LOSS: dzienna strata >= 10% bankrolla — przerywam.[/bold red]")
+        return True
+
+    if check_and_auto_pause(user_id=admin_uid):
+        dd = get_weekly_drawdown(user_id=admin_uid)
+        console.print(
+            f"[bold red]⛔ STOP-LOSS: tygodniowy drawdown {dd:.1%} >= "
+            f"{WEEKLY_DRAWDOWN_ALERT_PCT:.0%} — PAUZUJĘ agenta![/bold red]"
+        )
+        _wyslij_alarm(
+            "send_stop_loss_alert",
+            "agent WLASNIE sie zapauzowal, a powiadomienie nie doszlo",
+            dd,
+            current_bankroll,
+        )
+        return True
+    if check_weekly_alert(user_id=admin_uid):
+        console.print("[bold yellow]ALERT: tygodniowy drawdown przekroczył próg bankrolla![/bold yellow]")
+    return False
+
+
 def main():
     from dotenv import load_dotenv
     load_dotenv()
@@ -875,10 +936,7 @@ def main():
     if args.faza == "final":
         _zbierz_migawke_kursow(dry_run=bool(args.dry_run))
 
-    from footstats.core.bankroll import (
-        check_daily_stop_loss, check_weekly_alert,
-        is_agent_paused, check_and_auto_pause, get_weekly_drawdown,
-    )
+    from footstats.core.bankroll import is_agent_paused
     from footstats.utils.admin_user import resolve_admin_user_id
 
     admin_uid = resolve_admin_user_id()
@@ -886,20 +944,23 @@ def main():
     date_label = args.date or datetime.now().strftime("%Y-%m-%d")
     dry_tag    = "  [yellow]⚠ DRY-RUN[/yellow]" if args.dry_run else ""
 
-    # 15.1: Pause check (weekly stop-loss)
+    # Ręczna pauza z lokalnego Streamlita (plik stanu istnieje tylko po niej)
     if not args.dry_run and is_agent_paused():
-        console.print("[bold red]⛔ AGENT ZAPAUZOWANY (stop-loss 20% tygodniowy). Wznów przez dashboard.[/bold red]")
+        console.print(
+            "[bold red]⛔ AGENT ZAPAUZOWANY ręcznie (lokalny Streamlit, "
+            "data/agent_state.json).[/bold red]"
+        )
         _wyslij_alarm(
             "send_alert",
-            "agent jest ZAPAUZOWANY przez stop-loss, a powiadomienie nie doszlo",
+            "agent jest ZAPAUZOWANY recznie, a powiadomienie nie doszlo",
             "FootStats PAUSED",
-            "Agent zapauzowany (stop-loss). Wznów przez dashboard → Bankroll.",
+            "Agent zapauzowany ręcznie z lokalnego Streamlita "
+            "(plik data/agent_state.json).",
         )
         return
 
-    # Daily stop-loss check
-    if not args.dry_run and check_daily_stop_loss(user_id=admin_uid):
-        console.print("[bold red]STOP-LOSS: dzienna strata >= 10% bankrolla — przerywam.[/bold red]")
+    # Stop-loss dzienny i tygodniowy (domyślnie tylko ostrzeżenie w logu)
+    if _stop_loss_przerywa(args, admin_uid, current_bankroll):
         return
 
     # Streak detection
@@ -908,20 +969,6 @@ def main():
         console.print(f"[yellow]STREAK: {streak} przegranych z rzędu → stawki x{stake_mult:.0%}[/yellow]")
         args.stawka = round(args.stawka * stake_mult, 1)
         args.stawka_b = round(args.stawka_b * stake_mult, 1)
-
-    # 15.1: Weekly drawdown → auto-pause jeśli >= 20%
-    if not args.dry_run and check_and_auto_pause(user_id=admin_uid):
-        dd = get_weekly_drawdown(user_id=admin_uid)
-        console.print(f"[bold red]⛔ STOP-LOSS: tygodniowy drawdown {dd:.1%} >= 20% — PAUZUJĘ agenta![/bold red]")
-        _wyslij_alarm(
-            "send_stop_loss_alert",
-            "agent WLASNIE sie zapauzowal, a powiadomienie nie doszlo",
-            dd,
-            current_bankroll,
-        )
-        return
-    elif not args.dry_run and check_weekly_alert(user_id=admin_uid):
-        console.print("[bold yellow]ALERT: tygodniowy drawdown przekroczył 20% bankrolla![/bold yellow]")
 
     # Rolling accuracy alert (ciche — nie blokuje agenta)
     _wyslij_alarm(

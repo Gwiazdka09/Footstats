@@ -38,6 +38,9 @@ def zdrowa_baza(monkeypatch):
                 return _Wynik(_Row(ostatnia=teraz))
             if "ostatni_kupon" in sql:
                 return _Wynik(_Row(ostatni_kupon=teraz))
+            if "model_log" in sql:
+                # Zdrowy dziennik: kilka ocen (0 ocen w 24h to osobny alarm)
+                return _Wynik(_Row(n=5, ile=0))
             return _Wynik(_Row(n=0, ile=0))
 
     class _Wynik:
