@@ -48,14 +48,24 @@ def test_csp_obecne_na_zdrowiu(klient: TestClient):
     assert _csp(klient.get("/health")), "brak naglowka CSP"
 
 
-def test_domyslnie_tryb_report_only(klient: TestClient):
-    """Wymuszanie bez ani jednego pomiaru naruszen byloby zgadywaniem."""
+def test_domyslnie_tryb_wymuszania(klient: TestClient):
+    """Od 2026-11-06 CSP wymusza domyslnie (pomiar: 14 dni, zero naruszen z prod)."""
     r = klient.get("/health")
 
+    assert "content-security-policy" in r.headers
+    assert "content-security-policy-report-only" not in r.headers
+
+
+def test_tryb_raportujacy_za_flaga(monkeypatch):
+    """Wycofanie bez nowego obrazu: `CSP_ENFORCE=0` wraca do `Report-Only`."""
+    from footstats.api import main as _main
+
+    monkeypatch.setattr(_main, "_CSP_ENFORCE", False)
+    with TestClient(_main.app, raise_server_exceptions=False) as k:
+        r = k.get("/health")
+
     assert "content-security-policy-report-only" in r.headers
-    assert "content-security-policy" not in r.headers, (
-        "CSP wymuszane domyslnie — biala strona u uzytkownika przy pierwszym bledzie"
-    )
+    assert "content-security-policy" not in r.headers
 
 
 # ── treść polityki ───────────────────────────────────────────────────────────
@@ -169,24 +179,12 @@ def test_arkusze_statyczne_istnieja():
 
 # ── przełącznik na wymuszanie ────────────────────────────────────────────────
 
-def test_flaga_przelacza_na_wymuszanie(monkeypatch):
-    """Flip ma nie wymagać nowego obrazu — inaczej wycofanie złej polityki trwa
-    tyle, co wdrożenie, a to jest właśnie moment, w którym GUI leży."""
-    from footstats.api import main as _main
-
-    monkeypatch.setattr(_main, "_CSP_ENFORCE", True)
-    with TestClient(_main.app, raise_server_exceptions=False) as k:
-        r = k.get("/health")
-
-    assert "content-security-policy" in r.headers
-    assert "content-security-policy-report-only" not in r.headers
-
-
 def test_polityka_identyczna_w_obu_trybach(monkeypatch):
     """Gdyby tryby różniły się treścią, raporty z `Report-Only` nie mówiłyby nic
     o tym, co stanie się po wymuszeniu."""
     from footstats.api import main as _main
 
+    monkeypatch.setattr(_main, "_CSP_ENFORCE", False)
     with TestClient(_main.app, raise_server_exceptions=False) as k:
         raport = _csp(k.get("/health"))
 
