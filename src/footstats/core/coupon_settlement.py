@@ -516,7 +516,7 @@ def settle_active_coupons(
     if not dry_run:
         with _connect() as conn:
             cur = conn.execute(
-                """UPDATE coupons SET status='VOID'
+                """UPDATE coupons SET status='VOID', settled_at=CURRENT_TIMESTAMP
                    WHERE status='DRAFT' AND substr(match_date_first,1,10) < ?""",
                 (void_cutoff,),
             )
@@ -631,7 +631,8 @@ def settle_active_coupons(
                 if not dry_run:
                     with _connect() as conn:
                         conn.execute(
-                            "UPDATE coupons SET status='VOID', legs_json=? WHERE id=?",
+                            "UPDATE coupons SET status='VOID', settled_at=CURRENT_TIMESTAMP,"
+                            " legs_json=? WHERE id=?",
                             (json.dumps(updated_legs, ensure_ascii=False), coupon_id),
                         )
                 stats["voided"] += 1
@@ -647,7 +648,8 @@ def settle_active_coupons(
                 if not dry_run:
                     with _connect() as conn:
                         conn.execute(
-                            "UPDATE coupons SET status='VOID' WHERE id=?", (coupon_id,)
+                            "UPDATE coupons SET status='VOID', settled_at=CURRENT_TIMESTAMP"
+                            " WHERE id=?", (coupon_id,)
                         )
                 stats["voided"] += 1
                 stats["voided_brak_wyniku"] += 1
@@ -715,7 +717,8 @@ def settle_active_coupons(
                     # settle (Scheduler 06:00/21:30 + evening) mogą oba wybrać ten sam
                     # kupon — bez guardu drugi proces kredytowałby bankroll drugi raz.
                     cur = conn.execute(
-                        "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, legs_json=? "
+                        "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, legs_json=?, "
+                        "settled_at=CURRENT_TIMESTAMP "
                         "WHERE id=? AND status='ACTIVE'",
                         (new_status, payout, roi,
                          json.dumps(updated_legs, ensure_ascii=False), coupon_id),

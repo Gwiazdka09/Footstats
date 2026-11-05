@@ -57,7 +57,8 @@ def init_coupon_tables() -> None:
                 decision_score   INTEGER,
                 match_date_first TEXT,
                 bookmaker        TEXT,
-                user_id          INTEGER
+                user_id          INTEGER,
+                settled_at       TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_coupon_status  ON coupons(status);
             CREATE INDEX IF NOT EXISTS idx_coupon_created ON coupons(created_at);
@@ -131,16 +132,24 @@ def update_coupon_status(
                 roi_pct = round(
                     (payout_pln - row["stake_pln"]) / row["stake_pln"] * 100, 1
                 )
+        # settled_at: pierwszy moment wyjścia z DRAFT/ACTIVE. COALESCE chroni
+        # znacznik przy korekcie wypłaty (WON→WON); statusy otwarte go nie ruszają.
+        otwarty = status in ACTIVE_STATUSES
         if expected_status is not None:
             cur = conn.execute(
-                "UPDATE coupons SET status=?, payout_pln=?, roi_pct=? "
+                "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, "
+                "settled_at = CASE WHEN ? THEN settled_at "
+                "ELSE COALESCE(settled_at, CURRENT_TIMESTAMP) END "
                 "WHERE id=? AND status=?",
-                (status, payout_pln, roi_pct, coupon_id, expected_status),
+                (status, payout_pln, roi_pct, otwarty, coupon_id, expected_status),
             )
         else:
             cur = conn.execute(
-                "UPDATE coupons SET status=?, payout_pln=?, roi_pct=? WHERE id=?",
-                (status, payout_pln, roi_pct, coupon_id),
+                "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, "
+                "settled_at = CASE WHEN ? THEN settled_at "
+                "ELSE COALESCE(settled_at, CURRENT_TIMESTAMP) END "
+                "WHERE id=?",
+                (status, payout_pln, roi_pct, otwarty, coupon_id),
             )
         return (cur.rowcount or 0) == 1
     return bool(_exec(_fn))

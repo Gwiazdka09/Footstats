@@ -127,7 +127,8 @@ def _cmd_void(coupon_id: str) -> str:
     try:
         from footstats.utils.db import connect
         with connect() as conn:
-            conn.execute("UPDATE coupons SET status='VOID' WHERE id=%s", (cid,))
+            conn.execute("UPDATE coupons SET status='VOID',"
+                " settled_at=COALESCE(settled_at, CURRENT_TIMESTAMP) WHERE id=%s", (cid,))
         return f"✅ Kupon #{cid} → VOID"
     except (ImportError, RuntimeError, OSError) as e:
         return f"Błąd: {e}"

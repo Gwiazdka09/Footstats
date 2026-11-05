@@ -69,7 +69,8 @@ CREATE TABLE coupons (
     match_date_first TEXT,
     user_id          INTEGER DEFAULT 1,
     kupon_type       TEXT,
-    bookmaker        TEXT
+    bookmaker        TEXT,
+    settled_at       TIMESTAMP
 );
 """
 

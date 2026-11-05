@@ -791,7 +791,8 @@ def update_active_coupons(
             try:
                 with _connect() as conn:
                     conn.execute(
-                        "UPDATE coupons SET status=?, payout_pln=?, roi_pct=? WHERE id=?",
+                        "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, "
+                        "settled_at=COALESCE(settled_at, CURRENT_TIMESTAMP) WHERE id=?",
                         (new_status, payout, roi, coupon_id),
                     )
                     # Aktualizuj bankroll przy wygranej

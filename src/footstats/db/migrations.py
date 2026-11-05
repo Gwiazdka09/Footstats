@@ -457,6 +457,15 @@ _MIGRACJE_LEADERBOARD: list[tuple[int, str, list[str]]] = [
         "add_birth_ym_to_users",
         ["ALTER TABLE users ADD COLUMN birth_ym TEXT"],
     ),
+    # Moment rozliczenia kuponu (wyjście z DRAFT/ACTIVE). NULL = kupon sprzed
+    # tej zmiany albo wciąż otwarty. Bez tego raport wieczorny nie miał jak
+    # policzyć rozliczeń z doby. Składnia wspólna dla SQLite i PostgreSQL;
+    # powtórzenie ALTER jest ignorowane przez `_exec_statements` (idempotentne).
+    (
+        19,
+        "add_settled_at_to_coupons",
+        ["ALTER TABLE coupons ADD COLUMN settled_at TIMESTAMP"],
+    ),
 ]
 
 

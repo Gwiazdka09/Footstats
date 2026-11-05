@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     match_date_first TEXT,
     bookmaker        TEXT,
     user_id          INTEGER,
-    shared           BOOLEAN NOT NULL DEFAULT 0
+    shared           BOOLEAN NOT NULL DEFAULT 0,
+    settled_at       TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS predictions (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,

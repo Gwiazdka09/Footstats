@@ -56,7 +56,8 @@ CREATE TABLE coupons (
     -- `coupon_settlement.settle_active_coupons` wywala sie na
     -- "no such column: kupon_type" — fixture zostal w tyle za schematem prod.
     kupon_type       TEXT,
-    bookmaker        TEXT
+    bookmaker        TEXT,
+    settled_at       TIMESTAMP
 );
 CREATE TABLE bankroll_state (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
