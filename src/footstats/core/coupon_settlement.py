@@ -312,6 +312,26 @@ def _get_matches_fdb(fdb_key: str, date_str: str) -> list[dict]:
         return []
 
 
+def _get_matches_espn(date_str: str) -> list[dict]:
+    """Zakończone (po 90 min) mecze ESPN dla JEDNEGO dnia, w kształcie football-data.org.
+
+    Ten sam kształt (`homeTeam.name`, `awayTeam.name`, `score.fullTime`) pozwala
+    użyć `_znajdz_wynik_fdb` bez kopiowania reguły dopasowania nazw (próg 0.70,
+    para przez `min`, `team_similarity`). Źródło jest graceful: błąd -> [].
+    """
+    from footstats.scrapers.sources.espn_source import EspnSource
+
+    return [
+        {
+            "homeTeam": {"name": m.home},
+            "awayTeam": {"name": m.away},
+            "score": {"fullTime": {"home": m.ft_home, "away": m.ft_away}},
+        }
+        for m in EspnSource().fetch(date_str)
+        if m.ft_home is not None and m.ft_away is not None
+    ]
+
+
 def _znajdz_wynik_fdb(home: str, away: str, matches: list[dict]) -> str | None:
     """Fuzzy-match meczu w danych z football-data.org. Zwraca 'HG-AG' lub None.
 
@@ -423,6 +443,14 @@ def _find_leg_result(
             if d not in fdb_cache:
                 fdb_cache[d] = _get_matches_fdb(fdb_key, d)
             res = _znajdz_wynik_fdb(home, away, fdb_cache[d])
+
+        if not res:
+            # ESPN: darmowe, bez klucza; cache w `fdb_cache` pod osobnym kluczem,
+            # żeby nie zmieniać sygnatury (woła ją też settle_manual_coupons).
+            klucz_espn = f"espn:{d}"
+            if klucz_espn not in fdb_cache:
+                fdb_cache[klucz_espn] = _get_matches_espn(d)
+            res = _znajdz_wynik_fdb(home, away, fdb_cache[klucz_espn])
 
         if res:
             if isinstance(res, tuple):

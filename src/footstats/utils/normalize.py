@@ -218,6 +218,10 @@ _DEFAULT_MAPPINGS: dict[str, str] = {
     # oba kluby graly 29.08 i wpadaja do jednej puli `_fetch_fixtures_by_date`).
     # Mapowanie w druga strone by ja STWORZYLO.
     "wolves":              "wolverhampton",
+    # ESPN (2026-11-05): "Hearts" vs "Heart of Midlothian" dawało 0.40, "FC Copenhagen"
+    # vs "FC København" 0.63 — poniżej progu rozliczeń 0.70.
+    "hearts":              "heart of midlothian",
+    "kobenhavn":           "copenhagen",
     "wolverhampton wanderers": "wolverhampton",
     # TPS i Inter Turku sa z tego samego miasta, graja w Veikkausliidze i oba
     # mialy mecz 31.08. Bez tego aliasu "Turku PS" vs "Inter Turku" = 0.80, czyli

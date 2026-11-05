@@ -289,3 +289,19 @@ def klucze_env():
         "APISPORTS_KEY": "test_af_key",
         "BZZOIRO_KEY": "test_bzz_key",
     }
+
+
+# ── ESPN nigdy nie wychodzi do sieci w testach ───────────────────────────────
+# `_find_leg_result` i agregator wołają EspnSource; bez tego każdy test kaskady
+# rozliczeń bił po site.api.espn.com. Własne testy źródła podmieniają
+# `requests.get` same, więc je pomijamy.
+_MODULY_ESPN = {"test_espn_source", "test_espn_w_rozliczeniach"}
+
+
+@pytest.fixture(autouse=True)
+def _espn_bez_sieci(request, monkeypatch):
+    if request.module.__name__.rsplit(".", 1)[-1] in _MODULY_ESPN:
+        return
+    from footstats.scrapers.sources.espn_source import EspnSource
+
+    monkeypatch.setattr(EspnSource, "_zdarzenia", lambda self, dzien: [])

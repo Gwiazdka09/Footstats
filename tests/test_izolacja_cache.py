@@ -45,6 +45,7 @@ MODULY_CACHE = [
     ("footstats.scrapers.flashscore_results", "CACHE_DIR"),
     ("footstats.scrapers.sources.flashscore_source", "CACHE_DIR"),
     ("footstats.scrapers.sources.thesportsdb_source", "CACHE_DIR"),
+    ("footstats.scrapers.sources.espn_source", "CACHE_DIR"),
     ("footstats.scrapers.sources.footballdata_source", "CACHE_DIR"),
     ("footstats.data.context_scraper", "CACHE_DIR"),
 ]
