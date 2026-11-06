@@ -23,7 +23,7 @@ próba, nie wcześniej.
 from dataclasses import dataclass
 from datetime import datetime
 
-from footstats.core.coupon_tracker import STATUS_LOST, STATUS_WON
+from footstats.core.coupon_tracker import STATUS_LOST, STATUS_WON, wyplata_po_podatku
 
 SETTLED_STATUSES = (STATUS_WON, STATUS_LOST)
 
@@ -63,17 +63,23 @@ class UserStats:
     worst_coupon: CouponResult | None
 
 
-def _profit_units(status: str, stake: float | None, odds: float | None) -> float:
-    """Zysk-jednostki jednego kuponu: wygrana +stake*(kurs-1), przegrana -stake.
+def _profit_units(
+    status: str, stake: float | None, odds: float | None, payout: float | None = None
+) -> float:
+    """Zysk-jednostki jednego kuponu, z FAKTYCZNEJ wypłaty (spójnie z rankingiem).
 
-    WON bez kursu (odds brak/None/0) → 0.0, nie -stake — brak danych o kursie
+    WON z `payout_pln` → payout - stake (wypłata z buka, np. z boosterem).
+    WON bez wypłaty → netto po podatku (`wyplata_po_podatku`) - stake.
+    LOST → -stake. WON bez kursu i bez wypłaty → 0.0, nie -stake: brak danych
     nie może zamienić wygranej w (fałszywą) stratę.
     """
     stake_val = stake or 0.0
     if status == STATUS_WON:
+        if payout is not None:
+            return payout - stake_val
         if not odds:
             return 0.0
-        return stake_val * (odds - 1.0)
+        return wyplata_po_podatku(stake_val, odds) - stake_val
     return -stake_val
 
 
@@ -117,7 +123,7 @@ def get_user_stats(user_id: int) -> UserStats:
         ).fetchone()["n"]
         rows = conn.execute(
             """
-            SELECT id, status, stake_pln, total_odds
+            SELECT id, status, stake_pln, total_odds, payout_pln
             FROM coupons
             WHERE user_id = ? AND status IN (?, ?)
             ORDER BY created_at DESC, id DESC
@@ -131,7 +137,9 @@ def get_user_stats(user_id: int) -> UserStats:
     win_rate = wins / settled_count if settled_count else 0.0
 
     results = [
-        CouponResult(row["id"], _profit_units(row["status"], row["stake_pln"], row["total_odds"]))
+        CouponResult(row["id"], _profit_units(
+            row["status"], row["stake_pln"], row["total_odds"], row["payout_pln"]
+        ))
         for row in rows
     ]
     profit_units = sum(result.profit_units for result in results)
@@ -170,7 +178,7 @@ def get_progress_series(user_id: int) -> list[ProgressPoint]:
     with _connect() as conn:
         rows = conn.execute(
             """
-            SELECT id, status, stake_pln, total_odds, created_at
+            SELECT id, status, stake_pln, total_odds, payout_pln, created_at
             FROM coupons
             WHERE user_id = ? AND status IN (?, ?)
             ORDER BY created_at ASC, id ASC
@@ -182,7 +190,9 @@ def get_progress_series(user_id: int) -> list[ProgressPoint]:
     cumulative_profit = 0.0
     wins = 0
     for settled_count, row in enumerate(rows, start=1):
-        cumulative_profit += _profit_units(row["status"], row["stake_pln"], row["total_odds"])
+        cumulative_profit += _profit_units(
+            row["status"], row["stake_pln"], row["total_odds"], row["payout_pln"]
+        )
         if row["status"] == STATUS_WON:
             wins += 1
         points.append(
