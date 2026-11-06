@@ -1,4 +1,5 @@
 """Unit tests for utils/betting.py — oblicz_tip_correct and typy_zaklady."""
+from footstats.core.rynki_dziennika import czy_rozliczalny
 from footstats.utils.betting import oblicz_tip_correct
 
 
@@ -323,9 +324,12 @@ class TestParserTypowFailClosed:
         assert oblicz_tip_correct("Over 2,5", "2-1") == 1
         assert oblicz_tip_correct("Under 3,5", "2-1") == 1
 
-    def test_koniunkcja_pewne_zero_wygrywa_z_nieznanym(self):
-        # Jeden czlon pewnie przegrany => 0, nawet gdy inny jest nierozpoznany.
-        assert oblicz_tip_correct("1 & Strzelec Kowalski", "0-3") == 0
+    def test_koniunkcja_z_nieznanym_czlonem_blokuje_nawet_przy_pewnym_zerze(self):
+        # Nierozpoznany czlon blokuje cala noge — 0 od drugiego czlonu nie wygrywa.
+        assert oblicz_tip_correct("1 & Strzelec Kowalski", "0-3") is None
+
+    def test_czy_rozliczalny_false_przy_nieznanym_czlonie_koniunkcji(self):
+        assert czy_rozliczalny("1 & NIEZNANY RYNEK") is False
 
     def test_koniunkcja_z_nieznanym_czlonem_i_reszta_trafiona_to_none(self):
         assert oblicz_tip_correct("1 & Strzelec Kowalski", "3-0") is None
@@ -357,9 +361,9 @@ class TestParserTypowFailClosed:
                     "1ST HALF OVER 0.5"):
             assert oblicz_tip_correct(tip, "3-0;HT:0-0") is None, tip
 
-    def test_polowa_w_koniunkcji_z_przegrana_nodze_daje_0(self):
-        # Reszta pewnie przegrana => 0 mimo nierozpoznanej polowy.
-        assert oblicz_tip_correct("2 & 1H Over 0.5", "3-0;HT:1-0") == 0
+    def test_polowa_w_koniunkcji_blokuje_noge_nawet_przy_przegranej_reszcie(self):
+        # Nierozpoznana polowa blokuje cala noge, takze gdy reszta jest pewnie przegrana.
+        assert oblicz_tip_correct("2 & 1H Over 0.5", "3-0;HT:1-0") is None
         assert oblicz_tip_correct("1 & 1H Over 0.5", "3-0;HT:1-0") is None
 
     # ── kontrolne: dotychczasowe zachowanie bez zmian ────────────────────────────

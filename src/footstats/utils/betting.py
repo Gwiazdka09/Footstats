@@ -112,21 +112,18 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
                     actual_result, powod, ai_tip)
         return None
 
-    # Typ zlozony — "BB: 1 + Over 1.5", "BTTS & OVER 2.5", "1 & OVER 2.5" — to
-    # KONIUNKCJA czlonow. Bez tego oceniany byl tylko jeden czlon (np. samo Over przy
-    # "BTTS & OVER 2.5" 3-0 = WON, choc BTTS przegrane). Wynik: 0 gdy ktorykolwiek
-    # czlon jest pewnie 0; 1 tylko gdy wszystkie sa 1; inaczej None (nie zgadujemy).
-    # Rekursja dostaje ORYGINALNY actual_result (z sufiksem HT) — człony typu GG2H
-    # potrzebują go niezależnie od reszty kombinacji.
+    # Typ zlozony — "BB: 1 + Over 1.5", "BTTS & OVER 2.5" — to KONIUNKCJA czlonow.
+    # Nierozpoznany czlon blokuje rozliczenie calej nogi (None), wiec `czy_rozliczalny`
+    # mowi prawde. Rekursja dostaje ORYGINALNY actual_result (z sufiksem HT).
     bb = tip.startswith("BB:") or tip.startswith("BB ")
     czlony = _rozbij_typ(tip[3:] if bb else tip)
     if bb or len(czlony) > 1:
         if not czlony:
             return None
         wyniki = [oblicz_tip_correct(c, actual_result) for c in czlony]
-        if 0 in wyniki:
-            return 0
-        return 1 if all(w == 1 for w in wyniki) else None
+        if None in wyniki:
+            return None
+        return 1 if all(w == 1 for w in wyniki) else 0
 
     # Rynek polowy: brak oceny po polowie → nierozliczalny (patrz `_POLOWA`).
     if _POLOWA.search(tip):
