@@ -1,4 +1,5 @@
 """Unit tests for utils/betting.py — oblicz_tip_correct and typy_zaklady."""
+from footstats.core.rynki_dziennika import czy_rozliczalny
 from footstats.utils.betting import oblicz_tip_correct
 
 
@@ -267,3 +268,131 @@ class TestObliczTipCorrect:
     def test_bb_combo_z_gg2h(self):
         assert oblicz_tip_correct("BB: 1 & GG2H + Over 1.5", "4-0;HT:2-0") == 1
         assert oblicz_tip_correct("BB: 1 & GG2H + Over 1.5", "1-0;HT:1-0") == 0
+
+
+class TestParserTypowFailClosed:
+    """Przecinek dziesietny, typy zlozone i rynki polowy — nie zgadujemy, None zamiast bledu."""
+
+    # ── przecinek dziesietny w progu linii ─────────────────────────────────────
+
+    def test_under_25_z_przecinkiem_przy_1_1_wygrana(self):
+        # Regresja: regex bral "2" jako prog -> 2 < 2 = LOST zamiast WON.
+        assert oblicz_tip_correct("Under 2,5", "1-1") == 1
+
+    def test_over_25_z_przecinkiem_przy_3_golach_wygrana(self):
+        assert oblicz_tip_correct("Over 2,5", "2-1") == 1
+
+    def test_over_25_z_przecinkiem_przy_2_golach_przegrana(self):
+        assert oblicz_tip_correct("Over 2,5", "1-1") == 0
+
+    def test_przecinek_i_kropka_daja_ten_sam_wynik(self):
+        for tip in ("Over 1.5", "Under 1.5", "Over 3.5", "Under 3.5"):
+            for wynik in ("0-0", "1-0", "1-1", "2-1", "3-1", "0-4"):
+                assert oblicz_tip_correct(tip.replace(".", ","), wynik) == \
+                    oblicz_tip_correct(tip, wynik)
+
+    def test_gole_druzyny_z_przecinkiem(self):
+        assert oblicz_tip_correct("1 OVER 0,5", "0-2") == 0
+        assert oblicz_tip_correct("2 OVER 1,5", "0-2") == 1
+        assert oblicz_tip_correct("GOSPODARZ OVER 1,5", "1-0") == 0
+
+    # ── typy zlozone: koniunkcja ────────────────────────────────────────────────
+
+    def test_btts_i_over_przy_3_0_przegrana(self):
+        # BTTS przegrane (gosc nie strzelil) — ocena samego Over dawala WON.
+        assert oblicz_tip_correct("BTTS & OVER 2.5", "3-0") == 0
+
+    def test_btts_i_over_przy_2_1_wygrana(self):
+        assert oblicz_tip_correct("BTTS & OVER 2.5", "2-1") == 1
+
+    def test_1_i_over_przy_3_0_wygrana(self):
+        assert oblicz_tip_correct("1 & OVER 2.5", "3-0") == 1
+
+    def test_1_i_over_przy_0_3_przegrana(self):
+        # Czlon "1" byl ignorowany — wygrana goscia przy 3 golach dawala WON.
+        assert oblicz_tip_correct("1 & OVER 2.5", "0-3") == 0
+
+    def test_separatory_plus_i_przecinek_i_slowo_i(self):
+        assert oblicz_tip_correct("1 + Over 2.5", "0-3") == 0
+        assert oblicz_tip_correct("1 + Over 2.5", "3-0") == 1
+        assert oblicz_tip_correct("BTTS, Over 2.5", "3-0") == 0
+        assert oblicz_tip_correct("BTTS i Over 2.5", "2-1") == 1
+        assert oblicz_tip_correct("Over 2,5, BTTS", "2-1") == 1
+        assert oblicz_tip_correct("Over 2,5, BTTS", "3-0") == 0
+
+    def test_przecinek_dziesietny_to_jeden_czlon_nie_separator(self):
+        assert oblicz_tip_correct("Over 2,5", "2-1") == 1
+        assert oblicz_tip_correct("Under 3,5", "2-1") == 1
+
+    def test_koniunkcja_z_nieznanym_czlonem_blokuje_nawet_przy_pewnym_zerze(self):
+        # Nierozpoznany czlon blokuje cala noge — 0 od drugiego czlonu nie wygrywa.
+        assert oblicz_tip_correct("1 & Strzelec Kowalski", "0-3") is None
+
+    def test_czy_rozliczalny_false_przy_nieznanym_czlonie_koniunkcji(self):
+        assert czy_rozliczalny("1 & NIEZNANY RYNEK") is False
+
+    def test_koniunkcja_z_nieznanym_czlonem_i_reszta_trafiona_to_none(self):
+        assert oblicz_tip_correct("1 & Strzelec Kowalski", "3-0") is None
+
+    def test_prefiks_bb_z_separatorem_ampersand_w_czlonie(self):
+        assert oblicz_tip_correct("BB: BTTS & Over 2.5", "3-0") == 0
+        assert oblicz_tip_correct("BB: BTTS & Over 2.5 + 1", "2-1") == 1
+
+    def test_gg2h_nadal_jest_jednym_czlonem(self):
+        assert oblicz_tip_correct("1 & GG2H & Over 3.5", "4-0;HT:2-0") == 1
+        assert oblicz_tip_correct("1 & GG2H & Over 3.5", "2-0;HT:1-0") == 0
+
+    def test_plus_na_koncu_progu_druzyny_to_nie_separator(self):
+        assert oblicz_tip_correct("GOSPODARZ STRZELI 0.5+", "1-0") == 1
+        assert oblicz_tip_correct("GOŚĆ STRZELI 1.5+ (Szansa: 78%)", "1-1") == 0
+
+    def test_przecinek_w_nawiasie_opisu_nie_rozbija_typu(self):
+        assert oblicz_tip_correct("2 (wygrana gościa, pewniak)", "0-3") == 1
+
+    # ── rynki polowy: nie zgadujemy ──────────────────────────────────────────────
+
+    def test_polowa_nie_robi_z_numeru_progu(self):
+        # "1H OVER 0.5" przy 3-0;HT:0-0: "1" nie moze byc progiem.
+        assert oblicz_tip_correct("1H OVER 0.5", "3-0;HT:0-0") is None
+
+    def test_rynki_polowy_w_roznych_zapisach_to_none(self):
+        for tip in ("1H Over 0.5", "2H Over 0.5", "Over 0.5 1. połowa",
+                    "Powyżej 0.5 1.połowa", "HT Over 0.5", "Over 1.5 2. połowa",
+                    "1ST HALF OVER 0.5"):
+            assert oblicz_tip_correct(tip, "3-0;HT:0-0") is None, tip
+
+    def test_polowa_w_koniunkcji_blokuje_noge_nawet_przy_przegranej_reszcie(self):
+        # Nierozpoznana polowa blokuje cala noge, takze gdy reszta jest pewnie przegrana.
+        assert oblicz_tip_correct("2 & 1H Over 0.5", "3-0;HT:1-0") is None
+        assert oblicz_tip_correct("1 & 1H Over 0.5", "3-0;HT:1-0") is None
+
+    # ── kontrolne: dotychczasowe zachowanie bez zmian ────────────────────────────
+
+    def test_kontrolne_over_under_btts_dc(self):
+        assert oblicz_tip_correct("Over 2.5", "2-1") == 1
+        assert oblicz_tip_correct("Over 2.5", "1-1") == 0
+        assert oblicz_tip_correct("Under 1.5", "1-0") == 1
+        assert oblicz_tip_correct("Under 1.5", "1-1") == 0
+        assert oblicz_tip_correct("BTTS", "1-1") == 1
+        assert oblicz_tip_correct("BTTS", "1-0") == 0
+        assert oblicz_tip_correct("BTTS NO", "1-0") == 1
+        assert oblicz_tip_correct("BTTS nie", "2-2") == 0
+        assert oblicz_tip_correct("1X", "0-1") == 0
+        assert oblicz_tip_correct("X2", "0-1") == 1
+        assert oblicz_tip_correct("12", "1-1") == 0
+        assert oblicz_tip_correct("12", "2-1") == 1
+
+    def test_kontrolne_1x2_przy_kilku_wynikach(self):
+        for wynik, wygrywa in (("2-0", "1"), ("1-1", "X"), ("0-2", "2")):
+            for tip in ("1", "X", "2"):
+                assert oblicz_tip_correct(tip, wynik) == (1 if tip == wygrywa else 0)
+
+    def test_kontrolne_bb_plus_bez_zmian(self):
+        assert oblicz_tip_correct("BB: 2 + Over 1.5", "0-2") == 1
+        assert oblicz_tip_correct("BB: 2 + Over 2.5 + BTTS NIE + Under 3.5", "0-3") == 1
+        assert oblicz_tip_correct("BB: 2 + Over 2.5 + BTTS NIE + Under 3.5", "1-3") == 0
+
+    def test_znak_plus_handicapu_to_nie_separator(self):
+        assert oblicz_tip_correct("Handicap +1 Gość", "1-1") == 1
+        assert oblicz_tip_correct("BB: 1 + Handicap +1 Gość", "1-0") == 1
+        assert oblicz_tip_correct("BB: 1 + Handicap +1 Gość", "3-0") == 0

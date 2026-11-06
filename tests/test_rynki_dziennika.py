@@ -65,3 +65,16 @@ def test_lista_dla_frontu_ma_ksztalt_i_kolejnosc():
     lista = lista_rynkow()
     assert lista[0] == {"wartosc": "1", "etykieta": RYNKI[0].etykieta, "grupa": RYNKI[0].grupa}
     assert [x["wartosc"] for x in lista] == [r.wartosc for r in RYNKI]
+
+
+@pytest.mark.parametrize("typ", [
+    "1H Over 0.5", "Over 0.5 1. połowa", "1 & Strzelec Kowalski",
+])
+def test_typy_polowy_i_z_nierozpoznanym_czlonem_nie_sa_rozliczalne(typ):
+    # Zgodnosc z `oblicz_tip_correct`: None => automat nie rozliczy.
+    assert czy_rozliczalny(typ) is False
+
+
+@pytest.mark.parametrize("typ", ["Under 2,5", "BTTS & OVER 2.5", "1 & OVER 2.5", "Over 2,5, BTTS"])
+def test_typy_zlozone_i_z_przecinkiem_sa_rozliczalne(typ):
+    assert czy_rozliczalny(typ) is True
