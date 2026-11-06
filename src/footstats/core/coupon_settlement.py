@@ -19,8 +19,12 @@ Użycie:
 
 import json
 import logging
+import math
 import os
+import sqlite3
 from datetime import date, datetime, timedelta
+
+import psycopg2
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +32,12 @@ from footstats.core import match_linker
 from footstats.core.coupon_tracker import wyplata_po_podatku
 from footstats.utils.betting import oblicz_tip_correct, powod_nierozliczalny
 from footstats.utils.normalize import normalize_team_name, team_similarity
+
+# Awarie jednego kuponu, które pętla rozliczeń ma PRZEŻYĆ (logujemy i idziemy dalej).
+# Celowo konkretne typy, nie `Exception`: błąd programisty (AttributeError, NameError)
+# ma nadal wywrócić przebieg, zamiast być połknięty jako „błąd kuponu".
+_AWARIE_KUPONU = (KeyError, TypeError, ValueError, OSError, RuntimeError,
+                  OverflowError, sqlite3.Error, psycopg2.Error)
 
 # Kupony ACTIVE bez wyniku po tylu dniach (legi z nieobsługiwanych lig/friendly)
 # oznaczamy VOID, żeby nie blokowały na zawsze i nie liczyły się do accuracy/M1.
@@ -374,6 +384,30 @@ def _znajdz_wynik_fdb(home: str, away: str, matches: list[dict]) -> str | None:
     return best_result
 
 
+def _wynik_z_predictions(home: str, away: str, wiersze: list) -> str | None:
+    """Wynik meczu z wierszy `predictions` — obie strony muszą pasować.
+
+    Do 5.11 źródło 4 robiło `team_home LIKE %home% OR team_away LIKE %away%`:
+    mecz łapany JEDNĄ stroną, a krótka nazwa („Inter") trafiała w „Inter Miami".
+    Teraz ta sama reguła co `_znajdz_wynik_fdb`: `team_similarity` na obu stronach,
+    para liczona przez `min`, próg 0.70. Nie powstaje nowa reguła dopasowania.
+
+    Fail-closed: kilku kandydatów o RÓŻNYCH wynikach → None (nie zgadujemy).
+    Duplikaty z tym samym wynikiem (ten sam mecz zapisany dwa razy) są zgodne.
+    """
+    wyniki = {
+        w["actual_result"]
+        for w in wiersze
+        if min(team_similarity(home, w["team_home"] or ""),
+               team_similarity(away, w["team_away"] or "")) >= 0.70
+    }
+    if len(wyniki) > 1:
+        log.warning("Predictions: %s vs %s pasuje do meczów o różnych wynikach %s"
+                    " — odmawiam", home, away, sorted(wyniki))
+        return None
+    return next(iter(wyniki), None)
+
+
 def _manual_zrodla_zewnetrzne() -> bool:
     """Czy dziennik kuponów może sięgnąć po wynik do źródeł zewnętrznych (D5).
 
@@ -475,12 +509,15 @@ def _find_leg_result(
     for d in candidate_dates:
         try:
             with _connect() as pred_conn:
-                pred_row = pred_conn.execute(
-                    "SELECT actual_result FROM predictions WHERE match_date=? AND (team_home LIKE ? OR team_away LIKE ?) LIMIT 1",
-                    (d, f"%{home}%", f"%{away}%"),
-                ).fetchone()
-            if pred_row and pred_row["actual_result"]:
-                return pred_row["actual_result"]
+                pred_rows = pred_conn.execute(
+                    "SELECT team_home, team_away, actual_result FROM predictions"
+                    " WHERE match_date=? AND actual_result IS NOT NULL"
+                    " AND actual_result <> ''",
+                    (d,),
+                ).fetchall()
+            res = _wynik_z_predictions(home, away, pred_rows)
+            if res:
+                return res
         except (OSError, ValueError, RuntimeError) as e:
             # Kierunek jest bezpieczny (brak wyniku → kupon zostaje ACTIVE), ale awaria
             # bazy w ścieżce rozliczeń nie może być niewidoczna — bez logu wygląda
@@ -586,233 +623,250 @@ def settle_active_coupons(
 
     for row in rows:
         coupon_id = row["id"]
-        owner_uid = row["user_id"]
-        legs = json.loads(row["legs_json"])
-        total_odds = row["total_odds"]
-        stake = row["stake_pln"]
-        match_date = row["match_date_first"]
-        mdate = match_date[:10]
-
-        # Wiek kuponu — decyzja VOID zapada PO nieudanej próbie rozliczenia (nie przed),
-        # żeby kupon z dopiero-dostępnym wynikiem zdążył się rozliczyć zamiast zniknąć.
         try:
-            leg_date = datetime.fromisoformat(match_date).date()
-            too_old = (today - leg_date).days >= VOID_AFTER_DAYS
-        except (ValueError, TypeError):
-            # NAJGROZNIEJSZY z trzech: `too_old = False` znaczy "jeszcze nie czas
-            # na VOID", wiec kupon z niesparsowana data NIGDY nie wygasa i siedzi
-            # w ACTIVE bez konca. Ten sam ksztalt co petla dziennika z 28.08.
-            log.warning("Kupon #%s ma date %r nie do sparsowania — nie wygasnie"
-                        " przez VOID i zostanie w ACTIVE, dopoki ktos go nie ruszy"
-                        " recznie", coupon_id, match_date)
-            too_old = False
+            owner_uid = row["user_id"]
+            legs = json.loads(row["legs_json"])
+            total_odds = row["total_odds"]
+            stake = row["stake_pln"]
+            match_date = row["match_date_first"]
+            mdate = match_date[:10]
 
-        leg_results: list[int | None] = []
-        any_leg_lost = False
-        updated_legs = [dict(leg) for leg in legs]  # kopia do zapisu per-leg results
+            # Wiek kuponu — decyzja VOID zapada PO nieudanej próbie rozliczenia (nie przed),
+            # żeby kupon z dopiero-dostępnym wynikiem zdążył się rozliczyć zamiast zniknąć.
+            try:
+                leg_date = datetime.fromisoformat(match_date).date()
+                too_old = (today - leg_date).days >= VOID_AFTER_DAYS
+            except (ValueError, TypeError):
+                # NAJGROZNIEJSZY z trzech: `too_old = False` znaczy "jeszcze nie czas
+                # na VOID", wiec kupon z niesparsowana data NIGDY nie wygasa i siedzi
+                # w ACTIVE bez konca. Ten sam ksztalt co petla dziennika z 28.08.
+                log.warning("Kupon #%s ma date %r nie do sparsowania — nie wygasnie"
+                            " przez VOID i zostanie w ACTIVE, dopoki ktos go nie ruszy"
+                            " recznie", coupon_id, match_date)
+                too_old = False
 
-        for leg_idx, leg in enumerate(legs):
-            home = leg.get("home", "")
-            away = leg.get("away", "")
+            leg_results: list[int | None] = []
+            any_leg_lost = False
+            updated_legs = [dict(leg) for leg in legs]  # kopia do zapisu per-leg results
 
-            if not home or not away:
-                mecz = leg.get("mecz", "")
-                if " vs " in mecz:
-                    home, away = mecz.split(" vs ", 1)
-                elif " - " in mecz:
-                    home, away = mecz.split(" - ", 1)
-                home, away = home.strip(), away.strip()
+            for leg_idx, leg in enumerate(legs):
+                home = leg.get("home", "")
+                away = leg.get("away", "")
 
-            # 4 źródła wyników, kolejno mdate i mdate+1 (przesuniety terminarz)
-            res = _find_leg_result(home, away, mdate, fixtures_cache, fdb_cache, api_key, fdb_key)
+                if not home or not away:
+                    mecz = leg.get("mecz", "")
+                    if " vs " in mecz:
+                        home, away = mecz.split(" vs ", 1)
+                    elif " - " in mecz:
+                        home, away = mecz.split(" - ", 1)
+                    home, away = home.strip(), away.strip()
 
-            correct = oblicz_tip_correct(leg["tip"], res)
-            leg_results.append(correct)
+                # 4 źródła wyników, kolejno mdate i mdate+1 (przesuniety terminarz)
+                res = _find_leg_result(home, away, mdate, fixtures_cache, fdb_cache, api_key, fdb_key)
 
-            # Zapisz per-leg wynik do updated_legs (dla UI)
-            updated_legs[leg_idx]["result"] = res
-            updated_legs[leg_idx]["leg_won"] = (
-                True if correct == 1 else (False if correct == 0 else None)
-            )
+                correct = oblicz_tip_correct(leg["tip"], res)
+                leg_results.append(correct)
+
+                # Zapisz per-leg wynik do updated_legs (dla UI)
+                updated_legs[leg_idx]["result"] = res
+                updated_legs[leg_idx]["leg_won"] = (
+                    True if correct == 1 else (False if correct == 0 else None)
+                )
+
+                if verbose:
+                    status_text = "OK" if correct == 1 else "MISS" if correct == 0 else "WAITING"
+                    print(f"    - {leg.get('home','?')} vs {leg.get('away','?')} (Tip: {leg['tip']}, Res: {res or '?'}) -> {status_text}")
+
+                if correct == 0:
+                    any_leg_lost = True
+
+            # Nierozliczalne: brak nóg lub brakujące wyniki (i nic dotąd nie przegrane)
+            if (not leg_results or None in leg_results) and not any_leg_lost:
+                # Dogrywka/karne: wynik JEST, ale rynków 90-minutowych nie da się z niego
+                # rozliczyć (patrz `powod_nierozliczalny`). Czekanie `VOID_AFTER_DAYS`
+                # niczego nie zmieni — źródło nie dośle wyniku regulaminowego. Anulujemy
+                # od razu i Z PODANYM POWODEM, zamiast dziesięciu dni ciszy zakończonych
+                # anulowaniem, którego potem nikt nie umie wytłumaczyć.
+                blokady = [
+                    (lg.get("mecz") or f"{lg.get('home','?')} vs {lg.get('away','?')}", powod)
+                    for lg in updated_legs
+                    if (powod := powod_nierozliczalny(lg.get("result")))
+                ]
+                if blokady:
+                    opis = "; ".join(f"{mecz} ({powod})" for mecz, powod in blokady)
+                    if not dry_run:
+                        with _connect() as conn:
+                            cur = conn.execute(
+                                "UPDATE coupons SET status='VOID', settled_at=CURRENT_TIMESTAMP,"
+                                " legs_json=? WHERE id=? AND status='ACTIVE'",
+                                (json.dumps(updated_legs, ensure_ascii=False), coupon_id),
+                            )
+                        if (cur.rowcount or 0) == 0:
+                            log.info("Kupon #%s rozliczony równolegle — pomijam VOID", coupon_id)
+                            continue
+                    stats["voided"] += 1
+                    log.warning("Kupon #%s → VOID: wyniku nie da sie rozliczyc — %s",
+                                coupon_id, opis)
+                    if verbose:
+                        print(f"  [VOID] Kupon #{coupon_id} — {opis}\n")
+                    continue
+
+                if too_old:
+                    # >= VOID_AFTER_DAYS i wciąż nierozliczalne (mecz dawno rozegrany,
+                    # brak wyniku w żadnym źródle) → VOID. Nie wisi ACTIVE w nieskończoność.
+                    if not dry_run:
+                        with _connect() as conn:
+                            cur = conn.execute(
+                                "UPDATE coupons SET status='VOID', settled_at=CURRENT_TIMESTAMP"
+                                " WHERE id=? AND status='ACTIVE'", (coupon_id,)
+                            )
+                        if (cur.rowcount or 0) == 0:
+                            log.info("Kupon #%s rozliczony równolegle — pomijam VOID", coupon_id)
+                            continue
+                    stats["voided"] += 1
+                    stats["voided_brak_wyniku"] += 1
+                    # Osobny licznik i log, bo to NIE jest to samo co VOID po karnych.
+                    # Tamto jest normalną pracą systemu, to jest skutek awarii źródeł —
+                    # kupon wypada z accuracy i ROI. Do 24.08 jedynym śladem był `print`
+                    # pod `verbose`, więc 20 kuponów mogło zniknąć bez linijki w logu.
+                    mecze = ", ".join(
+                        lg.get("mecz") or f"{lg.get('home', '?')} vs {lg.get('away', '?')}"
+                        for lg in updated_legs
+                    ) or "?"
+                    log.warning(
+                        "Kupon #%s → VOID: brak wyniku po %sd (mecz %s) — %s",
+                        coupon_id, VOID_AFTER_DAYS, mdate, mecze,
+                    )
+                    if verbose:
+                        print(f"  [VOID] Kupon #{coupon_id} — brak wyniku po {VOID_AFTER_DAYS}d → VOID\n")
+                    continue
+                # Licznik prob na nogach, ktore WCIAZ nie maja wyniku. Rosnie przy
+                # kazdym przebiegu i jest jedyna rzecza, ktora odrozni „zrodlo padlo
+                # dzis" od „tej ligi nie umiemy rozliczyc od tygodnia".
+                for lg in updated_legs:
+                    if lg.get("result") in (None, "", "?"):
+                        lg["proby"] = int(lg.get("proby") or 0) + 1
+
+                # W oknie → zapisz znane per-leg wyniki (partial update) i czekaj
+                if not dry_run:
+                    try:
+                        with _connect() as conn:
+                            conn.execute(
+                                "UPDATE coupons SET legs_json=? WHERE id=?",
+                                (json.dumps(updated_legs, ensure_ascii=False), coupon_id),
+                            )
+                    except (OSError, ValueError) as e:
+                        log.debug("Błąd zapisu partial legs_json dla #%s: %s", coupon_id, e)
+                stats["partial"] += 1
+                # Rozdzielamy "czeka, bo jeszcze nie ma wyniku" od "czeka, bo wyniku
+                # juz nikt nie odda". Bez tego rozroznienia alarm o stojacym
+                # rozliczaniu nie da sie ustawic tak, zeby nie wyl codziennie.
+                # `czeka_zbyt_dlugo`, nie `data_jeszcze_osiagalna`: mecz z DZISIAJ moze
+                # sie jeszcze nie odbyc, a wtedy brak wyniku jest stanem normalnym.
+                # Dwa warunki, bo pytaja o dwie rozne rzeczy: `czeka_zbyt_dlugo` —
+                # czy wynik POWINNISMY juz miec; `czeka_na_wynik_osiagalny` — czy
+                # jeszcze jest szansa, ze zrodlo go odda.
+                if czeka_zbyt_dlugo(mdate) and czeka_na_wynik_osiagalny(updated_legs):
+                    stats["czekajace_w_zasiegu"] += 1
+                if verbose:
+                    print(f"  [PARTIAL] Kupon #{coupon_id} — czekam na brakujące wyniki\n")
+                continue
+
+            # Finalne rozliczenie
+            all_correct = all(r == 1 for r in leg_results) and not any_leg_lost
+            new_status = "WON" if all_correct else "LOST"
+            payout = round(stake * total_odds, 2) if all_correct else 0.0
+            # round() nie rzuca przy inf/nan — bez tej bramki kupon z nieskończonym kursem
+            # zostałby WON z wypłatą inf i zasilił bankroll.
+            if not math.isfinite(payout):
+                raise OverflowError(f"wypłata nieskończona: kurs={total_odds}, stawka={stake}")
+            roi = round((payout - stake) / stake * 100, 1) if stake else 0.0
 
             if verbose:
-                status_text = "OK" if correct == 1 else "MISS" if correct == 0 else "WAITING"
-                print(f"    - {leg.get('home','?')} vs {leg.get('away','?')} (Tip: {leg['tip']}, Res: {res or '?'}) -> {status_text}")
+                tag = "DRY" if dry_run else "SETTLE"
+                print(f"  [{tag}] Kupon #{coupon_id} → {new_status} | wypłata: {payout} PLN | ROI: {roi}%\n")
 
-            if correct == 0:
-                any_leg_lost = True
-
-        # Nierozliczalne: brak nóg lub brakujące wyniki (i nic dotąd nie przegrane)
-        if (not leg_results or None in leg_results) and not any_leg_lost:
-            # Dogrywka/karne: wynik JEST, ale rynków 90-minutowych nie da się z niego
-            # rozliczyć (patrz `powod_nierozliczalny`). Czekanie `VOID_AFTER_DAYS`
-            # niczego nie zmieni — źródło nie dośle wyniku regulaminowego. Anulujemy
-            # od razu i Z PODANYM POWODEM, zamiast dziesięciu dni ciszy zakończonych
-            # anulowaniem, którego potem nikt nie umie wytłumaczyć.
-            blokady = [
-                (lg.get("mecz") or f"{lg.get('home','?')} vs {lg.get('away','?')}", powod)
-                for lg in updated_legs
-                if (powod := powod_nierozliczalny(lg.get("result")))
-            ]
-            if blokady:
-                opis = "; ".join(f"{mecz} ({powod})" for mecz, powod in blokady)
-                if not dry_run:
-                    with _connect() as conn:
-                        conn.execute(
-                            "UPDATE coupons SET status='VOID', settled_at=CURRENT_TIMESTAMP,"
-                            " legs_json=? WHERE id=?",
-                            (json.dumps(updated_legs, ensure_ascii=False), coupon_id),
-                        )
-                stats["voided"] += 1
-                log.warning("Kupon #%s → VOID: wyniku nie da sie rozliczyc — %s",
-                            coupon_id, opis)
-                if verbose:
-                    print(f"  [VOID] Kupon #{coupon_id} — {opis}\n")
-                continue
-
-            if too_old:
-                # >= VOID_AFTER_DAYS i wciąż nierozliczalne (mecz dawno rozegrany,
-                # brak wyniku w żadnym źródle) → VOID. Nie wisi ACTIVE w nieskończoność.
-                if not dry_run:
-                    with _connect() as conn:
-                        conn.execute(
-                            "UPDATE coupons SET status='VOID', settled_at=CURRENT_TIMESTAMP"
-                            " WHERE id=?", (coupon_id,)
-                        )
-                stats["voided"] += 1
-                stats["voided_brak_wyniku"] += 1
-                # Osobny licznik i log, bo to NIE jest to samo co VOID po karnych.
-                # Tamto jest normalną pracą systemu, to jest skutek awarii źródeł —
-                # kupon wypada z accuracy i ROI. Do 24.08 jedynym śladem był `print`
-                # pod `verbose`, więc 20 kuponów mogło zniknąć bez linijki w logu.
-                mecze = ", ".join(
-                    lg.get("mecz") or f"{lg.get('home', '?')} vs {lg.get('away', '?')}"
-                    for lg in updated_legs
-                ) or "?"
-                log.warning(
-                    "Kupon #%s → VOID: brak wyniku po %sd (mecz %s) — %s",
-                    coupon_id, VOID_AFTER_DAYS, mdate, mecze,
-                )
-                if verbose:
-                    print(f"  [VOID] Kupon #{coupon_id} — brak wyniku po {VOID_AFTER_DAYS}d → VOID\n")
-                continue
-            # Licznik prob na nogach, ktore WCIAZ nie maja wyniku. Rosnie przy
-            # kazdym przebiegu i jest jedyna rzecza, ktora odrozni „zrodlo padlo
-            # dzis" od „tej ligi nie umiemy rozliczyc od tygodnia".
-            for lg in updated_legs:
-                if lg.get("result") in (None, "", "?"):
-                    lg["proby"] = int(lg.get("proby") or 0) + 1
-
-            # W oknie → zapisz znane per-leg wyniki (partial update) i czekaj
             if not dry_run:
                 try:
                     with _connect() as conn:
-                        conn.execute(
-                            "UPDATE coupons SET legs_json=? WHERE id=?",
-                            (json.dumps(updated_legs, ensure_ascii=False), coupon_id),
+                        # CAS-guard (D3): UPDATE tylko gdy kupon WCIĄŻ ACTIVE. Równoległe
+                        # settle (Scheduler 06:00/21:30 + evening) mogą oba wybrać ten sam
+                        # kupon — bez guardu drugi proces kredytowałby bankroll drugi raz.
+                        cur = conn.execute(
+                            "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, legs_json=?, "
+                            "settled_at=CURRENT_TIMESTAMP "
+                            "WHERE id=? AND status='ACTIVE'",
+                            (new_status, payout, roi,
+                             json.dumps(updated_legs, ensure_ascii=False), coupon_id),
                         )
-                except (OSError, ValueError) as e:
-                    log.debug("Błąd zapisu partial legs_json dla #%s: %s", coupon_id, e)
-            stats["partial"] += 1
-            # Rozdzielamy "czeka, bo jeszcze nie ma wyniku" od "czeka, bo wyniku
-            # juz nikt nie odda". Bez tego rozroznienia alarm o stojacym
-            # rozliczaniu nie da sie ustawic tak, zeby nie wyl codziennie.
-            # `czeka_zbyt_dlugo`, nie `data_jeszcze_osiagalna`: mecz z DZISIAJ moze
-            # sie jeszcze nie odbyc, a wtedy brak wyniku jest stanem normalnym.
-            # Dwa warunki, bo pytaja o dwie rozne rzeczy: `czeka_zbyt_dlugo` —
-            # czy wynik POWINNISMY juz miec; `czeka_na_wynik_osiagalny` — czy
-            # jeszcze jest szansa, ze zrodlo go odda.
-            if czeka_zbyt_dlugo(mdate) and czeka_na_wynik_osiagalny(updated_legs):
-                stats["czekajace_w_zasiegu"] += 1
-            if verbose:
-                print(f"  [PARTIAL] Kupon #{coupon_id} — czekam na brakujące wyniki\n")
-            continue
-
-        # Finalne rozliczenie
-        all_correct = all(r == 1 for r in leg_results) and not any_leg_lost
-        new_status = "WON" if all_correct else "LOST"
-        payout = round(stake * total_odds, 2) if all_correct else 0.0
-        roi = round((payout - stake) / stake * 100, 1) if stake else 0.0
-
-        if verbose:
-            tag = "DRY" if dry_run else "SETTLE"
-            print(f"  [{tag}] Kupon #{coupon_id} → {new_status} | wypłata: {payout} PLN | ROI: {roi}%\n")
-
-        if not dry_run:
-            try:
-                with _connect() as conn:
-                    # CAS-guard (D3): UPDATE tylko gdy kupon WCIĄŻ ACTIVE. Równoległe
-                    # settle (Scheduler 06:00/21:30 + evening) mogą oba wybrać ten sam
-                    # kupon — bez guardu drugi proces kredytowałby bankroll drugi raz.
-                    cur = conn.execute(
-                        "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, legs_json=?, "
-                        "settled_at=CURRENT_TIMESTAMP "
-                        "WHERE id=? AND status='ACTIVE'",
-                        (new_status, payout, roi,
-                         json.dumps(updated_legs, ensure_ascii=False), coupon_id),
-                    )
-                    settled_now = (cur.rowcount or 0) == 1
-                    if not settled_now:
-                        log.warning(
-                            "Kupon #%s nie jest już ACTIVE — rozliczony równolegle, pomijam kredyt/RAG",
-                            coupon_id,
-                        )
-                    else:
-                        log.info("Kupon #%s → %s | payout=%.2f | roi=%.1f%%", coupon_id, new_status, payout, roi)
-
-                    if settled_now and all_correct and payout > 0 and owner_uid is not None:
-                        # Kredytuj WŁAŚCICIELA kuponu (nie MAX(id)!), brutto/przed
-                        # podatkiem, 100% — spójnie z evening_agent.credit_win.
-                        cur_balance = conn.execute(
-                            "SELECT balance FROM bankroll_state WHERE user_id=?",
-                            (owner_uid,),
-                        ).fetchone()
-                        if cur_balance:
-                            new_balance = round(cur_balance["balance"] + payout, 2)
-                            conn.execute(
-                                "UPDATE bankroll_state SET balance=?, updated_at=? WHERE user_id=?",
-                                (new_balance, datetime.now().isoformat(), owner_uid),
-                            )
-                            conn.execute(
-                                "INSERT INTO bankroll_history "
-                                "(timestamp, change_pln, new_balance, type, description, user_id) "
-                                "VALUES (?,?,?,?,?,?)",
-                                (
-                                    datetime.now().isoformat(),
-                                    payout,
-                                    new_balance,
-                                    "WIN",
-                                    f"Kupon #{coupon_id} WON",
-                                    owner_uid,
-                                ),
+                        settled_now = (cur.rowcount or 0) == 1
+                        if not settled_now:
+                            log.warning(
+                                "Kupon #%s nie jest już ACTIVE — rozliczony równolegle, pomijam kredyt/RAG",
+                                coupon_id,
                             )
                         else:
-                            # D7: WON bez wiersza bankroll_state — nie może przejść w ciszy
-                            log.warning(
-                                "Kupon #%s WON, brak bankroll_state dla user_id=%s — kredyt pominięty",
-                                coupon_id, owner_uid,
-                            )
+                            log.info("Kupon #%s → %s | payout=%.2f | roi=%.1f%%", coupon_id, new_status, payout, roi)
 
-                if settled_now and not all_correct:
-                    failed_legs = [lg for lg in updated_legs if lg.get("leg_won") is False]
-                    parts = [
-                        f"Leg #{i+1}: {lg.get('home','?')} vs {lg.get('away','?')} "
-                        f"Tip:{lg.get('tip','?')} Wynik:{lg.get('result','?')}"
-                        for i, lg in enumerate(updated_legs) if lg.get("leg_won") is False
-                    ]
-                    lose_reason = (
-                        f"PRZEGRANY kupon ({len(legs)} legów, {len(failed_legs)} chybionych). "
-                        + "; ".join(parts)
-                    )
-                    _send_to_rag_feedback(coupon_id, updated_legs, mdate, lose_reason, verbose=verbose)
+                        if settled_now and all_correct and payout > 0 and owner_uid is not None:
+                            # Kredytuj WŁAŚCICIELA kuponu (nie MAX(id)!), brutto/przed
+                            # podatkiem, 100% — spójnie z evening_agent.credit_win.
+                            cur_balance = conn.execute(
+                                "SELECT balance FROM bankroll_state WHERE user_id=?",
+                                (owner_uid,),
+                            ).fetchone()
+                            if cur_balance:
+                                new_balance = round(cur_balance["balance"] + payout, 2)
+                                conn.execute(
+                                    "UPDATE bankroll_state SET balance=?, updated_at=? WHERE user_id=?",
+                                    (new_balance, datetime.now().isoformat(), owner_uid),
+                                )
+                                conn.execute(
+                                    "INSERT INTO bankroll_history "
+                                    "(timestamp, change_pln, new_balance, type, description, user_id) "
+                                    "VALUES (?,?,?,?,?,?)",
+                                    (
+                                        datetime.now().isoformat(),
+                                        payout,
+                                        new_balance,
+                                        "WIN",
+                                        f"Kupon #{coupon_id} WON",
+                                        owner_uid,
+                                    ),
+                                )
+                            else:
+                                # D7: WON bez wiersza bankroll_state — nie może przejść w ciszy
+                                log.warning(
+                                    "Kupon #%s WON, brak bankroll_state dla user_id=%s — kredyt pominięty",
+                                    coupon_id, owner_uid,
+                                )
 
-                if settled_now:
-                    stats["settled"] += 1
-            except (KeyError, TypeError, ValueError, OSError) as e:
-                log.error("Błąd rozliczania kuponu ID=%s: %s", coupon_id, e)
-                stats["errors"] += 1
-        else:
-            stats["settled"] += 1  # dry_run: count without DB write
+                    if settled_now and not all_correct:
+                        failed_legs = [lg for lg in updated_legs if lg.get("leg_won") is False]
+                        parts = [
+                            f"Leg #{i+1}: {lg.get('home','?')} vs {lg.get('away','?')} "
+                            f"Tip:{lg.get('tip','?')} Wynik:{lg.get('result','?')}"
+                            for i, lg in enumerate(updated_legs) if lg.get("leg_won") is False
+                        ]
+                        lose_reason = (
+                            f"PRZEGRANY kupon ({len(legs)} legów, {len(failed_legs)} chybionych). "
+                            + "; ".join(parts)
+                        )
+                        _send_to_rag_feedback(coupon_id, updated_legs, mdate, lose_reason, verbose=verbose)
+
+                    if settled_now:
+                        stats["settled"] += 1
+                except (KeyError, TypeError, ValueError, OSError) as e:
+                    log.error("Błąd rozliczania kuponu ID=%s: %s", coupon_id, e)
+                    stats["errors"] += 1
+            else:
+                stats["settled"] += 1  # dry_run: count without DB write
+        except _AWARIE_KUPONU as e:
+            # Błąd JEDNEGO kuponu (np. total_odds=None, uszkodzony legs_json) nie może
+            # zatrzymać przebiegu — inaczej kupony pozostałych userów czekają do jutra.
+            log.error("Kupon #%s: rozliczenie przerwane (%s): %s",
+                      coupon_id, type(e).__name__, e, exc_info=True)
+            stats["errors"] += 1
 
     if verbose:
         print(
@@ -978,6 +1032,9 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
 
             leg_results: list[int] = []
             unresolved = False
+            # Kopia nóg z wynikami do zapisu (dla UI) — nogi bez ustalonego wyniku
+            # (niepewne albo za przegraną, która zamknęła kupon) dostają None/None.
+            updated_legs = [{**lg, "result": None, "leg_won": None} for lg in legs]
             # Liczniki źródeł zbierane PER KUPON i doliczane dopiero, gdy kupon
             # faktycznie się rozliczy. Zliczanie per noga odpowiadałoby na inne
             # pytanie niż zadane: noga rozwiązana w kuponie, który i tak zostaje
@@ -985,7 +1042,7 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
             # przy KAŻDYM przebiegu crona — codziennie, dla tego samego kuponu.
             z_dziennika_kupon = 0
             z_zewnatrz_kupon = 0
-            for leg in legs:
+            for leg_idx, leg in enumerate(legs):
                 home = leg.get("home", "")
                 away = leg.get("away", "")
                 okno_data, okno_tol = _okno_nogi(leg, mdate)
@@ -1027,10 +1084,12 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                 if not wynik:
                     unresolved = True
                     continue
+                updated_legs[leg_idx]["result"] = wynik
                 correct = oblicz_tip_correct(leg.get("tip", ""), wynik)
                 if correct is None:
                     unresolved = True
                     continue
+                updated_legs[leg_idx]["leg_won"] = correct == 1
                 leg_results.append(correct)
                 if correct == 0:
                     # Przegrana noga rozlicza kupon od razu — ta sama reguła co
@@ -1077,7 +1136,8 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                 from footstats.core.coupon_tracker import update_coupon_status
 
                 zmieniono = update_coupon_status(
-                    coupon_id, new_status, payout_pln=payout, expected_status="ACTIVE"
+                    coupon_id, new_status, payout_pln=payout, expected_status="ACTIVE",
+                    legs_json=json.dumps(updated_legs, ensure_ascii=False),
                 )
                 if not zmieniono:
                     # CAS-guard: kupon rozliczony ręcznie równolegle (set_coupon_result)
