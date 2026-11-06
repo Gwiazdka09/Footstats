@@ -19,6 +19,7 @@ Użycie:
 
 import json
 import logging
+import math
 import os
 import sqlite3
 from datetime import date, datetime, timedelta
@@ -36,7 +37,7 @@ from footstats.utils.normalize import normalize_team_name, team_similarity
 # Celowo konkretne typy, nie `Exception`: błąd programisty (AttributeError, NameError)
 # ma nadal wywrócić przebieg, zamiast być połknięty jako „błąd kuponu".
 _AWARIE_KUPONU = (KeyError, TypeError, ValueError, OSError, RuntimeError,
-                  sqlite3.Error, psycopg2.Error)
+                  OverflowError, sqlite3.Error, psycopg2.Error)
 
 # Kupony ACTIVE bez wyniku po tylu dniach (legi z nieobsługiwanych lig/friendly)
 # oznaczamy VOID, żeby nie blokowały na zawsze i nie liczyły się do accuracy/M1.
@@ -695,11 +696,14 @@ def settle_active_coupons(
                     opis = "; ".join(f"{mecz} ({powod})" for mecz, powod in blokady)
                     if not dry_run:
                         with _connect() as conn:
-                            conn.execute(
+                            cur = conn.execute(
                                 "UPDATE coupons SET status='VOID', settled_at=CURRENT_TIMESTAMP,"
-                                " legs_json=? WHERE id=?",
+                                " legs_json=? WHERE id=? AND status='ACTIVE'",
                                 (json.dumps(updated_legs, ensure_ascii=False), coupon_id),
                             )
+                        if (cur.rowcount or 0) == 0:
+                            log.info("Kupon #%s rozliczony równolegle — pomijam VOID", coupon_id)
+                            continue
                     stats["voided"] += 1
                     log.warning("Kupon #%s → VOID: wyniku nie da sie rozliczyc — %s",
                                 coupon_id, opis)
@@ -712,10 +716,13 @@ def settle_active_coupons(
                     # brak wyniku w żadnym źródle) → VOID. Nie wisi ACTIVE w nieskończoność.
                     if not dry_run:
                         with _connect() as conn:
-                            conn.execute(
+                            cur = conn.execute(
                                 "UPDATE coupons SET status='VOID', settled_at=CURRENT_TIMESTAMP"
-                                " WHERE id=?", (coupon_id,)
+                                " WHERE id=? AND status='ACTIVE'", (coupon_id,)
                             )
+                        if (cur.rowcount or 0) == 0:
+                            log.info("Kupon #%s rozliczony równolegle — pomijam VOID", coupon_id)
+                            continue
                     stats["voided"] += 1
                     stats["voided_brak_wyniku"] += 1
                     # Osobny licznik i log, bo to NIE jest to samo co VOID po karnych.
@@ -769,6 +776,10 @@ def settle_active_coupons(
             all_correct = all(r == 1 for r in leg_results) and not any_leg_lost
             new_status = "WON" if all_correct else "LOST"
             payout = round(stake * total_odds, 2) if all_correct else 0.0
+            # round() nie rzuca przy inf/nan — bez tej bramki kupon z nieskończonym kursem
+            # zostałby WON z wypłatą inf i zasilił bankroll.
+            if not math.isfinite(payout):
+                raise OverflowError(f"wypłata nieskończona: kurs={total_odds}, stawka={stake}")
             roi = round((payout - stake) / stake * 100, 1) if stake else 0.0
 
             if verbose:

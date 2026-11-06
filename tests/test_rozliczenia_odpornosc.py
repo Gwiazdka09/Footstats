@@ -155,6 +155,39 @@ def test_uszkodzony_legs_json_nie_zatrzymuje_przebiegu(db, monkeypatch):
     assert stats["errors"] == 1
 
 
+def test_nieskonczony_kurs_to_awaria_kuponu_nie_zatrzymuje_przebiegu(db, monkeypatch):
+    monkeypatch.setattr(settlement, "_find_leg_result", lambda *a, **k: "1-0")
+    nieskonczony = _kupon(db, [{"home": "Legia", "away": "Lech", "tip": "1"}], odds=float("inf"))
+    dobry = _kupon(db, [{"home": "Cracovia", "away": "Pogon", "tip": "1"}])
+
+    stats = settlement.settle_active_coupons(dry_run=False, verbose=False)
+
+    assert _wiersz(db, dobry)["status"] == "WON", "drugi kupon nie został rozliczony"
+    assert _wiersz(db, nieskonczony)["status"] == "ACTIVE"
+    assert stats["errors"] == 1
+
+
+def test_kupon_przestawiony_na_won_przed_void_zostaje_won(db, monkeypatch):
+    stary = (date.today() - timedelta(days=12)).isoformat()
+    cid = _kupon(db, [{"home": "Legia", "away": "Lech", "tip": "1"}], mdate=stary)
+
+    def _wynik_brak_rownolegle_won(*a, **k):
+        # Symulacja równoległego procesu: kupon rozliczony między odczytem a VOID.
+        conn = sqlite3.connect(db)
+        conn.execute("UPDATE coupons SET status='WON' WHERE id=?", (cid,))
+        conn.commit()
+        conn.close()
+        return None
+
+    monkeypatch.setattr(settlement, "_find_leg_result", _wynik_brak_rownolegle_won)
+
+    stats = settlement.settle_active_coupons(dry_run=False, verbose=False)
+
+    assert _wiersz(db, cid)["status"] == "WON"
+    assert stats["voided"] == 0
+    assert stats["voided_brak_wyniku"] == 0
+
+
 # ── 2. źródło 4: obie strony meczu ──────────────────────────────────────────
 
 @pytest.fixture
