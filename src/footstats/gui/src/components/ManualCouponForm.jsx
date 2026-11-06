@@ -68,6 +68,8 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
     if (!stakePln || parseFloat(stakePln) <= 0) {
       return 'Stawka musi być dodatnia';
     }
+    // Bez daty kupon nigdy się nie rozliczy ani nie zaalarmuje (backend też odrzuca).
+    if (!matchDate) return 'Podaj datę meczu — bez niej kupon nie zostanie rozliczony';
     return null;
   };
 
@@ -88,7 +90,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
           })),
           stake_pln: parseFloat(stakePln),
           bookmaker: bookmaker.trim() || null,
-          match_date: matchDate || null,
+          match_date: matchDate,
         }),
       });
       onSaved();
@@ -126,6 +128,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
             >
               <input
                 type="text"
+                aria-label="Gospodarz"
                 placeholder="Gospodarz"
                 value={leg.home}
                 onChange={(e) => updateLeg(i, 'home', e.target.value)}
@@ -134,6 +137,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
               />
               <input
                 type="text"
+                aria-label="Gość"
                 placeholder="Gość"
                 value={leg.away}
                 onChange={(e) => updateLeg(i, 'away', e.target.value)}
@@ -176,6 +180,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
                 type="number"
                 step="0.01"
                 min="1.01"
+                aria-label="Kurs"
                 placeholder="Kurs"
                 value={leg.odds}
                 onChange={(e) => updateLeg(i, 'odds', e.target.value)}
@@ -199,8 +204,9 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Stawka (PLN)</label>
+            <label htmlFor="manual-stake" className="block text-xs font-bold text-slate-500 uppercase mb-2">Stawka (PLN)</label>
             <input
+              id="manual-stake"
               type="number"
               step="0.01"
               min="0.01"
@@ -210,8 +216,9 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Bukmacher</label>
+            <label htmlFor="manual-bookmaker" className="block text-xs font-bold text-slate-500 uppercase mb-2">Bukmacher</label>
             <input
+              id="manual-bookmaker"
               type="text"
               list="manual-coupon-bookmakers"
               value={bookmaker}
@@ -224,8 +231,10 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
             </datalist>
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Data (opcjonalnie)</label>
+            <label htmlFor="manual-date" className="block text-xs font-bold text-slate-500 uppercase mb-2">Data meczu</label>
             <input
+              id="manual-date"
+              required
               type="date"
               value={matchDate}
               onChange={(e) => setMatchDate(e.target.value)}

@@ -247,9 +247,9 @@ def test_kurs_laczny_inf_422_we_wspolnej_walidacji():
 
 
 def test_manual_granice_kursu_przechodza(db):
-    res = manual_coupon(ManualCouponRequest(legs=[_leg(1.01)], stake_pln=10.0), user_id=1)
+    res = manual_coupon(ManualCouponRequest(legs=[_leg(1.01)], stake_pln=10.0, match_date="2026-11-08"), user_id=1)
     assert res["total_odds"] == 1.01
-    res = manual_coupon(ManualCouponRequest(legs=[_leg(1000.0)], stake_pln=10.0), user_id=1)
+    res = manual_coupon(ManualCouponRequest(legs=[_leg(1000.0)], stake_pln=10.0, match_date="2026-11-08"), user_id=1)
     assert res["total_odds"] == 1000.0
 
 

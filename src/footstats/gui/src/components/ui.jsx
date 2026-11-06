@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, CheckCircle2, XCircle, Clock, Info } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, Clock, Info, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export const NavItem = ({ icon, label, active, collapsed, onClick }) => (
@@ -9,6 +9,23 @@ export const NavItem = ({ icon, label, active, collapsed, onClick }) => (
   >
     <div className={active ? 'text-indigo-400' : 'text-slate-500'}>{icon}</div>
     {!collapsed && <span className="nav-label font-semibold">{label}</span>}
+  </div>
+);
+
+// Błąd pobrania nie może wyglądać jak „brak danych” — baner mówi wprost, że coś
+// poszło nie tak, i (opcjonalnie) daje ponowienie.
+export const ErrorBanner = ({ message, onRetry }) => (
+  <div
+    role="alert"
+    className="glass-card px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4"
+    style={{ borderColor: 'var(--accent-secondary)' }}
+  >
+    <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--accent-secondary)' }}>
+      <AlertTriangle size={16} aria-hidden="true" /> {message}
+    </p>
+    {onRetry && (
+      <button onClick={onRetry} className="btn-see-all">Spróbuj ponownie</button>
+    )}
   </div>
 );
 
@@ -41,7 +58,7 @@ export const CouponCard = ({ coupon, index }) => (
         <span className="font-bold tracking-tight">Kupon #{coupon.id} <span className="text-xs text-slate-500 ml-2 font-normal">[{coupon.phase?.toUpperCase()}]</span></span>
       </div>
       <div className="flex items-center gap-2 text-xs text-slate-500">
-        <Calendar size={12} /> {new Date(coupon.created_at).toLocaleDateString()}
+        <Calendar size={12} /> {new Date(coupon.created_at).toLocaleDateString('pl-PL', { timeZone: 'Europe/Warsaw' })}
       </div>
     </div>
     <div className="p-6 space-y-3">
