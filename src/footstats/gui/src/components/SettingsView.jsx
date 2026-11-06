@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, TrendingUp, Trash2, Info, User } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { ConfigInput, ErrorBanner } from './ui';
+import { ConfigInput, ErrorBanner, formatRoi, formatKwota } from './ui';
 
 // 10.09: bez „Algorytm & Ryzyko” (progi naszych typów — nasze typy zniknęły
 // z GUI) i bez Telegrama (powiadomienia o NASZYCH kuponach). Zostaje konto.
@@ -153,12 +153,12 @@ const SettingsView = ({ status, apiFetch, onSave, user, isAdmin, onAccountUpdate
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
             <div className="bg-white/5 rounded-xl p-4 text-center">
               <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Balans</p>
-              <p className="text-lg font-bold text-white">{status?.bankroll?.toFixed(2)} <span className="text-xs font-normal text-slate-500">PLN</span></p>
+              <p className="text-lg font-bold text-white">{formatKwota(status?.bankroll)} <span className="text-xs font-normal text-slate-500">PLN</span></p>
             </div>
             <div className="bg-white/5 rounded-xl p-4 text-center">
               <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">ROI</p>
-              <p className={`text-lg font-bold ${status?.stats?.roi_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {status?.stats?.roi_pct >= 0 ? '+' : ''}{status?.stats?.roi_pct}%
+              <p className={`text-lg font-bold ${typeof status?.stats?.roi_pct !== 'number' ? 'text-slate-400' : status.stats.roi_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {formatRoi(status?.stats?.roi_pct)}
               </p>
             </div>
             <div className="bg-white/5 rounded-xl p-4 text-center">

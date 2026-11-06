@@ -60,8 +60,14 @@ const LeaderboardView = ({ apiFetch }) => {
   const [optIn, setOptIn] = useState(null);
   const [savingOptIn, setSavingOptIn] = useState(false);
 
+  // Ponowienie czyści baner dopiero po udanym pobraniu; błąd zostawia go na ekranie.
+  const loadPending = () =>
+    apiFetch('/leaderboard/pending')
+      .then(dane => { setPending(dane); setPendingError(false); })
+      .catch(() => setPendingError(true));
+
   useEffect(() => {
-    apiFetch('/leaderboard/pending').then(setPending).catch(() => setPendingError(true));
+    loadPending();
     apiFetch('/auth/me')
       .then(me => setOptIn(!!me.leaderboard_opt_in))
       .catch(() => setOptIn(null));
@@ -263,7 +269,10 @@ const LeaderboardView = ({ apiFetch }) => {
       )}
 
       {pendingError && (
-        <ErrorBanner message="Nie udało się pobrać listy świeżo udostępnionych kuponów" />
+        <ErrorBanner
+          message="Nie udało się pobrać listy świeżo udostępnionych kuponów"
+          onRetry={loadPending}
+        />
       )}
 
       {pending.length > 0 && (

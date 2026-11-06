@@ -7,6 +7,10 @@ const INNY = '__inny__';
 const EMPTY_LEG = { home: '', away: '', rynek: '', tipInny: '', odds: '' };
 const BOOKMAKERS = ['STS', 'Fortuna', 'Superbet', 'Betclic', 'Fuksiarz', 'Bzzoiro'];
 
+// Widoczna etykieta nad polem nogi (sam placeholder znika po wpisaniu tekstu).
+const ETYKIETA_NOGI = 'block text-xs mb-1 text-[var(--text-muted)]';
+const POLE_NOGI = 'min-w-0 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors';
+
 const tipNogi = (leg) => (leg.rynek === INNY ? leg.tipInny.trim() : leg.rynek);
 
 // Rynki pogrupowane do <optgroup>, w kolejności z backendu.
@@ -124,32 +128,39 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
           {legs.map((leg, i) => (
             <div
               key={i}
-              className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.6fr_84px_auto] gap-3 items-center bg-white/[0.02] border border-white/5 rounded-xl p-4"
+              className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.6fr_84px_auto] gap-3 items-start bg-white/[0.02] border border-white/5 rounded-xl p-4"
             >
-              <input
-                type="text"
-                aria-label="Gospodarz"
-                placeholder="Gospodarz"
-                value={leg.home}
-                onChange={(e) => updateLeg(i, 'home', e.target.value)}
-                maxLength={120}
-                className="min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-              <input
-                type="text"
-                aria-label="Gość"
-                placeholder="Gość"
-                value={leg.away}
-                onChange={(e) => updateLeg(i, 'away', e.target.value)}
-                maxLength={120}
-                className="min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-              />
+              <div className="min-w-0">
+                <label htmlFor={`leg-${i}-home`} className={ETYKIETA_NOGI}>Gospodarz</label>
+                <input
+                  id={`leg-${i}-home`}
+                  type="text"
+                  placeholder="Gospodarz"
+                  value={leg.home}
+                  onChange={(e) => updateLeg(i, 'home', e.target.value)}
+                  maxLength={120}
+                  className={POLE_NOGI}
+                />
+              </div>
+              <div className="min-w-0">
+                <label htmlFor={`leg-${i}-away`} className={ETYKIETA_NOGI}>Gość</label>
+                <input
+                  id={`leg-${i}-away`}
+                  type="text"
+                  placeholder="Gość"
+                  value={leg.away}
+                  onChange={(e) => updateLeg(i, 'away', e.target.value)}
+                  maxLength={120}
+                  className={POLE_NOGI}
+                />
+              </div>
               <div className="min-w-0 flex flex-col gap-1">
+                <label htmlFor={`leg-${i}-tip`} className={ETYKIETA_NOGI}>Typ</label>
                 <select
-                  aria-label="Typ"
+                  id={`leg-${i}-tip`}
                   value={leg.rynek}
                   onChange={(e) => updateLeg(i, 'rynek', e.target.value)}
-                  className="min-w-0 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                  className={POLE_NOGI}
                 >
                   <option value="">Wybierz typ…</option>
                   {grupyRynkow.map(g => (
@@ -168,7 +179,7 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
                       value={leg.tipInny}
                       onChange={(e) => updateLeg(i, 'tipInny', e.target.value)}
                       maxLength={120}
-                      className="min-w-0 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                      className={POLE_NOGI}
                     />
                     <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
                       Tę nogę rozliczysz sam w Historii.
@@ -176,21 +187,24 @@ const ManualCouponForm = ({ apiFetch, onClose, onSaved }) => {
                   </>
                 )}
               </div>
-              <input
-                type="number"
-                step="0.01"
-                min="1.01"
-                aria-label="Kurs"
-                placeholder="Kurs"
-                value={leg.odds}
-                onChange={(e) => updateLeg(i, 'odds', e.target.value)}
-                className="min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-              />
+              <div className="min-w-0">
+                <label htmlFor={`leg-${i}-odds`} className={ETYKIETA_NOGI}>Kurs</label>
+                <input
+                  id={`leg-${i}-odds`}
+                  type="number"
+                  step="0.01"
+                  min="1.01"
+                  placeholder="Kurs"
+                  value={leg.odds}
+                  onChange={(e) => updateLeg(i, 'odds', e.target.value)}
+                  className={POLE_NOGI}
+                />
+              </div>
               <button
                 onClick={() => removeLeg(i)}
                 disabled={legs.length === 1}
                 title="Usuń nogę"
-                className="p-2 text-slate-500 hover:text-pink-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors justify-self-end"
+                className="p-2 text-slate-500 hover:text-pink-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors justify-self-end md:mt-6"
               >
                 <Trash2 size={16} />
               </button>

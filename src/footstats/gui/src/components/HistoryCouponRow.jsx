@@ -81,7 +81,7 @@ const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
       >
         <div className="flex items-center gap-4">
           <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isWon ? 'bg-emerald-500/10 text-emerald-400' : isLost ? 'bg-rose-500/10 text-rose-400' : isVoid ? 'bg-slate-500/10 text-slate-400' : 'bg-amber-500/10 text-amber-400'}`}>
-            {isWon ? <CheckCircle2 /> : isLost ? <XCircle /> : isVoid ? <Ban /> : <Clock />}
+            {isWon ? <CheckCircle2 size={20} /> : isLost ? <XCircle size={20} /> : isVoid ? <Ban size={20} /> : <Clock size={20} />}
           </div>
           <div>
             <p className="font-bold text-lg">Kupon #{c.id} - {c.phase?.toUpperCase()}</p>
@@ -222,10 +222,10 @@ const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
               <div key={i} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${won === true ? 'bg-emerald-500/5 border border-emerald-500/15' : won === false ? 'bg-rose-500/5 border border-rose-500/15' : 'bg-white/[0.02] border border-white/5'}`}>
                 <div className="shrink-0">
                   {won === true
-                    ? <CheckCircle2 size={14} className="text-emerald-400" />
+                    ? <CheckCircle2 size={16} className="text-emerald-400" />
                     : won === false
-                      ? <XCircle size={14} className="text-rose-400" />
-                      : <Clock size={14} className="text-amber-400" />}
+                      ? <XCircle size={16} className="text-rose-400" />
+                      : <Clock size={16} className="text-amber-400" />}
                 </div>
                 <span className="font-semibold text-slate-200 flex-1 truncate">{leg.home} - {leg.away}</span>
                 <span className="text-slate-400 shrink-0">Typ: <span className="font-bold text-slate-200">{leg.tip}</span></span>

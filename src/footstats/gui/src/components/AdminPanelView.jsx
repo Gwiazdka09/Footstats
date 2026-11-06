@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Users, Trash2, UserPlus, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { formatRoi } from './ui';
 
 const AdminPanelView = ({ apiFetch, onSettled }) => {
   const [settling, setSettling] = useState(false);
@@ -119,7 +120,7 @@ const AdminPanelView = ({ apiFetch, onSettled }) => {
               <div>
                 <p className="text-xs uppercase text-slate-500 mb-1">ROI kuponów</p>
                 <p className={`text-2xl font-bold ${(modelStats.coupons.roi_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {modelStats.coupons.roi_pct >= 0 ? '+' : ''}{modelStats.coupons.roi_pct ?? '—'}%
+                  {formatRoi(modelStats.coupons.roi_pct)}
                 </p>
                 <p className="text-xs text-slate-500">{modelStats.coupons.profit_pln >= 0 ? '+' : ''}{modelStats.coupons.profit_pln} / {modelStats.coupons.stake_pln} PLN</p>
               </div>
