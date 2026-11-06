@@ -81,7 +81,7 @@ def test_naglowek_obecny(klucz: str, wartosc: str) -> None:
 
 def test_csp_dopuszcza_api_bo_inaczej_aplikacja_umiera() -> None:
     """Front i API są na różnych domenach — bez tego wpisu CSP ubija logowanie."""
-    csp = _naglowki().get("Content-Security-Policy-Report-Only", "")
+    csp = _naglowki().get("Content-Security-Policy", "")
     assert API_PROD in _dyrektywy_csp(csp).get("connect-src", []), (
         "CSP nie dopuszcza domeny API w connect-src — każde żądanie by padło"
     )
@@ -95,23 +95,22 @@ def test_helper_csp_nie_myli_dyrektyw() -> None:
 
 def test_csp_ma_gdzie_raportowac() -> None:
     """Tryb raportujący bez adresu raportu to dekoracja — lekcja z wersji API."""
-    csp = _naglowki().get("Content-Security-Policy-Report-Only", "")
+    csp = _naglowki().get("Content-Security-Policy", "")
     assert f"{API_PROD}/api/csp-report" in _dyrektywy_csp(csp).get("report-uri", [])
 
 
 def test_csp_blokuje_ramki_i_obce_skrypty() -> None:
-    dyrektywy = _dyrektywy_csp(_naglowki().get("Content-Security-Policy-Report-Only", ""))
+    dyrektywy = _dyrektywy_csp(_naglowki().get("Content-Security-Policy", ""))
     assert "'none'" in dyrektywy.get("frame-ancestors", [])
     assert "'self'" in dyrektywy.get("script-src", [])
     assert "'none'" in dyrektywy.get("object-src", [])
 
 
-def test_polityka_nie_jest_wymuszana_zanim_cokolwiek_zmierzymy() -> None:
-    """Zabezpieczenie przed pochopnym zaciśnięciem: wymuszona CSP, która psuje
-    front, daje białą stronę u wszystkich naraz. Najpierw raporty, potem decyzja
-    właściciela projektu — i wtedy ten test się zmienia razem z nią.
+def test_polityka_wymuszana_na_vercelu() -> None:
+    """Od 2026-11-06 CSP wymusza także front na Vercelu. Pomiar: 14 dni raportów,
+    wyłącznie podglądy Vercela, zero naruszeń z produkcji. Tryb raportujący
+    na Vercelu nie jest już używany — wycofanie to zmiana klucza w vercel.json.
     """
-    assert "Content-Security-Policy" not in _naglowki(), (
-        "CSP wymuszana na Vercelu — jeśli to świadoma decyzja po przejrzeniu "
-        "raportów, zaktualizuj ten test razem z nią"
-    )
+    naglowki = _naglowki()
+    assert "Content-Security-Policy" in naglowki
+    assert "Content-Security-Policy-Report-Only" not in naglowki

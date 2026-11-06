@@ -219,12 +219,11 @@ _CSP = "; ".join([
     "report-uri /api/csp-report",
 ])
 
-# DOMYŚLNIE RAPORTOWANIE, NIE WYMUSZANIE. CSP, która psuje GUI, jest gorsza od jej
-# braku: użytkownik widzi białą stronę, a przyczyna siedzi w nagłówku, nie w kodzie.
-# Nie mamy jeszcze ani jednego pomiaru naruszeń, więc wymuszanie byłoby zgadywaniem.
-# Flaga pozwala przełączyć BEZ wdrażania nowego obrazu — a moment, w którym trzeba
-# wycofać złą politykę, to dokładnie ten, w którym nie chcemy czekać na build.
-_CSP_ENFORCE = os.environ.get("CSP_ENFORCE", "0").strip() in ("1", "true", "True")
+# DOMYŚLNIE WYMUSZANIE (od 2026-11-06). Pomiar przed zmianą: 14 dni raportów
+# z `/api/csp-report` — wyłącznie podglądy Vercela (pasek narzędzi wstawia
+# `<style>`), zero naruszeń z produkcji. Wycofanie BEZ nowego obrazu:
+# `CSP_ENFORCE=0` na usłudze Cloud Run — wtedy wraca `Report-Only`.
+_CSP_ENFORCE = os.environ.get("CSP_ENFORCE", "1").strip() in ("1", "true", "True")
 
 
 @app.middleware("http")

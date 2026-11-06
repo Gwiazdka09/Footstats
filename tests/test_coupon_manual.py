@@ -167,11 +167,12 @@ def test_manual_coupon_puste_legs_400(tmp_db):
     assert exc.value.status_code == 400
 
 
-def test_manual_coupon_odds_1_lub_mniej_400(tmp_db):
+def test_manual_coupon_odds_1_lub_mniej_422(tmp_db):
+    # kurs poza [1.01, 1000] to teraz 422 (wspólna walidacja liczb), nie 400
     req = ManualCouponRequest(legs=[_leg(odds=1.0)], stake_pln=10.0)
     with pytest.raises(HTTPException) as exc:
         manual_coupon(req, user_id=1)
-    assert exc.value.status_code == 400
+    assert exc.value.status_code == 422
 
 
 def test_manual_coupon_stake_zero_lub_ujemna_400(tmp_db):

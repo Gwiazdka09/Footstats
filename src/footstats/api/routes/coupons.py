@@ -191,6 +191,46 @@ _MAX_NOG_KUPONU = _MAX_PREVIEW_LEGS
 # rozjezdza ROI i krzywa postepu w rankingu, ktory widza inni.
 _MAX_STAWKI = 100_000.0
 _MAX_WYPLATY = 10_000_000.0
+# Zakres kursu jednej nogi. Poza nim to literówka albo atak, nie zakład.
+_MIN_KURS_NOGI = 1.01
+_MAX_KURS_NOGI = 1000.0
+
+
+def _blad_liczb(detail: str) -> HTTPException:
+    """422 z polskim komunikatem — jeden kształt błędu dla wszystkich walidacji liczb."""
+    return HTTPException(status_code=422, detail=detail)
+
+
+def _waliduj_liczby_kuponu(stake: float | None, kursy: List[float]) -> float:
+    """Wspólna walidacja liczb kuponu (manual i place). Zwraca kurs łączny.
+
+    NaN/inf przechodzą porównania (`nan <= 0` jest False), więc skończoność
+    sprawdzamy jawnie i PRZED jakimkolwiek porównaniem. Dolne granice stawki
+    (dodatnia / min. 2 PLN) zostają w endpointach, bo różnią się między nimi.
+    """
+    if stake is not None:
+        if not math.isfinite(stake):
+            raise _blad_liczb("Stawka musi być liczbą skończoną")
+        if stake > _MAX_STAWKI:
+            raise _blad_liczb(f"Stawka nie może przekraczać {_MAX_STAWKI:.0f}")
+    for kurs in kursy:
+        if not math.isfinite(kurs) or not _MIN_KURS_NOGI <= kurs <= _MAX_KURS_NOGI:
+            raise _blad_liczb(
+                f"Kurs każdej nogi musi być liczbą od {_MIN_KURS_NOGI} do {_MAX_KURS_NOGI:.0f}"
+            )
+    total = math.prod(kursy)
+    if not math.isfinite(total):
+        raise _blad_liczb("Kurs łączny kuponu jest poza dopuszczalnym zakresem")
+    return round(total, 2)
+
+
+def _data_iso(wartosc: str) -> str:
+    """Zwraca 'RRRR-MM-DD' z daty ISO (także z czasem po dacie) albo rzuca 422."""
+    try:
+        datetime.strptime(wartosc[:10], "%Y-%m-%d")
+    except ValueError:
+        raise _blad_liczb("Data meczu musi być w formacie RRRR-MM-DD")
+    return wartosc[:10]
 
 
 def _validate_manual_coupon(req: ManualCouponRequest) -> None:
@@ -202,13 +242,9 @@ def _validate_manual_coupon(req: ManualCouponRequest) -> None:
             status_code=400,
             detail=f"Kupon może mieć najwyżej {_MAX_NOG_KUPONU} nóg (podano {len(req.legs)})",
         )
+    _waliduj_liczby_kuponu(req.stake_pln, [leg.odds for leg in req.legs])
     if req.stake_pln <= 0:
         raise HTTPException(status_code=400, detail="Stawka musi być dodatnia")
-    if req.stake_pln > _MAX_STAWKI:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Stawka nie może przekraczać {_MAX_STAWKI:.0f}",
-        )
     if req.bookmaker and len(req.bookmaker) > _MAX_BOOKMAKER_LEN:
         raise HTTPException(
             status_code=400,
@@ -227,8 +263,6 @@ def _validate_manual_coupon(req: ManualCouponRequest) -> None:
                 raise HTTPException(
                     status_code=400, detail="Data nogi musi być w formacie RRRR-MM-DD"
                 )
-        if leg.odds <= 1.0:
-            raise HTTPException(status_code=400, detail="Kurs każdej nogi musi być większy niż 1.0")
         for pole, wartosc in (("gospodarz", leg.home), ("gość", leg.away), ("typ", leg.tip)):
             if not wartosc or not wartosc.strip():
                 raise HTTPException(status_code=400, detail=f"Pole '{pole}' nie może być puste")
@@ -485,6 +519,18 @@ def calculate_kelly(req: KellyRequest, user_id: int = Depends(require_auth)):
 
 @router.post("/coupon/place")
 def place_coupon(req: PlaceCouponRequest, user_id: int = Depends(require_auth)):
+    if not req.selections:
+        raise _blad_liczb("Kupon musi mieć co najmniej jedną nogę")
+    # Kurs łączny liczy SERWER z kursów nóg; wartość od klienta nie jest zapisywana.
+    total_odds = _waliduj_liczby_kuponu(req.stake_pln, [s.odds for s in req.selections])
+    if req.total_odds is not None and not (
+        math.isfinite(req.total_odds) and abs(req.total_odds - total_odds) <= 0.01 * total_odds
+    ):
+        _log.warning(
+            "place_coupon: total_odds od klienta (%s) różni się od wyliczonego (%s) — ignoruję",
+            req.total_odds, total_odds,
+        )
+    match_date = _data_iso(req.match_date) if req.match_date else None
     if not req.stake_pln or req.stake_pln < 2.0:
         raise HTTPException(status_code=400, detail="Minimalna stawka to 2.00 PLN")
     with _connect() as conn:
@@ -513,8 +559,8 @@ def place_coupon(req: PlaceCouponRequest, user_id: int = Depends(require_auth)):
             VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id
             """,
             (now, "final", "ACTIVE", "accumulator", legs_json,
-             req.total_odds, req.stake_pln, None,
-             req.match_date or datetime.now().strftime("%Y-%m-%d"), user_id),
+             total_odds, req.stake_pln, None,
+             match_date or datetime.now().strftime("%Y-%m-%d"), user_id),
         ).fetchone()
         coupon_id = coupon_row["id"]
         new_balance = round(balance - req.stake_pln, 2)
