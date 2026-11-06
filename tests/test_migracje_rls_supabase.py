@@ -78,6 +78,32 @@ def test_blok_zawiera_wymagane_instrukcje_i_nie_ma_force():
     assert "FORCE" not in sql.upper()
 
 
+def test_blok_ogranicza_alter_do_tabel_bez_rls():
+    """ALTER bierze ACCESS EXCLUSIVE nawet przy włączonym RLS, więc tylko tabele bez RLS."""
+    conn = _PgConn()
+    mig._utwardz_supabase(conn)
+    sql = _blok(conn)
+    assert "relrowsecurity" in sql
+    assert "NOT c.relrowsecurity" in sql
+
+
+def test_blok_ustawia_lock_timeout_zanim_zrobi_alter():
+    """Start API nie może czekać bez limitu na długie transakcje jobów."""
+    conn = _PgConn()
+    mig._utwardz_supabase(conn)
+    sql = _blok(conn)
+    assert "set_config('lock_timeout', '5s', true)" in sql
+    assert sql.index("lock_timeout") < sql.index("ENABLE ROW LEVEL SECURITY")
+
+
+def test_revoke_tylko_gdy_rola_ma_grant_na_tabele_public():
+    conn = _PgConn()
+    mig._utwardz_supabase(conn)
+    sql = _blok(conn)
+    assert "role_table_grants" in sql
+    assert "table_schema = 'public'" in sql
+
+
 def test_sql_bez_parametrow_i_bez_znaku_zapytania():
     """Wrapper zamienia '?' na '%s'; psycopg2 interpretuje '%' tylko przy params != None."""
     conn = _PgConn()

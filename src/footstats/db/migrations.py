@@ -492,12 +492,14 @@ DECLARE
     t text;
     r text;
 BEGIN
+    -- Blok jest no-opem, gdy wszystko już zabezpieczone (bez blokad); lock_timeout chroni start przed czekaniem.
+    PERFORM set_config('lock_timeout', '5s', true);
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-        FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+        FOR t IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity LOOP
             EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
         END LOOP;
         FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+            IF EXISTS (SELECT 1 FROM information_schema.role_table_grants WHERE grantee = r AND table_schema = 'public') THEN
                 EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', r);
                 EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', r);
                 EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
