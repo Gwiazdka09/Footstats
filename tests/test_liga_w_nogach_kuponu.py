@@ -70,7 +70,7 @@ def przechwyc(monkeypatch):
 
 def _mecz(liga="Premier League"):
     return {
-        "gospodarz": "Arsenal", "goscie": "Chelsea", "data": "2026-09-01",
+        "gospodarz": "Arsenal", "goscie": "Chelsea", "data": "2099-09-01",
         "liga": liga, "pw": 55.0, "pr": 25.0, "pp": 20.0, "bt": 52.0, "o25": 58.0,
         "odds": {"home": 1.85, "draw": 3.4, "away": 4.2,
                  "over_2_5": 1.75, "under_2_5": 2.05, "btts": 1.8},
@@ -111,7 +111,7 @@ def test_pozostale_pola_nogi_nietkniete(przechwyc, klucz):
 
 def _kandydat(liga="Bundesliga"):
     return {"mecz": "Bayern vs Dortmund", "typ": "Over 2.5", "kurs": 1.7,
-            "decision_score": 65, "liga": liga, "data": "2026-09-01"}
+            "decision_score": 65, "liga": liga, "data": "2099-09-01"}
 
 
 def test_kupon_LLM_tez_niesie_lige(monkeypatch):

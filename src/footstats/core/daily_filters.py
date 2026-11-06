@@ -178,6 +178,9 @@ def filtruj_rozpoczete(wyniki: list[dict], teraz: datetime | None = None) -> lis
             else:
                 przeszly = datetime.strptime(d, "%Y-%m-%d").date() < teraz.date()
         except ValueError:
+            logger.warning(
+                "Nieczytelna data/godzina meczu %s vs %s (%r %r) — przepuszczam bez filtra rozpoczetych",
+                w.get("gospodarz"), w.get("goscie"), w.get("data"), w.get("godzina"))
             przeszly = False  # nieczytelna data: decyzja nalezy do dalszych filtrow
         (odrzucone if przeszly else ok).append(w)
     if odrzucone:
