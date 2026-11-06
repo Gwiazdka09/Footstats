@@ -8,6 +8,46 @@ log = logging.getLogger(__name__)
 _DOGRYWKA = re.compile(r"(?<![a-z])(aet|a\.e\.t\.?|et|dogrywk\w*)(?![a-z])", re.IGNORECASE)
 _KARNE = re.compile(r"(?<![a-z])(pens?|ap|karn\w*|k\.k\.)(?![a-z])", re.IGNORECASE)
 
+# Prog linii: kropka ALBO przecinek dziesietny ("2.5" == "2,5"). Wczesniej "2,5" dawalo
+# prog "2" (wiec "Under 2,5" przy 1-1 = 2<2 = PRZEGRANA, a powinno byc WYGRANA).
+_LICZBA = r"\d+(?:[.,]\d+)?"
+
+
+def _na_liczbe(tekst: str) -> float:
+    return float(tekst.replace(",", "."))
+
+
+# Separator czlonow typu zlozonego: "&", "+", " i ", " and ", " oraz " albo przecinek
+# MIEDZY rynkami. Przecinek wewnatrz liczby ("2,5") nie jest separatorem.
+_SEPARATOR = re.compile(r"\s*&\s*|\s*\+\s*|\s+(?:I|AND|ORAZ)\s+|\s*(?:(?<!\d),|,(?!\d))\s*")
+
+# Rynki polowy ("1H", "2H", "1. polowa", "HT", "1st half"). Oceny polowy nie ma —
+# jedyny rynek z HT (GG2H) obsluzony jest osobno — wiec nie zgadujemy: None. Bez tego
+# "1H OVER 0.5" brany byl za prog "1".
+_POLOWA = re.compile(
+    r"(?<!\w)(?:[12]H|HT|FH|SH|[12]ST|[12]ND|HALF\w*|PO[ŁL](?:OW\w*)?)(?!\w)")
+
+
+def _rozbij_typ(tip: str) -> list[str]:
+    """Rozbija typ zlozony na czlony; typ prosty zwraca jako jednoelementowa liste.
+
+    Nie rozbijamy: tresci w nawiasach (opis/szansa), sufiksu "+" progu ("STRZELI 0.5+")
+    znaku "+1" po spacji ("HANDICAP +1 GOŚĆ") oraz zapisu "[1X2] & GG2H" (jeden rynek).
+    """
+    def maska(m: re.Match) -> str:
+        return "\0" * len(m.group(0))
+
+    z_maska = re.sub(r"\([^)]*\)", maska, tip)
+    z_maska = re.sub(r"(?<=\d)\+(?=\s*(?:$|[&+,\x00]|(?:I|AND|ORAZ)\s))", maska, z_maska)
+    z_maska = re.sub(r"(?<=\s)\+(?=\d)", maska, z_maska)   # znak: "HANDICAP +1 GOŚĆ"
+    z_maska = re.sub(r"(?<!\w)[1X2]\s*&\s*GG2H(?!\w)", maska, z_maska)
+    czlony, start = [], 0
+    for sep in _SEPARATOR.finditer(z_maska):
+        czlony.append(tip[start:sep.start()])
+        start = sep.end()
+    czlony.append(tip[start:])
+    return [c.strip() for c in czlony if c.strip()]
+
 
 def powod_nierozliczalny(actual_result) -> str | None:
     """Zwraca powod, dla ktorego wyniku NIE da sie uczciwie rozliczyc, albo None.
@@ -72,18 +112,27 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
                     actual_result, powod, ai_tip)
         return None
 
-    # BetBuilder combo: "BB: 1 + Over 1.5" = KONIUNKCJA członów (wszystkie muszą trafić).
-    # Bez tego oceniany byl tylko pierwszy pasujacy czlon -> przegrane combo jako WON.
+    # Typ zlozony — "BB: 1 + Over 1.5", "BTTS & OVER 2.5", "1 & OVER 2.5" — to
+    # KONIUNKCJA czlonow. Bez tego oceniany byl tylko jeden czlon (np. samo Over przy
+    # "BTTS & OVER 2.5" 3-0 = WON, choc BTTS przegrane). Wynik: 0 gdy ktorykolwiek
+    # czlon jest pewnie 0; 1 tylko gdy wszystkie sa 1; inaczej None (nie zgadujemy).
     # Rekursja dostaje ORYGINALNY actual_result (z sufiksem HT) — człony typu GG2H
     # potrzebują go niezależnie od reszty kombinacji.
-    if tip.startswith("BB:") or tip.startswith("BB "):
-        czlony = [c.strip() for c in tip[3:].split("+") if c.strip()]
+    bb = tip.startswith("BB:") or tip.startswith("BB ")
+    czlony = _rozbij_typ(tip[3:] if bb else tip)
+    if bb or len(czlony) > 1:
         if not czlony:
             return None
         wyniki = [oblicz_tip_correct(c, actual_result) for c in czlony]
-        if any(w is None for w in wyniki):
-            return None          # któryś człon nierozliczalny → całość nieznana
-        return 1 if all(w == 1 for w in wyniki) else 0
+        if 0 in wyniki:
+            return 0
+        return 1 if all(w == 1 for w in wyniki) else None
+
+    # Rynek polowy: brak oceny po polowie → nierozliczalny (patrz `_POLOWA`).
+    if _POLOWA.search(tip):
+        log.warning("Typ %r dotyczy polowy meczu — brak oceny, noga zostaje"
+                    " NIEROZLICZONA", ai_tip)
+        return None
 
     # Wydziel sufiks HT (";HT:hh-ha") — reszta (FT) parsowana jak dotychczas.
     ht_home = ht_away = None
@@ -163,11 +212,12 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
         return 1 if match_result in ("1", "2") else 0
 
     # Gole drużyny: "1 OVER 0.5" = gospodarz strzeli >0.5 (1+) goli, "2 UNDER 1.5" = gość <1.5 itd.
-    team_goals = re.match(r"^(1|2)\s+(OVER|UNDER)\s+(\d+\.\d+|\d+)$", tip)
+    team_goals = re.match(rf"^(1|2)\s+(OVER|UNDER)\s+({_LICZBA})$", tip)
     if team_goals:
         if home_g is None or away_g is None:
             return None
-        side, direction, val = team_goals.group(1), team_goals.group(2), float(team_goals.group(3))
+        side, direction, val = (team_goals.group(1), team_goals.group(2),
+                                _na_liczbe(team_goals.group(3)))
         goals = home_g if side == "1" else away_g
         if direction == "OVER":
             return 1 if goals > val else 0
@@ -185,23 +235,24 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
     # Sufiks "(Szansa: 78%)" doklejany przez bet_builder jest odcinany.
     tip_bez_nawiasu = re.sub(r"\(.*?\)", "", tip).strip()
     team_pl = re.match(
-        r"^(GOSPODARZ|GOŚCIE|GOSCIE|GOŚĆ|GOSC)\s+STRZEL\w*\s+(\d+\.\d+|\d+)\+?$",
+        rf"^(GOSPODARZ|GOŚCIE|GOSCIE|GOŚĆ|GOSC)\s+STRZEL\w*\s+({_LICZBA})\+?$",
         tip_bez_nawiasu,
     )
     if team_pl:
         if home_g is None or away_g is None:
             return None
-        strona, val = team_pl.group(1), float(team_pl.group(2))
+        strona, val = team_pl.group(1), _na_liczbe(team_pl.group(2))
         goals = home_g if strona == "GOSPODARZ" else away_g
         return 1 if goals > val else 0
 
     # Gole druzyny nazwane (BetBuilder): "GOSPODARZ OVER 0.5" / "GOŚĆ OVER 1.5".
     # MUSI byc przed generycznym Over/Under (ten liczy TOTAL, nie gole druzyny).
-    team_named = re.match(r"^(GOSPODARZ|GOŚĆ|GOSC)\s+(OVER|UNDER)\s+(\d+\.\d+|\d+)$", tip)
+    team_named = re.match(rf"^(GOSPODARZ|GOŚĆ|GOSC)\s+(OVER|UNDER)\s+({_LICZBA})$", tip)
     if team_named:
         if home_g is None or away_g is None:
             return None
-        side, direction, val = team_named.group(1), team_named.group(2), float(team_named.group(3))
+        side, direction, val = (team_named.group(1), team_named.group(2),
+                                _na_liczbe(team_named.group(3)))
         goals = home_g if side == "GOSPODARZ" else away_g
         if direction == "OVER":
             return 1 if goals > val else 0
@@ -211,7 +262,7 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
     if "OVER" in tip or "UNDER" in tip:
         if total_goals is None: return None
         try:
-            val_match = re.search(r"(\d+\.\d+|\d+)", tip)
+            val_match = re.search(f"({_LICZBA})", tip_bez_nawiasu)
             if not val_match:
                 # CICHY POWROT, ktorego audyt `except` nie widzi, bo to nie handler.
                 # Typ OVER/UNDER bez progu liczbowego generujemy MY — to blad po
@@ -220,7 +271,7 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
                             " wiec blad jest po stronie generowania; noga zostaje"
                             " NIEROZLICZONA", tip)
                 return None
-            val = float(val_match.group(1))
+            val = _na_liczbe(val_match.group(1))
             if "OVER" in tip:
                 return 1 if total_goals > val else 0
             else:
@@ -242,11 +293,11 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
 
     # Handicap europejski: "1 (-1.5)" / "2 (+1.5)" — wygrana po doliczeniu handicapu,
     # remis po korekcie = przegrana (wariant europejski, bez zwrotu).
-    hcp = re.match(r"^(1|2)\s*\(\s*([+-]?\d+(?:\.\d+)?)\s*\)$", tip)
+    hcp = re.match(r"^(1|2)\s*\(\s*([+-]?\d+(?:[.,]\d+)?)\s*\)$", tip)
     if hcp:
         if home_g is None or away_g is None:
             return None
-        side, line = hcp.group(1), float(hcp.group(2))
+        side, line = hcp.group(1), _na_liczbe(hcp.group(2))
         if side == "1":
             return 1 if (home_g + line) > away_g else 0
         return 1 if (away_g + line) > home_g else 0
