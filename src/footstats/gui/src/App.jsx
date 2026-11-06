@@ -5,7 +5,7 @@ import {
 import { AnimatePresence } from 'framer-motion';
 
 import { API_BASE, decodeJwtPayload, legalUrl } from './lib/api';
-import { NavItem } from './components/ui';
+import { NavItem, ErrorBanner } from './components/ui';
 import LoginView from './components/LoginView';
 import DashboardHome from './components/DashboardHome';
 import CouponWizard from './components/Wizard/CouponWizard';
@@ -27,6 +27,8 @@ const App = () => {
   const [config, setConfig] = useState(null);
   const [calibration, setCalibration] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Błąd pobrania ≠ „brak danych”: baner trzyma się do następnego udanego pobrania.
+  const [fetchError, setFetchError] = useState(false);
   const [view, setView] = useState('dashboard'); // 'dashboard', 'history', 'stats', 'settings', 'wizard'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -113,8 +115,10 @@ const App = () => {
       setHistory(historyData);
       setConfig(configData);
       setCalibration(calibrationData);
+      setFetchError(false);
     } catch (error) {
       console.error("Błąd podczas pobierania danych:", error);
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -243,6 +247,12 @@ const App = () => {
         </div>
         <main className={`flex-1 main-content p-4 lg:p-12 ${sidebarCollapsed ? 'lg:ml-24' : 'lg:ml-72'}`}>
         <div className="container">
+          {fetchError && (
+            <ErrorBanner
+              message="Nie udało się pobrać danych — spróbuj ponownie"
+              onRetry={fetchData}
+            />
+          )}
           <AnimatePresence mode="wait">
             {view === 'dashboard' && (
               <DashboardHome

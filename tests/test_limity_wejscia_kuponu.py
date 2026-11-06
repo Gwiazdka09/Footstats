@@ -36,6 +36,7 @@ def _zadanie(ile_nog: int = 1, stawka: float = 10.0) -> coupons.ManualCouponRequ
     return coupons.ManualCouponRequest(
         legs=[coupons.ManualLeg(**_noga(i)) for i in range(ile_nog)],
         stake_pln=stawka,
+        match_date="2026-11-08",
     )
 
 

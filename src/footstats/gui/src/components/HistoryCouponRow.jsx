@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
-import { CheckCircle2, XCircle, Clock, ChevronRight, Share2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Ban, ChevronRight, Share2 } from 'lucide-react';
 import { odmianaTypy } from '../lib/tips';
+
+// Pole wypłaty: przecinek lub kropka, puste = „backend liczy sam” (null),
+// nie-liczba = undefined (komunikat u użytkownika, bez wysyłki).
+const parsujWyplate = (tekst) => {
+  const t = tekst.trim().replace(',', '.');
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+};
 
 const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
   const [expanded, setExpanded] = useState(false);
@@ -8,9 +17,14 @@ const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
   const [sharing, setSharing] = useState(false);
   const [settling, setSettling] = useState(false);
   const [settleError, setSettleError] = useState('');
+  const [payoutText, setPayoutText] = useState('');
   const isWon = ['WON', 'WIN'].includes(c.status);
   const isLost = ['LOST', 'LOSE'].includes(c.status);
-  const isManualActive = c.status === 'ACTIVE' && c.kupon_type === 'manual';
+  const isVoid = c.status === 'VOID';
+  const isManual = c.kupon_type === 'manual';
+  const isManualActive = c.status === 'ACTIVE' && isManual;
+  // WON -> WON z kwotą: backend dopuszcza korektę samej wypłaty (i ROI).
+  const isManualWon = c.status === 'WON' && isManual;
   const legs = c.legs || [];
   const wonCount = legs.filter(l => l.leg_won === true).length;
   const lostCount = legs.filter(l => l.leg_won === false).length;
@@ -32,14 +46,24 @@ const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
     }
   };
 
-  const markResult = async (result) => {
+  const markResult = async (result, { wymagajKwoty = false } = {}) => {
     if (settling) return;
+    // Kwota ma sens tylko przy WON — backend odrzuca ją przy LOST/VOID (400).
+    const payout = result === 'WON' ? parsujWyplate(payoutText) : null;
+    if (payout === undefined) {
+      setSettleError('Wypłata musi być liczbą nieujemną');
+      return;
+    }
+    if (wymagajKwoty && payout === null) {
+      setSettleError('Podaj kwotę wypłaty');
+      return;
+    }
     setSettling(true);
     setSettleError('');
     try {
       await apiFetch(`/coupon/${c.id}/result`, {
         method: 'PATCH',
-        body: JSON.stringify({ result }),
+        body: JSON.stringify(payout === null ? { result } : { result, payout_pln: payout }),
       });
       onRefresh && onRefresh();
     } catch (err) {
@@ -56,12 +80,12 @@ const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
         onClick={() => legs.length > 0 && setExpanded(e => !e)}
       >
         <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isWon ? 'bg-emerald-500/10 text-emerald-400' : isLost ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'}`}>
-            {isWon ? <CheckCircle2 /> : isLost ? <XCircle /> : <Clock />}
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isWon ? 'bg-emerald-500/10 text-emerald-400' : isLost ? 'bg-rose-500/10 text-rose-400' : isVoid ? 'bg-slate-500/10 text-slate-400' : 'bg-amber-500/10 text-amber-400'}`}>
+            {isWon ? <CheckCircle2 /> : isLost ? <XCircle /> : isVoid ? <Ban /> : <Clock />}
           </div>
           <div>
             <p className="font-bold text-lg">Kupon #{c.id} - {c.phase?.toUpperCase()}</p>
-            <p className="text-sm text-slate-500">{new Date(c.created_at).toLocaleString()}</p>
+            <p className="text-sm text-slate-500">{new Date(c.created_at).toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' })}</p>
             {legs.length > 0 && (
               <p className="text-xs text-slate-600 mt-0.5">
                 <span className="text-emerald-400">{wonCount}✓</span>
@@ -105,6 +129,18 @@ const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
       {isManualActive && (
         <div className="px-6 pb-4 flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-500 uppercase tracking-widest">Oznacz wynik:</span>
+          <label htmlFor={`payout-${c.id}`} className="text-xs text-slate-500 uppercase tracking-widest">
+            Wypłata z buka (PLN)
+          </label>
+          <input
+            id={`payout-${c.id}`}
+            type="text"
+            inputMode="decimal"
+            placeholder="opcjonalnie"
+            value={payoutText}
+            onChange={(e) => setPayoutText(e.target.value)}
+            className="w-28 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+          />
           {/* Kolory inline to POZOSTALOSC po bugu naprawionym 17.08.2026: reset
               `button { color: inherit }` stal poza `@layer`, wiec bil warstwowe
               klasy Tailwinda i zadne `text-*`/`bg-*` nie dzialalo na przycisku.
@@ -144,6 +180,35 @@ const HistoryCouponRow = ({ c, apiFetch, onRefresh }) => {
             className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 hover:opacity-80 transition-opacity"
           >
             ANULOWANY
+          </button>
+          {settleError && <span className="text-xs" style={{ color: 'var(--accent-secondary)' }}>{settleError}</span>}
+        </div>
+      )}
+
+      {isManualWon && (
+        <div className="px-6 pb-4 flex flex-wrap items-center gap-2">
+          <label htmlFor={`payout-${c.id}`} className="text-xs text-slate-500 uppercase tracking-widest">
+            Wypłata z buka (PLN)
+          </label>
+          <input
+            id={`payout-${c.id}`}
+            type="text"
+            inputMode="decimal"
+            placeholder="opcjonalnie"
+            value={payoutText}
+            onChange={(e) => setPayoutText(e.target.value)}
+            className="w-28 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+          <button
+            onClick={() => markResult('WON', { wymagajKwoty: true })}
+            disabled={settling}
+            style={{
+              color: 'var(--accent-primary)',
+              background: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)',
+            }}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 hover:opacity-80 transition-opacity"
+          >
+            ZAPISZ WYPŁATĘ
           </button>
           {settleError && <span className="text-xs" style={{ color: 'var(--accent-secondary)' }}>{settleError}</span>}
         </div>

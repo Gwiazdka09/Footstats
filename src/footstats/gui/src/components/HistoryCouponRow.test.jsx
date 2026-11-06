@@ -146,4 +146,103 @@ describe('licznik nog', () => {
     fireEvent.click(screen.getByText(/Kupon #149/));
     expect(screen.queryByText(/Typ:/)).not.toBeInTheDocument();
   });
+
+  it('kupon reczny: licznik i rozwiniecie czytaja result oraz leg_won z backendu', () => {
+    wyrenderuj({
+      status: 'LOST',
+      legs: [
+        { home: 'Legia', away: 'Wisła', tip: '1', odds: 1.8, result: '2:0', leg_won: true },
+        { home: 'Lech', away: 'Pogoń', tip: 'X', odds: 3.2, result: '1:0', leg_won: false },
+      ],
+    });
+    expect(screen.getByText('1✓')).toBeInTheDocument();
+    expect(screen.getByText('1✗')).toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Kupon #149/));
+    expect(screen.getByText('2:0')).toBeInTheDocument();
+    expect(screen.getByText('1:0')).toBeInTheDocument();
+  });
+});
+
+describe('wyplata z buka (kupon reczny)', () => {
+  const pole = () => screen.getByLabelText(/Wypłata z buka/);
+
+  it('puste pole = backend liczy sam (brak payout_pln w body)', async () => {
+    const { apiFetch } = wyrenderuj();
+    fireEvent.click(screen.getByText('WYGRANY'));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ result: 'WON' });
+  });
+
+  it('wpisana kwota idzie jako payout_pln przy WYGRANY', async () => {
+    const { apiFetch } = wyrenderuj();
+    fireEvent.change(pole(), { target: { value: '123,45' } });
+    fireEvent.click(screen.getByText('WYGRANY'));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [sciezka, opcje] = apiFetch.mock.calls[0];
+    expect(sciezka).toBe('/coupon/149/result');
+    expect(JSON.parse(opcje.body)).toEqual({ result: 'WON', payout_pln: 123.45 });
+  });
+
+  it('kwota NIE jest wysylana przy PRZEGRANY (backend odrzuca ja z 400)', async () => {
+    const { apiFetch } = wyrenderuj();
+    fireEvent.change(pole(), { target: { value: '50' } });
+    fireEvent.click(screen.getByText('PRZEGRANY'));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ result: 'LOST' });
+  });
+
+  it('zla kwota blokuje wysylke i pokazuje komunikat', () => {
+    const { apiFetch } = wyrenderuj();
+    fireEvent.change(pole(), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByText('WYGRANY'));
+
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(screen.getByText(/Wypłata musi być liczbą/)).toBeInTheDocument();
+  });
+
+  it('rozliczony WON pozwala skorygowac sama wyplate', async () => {
+    const { apiFetch } = wyrenderuj({ status: 'WON', payout_pln: 10 });
+    fireEvent.change(pole(), { target: { value: '99' } });
+    fireEvent.click(screen.getByText('ZAPISZ WYPŁATĘ'));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [sciezka, opcje] = apiFetch.mock.calls[0];
+    expect(sciezka).toBe('/coupon/149/result');
+    expect(JSON.parse(opcje.body)).toEqual({ result: 'WON', payout_pln: 99 });
+  });
+
+  it('korekta wymaga kwoty — pusta nic nie wysyla', () => {
+    const { apiFetch } = wyrenderuj({ status: 'WON', payout_pln: 10 });
+    fireEvent.click(screen.getByText('ZAPISZ WYPŁATĘ'));
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('korekty nie ma dla kuponu AI', () => {
+    wyrenderuj({ status: 'WON', kupon_type: 'accumulator' });
+    expect(screen.queryByText('ZAPISZ WYPŁATĘ')).not.toBeInTheDocument();
+  });
+});
+
+describe('ikona statusu', () => {
+  it('ANULOWANY ma wlasna ikone, inna niz zegar kuponu aktywnego', () => {
+    const { container: aktywny } = render(
+      <HistoryCouponRow c={kupon({ status: 'ACTIVE' })} apiFetch={vi.fn()} />,
+    );
+    const { container: anulowany } = render(
+      <HistoryCouponRow c={kupon({ status: 'VOID' })} apiFetch={vi.fn()} />,
+    );
+    expect(aktywny.querySelector('svg.lucide-clock')).not.toBeNull();
+    expect(aktywny.querySelector('svg.lucide-ban')).toBeNull();
+    expect(anulowany.querySelector('svg.lucide-ban')).not.toBeNull();
+    expect(anulowany.querySelector('svg.lucide-clock')).toBeNull();
+  });
+});
+
+describe('format daty', () => {
+  it('pokazuje czas warszawski w polskim formacie', () => {
+    wyrenderuj({ created_at: '2026-08-15T10:00:00Z' });
+    expect(screen.getByText('15.08.2026, 12:00:00')).toBeInTheDocument();
+  });
 });
