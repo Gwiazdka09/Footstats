@@ -492,18 +492,24 @@ DECLARE
     t text;
     r text;
 BEGIN
-    -- Blok jest no-opem, gdy wszystko już zabezpieczone (bez blokad); lock_timeout chroni start przed czekaniem.
+    -- No-op dla tabel z włączonym RLS (bez blokad ACCESS EXCLUSIVE); lock_timeout chroni start.
+    -- REVOKE są bezwarunkowe (gdy rola istnieje): tanie, a warunek na grantach tabel
+    -- przepuszczał granty sekwencji, funkcji i uprawnienia domyślne. Grantów dla PUBLIC
+    -- w schemacie public nie ma (sprawdzone 6.11), a RLS bez polityk i tak daje 0 wierszy.
     PERFORM set_config('lock_timeout', '5s', true);
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-        FOR t IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity LOOP
+        FOR t IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relrowsecurity LOOP
             EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
         END LOOP;
         FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
-            IF EXISTS (SELECT 1 FROM information_schema.role_table_grants WHERE grantee = r AND table_schema = 'public') THEN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
                 EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', r);
                 EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', r);
+                EXECUTE format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM %I', r);
                 EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
                 EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', r);
+                EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM %I', r);
             END IF;
         END LOOP;
     END IF;

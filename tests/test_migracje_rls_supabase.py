@@ -96,12 +96,21 @@ def test_blok_ustawia_lock_timeout_zanim_zrobi_alter():
     assert sql.index("lock_timeout") < sql.index("ENABLE ROW LEVEL SECURITY")
 
 
-def test_revoke_tylko_gdy_rola_ma_grant_na_tabele_public():
+def test_revoke_bezwarunkowe_na_funkcjach_i_domyslnych_uprawnieniach():
+    """Warunek na grantach tabel pomijał sekwencje, funkcje i uprawnienia domyślne."""
     conn = _PgConn()
     mig._utwardz_supabase(conn)
     sql = _blok(conn)
-    assert "role_table_grants" in sql
-    assert "table_schema = 'public'" in sql
+    assert "REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM" in sql
+    assert "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM" in sql
+    assert "role_table_grants" not in sql
+
+
+def test_blok_obejmuje_tabele_partycjonowane():
+    conn = _PgConn()
+    mig._utwardz_supabase(conn)
+    sql = _blok(conn)
+    assert "relkind IN ('r', 'p')" in sql
 
 
 def test_sql_bez_parametrow_i_bez_znaku_zapytania():
