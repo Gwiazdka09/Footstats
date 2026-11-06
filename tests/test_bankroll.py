@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status     TEXT NOT NULL DEFAULT 'DRAFT',
-    user_id    INTEGER DEFAULT 1
+    user_id    INTEGER DEFAULT 1,
+    settled_at       TIMESTAMP
 );
 """
 

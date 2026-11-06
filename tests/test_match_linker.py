@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS predictions (
     actual_result TEXT
 );
 CREATE TABLE IF NOT EXISTS coupons (
-    id INTEGER PRIMARY KEY AUTOINCREMENT
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    settled_at       TIMESTAMP
 );
 """
 

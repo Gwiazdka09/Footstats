@@ -5,9 +5,13 @@ re-runie) abortuje CAŁĄ transakcję → następny INSERT do schema_migrations 
 → crash startupu. SAVEPOINT per-statement izoluje błąd. Dodatkowo except musi
 łapać psycopg2.Error (nie tylko RuntimeError/ValueError/KeyError).
 """
+import sqlite3
+from pathlib import Path
+
 import pytest
 
 import footstats.db.migrations as mig
+import footstats.utils.db as udb
 
 
 class _FakeConn:
@@ -55,3 +59,90 @@ def test_nieoczekiwany_blad_propaguje():
     conn = _FakeConn(fail_on="BOOM", exc=TypeError)
     with pytest.raises(TypeError):
         mig._exec_statements(conn, ["BOOM"], "postgresql")
+
+
+class _ZamykajacyConn(sqlite3.Connection):
+    """Połączenie SQLite zachowujące kontrakt `utils.db._Conn`: commit/rollback + close."""
+
+    def __exit__(self, exc_type, *_) -> bool:
+        if exc_type:
+            self.rollback()
+        else:
+            self.commit()
+        self.close()
+        return False
+
+
+@pytest.fixture
+def baza_sqlite(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Plik SQLite w tmp_path zamiast Postgresa; `connect` podmieniamy u źródła."""
+    sciezka = tmp_path / "migracje.db"
+
+    def _polacz(wal: bool = True, foreign_keys: bool = True) -> sqlite3.Connection:
+        conn = sqlite3.connect(sciezka, factory=_ZamykajacyConn, timeout=5)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    monkeypatch.setattr(udb, "connect", _polacz)
+    monkeypatch.setattr(mig, "seed_admin_user", lambda: None)
+    return sciezka
+
+
+def _najwyzsza_wersja() -> int:
+    return max(v for v, _, _ in mig._get_migrations_for_dialect("sqlite"))
+
+
+def _liczba_wierszy_wersji(sciezka: Path, version: int) -> int:
+    with sqlite3.connect(sciezka) as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM schema_migrations WHERE version = ?", (version,)
+        ).fetchone()[0]
+
+
+def _usun_wiersz_wersji(sciezka: Path, version: int) -> None:
+    with sqlite3.connect(sciezka) as conn:
+        conn.execute("DELETE FROM schema_migrations WHERE version = ?", (version,))
+
+
+def test_ponowny_start_po_usunieciu_wiersza_wersji_nie_rzuca(baza_sqlite: Path) -> None:
+    # Arrange: pełna migracja, potem wiersz najwyższej wersji znika (ALTER już zrobiony)
+    mig.run_migrations()
+    najwyzsza = _najwyzsza_wersja()
+    _usun_wiersz_wersji(baza_sqlite, najwyzsza)
+
+    # Act: ponowny start nie może wywrócić procesu
+    mig.run_migrations()
+
+    # Assert: dokładnie jeden wiersz tej wersji
+    assert _liczba_wierszy_wersji(baza_sqlite, najwyzsza) == 1
+
+
+def test_wyscig_wpis_wersji_tuz_przed_insertem_nie_wywraca_startu(
+    baza_sqlite: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange: najwyższa wersja nieukończona; drugi proces zapisze ją tuż po ALTER,
+    # a przed INSERT-em tego procesu (symulacja wyścigu API vs job).
+    mig.run_migrations()
+    najwyzsza = _najwyzsza_wersja()
+    _usun_wiersz_wersji(baza_sqlite, najwyzsza)
+    statements_najwyzszej = next(
+        s for v, _, s in mig._get_migrations_for_dialect("sqlite") if v == najwyzsza
+    )
+    oryginal_exec = mig._exec_statements
+
+    def _exec_z_rywalem(conn, statements, dialect) -> None:
+        oryginal_exec(conn, statements, dialect)
+        if statements == statements_najwyzszej:
+            with sqlite3.connect(baza_sqlite, timeout=5) as rywal:
+                rywal.execute(
+                    "INSERT INTO schema_migrations (version, description) VALUES (?, ?)",
+                    (najwyzsza, "wpisane_przez_rywala"),
+                )
+
+    monkeypatch.setattr(mig, "_exec_statements", _exec_z_rywalem)
+
+    # Act: nie może rzucić IntegrityError
+    mig.run_migrations()
+
+    # Assert: jeden wiersz, nadal wpis rywala (ON CONFLICT nie nadpisuje)
+    assert _liczba_wierszy_wersji(baza_sqlite, najwyzsza) == 1
