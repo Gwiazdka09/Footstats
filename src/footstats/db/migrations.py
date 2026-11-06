@@ -487,6 +487,58 @@ def _ensure_migrations_table(conn, dialect: Literal["sqlite", "postgresql"]) -> 
     conn.commit()
 
 
+_UTWARDZ_SUPABASE_SQL = """DO $$
+DECLARE
+    t text;
+    r text;
+BEGIN
+    -- No-op dla tabel z włączonym RLS (bez blokad ACCESS EXCLUSIVE); lock_timeout chroni start.
+    -- REVOKE są bezwarunkowe (gdy rola istnieje): tanie, a warunek na grantach tabel
+    -- przepuszczał granty sekwencji, funkcji i uprawnienia domyślne. Grantów dla PUBLIC
+    -- w schemacie public nie ma (sprawdzone 6.11), a RLS bez polityk i tak daje 0 wierszy.
+    PERFORM set_config('lock_timeout', '5s', true);
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        FOR t IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relrowsecurity LOOP
+            EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+        END LOOP;
+        FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+                EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', r);
+                EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', r);
+                EXECUTE format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM %I', r);
+                EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
+                EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', r);
+                EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM %I', r);
+            END IF;
+        END LOOP;
+    END IF;
+END
+$$"""
+
+
+def _utwardz_supabase(conn) -> None:
+    """Włącza RLS na tabelach `public` i odbiera granty rolom `anon`/`authenticated`.
+
+    Powód (audyt bezpieczeństwa 5.11): `model_log` i `odds_snapshots` nie miały RLS,
+    a `anon`/`authenticated` miały pełne granty — przez PostgREST (URL projektu +
+    klucz publishable) dało się je czytać, a wg grantów także kasować. RLS na części
+    tabel włączono ręcznie w panelu, nowsze go nie dostały.
+
+    Wywoływane przy KAŻDYM starcie (idempotentne), żeby objąć też tabele dodane
+    przyszłymi migracjami. Bez FORCE ROW LEVEL SECURITY: aplikacja łączy się jako
+    właściciel (`postgres`), FORCE by ją zablokował. Poza Supabase (brak roli
+    `anon`) blok nic nie robi. SQL idzie bez parametrów, więc psycopg2 nie
+    interpretuje `%I`. Błąd bazy jest logowany i nie wywraca startu.
+    """
+    try:
+        conn.execute(_UTWARDZ_SUPABASE_SQL)
+        conn.commit()
+    except _DB_ERRORS as e:
+        conn.rollback()
+        _log.error("Krok utwardz_supabase nieudany (start trwa dalej): %s", e)
+
+
 def run_migrations() -> None:
     """Apply pending migrations for the detected DB dialect. Safe to call on every startup."""
     from footstats.utils.db import connect
@@ -519,6 +571,10 @@ def run_migrations() -> None:
         # so that subsequent migrations (like adding foreign keys) don't fail.
         if version == 1:
             seed_admin_user()
+
+    if dialect == "postgresql":
+        with connect() as conn:
+            _utwardz_supabase(conn)
 
     _log.info("All migrations up to date.")
 
