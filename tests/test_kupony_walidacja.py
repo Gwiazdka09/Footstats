@@ -182,7 +182,8 @@ CREATE TABLE coupons (
     kupon_type TEXT NOT NULL DEFAULT '', legs_json TEXT NOT NULL DEFAULT '[]',
     total_odds REAL, stake_pln REAL, payout_pln REAL, roi_pct REAL,
     groq_reasoning TEXT, decision_score INTEGER, match_date_first TEXT,
-    bookmaker TEXT, user_id INTEGER DEFAULT 1, shared BOOLEAN NOT NULL DEFAULT 0);
+    bookmaker TEXT, user_id INTEGER DEFAULT 1, shared BOOLEAN NOT NULL DEFAULT 0,
+    settled_at TIMESTAMP);
 """
 
 
