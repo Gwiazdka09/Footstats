@@ -99,6 +99,9 @@ def tmp_db(tmp_path, monkeypatch):
     yield db_path
 
 
+_DATA = "2026-11-08"
+
+
 def _leg(home: str = "Legia", away: str = "Lech", tip: str = "1", odds: float = 1.85) -> ManualLeg:
     return ManualLeg(home=home, away=away, tip=tip, odds=odds)
 
@@ -112,7 +115,7 @@ def _row(db_path: str, coupon_id: int) -> sqlite3.Row:
 
 
 def _saved_coupon(user_id: int = 1, stake: float = 10.0, odds: float = 2.5) -> int:
-    req = ManualCouponRequest(legs=[_leg(odds=odds)], stake_pln=stake)
+    req = ManualCouponRequest(legs=[_leg(odds=odds)], stake_pln=stake, match_date=_DATA)
     res = manual_coupon(req, user_id=user_id)
     return res["coupon_id"]
 
@@ -120,7 +123,7 @@ def _saved_coupon(user_id: int = 1, stake: float = 10.0, odds: float = 2.5) -> i
 # ── POST /coupon/manual — zapis ──────────────────────────────────────────────
 
 def test_manual_coupon_zapisuje_bookmaker_i_status_active(tmp_db):
-    req = ManualCouponRequest(legs=[_leg()], stake_pln=20.0, bookmaker="STS")
+    req = ManualCouponRequest(legs=[_leg()], stake_pln=20.0, bookmaker="STS", match_date=_DATA)
     res = manual_coupon(req, user_id=1)
 
     assert res["ok"] is True
@@ -134,6 +137,7 @@ def test_manual_coupon_total_odds_to_iloczyn(tmp_db):
     req = ManualCouponRequest(
         legs=[_leg(odds=1.5), _leg(home="Ajax", away="PSV", odds=2.0)],
         stake_pln=10.0,
+        match_date=_DATA,
     )
     res = manual_coupon(req, user_id=1)
     assert res["total_odds"] == pytest.approx(3.0)
@@ -146,13 +150,14 @@ def test_manual_coupon_mowi_ktore_nogi_rozliczysz_sam(tmp_db):
         legs=[_leg(tip="1"), _leg(home="Ajax", away="PSV", tip="rzuty rożne powyżej 3.5"),
               _leg(home="Roma", away="Lazio", tip="Over 2.5")],
         stake_pln=10.0,
+        match_date=_DATA,
     )
     res = manual_coupon(req, user_id=1)
     assert res["do_recznego_rozliczenia"] == [1]
 
 
 def test_manual_coupon_bez_bookmakera_jest_opcjonalny(tmp_db):
-    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0)
+    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0, match_date=_DATA)
     res = manual_coupon(req, user_id=1)
     row = _row(tmp_db, res["coupon_id"])
     assert row["bookmaker"] is None
@@ -161,7 +166,7 @@ def test_manual_coupon_bez_bookmakera_jest_opcjonalny(tmp_db):
 # ── POST /coupon/manual — walidacja ─────────────────────────────────────────
 
 def test_manual_coupon_puste_legs_400(tmp_db):
-    req = ManualCouponRequest(legs=[], stake_pln=10.0)
+    req = ManualCouponRequest(legs=[], stake_pln=10.0, match_date=_DATA)
     with pytest.raises(HTTPException) as exc:
         manual_coupon(req, user_id=1)
     assert exc.value.status_code == 400
@@ -169,28 +174,28 @@ def test_manual_coupon_puste_legs_400(tmp_db):
 
 def test_manual_coupon_odds_1_lub_mniej_422(tmp_db):
     # kurs poza [1.01, 1000] to teraz 422 (wspólna walidacja liczb), nie 400
-    req = ManualCouponRequest(legs=[_leg(odds=1.0)], stake_pln=10.0)
+    req = ManualCouponRequest(legs=[_leg(odds=1.0)], stake_pln=10.0, match_date=_DATA)
     with pytest.raises(HTTPException) as exc:
         manual_coupon(req, user_id=1)
     assert exc.value.status_code == 422
 
 
 def test_manual_coupon_stake_zero_lub_ujemna_400(tmp_db):
-    req = ManualCouponRequest(legs=[_leg()], stake_pln=0.0)
+    req = ManualCouponRequest(legs=[_leg()], stake_pln=0.0, match_date=_DATA)
     with pytest.raises(HTTPException) as exc:
         manual_coupon(req, user_id=1)
     assert exc.value.status_code == 400
 
 
 def test_manual_coupon_za_dlugi_string_400(tmp_db):
-    req = ManualCouponRequest(legs=[_leg(home="X" * 121)], stake_pln=10.0)
+    req = ManualCouponRequest(legs=[_leg(home="X" * 121)], stake_pln=10.0, match_date=_DATA)
     with pytest.raises(HTTPException) as exc:
         manual_coupon(req, user_id=1)
     assert exc.value.status_code == 400
 
 
 def test_manual_coupon_za_dlugi_bookmaker_400(tmp_db):
-    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0, bookmaker="X" * 61)
+    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0, bookmaker="X" * 61, match_date=_DATA)
     with pytest.raises(HTTPException) as exc:
         manual_coupon(req, user_id=1)
     assert exc.value.status_code == 400
@@ -212,12 +217,6 @@ def test_manual_coupon_smieciowa_data_400(tmp_db):
 
 def test_manual_coupon_poprawna_data_ok(tmp_db):
     req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0, match_date="2026-07-21")
-    res = manual_coupon(req, user_id=1)
-    assert res["ok"] is True
-
-
-def test_manual_coupon_brak_daty_dozwolony(tmp_db):
-    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0, match_date=None)
     res = manual_coupon(req, user_id=1)
     assert res["ok"] is True
 
@@ -386,3 +385,29 @@ def test_manual_coupon_zla_data_nogi_400(tmp_db):
     with pytest.raises(HTTPException) as exc:
         manual_coupon(req, user_id=1)
     assert exc.value.status_code == 400
+
+
+# ── POST /coupon/manual — data wymagana ──────────────────────────────────────
+
+def test_manual_coupon_bez_zadnej_daty_400(tmp_db):
+    """Kupon bez daty (ani kuponu, ani żadnej nogi) nigdy się nie rozliczy ani
+    nie zaalarmuje — odrzucamy go przy zapisie, z komunikatem po polsku."""
+    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0)
+    with pytest.raises(HTTPException) as exc:
+        manual_coupon(req, user_id=1)
+    assert exc.value.status_code == 400
+    assert "datę meczu" in exc.value.detail
+
+
+def test_manual_coupon_data_kuponu_wystarcza(tmp_db):
+    req = ManualCouponRequest(legs=[_leg()], stake_pln=10.0, match_date="2026-11-08")
+    assert manual_coupon(req, user_id=1)["ok"] is True
+
+
+def test_manual_coupon_data_na_jednej_nodze_wystarcza(tmp_db):
+    """Brak daty kuponu przechodzi, gdy KTÓRAKOLWIEK noga ma datę."""
+    req = ManualCouponRequest(
+        legs=[_leg(), ManualLeg(home="Ajax", away="PSV", tip="1", odds=1.5, match_date="2026-11-08")],
+        stake_pln=10.0,
+    )
+    assert manual_coupon(req, user_id=1)["ok"] is True

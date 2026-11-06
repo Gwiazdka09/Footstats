@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 import HistoryCouponRow from './HistoryCouponRow';
+import { ErrorBanner } from './ui';
 
 const SORT_OPTIONS = [
   { value: 'win_rate', label: 'Win rate' },
@@ -55,11 +56,12 @@ const LeaderboardView = ({ apiFetch }) => {
   const [sharedCoupons, setSharedCoupons] = useState([]);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
   const [pending, setPending] = useState([]);
+  const [pendingError, setPendingError] = useState(false);
   const [optIn, setOptIn] = useState(null);
   const [savingOptIn, setSavingOptIn] = useState(false);
 
   useEffect(() => {
-    apiFetch('/leaderboard/pending').then(setPending).catch(() => setPending([]));
+    apiFetch('/leaderboard/pending').then(setPending).catch(() => setPendingError(true));
     apiFetch('/auth/me')
       .then(me => setOptIn(!!me.leaderboard_opt_in))
       .catch(() => setOptIn(null));
@@ -258,6 +260,10 @@ const LeaderboardView = ({ apiFetch }) => {
             );
           })}
         </div>
+      )}
+
+      {pendingError && (
+        <ErrorBanner message="Nie udało się pobrać listy świeżo udostępnionych kuponów" />
       )}
 
       {pending.length > 0 && (

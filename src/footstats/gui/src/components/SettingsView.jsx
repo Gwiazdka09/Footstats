@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, TrendingUp, Trash2, Info, User } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { ConfigInput } from './ui';
+import { ConfigInput, ErrorBanner } from './ui';
 
 // 10.09: bez „Algorytm & Ryzyko” (progi naszych typów — nasze typy zniknęły
 // z GUI) i bez Telegrama (powiadomienia o NASZYCH kuponach). Zostaje konto.
@@ -11,9 +11,10 @@ const SettingsView = ({ status, apiFetch, onSave, user, isAdmin, onAccountUpdate
   const [bankrollLoading, setBankrollLoading] = useState(false);
 
   const [me, setMe] = useState(null);
+  const [meError, setMeError] = useState(false);
 
   useEffect(() => {
-    apiFetch('/auth/me').then(setMe).catch(() => {});
+    apiFetch('/auth/me').then(setMe).catch(() => setMeError(true));
   }, []);
 
   const [newUsername, setNewUsername] = useState('');
@@ -166,6 +167,7 @@ const SettingsView = ({ status, apiFetch, onSave, user, isAdmin, onAccountUpdate
             </div>
           </div>
 
+          {meError && <ErrorBanner message="Nie udało się pobrać danych konta — odśwież stronę" />}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             <div className="bg-white/5 rounded-xl p-4">
               <p className="text-xs text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1.5"><User size={13} /> Login</p>

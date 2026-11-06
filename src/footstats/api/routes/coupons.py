@@ -271,6 +271,13 @@ def _validate_manual_coupon(req: ManualCouponRequest) -> None:
                     status_code=400,
                     detail=f"Pole '{pole}' zbyt długie (max {_MAX_TEXT_LEN} znaków)",
                 )
+    # Bez żadnej daty kupon nigdy się nie rozliczy ani nie zaalarmuje (rozliczenie
+    # i alarmy szukają meczu po dacie) — odrzucamy przy zapisie, nie po tygodniu.
+    if not req.match_date and not any(leg.match_date for leg in req.legs):
+        raise HTTPException(
+            status_code=400,
+            detail="Podaj datę meczu — bez niej kupon nie zostanie rozliczony",
+        )
 
 
 @router.get("/coupons/active")
