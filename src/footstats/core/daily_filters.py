@@ -5,6 +5,7 @@ Uruchamiane przed wywołaniem Groq aby oszczędzać tokeny i poprawiać jakość
 
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -153,3 +154,36 @@ def _pre_filtruj_ligi(kandydaci: list[dict]) -> list[dict]:
             bez_nazwy, len(kandydaci),
         )
     return wynik
+
+
+ZAPAS_ROZPOCZETYCH_MIN = 10
+
+
+def filtruj_rozpoczete(wyniki: list[dict], teraz: datetime | None = None) -> list[dict]:
+    """Odrzuca mecze, ktore juz sie zaczely (z zapasem 10 min) albo maja date < dzis.
+
+    `teraz` to naiwny czas UTC (domyslnie biezacy). Bez godziny liczy sie sama data.
+    Incydent 29.10: draft zapisal 32 kupony na mecze z 28.10 (rozegrane).
+    """
+    teraz = teraz or datetime.now(timezone.utc).replace(tzinfo=None)
+    prog = teraz + timedelta(minutes=ZAPAS_ROZPOCZETYCH_MIN)
+    ok: list[dict] = []
+    odrzucone: list[dict] = []
+    for w in wyniki:
+        d = str(w.get("data") or "")[:10]
+        godz = str(w.get("godzina") or "")[:5]
+        try:
+            if len(godz) == 5 and godz[2] == ":":
+                przeszly = datetime.strptime(f"{d} {godz}", "%Y-%m-%d %H:%M") < prog
+            else:
+                przeszly = datetime.strptime(d, "%Y-%m-%d").date() < teraz.date()
+        except ValueError:
+            przeszly = False  # nieczytelna data: decyzja nalezy do dalszych filtrow
+        (odrzucone if przeszly else ok).append(w)
+    if odrzucone:
+        p = odrzucone[0]
+        logger.warning(
+            "filtruj_rozpoczete: odrzucono %d z %d meczow juz rozpoczetych "
+            "(np. %s - %s, %s %s)", len(odrzucone), len(wyniki),
+            p.get("gospodarz"), p.get("goscie"), p.get("data"), p.get("godzina") or "?")
+    return ok

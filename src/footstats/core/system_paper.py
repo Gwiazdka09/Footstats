@@ -130,7 +130,7 @@ def build_single_leg_coupons(wyniki: list[dict], stake: float = DEFAULT_STAKE,
     from footstats.core.coupon_tracker import (
         save_coupon, update_coupon_status, STATUS_ACTIVE, init_coupon_tables,
     )
-    from footstats.core.daily_filters import _pre_filtruj_ligi
+    from footstats.core.daily_filters import _pre_filtruj_ligi, filtruj_rozpoczete
     from footstats.utils.db import connect
 
     if user_id is None:
@@ -140,7 +140,7 @@ def build_single_leg_coupons(wyniki: list[dict], stake: float = DEFAULT_STAKE,
         return 0
 
     init_coupon_tables()
-    kandydaci = _pre_filtruj_ligi(wyniki)   # whitelist lig (Faza 17.4)
+    kandydaci = filtruj_rozpoczete(_pre_filtruj_ligi(wyniki))   # whitelist lig (Faza 17.4)
     created = 0
 
     for w in kandydaci:
