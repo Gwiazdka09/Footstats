@@ -64,18 +64,20 @@ def zrodla(monkeypatch):
     import footstats.core.backtest as bt
 
     class _Kursor:
-        def __init__(self, row):
-            self._row = row
+        def __init__(self, rows):
+            self._rows = rows
 
-        def fetchone(self):
-            return self._row
+        def fetchall(self):
+            return self._rows
 
     class _Conn:
         def execute(self, sql, params=()):
             d = params[0] if params else None
             stan["kolejnosc"].append(f"db:{d}")
             wynik = stan["db"].get(d)
-            return _Kursor({"actual_result": wynik} if wynik else None)
+            # Zrodlo 4 wymaga OBU druzyn — wiersz niesie ten sam mecz co `_szukaj`.
+            return _Kursor([{"team_home": "Legia", "team_away": "Lech",
+                             "actual_result": wynik}] if wynik else [])
 
         def __enter__(self):
             return self

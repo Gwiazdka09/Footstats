@@ -108,6 +108,7 @@ def update_coupon_status(
     status: str,
     payout_pln: float | None = None,
     expected_status: str | None = None,
+    legs_json: str | None = None,
 ) -> bool:
     """
     Aktualizuje status kuponu. Jeśli payout_pln podany — oblicza roi_pct.
@@ -116,6 +117,8 @@ def update_coupon_status(
     expected_status: CAS-guard (D3) — UPDATE tylko gdy kupon MA ten status
     (np. 'ACTIVE'); chroni przed podwójnym rozliczeniem przy równoległych
     ścieżkach settle (evening_agent vs settle_active_coupons).
+    legs_json: nowy JSON nóg (np. z wynikami) zapisywany w TEJ SAMEJ instrukcji co
+    status, więc pod tym samym warunkiem CAS; None = nogi bez zmian.
     Zwraca True gdy wiersz faktycznie zmieniony.
     """
     init_coupon_tables()
@@ -138,18 +141,21 @@ def update_coupon_status(
         if expected_status is not None:
             cur = conn.execute(
                 "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, "
+                "legs_json = COALESCE(?, legs_json), "
                 "settled_at = CASE WHEN ? THEN settled_at "
                 "ELSE COALESCE(settled_at, CURRENT_TIMESTAMP) END "
                 "WHERE id=? AND status=?",
-                (status, payout_pln, roi_pct, otwarty, coupon_id, expected_status),
+                (status, payout_pln, roi_pct, legs_json, otwarty, coupon_id,
+                 expected_status),
             )
         else:
             cur = conn.execute(
                 "UPDATE coupons SET status=?, payout_pln=?, roi_pct=?, "
+                "legs_json = COALESCE(?, legs_json), "
                 "settled_at = CASE WHEN ? THEN settled_at "
                 "ELSE COALESCE(settled_at, CURRENT_TIMESTAMP) END "
                 "WHERE id=?",
-                (status, payout_pln, roi_pct, otwarty, coupon_id),
+                (status, payout_pln, roi_pct, legs_json, otwarty, coupon_id),
             )
         return (cur.rowcount or 0) == 1
     return bool(_exec(_fn))
