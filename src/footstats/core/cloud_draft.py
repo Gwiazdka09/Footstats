@@ -271,9 +271,9 @@ def generuj_system_draft(dni: int = 2, dry_run: bool = True) -> dict:
         # Podgląd selekcji single-leg — identyczny dobór jak build_single_leg_coupons,
         # ale bez zapisu i bez sprawdzania idempotencji (to wymaga Neon).
         from footstats.core.system_paper import najlepszy_typ
-        from footstats.core.daily_filters import _pre_filtruj_ligi
+        from footstats.core.daily_filters import _pre_filtruj_ligi, filtruj_rozpoczete
 
-        kandydaci = _pre_filtruj_ligi(wyniki)
+        kandydaci = filtruj_rozpoczete(_pre_filtruj_ligi(wyniki))
 
         # Fallback nie ma kursów, a `najlepszy_typ` bez kursu zwraca None → zero
         # kuponów mimo poprawnych prob. Dociągamy je z AF po filtrze lig, żeby

@@ -41,7 +41,7 @@ def _patch(monkeypatch, exists_row=None):
 
 
 def _wyn():
-    return [{"gospodarz": "A", "goscie": "B", "data": "2026-08-01",
+    return [{"gospodarz": "A", "goscie": "B", "data": "2099-08-01",
              "odds": {"home": 1.8}, "pw": 60}]
 
 
@@ -72,7 +72,7 @@ def test_brak_usera_zwraca_zero(monkeypatch):
 def test_brak_legalnego_typu_pomija(monkeypatch):
     calls = _patch(monkeypatch, exists_row=None)
     # kurs longshot 8.0 (>MAX_KURS) → najlepszy_typ None → brak kuponu
-    wyn = [{"gospodarz": "A", "goscie": "B", "data": "2026-08-01",
+    wyn = [{"gospodarz": "A", "goscie": "B", "data": "2099-08-01",
             "odds": {"home": 8.0}, "pw": 60}]
     n = sp.build_single_leg_coupons(wyn, user_id=42)
     assert n == 0 and calls["save"] == []
@@ -80,7 +80,7 @@ def test_brak_legalnego_typu_pomija(monkeypatch):
 
 def test_brak_nazw_druzyn_pomija(monkeypatch):
     calls = _patch(monkeypatch, exists_row=None)
-    wyn = [{"gospodarz": "", "goscie": "B", "data": "2026-08-01",
+    wyn = [{"gospodarz": "", "goscie": "B", "data": "2099-08-01",
             "odds": {"home": 1.8}, "pw": 60}]
     n = sp.build_single_leg_coupons(wyn, user_id=42)
     assert n == 0 and calls["save"] == []

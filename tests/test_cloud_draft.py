@@ -22,8 +22,8 @@ class _ClientDown:
 
 
 _WYNIKI = [
-    {"gospodarz": "A", "goscie": "B", "liga": "ENG", "data": "2026-08-01", "odds": {"1": 1.8}},
-    {"gospodarz": "C", "goscie": "D", "liga": "ITA", "data": "2026-08-01", "odds": {"2": 2.1}},
+    {"gospodarz": "A", "goscie": "B", "liga": "ENG", "data": "2099-08-01", "odds": {"1": 1.8}},
+    {"gospodarz": "C", "goscie": "D", "liga": "ITA", "data": "2099-08-01", "odds": {"2": 2.1}},
 ]
 
 
@@ -201,7 +201,7 @@ def test_noga_dry_runu_ma_godzine_startu(monkeypatch):
     monkeypatch.setattr("footstats.core.quick_picks.szybkie_pewniaczki_2dni",
                         lambda klient, prog, godziny: [
                             {"gospodarz": "A", "goscie": "B", "liga": "ENG",
-                             "data": "2026-08-01", "godzina": "20:45",
+                             "data": "2099-08-01", "godzina": "20:45",
                              "odds": {"1": 1.8}},
                         ])
 
