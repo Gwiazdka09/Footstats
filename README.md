@@ -5,7 +5,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Playwright](https://img.shields.io/badge/Playwright-1.40-45ba4b.svg)](https://playwright.dev/)
-[![Tests](https://img.shields.io/badge/tests-6711-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-7286-brightgreen.svg)](tests/)
 
 **🌐 English · [Polski](README.pl.md)**
 
