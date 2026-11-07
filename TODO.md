@@ -33,6 +33,8 @@ Pomiary przed/po każdego kroku → `docs/obserwacja_modelu.md`.
 - [ ] **Krok 0 — akceptacja aliasów lig (do 30.10).** Kod wdrożony (PR #53, `1f220a042`).
       Warunek z speca: w logach „Filtr lig … odrzucono” zero Trendyol / Apertura / Stoiximan.
       **Częściowe** — kod jest, log jeszcze tego nie potwierdza.
+      **Stan 7.11:** kod `1f220a042` potwierdzony w git (`cat-file`); warunek z logów nadal
+      niepotwierdzony → zostaje otwarte, nie przenoszone do CHANGELOG.
 - [ ] **Krok 1 — zapis wszystkich rynków do pomiarów.** Podwójna szansa, Under 2.5 i
       „BTTS — nie” wyliczane z kolumn `model_log` i dodane do `_WYJSCIA_OBCIAZENIA`
       w `scripts/stan_uczenia.py`. Nowe kolumny `prob_over05/15/35/45` (`core/kalibracja_log.py`,
@@ -42,6 +44,10 @@ Pomiary przed/po każdego kroku → `docs/obserwacja_modelu.md`.
       wg sesji — nie zapisany w git): 1258 kandydatów, filtr lig odrzucił 59%, Poisson policzył 28%.
       Najpierw diagnoza próbki meczów bez wyniku po przyczynie (nazwa drużyny, beniaminek,
       brak w zbiorze, inne), potem naprawa największej, pomiar przed/po.
+      **Stan 7.11:** kod w `eb08f2ad3` (git; 61% → 96%, pomiar 25.10 w `docs/obserwacja_modelu.md`).
+      Pomiar live 6.11 = 86,4% (z sesji, **nie zapisany w git** — do potwierdzenia). Reguła
+      akceptacji 25.10 wymaga też ręcznej kontroli 20 nowych dopasowań — brak potwierdzenia
+      w dokumentach → zostaje otwarte.
 - [ ] **Krok 3 — nowe ligi** (każda pozycja osobny mini-projekt przed startem, własny `model_source`):
   - **3a reprezentacje** — 302 z 688 nazwanych odrzuceń w 30 dni (44%); darmowe wyniki meczów międzynarodowych.
   - **3b puchary** — 189 odrzuceń; wymaga oceny siły ligi (para drużyn z różnych lig).

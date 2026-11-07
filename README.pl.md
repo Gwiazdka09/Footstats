@@ -5,7 +5,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Playwright](https://img.shields.io/badge/Playwright-1.40-45ba4b.svg)](https://playwright.dev/)
-[![Tests](https://img.shields.io/badge/tests-6711-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-7286-brightgreen.svg)](tests/)
 
 **🌐 [English](README.md) · Polski**
 
@@ -22,7 +22,7 @@
 **🔗 Live demo:** [bot-opal-nu.vercel.app](https://bot-opal-nu.vercel.app)  ·  **API:** FastAPI @ Google Cloud Run  ·  **DB:** Supabase PostgreSQL
 
 ### Dlaczego warto zerknąć
-- 🧪 **6711 testów pytest** + CI (lint · mypy · bandit · pip-audit · gitleaks · coverage gate) + regression gate na broad-except — jakość *wymuszana*, nie deklarowana.
+- 🧪 **7286 testów pytest** + CI (lint · mypy · bandit · pip-audit · gitleaks · coverage gate) + regression gate na broad-except — jakość *wymuszana*, nie deklarowana.
 - 📊 **Wyniki negatywne publikowane, nie chowane** — na pytanie „czy model bije rynek" odpowiedź brzmi **nie**, z n, z-score'ami i holdoutem, który zabił 52 kandydujące podzbiory. Kilka obiecujących sygnałów (BTTS dwustronne, strzały celne, xG ponad strzałami) zostało zmierzonych, nie przeszło replikacji i zostało zapisane jako porażki.
 - 🤖 **Pełna autonomia** — dzienny pipeline na Google Cloud Run Jobs + Cloud Scheduler, w pełni PC-niezależny: predykcja, rozliczenie, CLV i RAG-feedback bez interwencji.
 - 🔒 **Rygor produkcyjny** — OWASP API hardening (live), JWT multi-user, RODO + bramka 18+, DevSecOps w CI, rollouty za flagami (default-OFF, walidowane przed flipem), guard-hooki blokujące lokalne odpalenia przeciw produkcyjnej bazie.
@@ -38,7 +38,7 @@ Stos technik zwięźle:
 | **Bayesian Statistics** | τ Dixona-Colesa, estymacja λ per liga, kalibracja izotoniczna + renorm 1X2, ensemble model/rynek 30/70, CLV tracking |
 | **Advanced Scraping** | Playwright (Superbet, FlashScore, STS), requests (Understat, Bzzoiro, API-Football, football-data.co.uk, FotMob) |
 | **Full-Stack** | FastAPI REST (Cloud Run) + React/Vite SPA (Vercel) + Supabase PostgreSQL + multi-user (JWT) |
-| **Quality** | 6711 testów pytest, regression gate na broad-except, CI (lint/security/coverage) + Docker health + daily DB backup (pg_dump → GCS) |
+| **Quality** | 7286 testów pytest, regression gate na broad-except, CI (lint/security/coverage) + Docker health + daily DB backup (pg_dump → GCS) |
 
 ---
 
@@ -138,7 +138,7 @@ src/footstats/
 ├── daily_agent.py         # główny agent (1358 LOC) + _decision / _output / _scheduler
 ├── evening_agent.py       # rozliczanie kuponów @ 23:00
 └── operator_agent.py      # smoke + pipeline + review orchestrator
-tests/             # 6711 testów pytest
+tests/             # 7286 testów pytest
 scripts/           # preflight, backup_db, visualize_brain, calibration_monitor
 data/              # parquet z historią (140 919 meczów), model_calibration.json, legacy SQLite
 cache/             # api_football/, understat_xg/, flashscore/, kursy/
@@ -165,7 +165,7 @@ Logi: `data/logs/operator_agent.log` | Raporty: `data/operator_reports/`
 ## 🧪 Testy
 
 ```bash
-DATABASE_URL="" pytest tests/ -v          # 6711 testów (pusty URL = suita unit, nigdy prod)
+DATABASE_URL="" pytest tests/ -v          # 7286 testów (pusty URL = suita unit, nigdy prod)
 pytest tests/test_poisson.py -v           # Poisson Bayesian + Dixon-Coles, przypadki brzegowe
 pytest tests/test_clv_tracker.py -v       # CLV tracking
 pytest tests/test_broad_except_audit.py   # regression gate: brak nowych broad except

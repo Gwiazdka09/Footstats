@@ -337,8 +337,9 @@ def _load_mappings() -> dict[str, str]:
     był MARTWY na każdej maszynie, która plik już miała — poprawka w kodzie
     nie zmieniała niczego po wdrożeniu.
 
-    Efekt uboczny: `data/team_mappings.json` nie jest w repo ani w obrazie
-    Dockera, więc każde środowisko dopasowywało nazwy inaczej. CI (świeży seed,
+    Efekt uboczny (stan historyczny — dziś plik jest śledzony w git i wpuszczony
+    wyjątkiem `!` w `.dockerignore`/`.gcloudignore`): gdy pliku nie było w repo
+    ani w obrazie Dockera, każde środowisko dopasowywało nazwy inaczej. CI (świeży seed,
     pełne defaults) rozróżniało Manchester United od City, a lokalna maszyna
     ze starym plikiem 28-wpisowym — nie. Ten sam kod, dwa zachowania.
 
