@@ -12,6 +12,15 @@ export const NavItem = ({ icon, label, active, collapsed, onClick }) => (
   </div>
 );
 
+// Brak liczby (błąd pobrania, null) to kreska, nie „undefined%” ani puste pole.
+const jestLiczba = (v) => typeof v === 'number' && Number.isFinite(v);
+
+// ROI ze znakiem: "+3.2%" / "-1.0%" albo "—".
+export const formatRoi = (v) => (jestLiczba(v) ? `${v >= 0 ? '+' : ''}${v}%` : '—');
+
+// Kwota z dwoma miejscami po przecinku: "100.00" albo "—" (jednostkę dopisuje wywołujący).
+export const formatKwota = (v) => (jestLiczba(v) ? v.toFixed(2) : '—');
+
 // Błąd pobrania nie może wyglądać jak „brak danych” — baner mówi wprost, że coś
 // poszło nie tak, i (opcjonalnie) daje ponowienie.
 export const ErrorBanner = ({ message, onRetry }) => (
@@ -58,7 +67,7 @@ export const CouponCard = ({ coupon, index }) => (
         <span className="font-bold tracking-tight">Kupon #{coupon.id} <span className="text-xs text-slate-500 ml-2 font-normal">[{coupon.phase?.toUpperCase()}]</span></span>
       </div>
       <div className="flex items-center gap-2 text-xs text-slate-500">
-        <Calendar size={12} /> {new Date(coupon.created_at).toLocaleDateString('pl-PL', { timeZone: 'Europe/Warsaw' })}
+        <Calendar size={16} /> {new Date(coupon.created_at).toLocaleDateString('pl-PL', { timeZone: 'Europe/Warsaw' })}
       </div>
     </div>
     <div className="p-6 space-y-3">

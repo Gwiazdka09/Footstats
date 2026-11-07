@@ -31,6 +31,17 @@ const wypelnijNoge = async () => {
 const wyslaneKupony = (apiFetch) => apiFetch.mock.calls.filter(([s]) => s === '/coupon/manual');
 
 describe('etykiety pol', () => {
+  it('pola nogi maja WIDOCZNA etykiete, nie tylko aria-label', () => {
+    wyrenderuj();
+    for (const nazwa of ['Gospodarz', 'Gość', 'Typ', 'Kurs']) {
+      const pole = screen.getByLabelText(nazwa);
+      const etykieta = document.querySelector(`label[for="${pole.id}"]`);
+      expect(etykieta).not.toBeNull();
+      expect(etykieta).toHaveTextContent(nazwa);
+      expect(pole).not.toHaveAttribute('aria-label');
+    }
+  });
+
   it('kazde pole ma dostepna nazwe', () => {
     wyrenderuj();
     for (const nazwa of ['Gospodarz', 'Gość', 'Typ', 'Kurs']) {

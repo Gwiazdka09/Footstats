@@ -3,12 +3,16 @@ import {
   Wallet, TrendingUp, CheckCircle2, Clock, ChevronRight, Target
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { StatCard, CouponCard } from './ui';
+import { StatCard, CouponCard, formatRoi, formatKwota } from './ui';
 
 // "Propozycje dnia" (akumulatory risk_low/medium/high z przyciskiem "Skopiuj
 // kupon") usunięte 10.09 — produktem jest dziennik kuponów ludzi, nie nasze
 // typy. Backend i tak oddaje puste koszyki (flaga SYSTEM_RISK_COUPONS).
-const DashboardHome = ({ user, status, coupons, calibration, isAdmin, onSeeAll }) => (
+const DashboardHome = ({ user, status, coupons, calibration, isAdmin, onSeeAll }) => {
+  const roi = status?.stats?.roi_pct;
+  const maRoi = typeof roi === 'number' && Number.isFinite(roi);
+  const kolorRoi = !maRoi ? 'indigo' : roi >= 0 ? 'emerald' : 'rose';
+  return (
   <motion.div
     initial={{ opacity: 0, x: 20 }}
     animate={{ opacity: 1, x: 0 }}
@@ -26,7 +30,7 @@ const DashboardHome = ({ user, status, coupons, calibration, isAdmin, onSeeAll }
         <div>
           <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Dostępny Balans</p>
           <p className="text-3xl font-bold leading-none metric-num">
-            <span className="stat-gradient">{status?.bankroll?.toFixed(2)}</span> <span className="text-lg font-normal text-indigo-300">PLN</span>
+            <span className="stat-gradient">{formatKwota(status?.bankroll)}</span> <span className="text-lg font-normal text-indigo-300">PLN</span>
           </p>
         </div>
       </div>
@@ -35,10 +39,10 @@ const DashboardHome = ({ user, status, coupons, calibration, isAdmin, onSeeAll }
     <section className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
       <StatCard
         title="Skuteczność (ROI)"
-        value={`${status?.stats?.roi_pct >= 0 ? '+' : ''}${status?.stats?.roi_pct}%`}
+        value={formatRoi(status?.stats?.roi_pct)}
         subtitle="Całkowity zwrot z inwestycji"
-        icon={<TrendingUp className={status?.stats?.roi_pct >= 0 ? "text-emerald-400" : "text-rose-400"} />}
-        color={status?.stats?.roi_pct >= 0 ? "emerald" : "rose"}
+        icon={<TrendingUp className={`text-${kolorRoi}-400`} />}
+        color={kolorRoi}
         delay={0.1}
       />
       <StatCard
@@ -114,6 +118,7 @@ const DashboardHome = ({ user, status, coupons, calibration, isAdmin, onSeeAll }
       </div>
     </section>
   </motion.div>
-);
+  );
+};
 
 export default DashboardHome;
