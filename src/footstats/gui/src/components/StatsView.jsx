@@ -10,6 +10,9 @@ const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 // Ulamek 0-1 (win_rate/roi z backendu) -> "66.7%".
 const formatPct = (fraction) => (isNum(fraction) ? `${(fraction * 100).toFixed(1)}%` : BRAK);
 
+// Licznik calkowity (kupony) — brak/NaN z backendu daje kreske, nie "undefined".
+const formatCount = (value) => (isNum(value) ? value : BRAK);
+
 // Zysk PLN (papierowy bankroll) ze znakiem: "+10.00" / "-8.00".
 const formatSigned = (value) =>
   (isNum(value) ? `${value >= 0 ? '+' : ''}${value.toFixed(2)}` : BRAK);
@@ -119,7 +122,7 @@ const StatsView = ({ apiFetch }) => {
       <div className="mb-12">
         <h1 className="text-4xl font-bold mb-2">Statystyki</h1>
         <p style={{ color: 'var(--text-muted)' }}>
-          {stats.settled_count}/{stats.total_coupons} rozliczonych kuponów.
+          {formatCount(stats.settled_count)}/{formatCount(stats.total_coupons)} rozliczonych kuponów.
         </p>
         <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
           Kwoty PLN to papierowy bankroll — nie są prawdziwymi pieniędzmi.

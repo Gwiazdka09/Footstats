@@ -31,6 +31,9 @@ import footstats.utils.db as dbmod
 CHAT_DOZWOLONY = "111222333"
 CHAT_OBCY = "999888777"
 
+# Fixture `bot` (autouse) podmienia tb._reply na atrapę — zachowujemy oryginał.
+_REPLY_ORYGINALNY = tb._reply
+
 
 class _Kursor:
     def __init__(self, row):
@@ -304,3 +307,16 @@ def test_stats_bez_trafien_nie_dzieli_przez_zero(bot):
     bot["conn"].row = {"cnt": 5, "won": None, "pnl": None}
 
     assert "0.0%" in tb._cmd_stats()
+
+
+def test_reply_w_testach_nie_wysyla_do_telegrama(monkeypatch):
+    """_reply pomija wysyłkę gdy działa pytest — nie może obejść strażnika _send."""
+    wywolania: list[tuple] = []
+    monkeypatch.setattr(tb.requests, "post", lambda *a, **k: wywolania.append((a, k)))
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "tests/test_telegram_bot.py::test_x")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token-testowy")
+    monkeypatch.setattr(tb, "_reply", _REPLY_ORYGINALNY)
+
+    tb._reply(CHAT_DOZWOLONY, "tekst")
+
+    assert wywolania == []

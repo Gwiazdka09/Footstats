@@ -58,6 +58,10 @@ def _get_updates(offset: int | None = None) -> list[dict]:
 
 
 def _reply(chat_id: int | str, text: str) -> None:
+    # Test bez mocka nie może wysłać na prawdziwego bota (jak w utils/telegram_notify._send).
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        logger.debug("Telegram: pomijam odpowiedź w trakcie testów")
+        return
     try:
         requests.post(
             API_BASE.format(token=_token(), method="sendMessage"),

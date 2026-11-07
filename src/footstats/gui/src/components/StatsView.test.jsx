@@ -12,4 +12,16 @@ describe('StatsView', () => {
     expect(await screen.findByText('Statystyki')).toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
+
+  it('pusta odpowiedz nie pokazuje undefined ani NaN, a liczniki daja kreske', async () => {
+    const apiFetch = vi.fn((sciezka) =>
+      Promise.resolve(sciezka === '/stats/me' ? {} : []),
+    );
+    const { container } = render(<StatsView apiFetch={apiFetch} />);
+    await screen.findByText('Statystyki');
+    const tekst = container.textContent;
+    expect(tekst).not.toMatch(/undefined/);
+    expect(tekst).not.toMatch(/NaN/);
+    expect(tekst).toContain('—/— rozliczonych kuponów.');
+  });
 });

@@ -69,7 +69,12 @@ def devig_1x2(odds_h, odds_d, odds_a) -> dict | None:
 
 @dataclass(frozen=True)
 class ModelFlags:
-    """Przełączniki warstw modelu do A/B. Domyślne = ścieżka produkcyjna."""
+    """Przełączniki warstw modelu do A/B.
+
+    Wartości domyślne NIE są pełną ścieżką produkcyjną: `use_calibration` jest
+    domyślnie False, bo statyczny plik kalibracji może pokrywać okno replay
+    (lookahead). Zgodność z produkcją wymaga podania flag jawnie.
+    """
     use_bayesian: bool = False      # dołącz Dixon-Coles jako ramię modelu
     use_ensemble: bool = True       # blenduj z devig kursów (jak prod)
     # Domyślnie False: statyczny model_calibration.json może obejmować okno replay (lookahead).
