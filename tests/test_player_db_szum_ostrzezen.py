@@ -57,24 +57,31 @@ def test_martwa_baza_ostrzega_raz_na_proces(tmp_path, caplog, monkeypatch):
         f"{len(ostrzezenia)} ostrzezen na 20 odczytow tego samego stanu stalego")
 
 
-def test_team_stats_tez_ostrzega_raz(tmp_path, caplog):
-    caplog.set_level(logging.WARNING, logger=pdb.log.name)
+def test_team_stats_loguje_info_raz_a_nie_ostrzezenie(tmp_path, caplog):
+    """Tabela dotyczy reprezentacji (MS 2026) — jej brak w kontenerze to stan
+    staly i oczekiwany, wiec INFO (raz na proces), nie WARNING."""
+    caplog.set_level(logging.INFO, logger=pdb.log.name)
 
     for i in range(20):
         pdb.get_team_stats(f"Druzyna {i}", 2026, db_path=_brak_bazy(tmp_path))
 
-    assert len([r for r in caplog.records if r.levelno >= logging.WARNING]) == 1
+    zapisy = [r for r in caplog.records if "team_stats" in r.getMessage()]
+    assert len(zapisy) == 1
+    assert zapisy[0].levelno == logging.INFO
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
 
-def test_dwie_tabele_to_dwa_osobne_ostrzezenia(tmp_path, caplog, monkeypatch):
-    """Cichniecie jednej nie moze wyciszyc drugiej — to rozne braki."""
+def test_dwie_tabele_to_dwa_osobne_komunikaty(tmp_path, caplog, monkeypatch):
+    """Cichniecie jednej nie moze wyciszyc drugiej — to rozne braki.
+    `player_stats` dalej ostrzega (WARNING), `team_stats` schodzi do INFO."""
     monkeypatch.setattr(pdb, "SCIEZKA_ZRZUTU", tmp_path / "brak.json")
-    caplog.set_level(logging.WARNING, logger=pdb.log.name)
+    caplog.set_level(logging.INFO, logger=pdb.log.name)
 
     pdb.team_goal_shares("Arsenal", 2026, db_path=_brak_bazy(tmp_path))
     pdb.get_team_stats("Arsenal", 2026, db_path=_brak_bazy(tmp_path))
 
-    assert len([r for r in caplog.records if r.levelno >= logging.WARNING]) == 2
+    assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
+    assert len([r for r in caplog.records if r.levelno == logging.INFO]) == 1
 
 
 def test_komunikat_nie_klamie_gdy_zrzut_jest(tmp_path, caplog, monkeypatch):
