@@ -61,7 +61,10 @@ _LONG_RUNNING_PATHS = {"/api/coupons/settle", "/api/cron/settle", "/api/cron/dra
                        "/api/cron/settle-manual", "/api/admin/opis-meczu",
                        "/api/analyses/matches",
                        # Kilka stron Bzzoiro na zimnym starcie nie mieści się w 10 s.
-                       "/api/matches/today", "/api/coupons/daily-proposals"}
+                       "/api/matches/today", "/api/coupons/daily-proposals",
+                       # Rzadko trwa >10 s → 504 → fałszywy alarm Schedulera
+                       # DEADLINE_EXCEEDED (11.10, 20.10, 4.11).
+                       "/api/cron/raport-dzienny"}
 _LONG_RUNNING_TIMEOUT = 120.0
 
 

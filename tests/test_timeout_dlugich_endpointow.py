@@ -23,6 +23,7 @@ from footstats.api.main import _LONG_RUNNING_PATHS, _LONG_RUNNING_TIMEOUT
     "/api/cron/settle-manual",
     "/api/cron/draft",
     "/api/coupons/settle",
+    "/api/cron/raport-dzienny",
 ])
 def test_endpointy_z_zewnetrznymi_zrodlami_maja_dluzszy_limit(sciezka: str):
     """Każdy z nich może wołać `_find_leg_result` albo scraper — 10 s nie wystarczy."""
