@@ -115,6 +115,10 @@ def _send(text: str, parse_mode: str = "HTML", chat_id: str | None = None) -> bo
     chat_id: opcjonalny — gdy podany, wysyła do tego czatu (per-user, 15.6);
     inaczej globalny TELEGRAM_CHAT_ID z env (bot autonomiczny → admin).
     """
+    # Test bez mocka nie może wysłać na prawdziwy czat (audyt 7.11).
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        log.debug("Telegram: pomijam wysylke w trakcie testow")
+        return False
     token, env_chat = _get_credentials()
     target = (chat_id or env_chat or "").strip()
     if not token or not target:

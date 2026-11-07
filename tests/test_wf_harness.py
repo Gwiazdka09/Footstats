@@ -428,3 +428,9 @@ def test_over25_nie_jest_zmieszane_z_cena_1x2():
     # Kontrola pozytywna: 1X2 MA sie roznic, inaczej test przechodzi dlatego,
     # ze kursow w ogole nie bylo.
     assert not z_ens["pw"].equals(bez["pw"])
+
+
+def test_model_flags_domyslnie_bez_kalibracji():
+    """Statyczny model_calibration.json może obejmować okno replay (lookahead),
+    więc domyślnie walk-forward nie wczytuje kalibracji."""
+    assert ModelFlags().use_calibration is False
