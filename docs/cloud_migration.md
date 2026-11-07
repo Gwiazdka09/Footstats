@@ -7,6 +7,9 @@ i settlement już są cloudowe; to domyka migrację.
 **Decyzja:** Cloud Run Jobs (nie request-bound jak /cron/draft; Playwright+Groq OK), nie Raspberry Pi
 (infra GCP + Neon już stoi; Pi = port ARM + dubel). Koszt ~$0-5/mc (2 krótkie runy/dzień).
 
+> **Aktualizacja:** od 18.07.2026 baza produkcyjna to **Supabase Postgres** (session pooler);
+> Neon został zablokowany limitem. Wzmianki o Neonie niżej są historyczne.
+
 > ⚠️ Wymaga `gcloud` (Twoje konto/koszt). Poniżej gotowe komendy — uruchom jutro. Placeholdery `<...>` uzupełnij.
 
 ## 0. Zmienne
@@ -24,7 +27,7 @@ gcloud builds submit --tag $IMAGE --dockerfile Dockerfile.jobs .
 ```
 
 ## 2. Sekrety (te same co lokalny .env)
-Przez Cloud Run env lub Secret Manager. Minimum: `DATABASE_URL` (Neon), `GROQ_API_KEY`,
+Przez Cloud Run env lub Secret Manager. Minimum: `DATABASE_URL` (Supabase; do 18.07 Neon), `GROQ_API_KEY`,
 `BZZOIRO_KEY`, `TELEGRAM_*` (jeśli final wysyła), `JWT_SECRET`. Ustaw `--set-secrets` / `--set-env-vars`.
 
 ## 3. Cloud Run Jobs (final + evening)

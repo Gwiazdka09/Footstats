@@ -22,7 +22,7 @@
 **🔗 Live demo:** [bot-opal-nu.vercel.app](https://bot-opal-nu.vercel.app)  ·  **API:** FastAPI @ Google Cloud Run  ·  **DB:** Supabase PostgreSQL
 
 ### Why it's worth a look
-- 🧪 **6,711 pytest tests** + CI (lint · mypy · bandit · pip-audit · gitleaks · coverage gate) + a regression gate on broad excepts — quality is *enforced*, not claimed.
+- 🧪 **7,286 pytest tests** + CI (lint · mypy · bandit · pip-audit · gitleaks · coverage gate) + a regression gate on broad excepts — quality is *enforced*, not claimed.
 - 📊 **Negative results are published, not buried** — "does the model beat the market" is answered **no**, with n, z-scores and the holdout that killed 52 candidate subsets. Several promising signals (BTTS two-way, shots-on-target, xG on top of shots) were measured, failed replication, and were written down as failures.
 - 🤖 **Full autonomy** — a daily pipeline on Google Cloud Run Jobs + Cloud Scheduler, fully PC-independent: prediction, settlement, CLV capture and RAG feedback with zero intervention.
 - 🔒 **Production rigor** — OWASP API hardening (live), JWT multi-user, GDPR/18+ gating, DevSecOps in CI, feature-flagged rollouts (default-OFF, validated before flipping), guard hooks that block local runs from touching the production DB.
@@ -38,7 +38,7 @@ Tech at a glance:
 | **Bayesian Statistics** | Dixon-Coles τ, per-league λ estimation, isotonic calibration + 1X2 renormalization, model/market ensemble at 30/70, CLV tracking |
 | **Advanced Scraping** | Playwright (Superbet, FlashScore, STS), requests (Understat, Bzzoiro, API-Football, football-data.co.uk, FotMob) |
 | **Full-Stack** | FastAPI REST (Cloud Run) + React/Vite SPA (Vercel) + Supabase PostgreSQL + multi-user (JWT) |
-| **Quality** | 6,711 pytest tests, broad-except regression gate, CI (lint/security/coverage) + Docker health + daily DB backup (pg_dump → GCS) |
+| **Quality** | 7,286 pytest tests, broad-except regression gate, CI (lint/security/coverage) + Docker health + daily DB backup (pg_dump → GCS) |
 
 ---
 
@@ -138,7 +138,7 @@ src/footstats/
 ├── daily_agent.py         # main agent (1,358 LOC) + _decision / _output / _scheduler
 ├── evening_agent.py       # coupon settlement @ 23:00
 └── operator_agent.py      # smoke + pipeline + review orchestrator
-tests/             # 6,711 pytest tests
+tests/             # 7,286 pytest tests
 scripts/           # preflight, backup_db, visualize_brain, calibration_monitor
 data/              # parquet history (140,919 matches), model_calibration.json, legacy SQLite
 cache/             # api_football/, understat_xg/, flashscore/, kursy/
@@ -165,7 +165,7 @@ Logs: `data/logs/operator_agent.log` | Reports: `data/operator_reports/`
 ## 🧪 Tests
 
 ```bash
-DATABASE_URL="" pytest tests/ -v          # 6,711 tests (empty URL = unit suite, never prod)
+DATABASE_URL="" pytest tests/ -v          # 7,286 tests (empty URL = unit suite, never prod)
 pytest tests/test_poisson.py -v           # Bayesian Poisson + Dixon-Coles edge cases
 pytest tests/test_clv_tracker.py -v       # CLV tracking
 pytest tests/test_broad_except_audit.py   # regression gate: no new broad excepts
