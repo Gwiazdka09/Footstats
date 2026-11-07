@@ -11,7 +11,7 @@ from footstats.ai import rag_embeddings
 
 
 def test_powiadomienie_windows_pomijane_poza_windows(monkeypatch):
-    monkeypatch.setattr(dao.os, "name", "posix")
+    monkeypatch.setattr(dao, "_jest_windows", lambda: False)
     wywolania: list = []
     monkeypatch.setattr(dao.subprocess, "Popen", lambda *a, **k: wywolania.append(a))
 
