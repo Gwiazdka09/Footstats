@@ -72,7 +72,8 @@ class ModelFlags:
     """Przełączniki warstw modelu do A/B. Domyślne = ścieżka produkcyjna."""
     use_bayesian: bool = False      # dołącz Dixon-Coles jako ramię modelu
     use_ensemble: bool = True       # blenduj z devig kursów (jak prod)
-    use_calibration: bool = True    # load_calibration() w predict_match
+    # Domyślnie False: statyczny model_calibration.json może obejmować okno replay (lookahead).
+    use_calibration: bool = False   # load_calibration() w predict_match
     w_bayesian: float = 0.5         # waga ramienia bayesian w blendzie modelu
 
 

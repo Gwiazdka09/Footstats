@@ -183,6 +183,7 @@ class TestPerUserTelegram:
         """_send z chat_id override wysyła do podanego czatu, nie globalnego."""
         monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
         monkeypatch.setenv("TELEGRAM_CHAT_ID", "GLOBAL")
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)  # guard z _send
         from footstats.utils import telegram_notify as tn
         captured = {}
 
@@ -202,6 +203,7 @@ class TestPerUserTelegram:
         """Bez chat_id override → globalny env."""
         monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
         monkeypatch.setenv("TELEGRAM_CHAT_ID", "GLOBAL")
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)  # guard z _send
         from footstats.utils import telegram_notify as tn
         captured = {}
 
@@ -268,3 +270,21 @@ class TestSourceHealthCheck:
 
         assert result is False
         mock_alert.assert_not_called()
+
+
+class TestTelegramMilczyWTestach:
+    """Audyt 7.11 — test bez mocka nie może wysłać na prawdziwy czat."""
+
+    @pytest.mark.unit
+    def test_send_pomija_wysylke_w_trakcie_pytest(self, monkeypatch):
+        """Przy PYTEST_CURRENT_TEST `_send` zwraca False i nie woła requests.post."""
+        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "GLOBAL")
+        monkeypatch.setenv("PYTEST_CURRENT_TEST", "tests/x.py::test_y (call)")
+        from footstats.utils import telegram_notify as tn
+        wywolania = []
+        monkeypatch.setattr(tn.requests, "post",
+                            lambda *a, **k: wywolania.append(a) or None)
+
+        assert tn._send("hej") is False
+        assert wywolania == []
