@@ -143,7 +143,7 @@ def _cache_set(klucz: str, dane):
 def _af_ensure_dir():
     global _zgloszono_brak_katalogu
     try:
-        CACHE_DIR.mkdir(exist_ok=True)
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         if not _zgloszono_brak_katalogu:
             # Bez katalogu KAZDY zapis cache pada po cichu, wiec kazde zapytanie
