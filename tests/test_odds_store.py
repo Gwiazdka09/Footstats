@@ -125,3 +125,39 @@ def test_zapisane_wartosci_zgadzaja_sie_z_wejsciem(conn):
     assert r["outcome"] == "Over"
     assert r["bookmaker"] == "pinnacle"
     assert r["price"] == pytest.approx(1.90)
+
+
+class _KursorDict:
+    """Atrapa kursora Postgresa (RealDictCursor): wiersze to zwykle dict-y."""
+
+    def __init__(self, wiersze):
+        self._wiersze = wiersze
+
+    def fetchall(self):
+        return self._wiersze
+
+
+class _PolaczenieDict:
+    def __init__(self, istniejace):
+        self._istniejace = istniejace
+        self.inserty = []
+
+    def execute(self, sql, params=()):
+        if sql.lstrip().upper().startswith("SELECT"):
+            return _KursorDict(self._istniejace)
+        self.inserty.append(params)
+        return _KursorDict([])
+
+
+def test_wiersze_jako_dict_postgres_nie_rzucaja_keyerror():
+    istniejacy = {"event_id": "abc123", "market": "h2h", "line": 0.0,
+                  "outcome": "Draw", "bookmaker": "pinnacle"}
+    polaczenie = _PolaczenieDict([istniejacy])
+
+    stat = odds_store.zapisz_migawke(
+        [_wiersz(), _wiersz("everygame", price=4.00)],
+        conn=polaczenie, dzien="2026-08-27")
+
+    assert stat["pominiete"] == 1
+    assert stat["zapisane"] == 1
+    assert len(polaczenie.inserty) == 1
