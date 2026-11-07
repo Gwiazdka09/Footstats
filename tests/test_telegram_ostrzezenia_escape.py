@@ -30,6 +30,7 @@ class _Odp:
 
 def _przechwyc(monkeypatch, odpowiedzi):
     """Podstawia HTTP; zwraca listę wysłanych payloadów."""
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)  # guard z _send
     wyslane: list[dict] = []
     kolejka = list(odpowiedzi)
 
