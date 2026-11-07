@@ -80,3 +80,41 @@ def test_poprawny_json_nie_loguje_bledu(smiec):
 
     assert wynik["ostrzezenia"] == "ok"
     assert not smiec.records, f"blad zalogowany mimo poprawnego JSON: {_log(smiec)}"
+
+
+def test_log_podaje_pozycje_bledu_i_fragment_wokol(smiec):
+    """`e.msg`, `e.pos` i repr fragmentu +-80 zn. — widac znak, ktory zepsul JSON."""
+    tekst = '{"a": 1, "b": 2 "c": 3}' + "x" * 300 + "{"
+
+    _wyciagnij_json(tekst)
+
+    tekst_logu = _log(smiec)
+    assert "pozycja bledu" in tekst_logu
+    assert "Expecting" in tekst_logu or "Extra data" in tekst_logu
+    assert repr('"b": 2 "c": 3') [1:-1] in tekst_logu, "brak fragmentu wokol bledu"
+
+
+def test_log_podaje_pozycje_szwu_po_kontynuacji(smiec):
+    """Sklejka partial + continuation: log wskazuje szew i jego otoczenie."""
+    from footstats.ai.analyzer_helpers import OdpowiedzZeSzwem
+
+    partial = '{"top3": [{"mecz": "A vs B", "typ": "1"'
+    tekst = OdpowiedzZeSzwem(partial + ' ,, "kurs": 1.5}]}' + "{", szew=len(partial))
+
+    _wyciagnij_json(tekst)
+
+    tekst_logu = _log(smiec)
+    assert f"szew kontynuacji: {len(partial)}" in tekst_logu
+    assert repr(tekst[len(partial) - 10:len(partial) + 10])[1:-1] in tekst_logu
+
+
+def test_szew_mozna_podac_jawnym_parametrem(smiec):
+    _wyciagnij_json('{"a": 1,, "b": 2}{', szew=7)
+
+    assert "szew kontynuacji: 7" in _log(smiec)
+
+
+def test_bez_szwu_log_nie_wspomina_o_kontynuacji(smiec):
+    _wyciagnij_json('{"a": 1,, "b": 2}{')
+
+    assert "szew" not in _log(smiec)

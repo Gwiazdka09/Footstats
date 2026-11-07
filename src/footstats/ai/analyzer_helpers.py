@@ -545,8 +545,26 @@ def _pierwszy_domkniety_obiekt(tekst: str) -> str | None:
     return None
 
 
-def _wyciagnij_json(tekst: str) -> dict:
+class OdpowiedzZeSzwem(str):
+    """Odpowiedz modelu sklejona po kontynuacji (`partial + continuation`).
+
+    To nadal zwykly `str` (kontrakt `_zapytaj_typera` bez zmian); `szew` niesie
+    tylko pozycje sklejenia, zeby log nieudanego parsowania mogl pokazac otoczenie.
+    """
+
+    szew: int | None
+
+    def __new__(cls, tekst: str, szew: int | None = None) -> "OdpowiedzZeSzwem":
+        obiekt = super().__new__(cls, tekst)
+        obiekt.szew = szew
+        return obiekt
+
+
+def _wyciagnij_json(tekst: str, szew: int | None = None) -> dict:
     """Wyciąga JSON z odpowiedzi AI (nawet jeśli AI doda tekst dookoła).
+
+    `szew` — pozycja sklejenia po kontynuacji ucietej odpowiedzi (domyslnie
+    brana z `OdpowiedzZeSzwem`); wylacznie do diagnostyki w logu bledu.
 
     Porazka tej funkcji kosztuje CALY dzienny przebieg: zaslepka nie ma klucza
     `top3`, wiec `ai_analiza_pewniaczki` pomija override tipu, pewnosc z modelu,
@@ -580,17 +598,26 @@ def _wyciagnij_json(tekst: str) -> dict:
 
     try:
         return json.loads(tekst)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
         # Sam poczatek nie rozstrzyga niczego: odpowiedz URWANA i odpowiedz
         # USZKODZONA wygladaja na pierwszych 200 znakach identycznie, a maja
         # przeciwne naprawy (budzet wyjscia vs prompt/parser). Bilans nawiasow
         # rozdziela je od razu — niezbilansowane znaczy urwanie. Koncowka jest
         # w logu, bo smiec siedzi zwykle wlasnie tam.
+        # Pozycja bledu i otoczenie (repr → widac znaki niedrukowalne), a po
+        # kontynuacji takze szew: tam najczesciej pekala sklejka.
+        if szew is None:
+            szew = getattr(tekst, "szew", None)
+        diagnoza = " Blad: %s, pozycja bledu: %d, OKOLICA: %r." % (
+            e.msg, e.pos, tekst[max(0, e.pos - 80):e.pos + 80])
+        if szew is not None:
+            diagnoza += " szew kontynuacji: %d, OKOLICA_SZWU: %r." % (
+                szew, tekst[max(0, szew - 80):szew + 80])
         logger.error("[AI] Nie udalo sie sparsowac JSON z odpowiedzi modelu —"
                   " przebieg NIE zapisze zadnych predykcji. Dlugosc %d zn.,"
                   " nawiasy: otwarte %d / zamkniete %d (rozjazd = odpowiedz urwana)."
-                  " POCZATEK: %s ||| KONIEC: %s",
-                  len(tekst), tekst.count("{"), tekst.count("}"),
+                  "%s POCZATEK: %s ||| KONIEC: %s",
+                  len(tekst), tekst.count("{"), tekst.count("}"), diagnoza,
                   tekst[:250].replace("\n", " "), tekst[-250:].replace("\n", " "))
         return {"typ": "brak", "pewnosc": 0, "uzasadnienie": tekst[:300], "value_bet": False}
 
