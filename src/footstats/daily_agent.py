@@ -858,6 +858,11 @@ def _zgloś_brak_kuponu_do_zapisu(faza: str, dane: dict | None) -> None:
             "slad, zeby dalo sie odroznic od awarii.", faza)
 
 
+def _zapis_kuponu_final_wlaczony() -> bool:
+    """Kupon final do bazy tylko przy FINAL_ZAPIS_KUPONU=1 (domyslnie wylaczony, decyzja 07.11)."""
+    return os.getenv("FINAL_ZAPIS_KUPONU", "0").strip().lower() in ("1", "true", "yes")
+
+
 def _stop_loss_przerywa(args, admin_uid: int, current_bankroll: float) -> bool:
     """
     True, gdy stop-loss ma przerwać przebieg PRZED KROK 0.
@@ -1270,7 +1275,12 @@ def main():
     cid = None
     draft_legs = []
     draft_odds = 1.0
-    if args.faza and not args.dry_run:
+    if args.faza == "final" and not args.dry_run and not _zapis_kuponu_final_wlaczony():
+        # Decyzja 2026-11-07: kupon final nie trafia do bazy (0/19 dni od 20.10 —
+        # bramka decision_score nieosiagalna, typy i tak niewidoczne w GUI).
+        # Predykcje zapisuja sie dalej; pomijamy tez wywolanie LLM Scout.
+        log.info("Zapis kuponu final wylaczony (FINAL_ZAPIS_KUPONU=0) — predykcje zapisane osobno")
+    elif args.faza and not args.dry_run:
         kupon_a_db = dane.get("kupon_a") or {}
         zdarzenia_db = kupon_a_db.get("zdarzenia") or []
         kurs_db = kupon_a_db.get("kurs_laczny", 1.0) or 1.0
