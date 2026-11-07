@@ -170,3 +170,16 @@ def test_udana_kontynuacja_skleja_odpowiedz(monkeypatch):
         _klient(lambda **kw: _Odp("DOKONCZENIE")), _ROZMOWA, "CZESC")
 
     assert wynik == "CZESCDOKONCZENIE"
+
+
+def test_sklejka_pamieta_pozycje_szwu(monkeypatch):
+    """Dlugosc `partial` = miejsce sklejenia; log bledu parsowania z niej korzysta."""
+    from footstats.ai import analyzer as an
+    from footstats.ai import client as cl
+
+    monkeypatch.setattr(cl, "GROQ_MODEL", "openai/gpt-oss-120b")
+    wynik = an._kontynuuj_uciety_json(
+        _klient(lambda **kw: _Odp("DOKONCZENIE")), _ROZMOWA, "CZESC")
+
+    assert isinstance(wynik, str)
+    assert wynik.szew == len("CZESC")

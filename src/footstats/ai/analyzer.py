@@ -143,7 +143,11 @@ def _kontynuuj_uciety_json(client, messages: list, partial: str, max_tokens: int
             temperature=0.1,
             **{k: v for k, v in _p.items() if k != "model"},
         )
-        return partial + resp2.choices[0].message.content
+        # Szew zapamietany w obiekcie (to dalej `str`) — tylko do diagnostyki
+        # w logu nieudanego parsowania (`_wyciagnij_json`).
+        from footstats.ai.analyzer_helpers import OdpowiedzZeSzwem
+        return OdpowiedzZeSzwem(partial + resp2.choices[0].message.content,
+                                szew=len(partial))
     except (AttributeError, IndexError, TypeError, ValueError, OSError,
             RuntimeError) + _BLEDY_GROQA as e:
         # Waskie `(AttributeError, IndexError)` przepuszczalo 413 i bledy

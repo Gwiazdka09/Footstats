@@ -87,11 +87,12 @@ def zapisz_migawke(
         conn = kontekst.__enter__()
 
     try:
-        # Kolejnosc kolumn w `_ISTNIEJACE` odpowiada `_klucz`. Dostep po INDEKSIE,
-        # bo `sqlite3.Row` i wiersz psycopg2 roznia sie interfejsem nazwowym,
-        # a indeks dziala w obu.
+        # Dostep po NAZWACH kolumn z `_ISTNIEJACE`: `sqlite3.Row` i RealDictRow
+        # (Postgres, `utils/db.py`) obsluguja `r["nazwa"]`, a indeks na dict-cie
+        # rzuca KeyError.
         znane = {
-            (str(r[0]), str(r[1]), float(r[2]), str(r[3]), str(r[4]))
+            (str(r["event_id"]), str(r["market"]), float(r["line"]),
+             str(r["outcome"]), str(r["bookmaker"]))
             for r in conn.execute(_ISTNIEJACE, (dzien,)).fetchall()
         }
 

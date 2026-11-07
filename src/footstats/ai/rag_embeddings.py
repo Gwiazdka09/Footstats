@@ -53,7 +53,8 @@ def _get_embedding_model():
             _EMBEDDING_MODEL = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
             logger.info("[RAG] Embedding model loaded (multilingual MiniLM)")
         except ImportError:
-            logger.error("[RAG] sentence-transformers not installed. Install via: pip install sentence-transformers")
+            # INFO: wylaczenie jest SWIADOME (naglowek modulu), nie awaria.
+            logger.info("[RAG] sentence-transformers not installed. Install via: pip install sentence-transformers")
             raise
     return _EMBEDDING_MODEL
 

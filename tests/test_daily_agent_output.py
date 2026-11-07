@@ -118,7 +118,13 @@ def test_pusty_slownik_daje_sam_naglowek(logi_w_tmp):
 
 # ── _powiadomienie_windows ──────────────────────────────────────────────────
 
-def test_powiadomienie_odpala_powershell(monkeypatch):
+@pytest.fixture
+def windows(monkeypatch):
+    """CI chodzi na Linuksie, a te testy sprawdzaja sciezke Windows."""
+    monkeypatch.setattr(dao, "_jest_windows", lambda: True)
+
+
+def test_powiadomienie_odpala_powershell(monkeypatch, windows):
     zebrane = {}
     monkeypatch.setattr(subprocess, "Popen",
                         lambda cmd, **k: zebrane.update(cmd=cmd))
@@ -127,7 +133,7 @@ def test_powiadomienie_odpala_powershell(monkeypatch):
     assert "Tytul" in zebrane["cmd"][-1]
 
 
-def test_powiadomienie_escapuje_apostrof(monkeypatch):
+def test_powiadomienie_escapuje_apostrof(monkeypatch, windows):
     """Apostrof w nazwie druzyny nie moze rozwalic skryptu PowerShell."""
     zebrane = {}
     monkeypatch.setattr(subprocess, "Popen",
@@ -136,7 +142,7 @@ def test_powiadomienie_escapuje_apostrof(monkeypatch):
     assert "Nott''m Forest" in zebrane["cmd"][-1]
 
 
-def test_brak_powershell_nie_przerywa_pipeline(monkeypatch):
+def test_brak_powershell_nie_przerywa_pipeline(monkeypatch, windows):
     """Linux/Cloud Run nie ma powershell — to nie moze wywalic agenta."""
     def _brak(*a, **k):
         raise OSError("powershell not found")

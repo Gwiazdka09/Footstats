@@ -76,12 +76,13 @@ MIN_SKLAD = 8
 _ostrzezenia_o_bazie: set[str] = set()
 
 
-def _zglos_brak_raz(tabela: str, komunikat: str, *args) -> None:
-    """Ostrzega o braku tabeli RAZ na proces. Kolejne odczyty milcza."""
+def _zglos_brak_raz(tabela: str, komunikat: str, *args,
+                    poziom: int = logging.WARNING) -> None:
+    """Zglasza brak tabeli RAZ na proces. Kolejne odczyty milcza."""
     if tabela in _ostrzezenia_o_bazie:
         return
     _ostrzezenia_o_bazie.add(tabela)
-    log.warning(komunikat, *args)
+    log.log(poziom, komunikat, *args)
 
 
 @functools.lru_cache(maxsize=1)
@@ -504,7 +505,10 @@ def get_team_stats(
             " — mecze pojda bez statystyk kadr. Tabela dotyczy reprezentacji"
             " (MS 2026); dla klubow jej brak nic nie zmienia. Kolejne przypadki"
             " juz nie beda logowane.",
-            type(e).__name__, team, season)
+            type(e).__name__, team, season,
+            # INFO: w chmurze pliku SQLite nie ma w obrazie, a tabela jest
+            # martwa po MS 2026 — WARNING w kazdym przebiegu byl szumem.
+            poziom=logging.INFO)
         return None
     return dict(row) if row else None
 

@@ -8,6 +8,7 @@ re-importuje te symbole, więc istniejące ścieżki i patch-targety działają.
 """
 
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -122,8 +123,15 @@ def _zapisz_txt(dane: dict, stawka_a: float, stawka_b: float) -> Path:
 
 # ── Powiadomienie Windows ─────────────────────────────────────────────────────
 
+def _jest_windows() -> bool:
+    """Osobny seam, bo podmiana globalnego `os.name` w testach psuje pathlib na Linuksie."""
+    return os.name == "nt"
+
+
 def _powiadomienie_windows(tytul: str, tekst: str) -> None:
     """Wyświetla Windows toast notification przez PowerShell (bez dodatkowych pakietów)."""
+    if not _jest_windows():
+        return  # kontener Linux: brak powershella, pomijamy bez ostrzeżenia
     ps_script = f"""
 Add-Type -AssemblyName System.Windows.Forms
 $n = New-Object System.Windows.Forms.NotifyIcon
