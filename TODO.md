@@ -25,6 +25,19 @@
 
 ---
 
+## 💡 07.11 — POMYSŁY NA PÓŹNIEJ (zapisane po audycie 5–7.11)
+
+- [ ] **Telegram: kupon na zadany kurs.** Komenda w bocie + kurs (np. `/kupon 5.0`) → bot
+      składa kupon z dzisiejszych typów o kursie łącznym możliwie blisko zadanego i dopisuje go
+      do dziennika użytkownika. Najpierw spec: z jakich nóg, limit nóg, czy zapis jako `manual`,
+      zakaz zachęt do gry (`.claude/rules/wypuszczenie-pl.md`).
+- [ ] **Telegram: łączenie wiadomości.** Jedna zbiorcza wiadomość zamiast osobnej na każdą
+      predykcję/rozliczenie + deduplikacja alarmów.
+- [ ] **Aliasy nazw drużyn (dalszy ciąg Kroku 2).** Kolejne ~50 aliasów, próg podobieństwa ≥93%,
+      ręczna kontrola 20 losowych dopasowań przed wdrożeniem.
+- Zrobione 07.11: kupon final domyślnie NIE trafia do bazy (`FINAL_ZAPIS_KUPONU=0`, bramka
+  decision_score odrzucała 19/19 dni); hook `guard_live_ops` łapie też narzędzie PowerShell.
+
 ## 🟢 22.10 — POMIAR KALIBRACJI + CZĘŚCIOWE ODMROŻENIE (otwarte)
 
 Zrobione tego dnia (Krok 0, CVE, front, pomiar kalibracji) → `CHANGELOG.md` 2026-10-22.
