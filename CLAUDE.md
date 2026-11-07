@@ -41,11 +41,11 @@ Ja = orchestrator. Workflow feature: subagent-driven-development (planner→code
 ## Architecture (Pointers)
 - Structure: See `PROJECT_STRUCTURE.md`
 - Core: `src/footstats/` (AI, Core, Scrapers)
-- DB: `data/footstats_backtest.db` (SQLite)
+- DB: prod = Supabase Postgres (`DATABASE_URL`); `data/footstats_backtest.db` (SQLite) tylko lokalnie/backtest
 - Pipeline: Cloud Run Jobs (`footstats-final` 11:00 + `footstats-evening` 23:00, Cloud Scheduler). Lokalny `run_daily.bat` wyłączony — patrz `docs/cloud_migration.md`.
 
 ## Tech Stack
-- Backend: FastAPI, Playwright (Scraping), Groq SDK (Llama 3.1 8B).
+- Backend: FastAPI, Playwright (Scraping), Groq SDK (`openai/gpt-oss-120b`, reasoning; Llama 3.1 8B wycofana 22.08.2026).
 - Frontend: Streamlit, vis-network (Brain Graph).
 - Logic: Poisson, Kelly Criterion, RAG Feedback Loop (pętla zwrotna działa
   chronologicznie — wyszukiwanie **semantyczne** jest świadomie wyłączone na
