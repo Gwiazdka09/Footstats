@@ -11,7 +11,7 @@ import psycopg2
 from fastapi import APIRouter, Depends, HTTPException
 
 from footstats.api.auth import require_auth
-from footstats.core.user_stats import get_progress_series, get_user_stats
+from footstats.core.user_stats import get_market_stats, get_progress_series, get_user_stats
 
 router = APIRouter(prefix="/api", tags=["user-stats"])
 log = logging.getLogger(__name__)
@@ -45,3 +45,14 @@ def stats_progress(user_id: int = Depends(require_auth)) -> list[dict]:
         log.warning("stats/progress: odczyt serii nieudany (user_id=%s): %s", user_id, e)
         raise HTTPException(status_code=503, detail="Dane niedostępne") from e
     return [dataclasses.asdict(point) for point in series]
+
+
+@router.get("/stats/markets")
+def stats_markets(user_id: int = Depends(require_auth)) -> list[dict]:
+    """Zwraca skuteczność nóg kuponów usera wg rodzaju typu (pomiar, nie rekomendacja)."""
+    try:
+        stats = get_market_stats(user_id)
+    except _BLEDY_ODCZYTU as e:
+        log.warning("stats/markets: odczyt nieudany (user_id=%s): %s", user_id, e)
+        raise HTTPException(status_code=503, detail="Dane niedostępne") from e
+    return [dataclasses.asdict(stat) for stat in stats]
