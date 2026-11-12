@@ -121,9 +121,12 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
         if not czlony:
             return None
         wyniki = [oblicz_tip_correct(c, actual_result) for c in czlony]
+        # Kleene AND: przegrany czlon przesadza nogę nawet gdy inny jest nierozpoznany.
+        if 0 in wyniki:
+            return 0
         if None in wyniki:
             return None
-        return 1 if all(w == 1 for w in wyniki) else 0
+        return 1
 
     # Rynek polowy: brak oceny po polowie → nierozliczalny (patrz `_POLOWA`).
     if _POLOWA.search(tip):

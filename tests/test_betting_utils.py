@@ -324,9 +324,9 @@ class TestParserTypowFailClosed:
         assert oblicz_tip_correct("Over 2,5", "2-1") == 1
         assert oblicz_tip_correct("Under 3,5", "2-1") == 1
 
-    def test_koniunkcja_z_nieznanym_czlonem_blokuje_nawet_przy_pewnym_zerze(self):
-        # Nierozpoznany czlon blokuje cala noge — 0 od drugiego czlonu nie wygrywa.
-        assert oblicz_tip_correct("1 & Strzelec Kowalski", "0-3") is None
+    def test_koniunkcja_z_nieznanym_czlonem_i_pewnym_zerze_to_zero(self):
+        # Kleene AND (od 12.11): pewny przegrany czlon przesadza nogę mimo nieznanego.
+        assert oblicz_tip_correct("1 & Strzelec Kowalski", "0-3") == 0
 
     def test_czy_rozliczalny_false_przy_nieznanym_czlonie_koniunkcji(self):
         assert czy_rozliczalny("1 & NIEZNANY RYNEK") is False
@@ -361,9 +361,10 @@ class TestParserTypowFailClosed:
                     "1ST HALF OVER 0.5"):
             assert oblicz_tip_correct(tip, "3-0;HT:0-0") is None, tip
 
-    def test_polowa_w_koniunkcji_blokuje_noge_nawet_przy_przegranej_reszcie(self):
-        # Nierozpoznana polowa blokuje cala noge, takze gdy reszta jest pewnie przegrana.
-        assert oblicz_tip_correct("2 & 1H Over 0.5", "3-0;HT:1-0") is None
+    def test_polowa_w_koniunkcji_przegrana_reszta_przesadza(self):
+        # Kleene AND: pewna przegrana reszty przesądza nogę (0); gdy reszta trafiona
+        # a polowa nieznana, noga zostaje nierozliczona (None).
+        assert oblicz_tip_correct("2 & 1H Over 0.5", "3-0;HT:1-0") == 0
         assert oblicz_tip_correct("1 & 1H Over 0.5", "3-0;HT:1-0") is None
 
     # ── kontrolne: dotychczasowe zachowanie bez zmian ────────────────────────────
