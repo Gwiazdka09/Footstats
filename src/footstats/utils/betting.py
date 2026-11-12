@@ -1,5 +1,6 @@
 import logging
 import re
+import unicodedata
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +50,67 @@ def _rozbij_typ(tip: str) -> list[str]:
     return [c.strip() for c in czlony if c.strip()]
 
 
+# ── Rynki statystyczne dziennika (rożne, gol/celne strzały zawodnika) ──────────
+# Człony po upper(). Rozliczane tylko gdy podano `statystyki` (patrz espn_stats).
+_RE_ROGI = re.compile(rf"^(?:(1|2)\s+)?CORNERS\s+(OVER|UNDER)\s+({_LICZBA})$")
+_RE_GOL = re.compile(r"^GOL:\s*(.+)$")
+_RE_SOT = re.compile(rf"^SOT:\s*(.+?)\s+(OVER|UNDER)\s+({_LICZBA})$")
+_ZNAKI_BEZ_ROZKLADU = str.maketrans({"ł": "l", "ø": "o", "đ": "d", "ß": "ss"})
+
+
+def normalizuj_nazwisko(nazwa: str) -> str:
+    """Nazwa zawodnika: bez akcentów, lower, bez kropek, pojedyncze spacje."""
+    tekst = str(nazwa).lower().translate(_ZNAKI_BEZ_ROZKLADU)
+    tekst = unicodedata.normalize("NFKD", tekst)
+    tekst = "".join(c for c in tekst if not unicodedata.combining(c))
+    tekst = tekst.replace(".", "").replace("-", " ")
+    return " ".join(tekst.split())
+
+
+def wymaga_statystyk(tip: str | None) -> bool:
+    """Czy którykolwiek człon typu to rynek statystyczny (rożne / GOL / SOT)."""
+    tekst = (tip or "").strip().upper()
+    if tekst.startswith("BB:") or tekst.startswith("BB "):
+        tekst = tekst[3:]
+    return any(_RE_ROGI.match(c) or _RE_GOL.match(c) or _RE_SOT.match(c)
+               for c in _rozbij_typ(tekst))
+
+
+def _znajdz_zawodnika(nazwa: str, zawodnicy: dict) -> dict | None:
+    """Pełna nazwa równa; w drugiej kolejności samo nazwisko, gdy jednoznaczne."""
+    klucz = normalizuj_nazwisko(nazwa)
+    if klucz in zawodnicy:
+        return zawodnicy[klucz]
+    nazwisko = klucz.split()[-1] if klucz else ""
+    pasujace = [z for k, z in zawodnicy.items() if k.split() and k.split()[-1] == nazwisko]
+    return pasujace[0] if nazwisko and len(pasujace) == 1 else None
+
+
+def _porownaj(wartosc: int | float, kierunek: str, linia: float) -> int:
+    return int(wartosc > linia) if kierunek == "OVER" else int(wartosc < linia)
+
+
+def _rozlicz_statystyczny(czlon: str, statystyki: dict | None) -> int | None:
+    """Człon statystyczny -> 1/0, albo None (brak danych, nie zagrał, dwuznaczność)."""
+    if not statystyki:
+        return None
+    m = _RE_ROGI.match(czlon)
+    if m:
+        rogi = statystyki.get("corners")
+        if not rogi:
+            return None
+        strona, kierunek, linia = m.groups()
+        suma = {"1": rogi[0], "2": rogi[1], None: rogi[0] + rogi[1]}[strona]
+        return _porownaj(suma, kierunek, _na_liczbe(linia))
+    m = _RE_GOL.match(czlon) or _RE_SOT.match(czlon)
+    zawodnik = _znajdz_zawodnika(m.group(1), statystyki.get("zawodnicy") or {}) if m else None
+    if not m or not zawodnik or not zawodnik.get("zagral"):
+        return None
+    if czlon.startswith("GOL:"):
+        return int(zawodnik["gole"] > 0)
+    return _porownaj(zawodnik["sot"], m.group(2), _na_liczbe(m.group(3)))
+
+
 def powod_nierozliczalny(actual_result) -> str | None:
     """Zwraca powod, dla ktorego wyniku NIE da sie uczciwie rozliczyc, albo None.
 
@@ -77,13 +139,16 @@ def powod_nierozliczalny(actual_result) -> str | None:
     return None
 
 
-def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
+def oblicz_tip_correct(ai_tip: str, actual_result,
+                       statystyki: dict | None = None) -> int | None:
     """
     Oblicza czy typ był trafiony na podstawie wyniku meczu.
     Obsługuje formaty: str ("2-1"), tuple (2, 1) oraz list [2, 1].
     Opcjonalny sufiks wyniku połowy: "2-1;HT:1-0" — wymagany tylko przez
     rynki half-time (np. GG2H); pozostałe rynki parsują samo FT i działają
     identycznie z sufiksem lub bez niego.
+    `statystyki` (z espn_stats) odblokowuje rynki rożnych / GOL / SOT; bez nich
+    takie człony dają None (noga zostaje do ręcznego rozliczenia).
     """
     if not actual_result:
         return None
@@ -120,13 +185,17 @@ def oblicz_tip_correct(ai_tip: str, actual_result) -> int | None:
     if bb or len(czlony) > 1:
         if not czlony:
             return None
-        wyniki = [oblicz_tip_correct(c, actual_result) for c in czlony]
+        wyniki = [oblicz_tip_correct(c, actual_result, statystyki) for c in czlony]
         # Kleene AND: przegrany czlon przesadza nogę nawet gdy inny jest nierozpoznany.
         if 0 in wyniki:
             return 0
         if None in wyniki:
             return None
         return 1
+
+    # Rynki statystyczne (rożne, GOL, SOT) — wymagają `statystyki`.
+    if _RE_ROGI.match(tip) or _RE_GOL.match(tip) or _RE_SOT.match(tip):
+        return _rozlicz_statystyczny(tip, statystyki)
 
     # Rynek polowy: brak oceny po polowie → nierozliczalny (patrz `_POLOWA`).
     if _POLOWA.search(tip):

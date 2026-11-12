@@ -30,7 +30,12 @@ log = logging.getLogger(__name__)
 
 from footstats.core import match_linker
 from footstats.core.coupon_tracker import wyplata_po_podatku
-from footstats.utils.betting import oblicz_tip_correct, powod_nierozliczalny
+from footstats.scrapers.sources.espn_stats import statystyki_meczu
+from footstats.utils.betting import (
+    oblicz_tip_correct,
+    powod_nierozliczalny,
+    wymaga_statystyk,
+)
 from footstats.utils.normalize import normalize_team_name, team_similarity
 
 # Awarie jednego kuponu, które pętla rozliczeń ma PRZEŻYĆ (logujemy i idziemy dalej).
@@ -937,6 +942,15 @@ def _send_to_rag_feedback(coupon_id: int, legs: list, mdate: str, reason: str, v
             log.warning("Błąd wysyłania feedback do RAG dla kuponu #%s, leg #%s: %s", coupon_id, i + 1, e)
 
 
+
+def _statystyki_nogi(cache: dict, home: str, away: str, data: str) -> dict | None:
+    """Statystyki meczu z ESPN z cache na czas przebiegu (też negatywne wyniki)."""
+    klucz = (home, away, data)
+    if klucz not in cache:
+        cache[klucz] = statystyki_meczu(home, away, data)
+    return cache[klucz]
+
+
 def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
     """
     Auto-rozlicza kupony manual (dziennik, Etap C planu J4c).
@@ -1014,6 +1028,7 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
     zewnetrzne = _manual_zrodla_zewnetrzne()
     fixtures_cache: dict[str, list] = {}
     fdb_cache: dict[str, list] = {}
+    stat_cache: dict[tuple, dict | None] = {}  # statystyki ESPN per (home, away, data)
     api_key = fdb_key = ""
     if zewnetrzne:
         import os
@@ -1086,6 +1101,14 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
                     continue
                 updated_legs[leg_idx]["result"] = wynik
                 correct = oblicz_tip_correct(leg.get("tip", ""), wynik)
+                if correct is None and wymaga_statystyk(leg.get("tip", "")):
+                    # Statystyki (rożne, strzelcy) pobieramy dopiero, gdy sam wynik
+                    # nie rozstrzyga nogi (przegrany człon golowy przesądza bez sieci).
+                    correct = oblicz_tip_correct(
+                        leg.get("tip", ""), wynik,
+                        statystyki=_statystyki_nogi(
+                            stat_cache, home, away,
+                            str(_data_poprawna(leg.get("match_date")) or mdate)))
                 if correct is None:
                     unresolved = True
                     continue

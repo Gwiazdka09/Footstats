@@ -578,3 +578,62 @@ def test_brak_wyniku_soboty_nie_jest_przeterminowany_przed_sobota(prawdziwy_link
     assert _row(prawdziwy_linker, cid)["status"] == "ACTIVE"
     assert stats["skipped"] == 1
     assert stats["przeterminowane"] == 0
+
+
+# ── Rynki statystyczne (rożne, GOL) — statystyki z ESPN, atrapa ──────────────
+
+_STAT_MECZU = {"corners": (6, 3), "zawodnicy": {
+    "scott mctominay": {"gole": 1, "sot": 2, "zagral": True, "druzyna": "home"}}}
+
+
+def _bb_stat(tip: str) -> list:
+    return [{"home": "Scotland", "away": "Poland", "tip": tip}]
+
+
+def test_bb_rozne_i_gol_rozliczony_won(tmp_db, monkeypatch):
+    _mock_link_leg_single(
+        monkeypatch, LinkResult(True, "exact", _prediction("2-0"), "Dopasowano"))
+    monkeypatch.setattr(settlement, "statystyki_meczu", lambda *a: _STAT_MECZU)
+    cid = _insert_coupon(
+        tmp_db, _bb_stat("BB: 1 CORNERS OVER 4.5 & GOL: Scott McTominay & 1"))
+
+    settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(tmp_db, cid)["status"] == "WON"
+
+
+def test_bb_rozne_i_gol_rozliczony_lost(tmp_db, monkeypatch):
+    _mock_link_leg_single(
+        monkeypatch, LinkResult(True, "exact", _prediction("2-0"), "Dopasowano"))
+    monkeypatch.setattr(settlement, "statystyki_meczu", lambda *a: _STAT_MECZU)
+    cid = _insert_coupon(tmp_db, _bb_stat("BB: 1 CORNERS OVER 9.5 & GOL: Scott McTominay"))
+
+    settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(tmp_db, cid)["status"] == "LOST"
+
+
+def test_brak_statystyk_zostaje_active(tmp_db, monkeypatch):
+    _mock_link_leg_single(
+        monkeypatch, LinkResult(True, "exact", _prediction("2-0"), "Dopasowano"))
+    monkeypatch.setattr(settlement, "statystyki_meczu", lambda *a: None)
+    cid = _insert_coupon(tmp_db, _bb_stat("BB: 1 & GOL: Scott McTominay"))
+
+    stats = settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(tmp_db, cid)["status"] == "ACTIVE"
+    assert stats["settled"] == 0
+
+
+def test_przegrany_czlon_golowy_lost_bez_statystyk(tmp_db, monkeypatch):
+    _mock_link_leg_single(
+        monkeypatch, LinkResult(True, "exact", _prediction("0-2"), "Dopasowano"))
+
+    def boom(*a):
+        raise AssertionError("statystyki nie powinny byc pobierane")
+    monkeypatch.setattr(settlement, "statystyki_meczu", boom)
+    cid = _insert_coupon(tmp_db, _bb_stat("BB: 1 & GOL: Scott McTominay"))
+
+    settlement.settle_manual_coupons(dry_run=False, verbose=False)
+
+    assert _row(tmp_db, cid)["status"] == "LOST"
