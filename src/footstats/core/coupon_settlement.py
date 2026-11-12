@@ -965,7 +965,9 @@ def settle_manual_coupons(dry_run: bool = False, verbose: bool = True) -> dict:
     ZERO zewnętrznych API — DOMYŚLNIE. W odróżnieniu od `settle_active_coupons`
     (kupony AI) ta funkcja nie woła `_find_leg_result`/FlashScore/football-data,
     żeby nie generować dodatkowego ruchu do zewnętrznych źródeł dla wpisów
-    ręcznych.
+    ręcznych. Wyjątek NIEZALEŻNY od flagi: nogi z rynkiem statystycznym (rożne,
+    GOL, SOT) pobierają statystyki z ESPN (`espn_stats`, darmowe, bez klucza
+    i limitu) — tylko gdy sam wynik nie rozstrzyga nogi.
 
     `link_leg` zwracające `match_confidence == "ambiguous"` NIE schodzi do
     kolejnych źródeł: „dwa różne mecze w oknie dat" to wynik, nie brak danych,
