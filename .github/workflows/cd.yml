@@ -175,4 +175,5 @@ jobs:
           URL=$(gcloud run services describe ${{ secrets.CLOUD_RUN_SERVICE }} \
             --region ${{ secrets.GCP_REGION }} \
             --format 'value(status.url)')
-          curl -f "$URL/health"
+          # retry: zaraz po podmianie rewizji /health bywa chwilowo 5xx (15.11 exit 22 przy zdrowej rewizji)
+          curl -fsS --retry 6 --retry-delay 10 --retry-all-errors "$URL/health"
