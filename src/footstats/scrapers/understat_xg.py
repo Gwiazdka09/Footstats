@@ -237,20 +237,24 @@ def fetch_league_team_xg(league_key: str, season: int) -> dict[str, dict]:
         return {}
 
     wynik: dict[str, dict] = {}
-    for tabela in soup.find_all("table"):
+    tabele = soup.find_all("table")
+    for tabela in tabele:
         naglowki = [th.get_text(strip=True) for th in tabela.find_all("th")]
         if not {"Team", "xG", "xGA"}.issubset(set(naglowki)):
             continue  # kalendarze i inne tabele na stronie
-        try:
-            i_team, i_m = naglowki.index("Team"), naglowki.index("M")
-            i_xg, i_xga = naglowki.index("xG"), naglowki.index("xGA")
-        except ValueError as e:
+        brakujace = [k for k in ("Team", "M", "xG", "xGA") if k not in naglowki]
+        if brakujace:
             # Filtr wyzej juz przepuscil tabele z Team/xG/xGA, wiec tu jestesmy
             # tylko wtedy, gdy Understat ZMIENIL uklad kolumn. Cicho znaczylo:
             # "brak tabeli xG", a naprawde znaczy "tabela jest, nie umiemy jej odczytac".
+            # Nazwy kolumn jawnie — tresc ValueError z list.index zalezy od wersji
+            # Pythona (3.14 nie podaje wartosci).
             _log.warning("Understat: tabela ma xG/xGA, ale brakuje kolumny (%s);"
-                        " naglowki: %s — liga zostaje BEZ xG", e, naglowki)
+                        " naglowki: %s — liga zostaje BEZ xG",
+                        ", ".join(repr(k) for k in brakujace), naglowki)
             continue
+        i_team, i_m = naglowki.index("Team"), naglowki.index("M")
+        i_xg, i_xga = naglowki.index("xG"), naglowki.index("xGA")
 
         for wiersz in tabela.find_all("tr")[1:]:
             komorki = [c.get_text(strip=True) for c in wiersz.find_all(["td", "th"])]
@@ -277,6 +281,14 @@ def fetch_league_team_xg(league_key: str, season: int) -> dict[str, dict]:
             wynik[team] = payload
         break  # pierwsza tabela z kompletem kolumn wystarczy
 
+    if tabele and not wynik and not any(
+            {"Team", "xG", "xGA"}.issubset({th.get_text(strip=True) for th in t.find_all("th")})
+            for t in tabele):
+        # Strona ma tabele, ale zadna nie ma Team/xG/xGA — Understat przemianowal
+        # kolumny. Bez tego ostrzezenia liga cicho jechalaby bez xG.
+        _log.warning("[Understat] %s: %d tabel, zadna z kolumnami Team/xG/xGA;"
+                     " naglowki pierwszej: %s — liga zostaje BEZ xG", league_key,
+                     len(tabele), [th.get_text(strip=True) for th in tabele[0].find_all("th")])
     _log.info("[Understat] tabela ligi %s: %d drużyn", league_key, len(wynik))
     return wynik
 

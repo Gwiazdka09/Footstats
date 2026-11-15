@@ -96,7 +96,25 @@ def test_zmieniony_uklad_tabeli_jest_glosny(caplog, monkeypatch):
 
     assert wynik == {}
     assert "brakuje kolumny" in caplog.text
-    assert "'M'" in caplog.text or "M" in caplog.text
+    assert "'M'" in caplog.text
+
+
+def test_przemianowane_kolumny_xg_sa_glosne(caplog, monkeypatch):
+    """Gdy Understat przemianuje xG/xGA, filtr tabel nie przepuszcza ZADNEJ
+    tabeli — bez osobnego ostrzezenia liga cicho jechalaby bez xG."""
+    html = """<html><body><table>
+        <tr><th>Team</th><th>M</th><th>ExpG</th><th>ExpGA</th></tr>
+        <tr><td>Arsenal</td><td>10</td><td>18.5</td><td>9.2</td></tr>
+    </table></body></html>"""
+    monkeypatch.setattr("footstats.scrapers.browser_fetch.pobierz_html",
+                        lambda *a, **k: html)
+
+    with caplog.at_level(logging.WARNING):
+        wynik = ux.fetch_league_team_xg("EPL", 2026)
+
+    assert wynik == {}
+    assert "zadna z kolumnami Team/xG/xGA" in caplog.text
+    assert "ExpG" in caplog.text
 
 
 def test_kompletna_tabela_ligi_nie_generuje_ostrzezen(caplog, monkeypatch):
