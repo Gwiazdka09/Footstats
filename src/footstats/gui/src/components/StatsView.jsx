@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Wallet, Flame, Trophy, ClipboardList } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ProgressChart from './ProgressChart';
+import MarketStatsSection from './MarketStatsSection';
 
 const BRAK = '—';
 // Brak/NaN z backendu (pusta odpowiedz) ma dac kreske, a nie TypeError przy toFixed.
@@ -63,6 +64,7 @@ const MetricTile = ({ icon, label, value, valueColor }) => (
 const StatsView = ({ apiFetch }) => {
   const [stats, setStats] = useState(null);
   const [progress, setProgress] = useState([]);
+  const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -78,6 +80,10 @@ const StatsView = ({ apiFetch }) => {
     apiFetch('/stats/progress')
       .then(setProgress)
       .catch(() => setProgress([]));
+    // Statystyki wg rodzaju typu — też niekrytyczne.
+    apiFetch('/stats/markets')
+      .then(setMarkets)
+      .catch(() => setMarkets([]));
   }, []);
 
   if (loading) {
@@ -161,6 +167,10 @@ const StatsView = ({ apiFetch }) => {
         </div>
         <CouponResultRow label="Najlepszy kupon" result={stats.best_coupon} />
         <CouponResultRow label="Najgorszy kupon" result={stats.worst_coupon} />
+      </div>
+
+      <div className="mt-10">
+        <MarketStatsSection stats={markets} />
       </div>
 
       <div className="mt-10">

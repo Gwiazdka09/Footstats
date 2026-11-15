@@ -20,10 +20,25 @@ wiarygodna dopiero na kuponach od 01.09 w górę — włączać ją, gdy uzbiera
 próba, nie wcześniej.
 """
 
+import json
+import logging
+import math
+import re
 from dataclasses import dataclass
 from datetime import datetime
 
 from footstats.core.coupon_tracker import STATUS_LOST, STATUS_WON, wyplata_po_podatku
+from footstats.utils.betting import (
+    _LICZBA,
+    _RE_GOL,
+    _RE_ROGI,
+    _RE_SOT,
+    _rozbij_typ,
+)
+
+log = logging.getLogger(__name__)
+
+MALA_PROBA_N = 20
 
 SETTLED_STATUSES = (STATUS_WON, STATUS_LOST)
 
@@ -204,3 +219,166 @@ def get_progress_series(user_id: int) -> list[ProgressPoint]:
             )
         )
     return points
+
+
+# ── Statystyki wg rodzaju typu ────────────────────────────────────────────────
+_RE_WYNIK = re.compile(r"^[1X2]$")
+_RE_PODWOJNA = re.compile(r"^(1X|X2|12)$")
+_RE_GOLE_MECZU = re.compile(rf"^(OVER|UNDER)\s+{_LICZBA}$")
+# Aliasy dokładnie jak w rozliczaniu (utils/betting.py oblicz_tip_correct).
+_RE_BTTS = re.compile(r"^(BTTS|BTTS NO|NO BTTS|BTTS NIE|NIE BTTS)$")
+_RE_GOLE_DRUZYNY = re.compile(
+    rf"^(?:[12]\s+(OVER|UNDER)\s+{_LICZBA}"
+    rf"|(GOSPODARZ|GOŚĆ|GOSC)\s+(OVER|UNDER)\s+{_LICZBA}"
+    rf"|(GOSPODARZ|GOŚCIE|GOSCIE|GOŚĆ|GOSC)\s+STRZEL\w*\s+{_LICZBA}\+?)$"
+)
+_RE_NAWIAS = re.compile(r"\(.*?\)")
+_BLEDY_LEGS = (ValueError, TypeError)
+
+
+@dataclass(frozen=True)
+class MarketStat:
+    """Skuteczność nóg jednego rodzaju typu (pomiar, nie rekomendacja)."""
+
+    market: str
+    n: int
+    wins: int
+    hit_rate: float
+    implied_prob: float | None  # None gdy żadna noga rodzaju nie ma kursu >1.0
+    edge_pp: float | None
+    se_pp: float
+    n_za_male: bool
+    skladniki: list[str]
+
+
+def _rodzaj_czlonu(czlon: str) -> str:
+    """Rodzaj pojedynczego członu typu (już po upper/strip)."""
+    czlon = _RE_NAWIAS.sub("", czlon).strip()  # sufiks „(Szansa: 78%)" jak w rozliczaniu
+    if _RE_WYNIK.match(czlon):
+        return "Wynik 1X2"
+    if _RE_PODWOJNA.match(czlon):
+        return "Podwójna szansa"
+    if _RE_GOLE_MECZU.match(czlon):
+        return "Gole w meczu"
+    if _RE_BTTS.match(czlon):
+        return "Obie strzelą"
+    if _RE_GOLE_DRUZYNY.match(czlon):
+        return "Gole drużyny"
+    if _RE_ROGI.match(czlon):
+        return "Rzuty rożne"
+    if _RE_GOL.match(czlon):
+        return "Zawodnik: gol"
+    if _RE_SOT.match(czlon):
+        return "Zawodnik: celne strzały"
+    return "Inne"
+
+
+def _rozbij_bb(tip: str) -> list[str] | None:
+    """Człony typu Bet Builder (po upper) albo None, gdy tip nie jest BB."""
+    tekst = (tip or "").strip().upper()
+    if tekst.startswith("BB:") or tekst.startswith("BB "):
+        return _rozbij_typ(tekst[3:].strip())
+    return None
+
+
+def skladniki_bb(tip: str) -> list[str]:
+    """Unikalne rodzaje członów BB (kolejność pierwszego wystąpienia); [] gdy nie BB."""
+    czlony = _rozbij_bb(tip)
+    if czlony is None:
+        return []
+    return list(dict.fromkeys(_rodzaj_czlonu(c) for c in czlony))
+
+
+def klasyfikuj_rynek(tip: str | None) -> str:
+    """Rodzaj typu po polsku; BB liczony jako całość („Bet Builder")."""
+    if _rozbij_bb(tip or "") is not None:
+        return "Bet Builder"
+    czlony = _rozbij_typ((tip or "").strip().upper())
+    if len(czlony) != 1:
+        return "Inne"
+    return _rodzaj_czlonu(czlony[0])
+
+
+def _nogi_rozliczone(legs_json: object) -> list[tuple[str, float | None, bool]]:
+    """(tip, kurs, trafiona) tylko dla nóg z leg_won True/False; reszta pomijana."""
+    try:
+        legs = json.loads(legs_json) if isinstance(legs_json, str) else legs_json
+    except ValueError as e:
+        log.warning("market_stats: nieczytelny legs_json: %s", e)
+        return []
+    if legs is None:
+        return []
+    if not isinstance(legs, list):
+        log.warning("market_stats: legs_json nie jest listą (%s)", type(legs).__name__)
+        return []
+    wynik: list[tuple[str, float | None, bool]] = []
+    for leg in legs:
+        # tylko prawdziwe bool (źródło zapisuje bool); 0/1 pomijamy
+        if not isinstance(leg, dict) or not isinstance(leg.get("leg_won"), bool):
+            continue
+        try:
+            kurs = float(leg["odds"]) if leg.get("odds") else None
+        except _BLEDY_LEGS as e:
+            log.warning("market_stats: zły kurs nogi %r: %s", leg.get("odds"), e)
+            kurs = None
+        wynik.append((str(leg.get("tip", "")), kurs, leg["leg_won"] is True))
+    return wynik
+
+
+def _zbuduj_stat(
+    market: str, nogi: list[tuple[float | None, bool]], skladniki: list[str]
+) -> MarketStat:
+    """Agreguje nogi jednego rodzaju do MarketStat."""
+    n = len(nogi)
+    wins = sum(1 for _, won in nogi if won)
+    hit = wins / n
+    # implikowane prawdopodobieństwo i edge z TEJ SAMEJ próby: nogi z kursem >1.0
+    z_kursem = [(k, won) for k, won in nogi if k and k > 1.0]
+    implied: float | None = None
+    edge: float | None = None
+    if z_kursem:
+        implied = sum(1.0 / k for k, _ in z_kursem) / len(z_kursem)
+        hit_kurs = sum(1 for _, won in z_kursem if won) / len(z_kursem)
+        edge = (hit_kurs - implied) * 100
+    return MarketStat(
+        market=market,
+        n=n,
+        wins=wins,
+        hit_rate=hit,
+        implied_prob=implied,
+        edge_pp=edge,
+        se_pp=math.sqrt(hit * (1 - hit) / n) * 100,
+        n_za_male=n < MALA_PROBA_N,
+        skladniki=skladniki,
+    )
+
+
+def get_market_stats(user_id: int) -> list[MarketStat]:
+    """Statystyki nóg kuponów manual (WON/LOST) wg rodzaju typu, malejąco po n.
+
+    Liczą się tylko nogi z leg_won True/False: kupon LOST rozliczany jest na
+    pierwszej przegranej nodze, reszta nie ma leg_won i jest pomijana (nie zgadujemy).
+    SELECT-only.
+    """
+    from footstats.core.coupon_tracker import _connect
+
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT legs_json FROM coupons
+            WHERE user_id = ? AND kupon_type = 'manual' AND status IN (?, ?)
+            """,
+            (user_id, *SETTLED_STATUSES),
+        ).fetchall()
+
+    grupy: dict[str, list[tuple[float | None, bool]]] = {}
+    skladniki: dict[str, list[str]] = {}
+    for row in rows:
+        for tip, kurs, won in _nogi_rozliczone(row["legs_json"]):
+            rodzaj = klasyfikuj_rynek(tip)
+            grupy.setdefault(rodzaj, []).append((kurs, won))
+            if rodzaj == "Bet Builder":
+                znane = skladniki.setdefault(rodzaj, [])
+                znane.extend(s for s in skladniki_bb(tip) if s not in znane)
+    stats = [_zbuduj_stat(m, nogi, skladniki.get(m, [])) for m, nogi in grupy.items()]
+    return sorted(stats, key=lambda s: s.n, reverse=True)

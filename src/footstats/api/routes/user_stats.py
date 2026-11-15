@@ -8,10 +8,11 @@ import dataclasses
 import logging
 
 import psycopg2
+import psycopg2.pool
 from fastapi import APIRouter, Depends, HTTPException
 
 from footstats.api.auth import require_auth
-from footstats.core.user_stats import get_progress_series, get_user_stats
+from footstats.core.user_stats import get_market_stats, get_progress_series, get_user_stats
 
 router = APIRouter(prefix="/api", tags=["user-stats"])
 log = logging.getLogger(__name__)
@@ -21,7 +22,8 @@ log = logging.getLogger(__name__)
 # lub kolumny (ImportError/KeyError), złych typach w wierszu (TypeError/ValueError).
 # Wszystkie kończą się tym samym: 503 „Dane niedostępne", nie 500.
 _BLEDY_ODCZYTU = (
-    psycopg2.Error, OSError, ValueError, TypeError, KeyError, AttributeError, ImportError,
+    psycopg2.Error, psycopg2.pool.PoolError, OSError, RuntimeError,
+    ValueError, TypeError, KeyError, AttributeError, ImportError,
 )
 
 
@@ -45,3 +47,14 @@ def stats_progress(user_id: int = Depends(require_auth)) -> list[dict]:
         log.warning("stats/progress: odczyt serii nieudany (user_id=%s): %s", user_id, e)
         raise HTTPException(status_code=503, detail="Dane niedostępne") from e
     return [dataclasses.asdict(point) for point in series]
+
+
+@router.get("/stats/markets")
+def stats_markets(user_id: int = Depends(require_auth)) -> list[dict]:
+    """Zwraca skuteczność nóg kuponów usera wg rodzaju typu (pomiar, nie rekomendacja)."""
+    try:
+        stats = get_market_stats(user_id)
+    except _BLEDY_ODCZYTU as e:
+        log.warning("stats/markets: odczyt nieudany (user_id=%s): %s", user_id, e)
+        raise HTTPException(status_code=503, detail="Dane niedostępne") from e
+    return [dataclasses.asdict(stat) for stat in stats]
