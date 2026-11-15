@@ -8,6 +8,7 @@ import dataclasses
 import logging
 
 import psycopg2
+import psycopg2.pool
 from fastapi import APIRouter, Depends, HTTPException
 
 from footstats.api.auth import require_auth
@@ -21,7 +22,8 @@ log = logging.getLogger(__name__)
 # lub kolumny (ImportError/KeyError), złych typach w wierszu (TypeError/ValueError).
 # Wszystkie kończą się tym samym: 503 „Dane niedostępne", nie 500.
 _BLEDY_ODCZYTU = (
-    psycopg2.Error, OSError, ValueError, TypeError, KeyError, AttributeError, ImportError,
+    psycopg2.Error, psycopg2.pool.PoolError, OSError, RuntimeError,
+    ValueError, TypeError, KeyError, AttributeError, ImportError,
 )
 
 

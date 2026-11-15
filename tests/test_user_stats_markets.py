@@ -17,7 +17,10 @@ from tests.test_user_stats import tmp_db  # noqa: F401  (fixture autouse, izolow
     ("Over 2.5", "Gole w meczu"), ("under 3,5", "Gole w meczu"),
     ("BTTS", "Obie strzelą"), ("btts no", "Obie strzelą"),
     ("1 OVER 1.5", "Gole drużyny"), ("2 under 0.5", "Gole drużyny"),
-    ("GOSPODARZ STRZELI", "Gole drużyny"), ("gość strzeli", "Gole drużyny"),
+    ("GOSPODARZ STRZELI 0.5+", "Gole drużyny"), ("gość strzeli 1,5", "Gole drużyny"),
+    ("GOŚCIE STRZELĄ 0.5+", "Gole drużyny"), ("GOSC STRZELI 1.5+ (Szansa: 78%)", "Gole drużyny"),
+    ("GOSPODARZ OVER 0.5", "Gole drużyny"), ("gość under 1.5", "Gole drużyny"),
+    ("NO BTTS", "Obie strzelą"), ("BTTS NIE", "Obie strzelą"), ("nie btts", "Obie strzelą"),
     ("CORNERS OVER 9.5", "Rzuty rożne"), ("1 corners over 4.5", "Rzuty rożne"),
     ("GOL: Haaland", "Zawodnik: gol"),
     ("SOT: Haaland OVER 1.5", "Zawodnik: celne strzały"),
@@ -60,7 +63,55 @@ def test_market_stats_agreguje_i_sortuje():
     assert gole.edge_pp == pytest.approx((2 / 3 - 1.25 / 3) * 100)
     assert gole.se_pp == pytest.approx(((2 / 3) * (1 / 3) / 3) ** 0.5 * 100)
     assert gole.n_za_male is True
-    assert get_market_stats(1)[0].market == "Gole w meczu"
+
+
+def test_market_stats_kolejnosc_po_n_niezaleznie_od_wstawiania():
+    _kupon([_leg("1", 2.0, True)])  # rodzaj o mniejszym n wstawiony PIERWSZY
+    _kupon([_leg("Over 2.5", 2.0, True), _leg("Over 1.5", 2.0, True)])
+    _kupon([_leg("Under 3.5", 2.0, True)])
+    assert [m.market for m in get_market_stats(1)] == ["Gole w meczu", "Wynik 1X2"]
+
+
+def test_market_stats_edge_z_tej_samej_proby_i_none_bez_kursow():
+    # kurs tylko na jednej nodze: edge liczony z jej trafności (0.0 vs 0.5), nie z całości
+    _kupon([_leg("Over 2.5", 2.0, False), _leg("Over 1.5", None, True)])
+    _kupon([_leg("1", None, True)])
+    stats = {s.market: s for s in get_market_stats(1)}
+    gole = stats["Gole w meczu"]
+    assert gole.hit_rate == pytest.approx(0.5)
+    assert gole.implied_prob == pytest.approx(0.5)
+    assert gole.edge_pp == pytest.approx(-50.0)
+    assert stats["Wynik 1X2"].implied_prob is None
+    assert stats["Wynik 1X2"].edge_pp is None
+
+
+@pytest.mark.parametrize("legs_json", ["5", '{"a": 1}', "null", "[1, 2]"])
+def test_market_stats_legs_nie_lista_pomija_kupon(legs_json):
+    cid = _kupon([_leg("1", 2.0, True)])
+    import footstats.core.coupon_tracker as ct
+    with ct._connect() as conn:
+        conn.execute("UPDATE coupons SET legs_json = ? WHERE id = ?", (legs_json, cid))
+    assert get_market_stats(1) == []
+
+
+def test_market_stats_leg_won_liczba_nie_jest_bool():
+    _kupon([_leg("1", 2.0, 1), _leg("X", 2.0, 0)])
+    assert get_market_stats(1) == []
+
+
+def test_endpoint_503_przy_runtime_error(monkeypatch):
+    import footstats.api.routes.user_stats as r
+
+    def _boom(_uid):
+        raise RuntimeError("pula zamknięta")
+
+    monkeypatch.setattr(r, "get_market_stats", _boom)
+    app.dependency_overrides[require_auth] = lambda: 1
+    try:
+        resp = TestClient(app).get("/api/stats/markets")
+    finally:
+        app.dependency_overrides.pop(require_auth, None)
+    assert resp.status_code == 503
 
 
 def test_market_stats_pomija_nogi_bez_leg_won_void_active_manual_only_i_innych_userow():

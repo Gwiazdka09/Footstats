@@ -2,6 +2,7 @@ import React from 'react';
 import { Layers } from 'lucide-react';
 
 const BRAK = '—';
+// null/undefined/NaN → „—" (np. brak kursów w próbie), nigdy „0%" ani „0 pp".
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const pct = (fraction) => (isNum(fraction) ? `${(fraction * 100).toFixed(0)}%` : BRAK);
 // Różnica w punktach procentowych ze znakiem: "+5.2 pp" / "-3.0 pp".

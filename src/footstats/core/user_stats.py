@@ -225,10 +225,14 @@ def get_progress_series(user_id: int) -> list[ProgressPoint]:
 _RE_WYNIK = re.compile(r"^[1X2]$")
 _RE_PODWOJNA = re.compile(r"^(1X|X2|12)$")
 _RE_GOLE_MECZU = re.compile(rf"^(OVER|UNDER)\s+{_LICZBA}$")
-_RE_BTTS = re.compile(r"^BTTS(\s+(NO|NIE|TAK|YES))?$")
+# Aliasy dokładnie jak w rozliczaniu (utils/betting.py oblicz_tip_correct).
+_RE_BTTS = re.compile(r"^(BTTS|BTTS NO|NO BTTS|BTTS NIE|NIE BTTS)$")
 _RE_GOLE_DRUZYNY = re.compile(
-    rf"^(?:[12]\s+(OVER|UNDER)\s+{_LICZBA}|(GOSPODARZ|GO[SŚ][CĆ])\s+STRZELI.*)$"
+    rf"^(?:[12]\s+(OVER|UNDER)\s+{_LICZBA}"
+    rf"|(GOSPODARZ|GOŚĆ|GOSC)\s+(OVER|UNDER)\s+{_LICZBA}"
+    rf"|(GOSPODARZ|GOŚCIE|GOSCIE|GOŚĆ|GOSC)\s+STRZEL\w*\s+{_LICZBA}\+?)$"
 )
+_RE_NAWIAS = re.compile(r"\(.*?\)")
 _BLEDY_LEGS = (ValueError, TypeError)
 
 
@@ -240,8 +244,8 @@ class MarketStat:
     n: int
     wins: int
     hit_rate: float
-    implied_prob: float
-    edge_pp: float
+    implied_prob: float | None  # None gdy żadna noga rodzaju nie ma kursu >1.0
+    edge_pp: float | None
     se_pp: float
     n_za_male: bool
     skladniki: list[str]
@@ -249,6 +253,7 @@ class MarketStat:
 
 def _rodzaj_czlonu(czlon: str) -> str:
     """Rodzaj pojedynczego członu typu (już po upper/strip)."""
+    czlon = _RE_NAWIAS.sub("", czlon).strip()  # sufiks „(Szansa: 78%)" jak w rozliczaniu
     if _RE_WYNIK.match(czlon):
         return "Wynik 1X2"
     if _RE_PODWOJNA.match(czlon):
@@ -301,9 +306,15 @@ def _nogi_rozliczone(legs_json: object) -> list[tuple[str, float | None, bool]]:
     except ValueError as e:
         log.warning("market_stats: nieczytelny legs_json: %s", e)
         return []
+    if legs is None:
+        return []
+    if not isinstance(legs, list):
+        log.warning("market_stats: legs_json nie jest listą (%s)", type(legs).__name__)
+        return []
     wynik: list[tuple[str, float | None, bool]] = []
-    for leg in legs or []:
-        if not isinstance(leg, dict) or leg.get("leg_won") not in (True, False):
+    for leg in legs:
+        # tylko prawdziwe bool (źródło zapisuje bool); 0/1 pomijamy
+        if not isinstance(leg, dict) or not isinstance(leg.get("leg_won"), bool):
             continue
         try:
             kurs = float(leg["odds"]) if leg.get("odds") else None
@@ -321,15 +332,21 @@ def _zbuduj_stat(
     n = len(nogi)
     wins = sum(1 for _, won in nogi if won)
     hit = wins / n
-    implied_list = [1.0 / k for k, _ in nogi if k and k > 1.0]
-    implied = sum(implied_list) / len(implied_list) if implied_list else 0.0
+    # implikowane prawdopodobieństwo i edge z TEJ SAMEJ próby: nogi z kursem >1.0
+    z_kursem = [(k, won) for k, won in nogi if k and k > 1.0]
+    implied: float | None = None
+    edge: float | None = None
+    if z_kursem:
+        implied = sum(1.0 / k for k, _ in z_kursem) / len(z_kursem)
+        hit_kurs = sum(1 for _, won in z_kursem if won) / len(z_kursem)
+        edge = (hit_kurs - implied) * 100
     return MarketStat(
         market=market,
         n=n,
         wins=wins,
         hit_rate=hit,
         implied_prob=implied,
-        edge_pp=(hit - implied) * 100 if implied_list else 0.0,
+        edge_pp=edge,
         se_pp=math.sqrt(hit * (1 - hit) / n) * 100,
         n_za_male=n < MALA_PROBA_N,
         skladniki=skladniki,
