@@ -237,7 +237,8 @@ def fetch_league_team_xg(league_key: str, season: int) -> dict[str, dict]:
         return {}
 
     wynik: dict[str, dict] = {}
-    for tabela in soup.find_all("table"):
+    tabele = soup.find_all("table")
+    for tabela in tabele:
         naglowki = [th.get_text(strip=True) for th in tabela.find_all("th")]
         if not {"Team", "xG", "xGA"}.issubset(set(naglowki)):
             continue  # kalendarze i inne tabele na stronie
@@ -280,6 +281,14 @@ def fetch_league_team_xg(league_key: str, season: int) -> dict[str, dict]:
             wynik[team] = payload
         break  # pierwsza tabela z kompletem kolumn wystarczy
 
+    if tabele and not wynik and not any(
+            {"Team", "xG", "xGA"}.issubset({th.get_text(strip=True) for th in t.find_all("th")})
+            for t in tabele):
+        # Strona ma tabele, ale zadna nie ma Team/xG/xGA — Understat przemianowal
+        # kolumny. Bez tego ostrzezenia liga cicho jechalaby bez xG.
+        _log.warning("[Understat] %s: %d tabel, zadna z kolumnami Team/xG/xGA;"
+                     " naglowki pierwszej: %s — liga zostaje BEZ xG", league_key,
+                     len(tabele), [th.get_text(strip=True) for th in tabele[0].find_all("th")])
     _log.info("[Understat] tabela ligi %s: %d drużyn", league_key, len(wynik))
     return wynik
 
