@@ -163,7 +163,7 @@ slowapi==0.1.10
     # via footstats (pyproject.toml)
 sniffio==1.3.1
     # via groq
-soupsieve==2.9.2
+soupsieve==4.0
     # via beautifulsoup4
 sse-starlette==3.4.8
     # via mcp
