@@ -60,6 +60,10 @@ def _zdarzenie(**nadpisz) -> dict:
 @pytest.fixture(autouse=True)
 def _cicho(monkeypatch):
     monkeypatch.setattr(qp.console, "print", lambda *a, **k: None)
+    # Import lokalny w funkcji → patch u ŹRÓDŁA. Bez tego każdy test wczytuje
+    # pełny parquet historii (~4 s) tylko po to, by sprawdzić filtr wejścia.
+    monkeypatch.setattr("footstats.data.historical_loader.load_cached",
+                        lambda *a, **k: None)
 
 
 # ── brak źródła ─────────────────────────────────────────────────────────────
