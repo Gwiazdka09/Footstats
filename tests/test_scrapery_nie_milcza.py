@@ -96,7 +96,7 @@ def test_zmieniony_uklad_tabeli_jest_glosny(caplog, monkeypatch):
 
     assert wynik == {}
     assert "brakuje kolumny" in caplog.text
-    assert "'M'" in caplog.text or "M" in caplog.text
+    assert "'M'" in caplog.text
 
 
 def test_kompletna_tabela_ligi_nie_generuje_ostrzezen(caplog, monkeypatch):

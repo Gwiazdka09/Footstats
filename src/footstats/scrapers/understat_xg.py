@@ -241,16 +241,19 @@ def fetch_league_team_xg(league_key: str, season: int) -> dict[str, dict]:
         naglowki = [th.get_text(strip=True) for th in tabela.find_all("th")]
         if not {"Team", "xG", "xGA"}.issubset(set(naglowki)):
             continue  # kalendarze i inne tabele na stronie
-        try:
-            i_team, i_m = naglowki.index("Team"), naglowki.index("M")
-            i_xg, i_xga = naglowki.index("xG"), naglowki.index("xGA")
-        except ValueError as e:
+        brakujace = [k for k in ("Team", "M", "xG", "xGA") if k not in naglowki]
+        if brakujace:
             # Filtr wyzej juz przepuscil tabele z Team/xG/xGA, wiec tu jestesmy
             # tylko wtedy, gdy Understat ZMIENIL uklad kolumn. Cicho znaczylo:
             # "brak tabeli xG", a naprawde znaczy "tabela jest, nie umiemy jej odczytac".
+            # Nazwy kolumn jawnie — tresc ValueError z list.index zalezy od wersji
+            # Pythona (3.14 nie podaje wartosci).
             _log.warning("Understat: tabela ma xG/xGA, ale brakuje kolumny (%s);"
-                        " naglowki: %s — liga zostaje BEZ xG", e, naglowki)
+                        " naglowki: %s — liga zostaje BEZ xG",
+                        ", ".join(repr(k) for k in brakujace), naglowki)
             continue
+        i_team, i_m = naglowki.index("Team"), naglowki.index("M")
+        i_xg, i_xga = naglowki.index("xG"), naglowki.index("xGA")
 
         for wiersz in tabela.find_all("tr")[1:]:
             komorki = [c.get_text(strip=True) for c in wiersz.find_all(["td", "th"])]
