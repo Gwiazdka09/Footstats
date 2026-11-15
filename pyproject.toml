@@ -85,9 +85,10 @@ api = [
 ai = [
     "groq>=0.4",
     "langfuse>=2.0",
-    # opentelemetry-api = zaleznosc PRZECHODNIA langfuse. Dolna granica 1.45.1 =
-    # wymog BEZPIECZENSTWA: CVE-2026-114603 (pip-audit 22.10).
-    "opentelemetry-api>=1.45.1",
+    # opentelemetry-api = zaleznosc PRZECHODNIA langfuse. Dolna granica 1.45.2 =
+    # wymog BEZPIECZENSTWA: CVE-2026-114603 (pip-audit 22.10, >=1.45.1)
+    # i CVE-2026-126360 (pip-audit 15.11, >=1.45.2).
+    "opentelemetry-api>=1.45.2",
     # Licznik tokenow promptu (I2). Bez niego `szacuj_tokeny` dzieli dlugosc
     # tekstu przez stala 1.4 zn/tok — dobrana pod opisy meczow z emoji (1.47),
     # ale zawyzajaca zwykly polski tekst o 84% (realnie 2.56). Skutkiem nie jest
