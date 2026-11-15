@@ -176,4 +176,4 @@ jobs:
             --region ${{ secrets.GCP_REGION }} \
             --format 'value(status.url)')
           # retry: zaraz po podmianie rewizji /health bywa chwilowo 5xx (15.11 exit 22 przy zdrowej rewizji)
-          curl -fsS --retry 6 --retry-delay 10 --retry-all-errors "$URL/health"
+          curl -fsS --retry 6 --retry-delay 10 --retry-all-errors --connect-timeout 10 --max-time 20 "$URL/health"
