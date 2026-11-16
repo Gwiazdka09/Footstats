@@ -13,7 +13,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def _connect():
-    """Bezpośrednie połączenie do lokalnej bazy SQLite."""
+    """Połączenie tylko do odczytu: prod Postgres (DATABASE_URL) lub lokalny SQLite."""
+    url = os.environ.get('DATABASE_URL', '')
+    if url.startswith('postgres'):
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+
+        conn = psycopg2.connect(url, cursor_factory=RealDictCursor)
+        conn.set_session(readonly=True)  # tylko SELECT, zero zapisu na prod
+        return conn
+
     db_path = os.path.join('data', 'footstats_backtest.db')
     if not os.path.exists(db_path):
         db_path = os.path.join('..', 'data', 'footstats_backtest.db')
@@ -28,7 +37,8 @@ def fetch_dynamic_data():
     edges = []
 
     try:
-        with _connect() as conn:
+        conn = _connect()
+        try:
             # Pobierz 20 ostatnich lekcji dla bogatszego grafu
             query = """
                 SELECT f.id, f.reason_for_failure, f.created_at,
@@ -38,7 +48,9 @@ def fetch_dynamic_data():
                 ORDER BY f.created_at DESC
                 LIMIT 20
             """
-            rows = conn.execute(query).fetchall()
+            cur = conn.cursor()
+            cur.execute(query)
+            rows = cur.fetchall()
 
             for row in rows:
                 lesson_id = f"lesson_{row['id']}"
@@ -83,6 +95,9 @@ def fetch_dynamic_data():
                         'width': 0.5,
                         'arrows': 'none'
                     })
+
+        finally:
+            conn.close()
 
     except Exception as e:
         logger.error(f"Błąd danych dynamicznych: {e}")
