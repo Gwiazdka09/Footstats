@@ -771,7 +771,7 @@ siedzą w tabeli obok singli.
 
 Konto `Gwiazdka09` / `jakubgwiazdowski12@gmail.com`, zawieszone od 01.08.
 Mejl poszedl na `support@api-sports.io` — pytanie o powod i o to, co zmienic,
-zeby konto wrocilo. Tresc i kontekst: `docs/robocze/2026-08-30-apifootball-odwolanie.md`.
+zeby konto wrocilo. Tresc i kontekst: `docs/archive/robocze/2026-08-30-apifootball-odwolanie.md`.
 
 - [ ] **Czekamy na odpowiedz.** Gdyby dopytali o ruch: mamy licznik zuzycia
   w aplikacji, cache dyskowy 24 h i logi produkcyjne z tym samym komunikatem
