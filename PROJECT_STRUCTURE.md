@@ -19,6 +19,8 @@ bot/
 │
 ├── Dockerfile.api              # Obraz API (Cloud Run Service)
 ├── Dockerfile.jobs             # Obraz batch (Cloud Run Jobs: Playwright+chromium)
+├── cloudbuild_api.yaml / cloudbuild_jobs.yaml  # Budowa obrazów API / jobs (Cloud Build)
+├── pyrightconfig.json / vexp.toml              # Konfiguracja pyright / indeksu vexp
 ├── docker-compose.yml          # Lokalny stack (DB + API)
 │
 ├── src/footstats/              # === KOD ŹRÓDŁOWY ===
@@ -48,18 +50,23 @@ bot/
 │   ├── calibration_monitor.py  # Monitor kalibracji
 │   ├── visualize_brain.py      # Generator Brain Graph (brain_graph.html)
 │   ├── accuracy_report.py / sanity_check.py / preflight_footstats.py / evict_cache.py
+│   ├── ...                     # Pomiary modelu (estymator_lambda, ramie_bayesian*, ruch_linii, rynek_golowy...) — importowane przez testy, dlatego zostają tu
+│   ├── archive/                # Wycofane skrypty jednorazowe (backfille, wzorce historyczne, cichy_bot.bat)
 │   └── run_daily.bat, run_operator.bat, schedule_agents.ps1, silent_run.vbs  [LEGACY LOKALNE — rollback]
 │
 ├── tests/                      # Pytest (1656 testów zebranych, gate cov 56%)
 ├── docs/                       # Dokumentacja rozszerzona (cloud_migration.md, scheduler_setup.md, blueprints/, roasts/)
-│   ├── archive/                # [gitignored] stare raporty PDF + logi kuponów (przeniesione 07-27)
+│   ├── superpowers/            # Specyfikacje i plany (np. odmrożenie modelu)
+│   ├── pomiary/                # Wyniki pomiarów modelu (md/json, wrzesień 2026)
+│   ├── audits/                 # Audyty
+│   ├── archive/                # Stare raporty, logi, BETA_READINESS/PROJECT_STATE, robocze/ (zastąpione przez STATUS.md)
 │   └── screenshots/            # [gitignored] screenshoty QA Playwright
 ├── .claude/                    # Konfiguracja Claude Code: agents/, commands/, rules/, settings
-├── .github/workflows/          # CI (ci.yml), CD (cd.yml), backup (backup.yml)
+├── .github/workflows/          # CI (ci.yml), CD API (cd.yml), CD jobs (cd-jobs.yml), odświeżanie datasetu (dataset_refresh.yml), backup (backup.yml)
 │
 ├── data/                       # SQLite (legacy backtest) + parquet — NIE RUSZAĆ
 ├── cache/ · logs/ · .backups/  # Artefakty runtime (gitignored)
-└── assets/ · lib/              # Zasoby statyczne / vendored
+└── assets/                     # Zasoby statyczne
 ```
 
 ## Pipeline produkcyjny (PC-niezależny)
