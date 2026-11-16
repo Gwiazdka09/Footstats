@@ -6,20 +6,54 @@ Automatycznie pobiera dane z bazy i generuje PREMIUM mapę wiedzy AI.
 import json
 import os
 import sqlite3
+import sys
 import logging
 
 # Konfiguracja logowania
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+_ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
+
+
+def _url_z_env_pliku(path: str = _ENV_PATH) -> str:
+    """Fallback: DATABASE_URL_SUPABASE, potem DATABASE_URL z .env (bez logowania)."""
+    wartosci: dict[str, str] = {}
+    try:
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                k, v = line.split('=', 1)
+                wartosci[k.strip()] = v.strip().strip('"').strip("'")
+    except OSError:
+        return ''
+    return wartosci.get('DATABASE_URL_SUPABASE') or wartosci.get('DATABASE_URL', '')
+
+
+def _json_do_skryptu(obj: object) -> str:
+    """JSON bezpieczny do osadzenia w inline <script> (bez </script> i &)."""
+    zamiany = {'<': '003c', '>': '003e', '&': '0026'}
+    tekst = json.dumps(obj)
+    for znak, kod in zamiany.items():
+        tekst = tekst.replace(znak, chr(92) + 'u' + kod)
+    return tekst
+
+
 def _connect():
     """Połączenie tylko do odczytu: prod Postgres (DATABASE_URL) lub lokalny SQLite."""
-    url = os.environ.get('DATABASE_URL', '')
+    url = os.environ.get('DATABASE_URL', '') or _url_z_env_pliku()
     if url.startswith('postgres'):
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+        except ImportError as e:
+            raise RuntimeError(
+                "Tryb Postgres wymaga psycopg2 (pip install psycopg2-binary)"
+            ) from e
 
-        conn = psycopg2.connect(url, cursor_factory=RealDictCursor)
+        conn = psycopg2.connect(url, cursor_factory=RealDictCursor, connect_timeout=10)
         conn.set_session(readonly=True)  # tylko SELECT, zero zapisu na prod
         return conn
 
@@ -42,7 +76,7 @@ def fetch_dynamic_data():
             # Pobierz 20 ostatnich lekcji dla bogatszego grafu
             query = """
                 SELECT f.id, f.reason_for_failure, f.created_at,
-                       p.team_home, p.team_away, p.actual_result, p.match_date
+                       p.team_home, p.team_away, p.actual_result, p.match_date, p.tip_correct
                 FROM ai_feedback f
                 JOIN predictions p ON p.id = f.match_id
                 ORDER BY f.created_at DESC
@@ -56,15 +90,19 @@ def fetch_dynamic_data():
                 lesson_id = f"lesson_{row['id']}"
                 match_label = f"{row['team_home']} vs {row['team_away']}"
 
+                # Trafiony typ = zielony, chybiony = różowy (domyślny), nieznany = różowy
+                trafiony = row['tip_correct'] == 1
+                kolor = '#32CD32' if trafiony else '#FF1493'
+                znak = 'TRAFIONY' if trafiony else 'LEKCJA'
                 # Węzeł lekcji (Neon Pink Diamond)
                 nodes.append({
                     'id': lesson_id,
-                    'label': f"LEKCJA: {match_label}",
-                    'color': '#FF1493',
+                    'label': f"{znak}: {match_label}",
+                    'color': kolor,
                     'title': f"<b>Data meczu:</b> {row['match_date']}<br><b>Wynik:</b> {row['actual_result']}<br><b>Wniosek:</b> {row['reason_for_failure']}",
                     'size': 25,
                     'shape': 'diamond',
-                    'font': {'size': 10, 'color': '#FF1493'}
+                    'font': {'size': 10, 'color': kolor}
                 })
 
                 # Połączenie lekcji z bazą wiedzy
@@ -101,6 +139,7 @@ def fetch_dynamic_data():
 
     except Exception as e:
         logger.error(f"Błąd danych dynamicznych: {e}")
+        raise
 
     return nodes, edges
 
@@ -205,12 +244,16 @@ def create_brain_graph():
     ]
 
     # 2. DYNAMIKA: Pobierz lekcje
-    dyn_nodes, dyn_edges = fetch_dynamic_data()
+    try:
+        dyn_nodes, dyn_edges = fetch_dynamic_data()
+    except Exception:
+        # Nie nadpisuj istniejącego pliku wyjściowego przy błędzie pobierania
+        sys.exit(1)
     nodes.extend(dyn_nodes)
     edges.extend(dyn_edges)
 
-    nodes_json = json.dumps(nodes)
-    edges_json = json.dumps(edges)
+    nodes_json = _json_do_skryptu(nodes)
+    edges_json = _json_do_skryptu(edges)
 
     # 3. PREMIUM HTML & CSS (Przywrócone i ulepszone)
     html_content = f"""<!DOCTYPE html>
