@@ -23,8 +23,7 @@ Lang: PL. Context: Soccer predictions (Poisson + RAG + LLM).
   Nowa kontrola poprawności = alarm końcowy w `core/alarmy_jakosci`, nie kolejny test jednostkowy.
 
 ## Subagent team (.claude/agents/)
-Ja = orchestrator. Workflow feature: subagent-driven-development (planner→coder→reviewer, 2-stage review, branch+TDD+commit per task).
-- `footstats-planner` (opus) — spec→plan TDD, read-only.
+Ja = orchestrator (sam planuję). Workflow feature: subagent-driven-development (plan→coder→reviewer, 2-stage review, branch+TDD+commit per task).
 - `footstats-coder` (sonnet) — implementer 1 task, TDD, commit.
 - `footstats-reviewer` (opus) — spec + quality review.
 - `footstats-data-guard` (sonnet) — guard: prod Neon writes / Telegram spam / lookahead.
@@ -34,7 +33,6 @@ Ja = orchestrator. Workflow feature: subagent-driven-development (planner→code
 - `footstats-scribe` (sonnet) — kronikarz sesji: TODO→CHANGELOG, STATUS refresh, commit docs.
 - `footstats-gui-verifier` (sonnet) — screenshot Playwright po zmianie GUI (desktop+mobile), checklist design-system.
 - `footstats-test-medic` (sonnet) — pytest triage: naprawia testy (nie kod prod), zgłasza bugi prod.
-- `footstats-calibration-reporter` (sonnet) — co 2-3 dni: calibration_monitor + flip-advisor, licznik settled → progi 20/88.
 - `footstats-ops-monitor` (sonnet) — daily: Cloud Run Jobs/Scheduler health (gcloud read-only), GREEN/AMBER/RED.
 - `footstats-postmatch-analyst` (sonnet) — po zakończonych meczach: rozlicza (też kupony papierowe), tworzy wnioski pomeczowe, klastruje powtarzalne przyczyny błędów. Analizuje TRAFIONE tak samo jak nietrafione. Domyślnie `--dry`, zapis do prod `ai_feedback` tylko za zgodą.
 
